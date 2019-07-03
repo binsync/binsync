@@ -1,0 +1,27 @@
+{
+	"pluginmetadataversion" : 2,
+	"name": "BinSync",
+	"type": ["core", "ui"],
+	"api": ["python2", "python3"],
+	"description": "BinSync support.",
+	"longdescription": "BinSync support.",
+	"license": {
+		"name": "BSD 2-clause",
+		"text": ""
+	},
+	"platforms" : ["Darwin", "Linux", "Windows"],
+	"installinstructions" : {
+		"Darwin" : "details to follow",
+		"Linux" : "details to follow",
+		"Windows" : "details to follow"
+	},
+	"dependencies": {
+		"pip": [],
+		"apt": [],
+		"installers": [],
+		"other": []
+	},
+	"version": "0.0.0.1",
+	"author": "angr.io",
+	"minimumbinaryninjaversion": 1200
+}
