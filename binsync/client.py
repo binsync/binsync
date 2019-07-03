@@ -49,13 +49,21 @@ class Client:
         return os.path.join(self.repo_root, user)
 
     def get_state(self, user=None, version=None):
-        if self.state is None:
+        if user is None or user == self.master_user:
+            # local state
+            if self.state is None:
+                try:
+                    self.state = State.parse(self.base_path(user=user), version=version)
+                except MetadataNotFoundError:
+                    # we should return a new state
+                    self.state = State(user if user is not None else self.master_user)
+            return self.state
+        else:
             try:
-                self.state = State.parse(self.base_path(user=user), version=version)
+                state = State.parse(self.base_path(user=user), version=version)
+                return state
             except MetadataNotFoundError:
-                # we should return a new state
-                self.state = State(user if user is not None else self.master_user)
-        return self.state
+                return None
 
     def save_state(self, state=None):
 
@@ -68,14 +76,15 @@ class Client:
 
         path = self.base_path(user=state.user)
 
-        # create this folder
-        os.mkdir(path)
+        if not os.path.exists(path):
+            # create this folder if it does not exist
+            os.mkdir(path)
 
         # dump the state
         state.dump(path)
 
         # commit changes
-        self.repo.index.add(["."])
+        self.repo.index.add([os.path.join(".", state.user, "*")])
         self.repo.index.commit("Save state")
 
     def close(self):

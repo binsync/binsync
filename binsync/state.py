@@ -1,10 +1,16 @@
 
+try:
+    FileNotFoundError
+except NameError:
+    FileNotFoundError = IOError
+
 import os
 from functools import wraps
 
+from sortedcontainers import SortedDict
 import toml
 
-from .data import Function
+from .data import Function, Comment
 from .errors import MetadataNotFoundError
 
 
@@ -34,6 +40,7 @@ class State:
 
         # data
         self.functions = { }
+        self.comments = SortedDict()
 
     def save_metadata(self, path):
         d = {
@@ -49,6 +56,9 @@ class State:
 
         # dump function
         Function.dump_many(os.path.join(base_path, "functions.toml"), self.functions)
+
+        # dump comments
+        Comment.dump_many(os.path.join(base_path, "comments.toml"), self.comments)
 
     @staticmethod
     def load_metadata(path):
@@ -72,10 +82,20 @@ class State:
         s.version = version if version is not None else metadata['version']
 
         # load function
-        functions = { }
-        for func in Function.load_many(os.path.join(base_path, "functions.toml")):
-            functions[func.addr] = func
-        s.functions = functions
+        funcs_toml_path = os.path.join(base_path, "functions.toml")
+        if os.path.isfile(funcs_toml_path):
+            functions = { }
+            for func in Function.load_many(funcs_toml_path):
+                functions[func.addr] = func
+            s.functions = functions
+
+        # load comments
+        comments_toml_path = os.path.join(base_path, "comments.toml")
+        if os.path.isfile(comments_toml_path):
+            comments = { }
+            for comm in Comment.load_many(comments_toml_path):
+                comments[comm.addr] = comm.comment
+            s.comments = SortedDict(comments)
 
         # clear the dirty bit
         s._dirty = False
@@ -99,6 +119,16 @@ class State:
         self.functions[func.addr] = func
         return True
 
+    @dirty_checker
+    def set_comment(self, addr, comment):
+
+        if addr in self.comments and self.comments[addr] == comment:
+            # no update is required
+            return False
+
+        self.comments[addr] = comment
+        return True
+
     #
     # Pullers
     #
@@ -109,3 +139,16 @@ class State:
             raise KeyError("Function %x is not found in the db." % addr)
 
         return self.functions[addr]
+
+    def get_comment(self, addr):
+
+        if addr not in self.comments:
+            raise KeyError("There is no comment at address %#x." % addr)
+
+        return self.comments[addr]
+
+    def get_comments(self, start_addr, end_addr=None):
+        for k in self.comments.irange(start_addr, reverse=False):
+            if k >= end_addr:
+                break
+            yield self.comments[k]

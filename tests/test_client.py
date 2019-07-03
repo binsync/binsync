@@ -22,7 +22,7 @@ def test_client_state():
     state = client.get_state()
     nose.tools.assert_equal(state.user, "user0")
 
-    func = binsync.data.Function(0x400080, name="some_name", comment="some comment!")
+    func = binsync.data.Function(0x400080, name="some_name", notes="some comment!")
     # the state should be clean
     nose.tools.assert_false(state._dirty)
     state.set_function(func)

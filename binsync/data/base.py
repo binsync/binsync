@@ -1,5 +1,8 @@
 
 class Base:
+
+    __slots__ = tuple()
+
     def dump(self):
         raise NotImplementedError()
 
