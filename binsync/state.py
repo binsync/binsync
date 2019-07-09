@@ -10,7 +10,7 @@ from functools import wraps
 from sortedcontainers import SortedDict
 import toml
 
-from .data import Function, Comment
+from .data import Function, Comment, Patch
 from .errors import MetadataNotFoundError
 
 
@@ -41,6 +41,7 @@ class State:
         # data
         self.functions = { }
         self.comments = SortedDict()
+        self.patches = SortedDict()
 
     @property
     def dirty(self):
@@ -63,6 +64,9 @@ class State:
 
         # dump comments
         Comment.dump_many(os.path.join(base_path, "comments.toml"), self.comments)
+
+        # dump patches
+        Patch.dump_many(os.path.join(base_path, "patches.toml"), self.patches)
 
     @staticmethod
     def load_metadata(path):
@@ -100,6 +104,14 @@ class State:
             for comm in Comment.load_many(comments_toml_path):
                 comments[comm.addr] = comm.comment
             s.comments = SortedDict(comments)
+
+        # load patches
+        patches_toml_path = os.path.join(base_path, "patches.toml")
+        if os.path.isfile(patches_toml_path):
+            patches = { }
+            for patch in Patch.load_many(patches_toml_path):
+                patches[patch.offset] = patch
+            s.patches = SortedDict(patches)
 
         # clear the dirty bit
         s._dirty = False
