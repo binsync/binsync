@@ -7,7 +7,7 @@ from binaryninja.interaction import show_message_box
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon
 import binsync
 from PySide2.QtWidgets import (QDockWidget, QWidget, QApplication, QMenu, QMainWindow, QTabWidget, QMenuBar, QDialog,
-    QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QPushButton, QMessageBox, QGroupBox)
+    QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QPushButton, QMessageBox, QGroupBox, QCheckBox)
 from PySide2.QtCore import Qt
 
 # Some code is derived from https://github.com/NOPDev/BinjaDock/tree/master/defunct
@@ -120,8 +120,8 @@ class BinsyncController:
     def __init__(self):
         self._client = None  # type: binsync.Client
 
-    def connect(self, user, path):
-        self._client = binsync.Client(user, path)
+    def connect(self, user, path, init_repo):
+        self._client = binsync.Client(user, path, init_repo=init_repo)
 
     def push_function(self, bv, bn_func):
 
@@ -188,6 +188,16 @@ class BinsyncWidget(BinjaWidget):
         repo_layout.addWidget(binsync_label)
         repo_layout.addWidget(self._repo_edit)
 
+        checkbox_layout = QHBoxLayout()
+        init_repo_label = QLabel(self)
+        init_repo_label.setText("Initialize repo")
+        checkbox_layout.addWidget(init_repo_label)
+        self._initrepo_checkbox = QCheckBox(self)
+        self._initrepo_checkbox.setToolTip("I'm the first user of this sync repo and I'd like to initialize it as a new repo.")
+        self._initrepo_checkbox.setChecked(False)
+        self._initrepo_checkbox.setEnabled(True)
+        checkbox_layout.addWidget(self._initrepo_checkbox)
+
         # buttons
         connect_button = QPushButton(self)
         connect_button.setText("Connect")
@@ -205,6 +215,7 @@ class BinsyncWidget(BinjaWidget):
         config_layout = QVBoxLayout()
         config_layout.addLayout(user_layout)
         config_layout.addLayout(repo_layout)
+        config_layout.addLayout(checkbox_layout)
         config_layout.addLayout(buttons_layout)
         config_box.setLayout(config_layout)
 
@@ -217,6 +228,7 @@ class BinsyncWidget(BinjaWidget):
     def _on_connect_clicked(self):
         user = self._user_edit.text()
         path = self._repo_edit.text()
+        init_repo = self._initrepo_checkbox.isChecked()
 
         if not user:
             QMessageBox(self).critical(None, "Invalid user name",
@@ -231,7 +243,7 @@ class BinsyncWidget(BinjaWidget):
             return
 
         # TODO: Add a user ID to angr management
-        self._controller.connect(user, path)
+        self._controller.connect(user, path, init_repo)
 
         if self._dialog is not None:
             self._dialog.close()
