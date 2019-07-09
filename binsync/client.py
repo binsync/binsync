@@ -121,6 +121,39 @@ class Client:
                 metadata = State.load_metadata(metadata_path)
                 yield User.from_metadata(metadata)
 
+    def tally(self, users=None):
+        """
+        Return a dict of user names and what information they can provide, e.g.,
+        {"user":
+            {
+                "functions": [0x400080],
+            }
+        }
+
+        :param list users:  A list of user names or None if we don't want to limit the range of user names we care about.
+        :return:            A dict with tally information.
+        :rtype:             dict
+        """
+
+        if users is not None:
+            users = set(users)
+
+        all_info = { }
+
+        for user in self.users():
+            if users is not None and user.name not in users:
+                continue
+
+            # what information does this user provide?
+            info = { }
+            state = self.get_state(user=user.name)
+            info['function'] = list(state.functions.keys())
+            info['comments'] = list(state.comments.keys())
+
+            all_info[user.name] = info
+
+        return all_info
+
     def base_path(self, user=None):
         if user is None:
             user = self.master_user
