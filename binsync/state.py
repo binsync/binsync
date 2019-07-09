@@ -42,6 +42,10 @@ class State:
         self.functions = { }
         self.comments = SortedDict()
 
+    @property
+    def dirty(self):
+        return self._dirty
+
     def save_metadata(self, path):
         d = {
             'user': self.user,
