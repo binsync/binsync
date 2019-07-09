@@ -145,6 +145,16 @@ class State:
         self.comments[addr] = comment
         return True
 
+    @dirty_checker
+    def set_patch(self, addr, patch):
+
+        if addr in self.patches and self.patches[addr] == patch:
+            # no update is required
+            return False
+
+        self.patches[addr] = patch
+        return True
+
     #
     # Pullers
     #
@@ -168,3 +178,10 @@ class State:
             if k >= end_addr:
                 break
             yield self.comments[k]
+
+    def get_patch(self, addr):
+
+        if addr not in self.patches:
+            raise KeyError("There is no patch at address %#x." % addr)
+
+        return self.patches[addr]
