@@ -1,4 +1,5 @@
 
+import codecs
 import toml
 
 from .base import Base
@@ -17,13 +18,15 @@ class Patch(Base):
         return {
             'obj_name': self.obj_name,
             'offset': self.offset,
-            'new_bytes': self.new_bytes,
+            # we need to use codecs to be compatible with Python2 and Python3 at the same time
+            'new_bytes': codecs.encode(self.new_bytes, "hex"),
         }
 
     def __setstate__(self, state):
         self.obj_name = state['obj_name']
-        self.offset = state['offset']
-        self.new_bytes = state['new_bytes']
+        self.offset = int(state['offset'][:-1] if state['offset'].endswith["L"] else state['offset'])
+        # we need to use codecs to be compatible with Python2 and Python3 at the same time
+        self.new_bytes = codecs.decode(state['new_bytes'], "hex")
 
     def __eq__(self, other):
         return (isinstance(other, Patch) and
@@ -59,7 +62,7 @@ class Patch(Base):
     @classmethod
     def dump_many(cls, path, patches):
         patches_ = { }
-        for v in patches.items():
+        for v in patches.values():
             patches_["%x" % v.offset] = v.__getstate__()
         with open(path, "w") as f:
             toml.dump(patches_, f)

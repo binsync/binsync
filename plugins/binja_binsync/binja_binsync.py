@@ -5,7 +5,9 @@ from binaryninjaui import DockHandler, DockContextHandler, UIAction, UIActionHan
 from binaryninja import PluginCommand
 from binaryninja.interaction import show_message_box
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon
+from binaryninja.binaryview import BinaryDataNotification
 import binsync
+from binsync.data import Patch
 from PySide2.QtWidgets import (QDockWidget, QWidget, QApplication, QMenu, QMainWindow, QTabWidget, QMenuBar, QDialog,
     QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QPushButton, QMessageBox, QGroupBox, QCheckBox)
 from PySide2.QtCore import Qt
@@ -123,8 +125,7 @@ class BinsyncController:
     def connect(self, user, path, init_repo):
         self._client = binsync.Client(user, path, init_repo=init_repo)
 
-    def push_function(self, bv, bn_func):
-
+    def _check_client(self):
         if self._client is None:
             show_message_box(
                 "BinSync client does not exist",
@@ -132,6 +133,11 @@ class BinsyncController:
                 MessageBoxButtonSet.OKButtonSet,
                 MessageBoxIcon.ErrorIcon,
             )
+            return False
+        return True
+
+    def push_function(self, bv, bn_func):
+        if not self._check_client():
             return
 
         # Push function
@@ -146,6 +152,12 @@ class BinsyncController:
             self._client.get_state().set_comment(comm_addr, comment)
 
         # TODO: Fixme
+        self._client.save_state()
+
+    def push_patch(self, patch):
+        if not self._check_client():
+            return
+        self._client.get_state().set_patch(patch.offset, patch)
         self._client.save_state()
 
 
@@ -264,7 +276,27 @@ def launch_binsync_configure(*args):
     d.exec_()
 
 
+class PatchDataNotification(BinaryDataNotification):
+    def __init__(self, view, controller):
+        self._view = view
+        self._controller = controller
+        self._patch_number = 0
+
+    def data_written(self, view, offset, length):
+        # TODO think about the naming
+        patch = Patch("BinaryNinjaPatch_%05d" % self._patch_number, offset, view.read(offset, length))
+        self._patch_number += 1
+        self._controller.push_patch(patch)
+
+
+def start_patch_monitor(view):
+    notification = PatchDataNotification(view, controller)
+    view.register_notification(notification)
+
+
 UIAction.registerAction("Configure BinSync...")
 UIActionHandler.globalActions().bindAction("Configure BinSync...", UIAction(launch_binsync_configure))
 Menu.mainMenu("Tools").addAction("Configure BinSync...", "BinSync")
 PluginCommand.register_for_function("Push function upwards", "Push function upwards", controller.push_function)
+# TODO how can we avoid having users to click on this menu option?
+PluginCommand.register("Start Patch Monitor", "Start Patch Monitor", start_patch_monitor)
