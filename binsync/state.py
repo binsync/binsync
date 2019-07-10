@@ -185,3 +185,6 @@ class State:
             raise KeyError("There is no patch at address %#x." % addr)
 
         return self.patches[addr]
+
+    def get_patches(self):
+        return self.patches.values()

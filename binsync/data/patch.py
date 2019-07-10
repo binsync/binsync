@@ -2,7 +2,12 @@
 import codecs
 import toml
 
+from ..utils import is_py3
 from .base import Base
+
+
+if is_py3():
+    unicode = str
 
 
 class Patch(Base):
@@ -17,14 +22,17 @@ class Patch(Base):
     def __getstate__(self):
         return {
             'obj_name': self.obj_name,
-            'offset': self.offset,
+            'offset': int(self.offset),
             # we need to use codecs to be compatible with Python2 and Python3 at the same time
             'new_bytes': codecs.encode(self.new_bytes, "hex"),
         }
 
     def __setstate__(self, state):
+        if isinstance(state['offset'], (str, unicode)):
+            state['offset'] = int(state['offset'].rstrip('L'))
+
         self.obj_name = state['obj_name']
-        self.offset = int(state['offset'][:-1] if state['offset'].endswith["L"] else state['offset'])
+        self.offset = state['offset']
         # we need to use codecs to be compatible with Python2 and Python3 at the same time
         self.new_bytes = codecs.decode(state['new_bytes'], "hex")
 
@@ -63,6 +71,6 @@ class Patch(Base):
     def dump_many(cls, path, patches):
         patches_ = { }
         for v in patches.values():
-            patches_["%x" % v.offset] = v.__getstate__()
+            patches_["%s_%x" % (v.obj_name, v.offset)] = v.__getstate__()
         with open(path, "w") as f:
             toml.dump(patches_, f)

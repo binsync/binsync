@@ -284,7 +284,10 @@ class PatchDataNotification(BinaryDataNotification):
 
     def data_written(self, view, offset, length):
         # TODO think about the naming
-        patch = Patch("BinaryNinjaPatch_%05d" % self._patch_number, offset, view.read(offset, length))
+
+        file_offset = offset - view.start
+        obj_name = os.path.basename(view.file.original_filename)
+        patch = Patch(obj_name, file_offset, view.read(offset, length))
         self._patch_number += 1
         self._controller.push_patch(patch)
 

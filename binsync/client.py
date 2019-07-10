@@ -149,6 +149,7 @@ class Client:
             state = self.get_state(user=user.name)
             info['function'] = list(state.functions.keys())
             info['comments'] = list(state.comments.keys())
+            info['patches'] = list({'obj_name': p.obj_name, 'offset': p.offset} for p in state.patches.values())
 
             all_info[user.name] = info
 

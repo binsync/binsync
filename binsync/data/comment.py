@@ -1,9 +1,12 @@
 
 import toml
 
+from ..utils import is_py3
 from .base import Base
 
-long = int
+if is_py3():
+    unicode = str
+    long = int
 
 
 class Comment(Base):
@@ -66,7 +69,7 @@ class Comment(Base):
         for k, v in comments.items():
             if type(v) is cls:
                 comments_["%x" % k] = v.__getstate__()
-            elif type(v) is str:
+            elif isinstance(v, (str, unicode)):
                 comments_["%x" % k] = Comment(k, v).__getstate__()
             else:
                 raise TypeError("Unsupported comment type %s." % type(v))
