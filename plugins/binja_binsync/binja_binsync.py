@@ -292,8 +292,21 @@ class PatchDataNotification(BinaryDataNotification):
         self._controller.push_patch(patch)
 
 
+class EditFunctionNotification(BinaryDataNotification):
+    def __init__(self, view, controller):
+        self._view = view
+        self._controller = controller
+
+    def function_updated(self, view, func):
+        self._controller.push_function(view, func)
+
+
 def start_patch_monitor(view):
     notification = PatchDataNotification(view, controller)
+    view.register_notification(notification)
+
+def start_function_monitor(view):
+    notification = EditFunctionNotification(view, controller)
     view.register_notification(notification)
 
 
@@ -302,4 +315,5 @@ UIActionHandler.globalActions().bindAction("Configure BinSync...", UIAction(laun
 Menu.mainMenu("Tools").addAction("Configure BinSync...", "BinSync")
 PluginCommand.register_for_function("Push function upwards", "Push function upwards", controller.push_function)
 # TODO how can we avoid having users to click on this menu option?
-PluginCommand.register("Start Patch Monitor", "Start Patch Monitor", start_patch_monitor)
+PluginCommand.register("Start Sharing Patches", "Start Sharing Patches", start_patch_monitor)
+PluginCommand.register("Start Sharing Functions", "Start Sharing Functions", start_function_monitor)
