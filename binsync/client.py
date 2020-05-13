@@ -27,6 +27,7 @@ class Client:
         self.repo_root = repo_root
         self.remote = remote
         self.branch = branch
+        self.repo = None
 
         # three scenarios
         # 1. We already have the repo checked out
@@ -44,11 +45,12 @@ class Client:
             assert not (init_repo is True and remote_url)
             if init_repo:
                 # case 3
-                git.Repo.init(self.repo_root)
+                self.repo = git.Repo.init(self.repo_root)
             elif remote_url is not None:
                 # case 2
                 self.clone(remote_url)
-            self.repo = git.Repo(self.repo_root)
+            if not self.repo:
+                self.repo = git.Repo(self.repo_root)
 
         assert not self.repo.bare  # it should not be a bare repo
 
@@ -165,7 +167,7 @@ class Client:
             # local state
             if self.state is None:
                 try:
-                    self.state = State.parse(self.base_path(user=user), version=version)
+                    self.state = State.parse(self.base_path(user=user), version=version) #Also need to check if user is none here???
                 except MetadataNotFoundError:
                     # we should return a new state
                     self.state = State(user if user is not None else self.master_user)

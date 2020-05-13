@@ -3,7 +3,7 @@ import os
 
 from binaryninjaui import DockHandler, DockContextHandler, UIAction, UIActionHandler, Menu
 from binaryninja import PluginCommand
-from binaryninja.interaction import show_message_box
+from binaryninja.interaction import show_message_box, get_directory_name_input
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon
 from binaryninja.binaryview import BinaryDataNotification
 import binsync
@@ -195,10 +195,16 @@ class BinsyncWidget(BinjaWidget):
         # repo path
         self._repo_edit = QLineEdit(self)
 
+        #select_button
+        select_dir_button = QPushButton(self)
+        select_dir_button.setText("...")
+        select_dir_button.clicked.connect(self._on_dir_select_clicked)
+
         # layout
         repo_layout = QHBoxLayout()
         repo_layout.addWidget(binsync_label)
         repo_layout.addWidget(self._repo_edit)
+        repo_layout.addWidget(select_dir_button)
 
         checkbox_layout = QHBoxLayout()
         init_repo_label = QLabel(self)
@@ -236,6 +242,10 @@ class BinsyncWidget(BinjaWidget):
         main_layout.addWidget(config_box)
 
         self.setLayout(main_layout)
+    
+    def _on_dir_select_clicked(self):
+        dirpath = get_directory_name_input("Select Git Root Directory")
+        self._repo_edit.setText(dirpath)
 
     def _on_connect_clicked(self):
         user = self._user_edit.text()
