@@ -1,4 +1,3 @@
-
 import toml
 
 from ..utils import is_py3
@@ -15,7 +14,10 @@ class Comment(Base):
     :ivar str comment:  Content.
     """
 
-    __slots__ = ('addr', 'comment', )
+    __slots__ = (
+        "addr",
+        "comment",
+    )
 
     def __init__(self, addr, comment):
         self.addr = addr
@@ -23,8 +25,8 @@ class Comment(Base):
 
     def __getstate__(self):
         return {
-            'addr': self.addr,
-            'comment': self.comment,
+            "addr": self.addr,
+            "comment": self.comment,
         }
 
     def __setstate__(self, state):
@@ -34,10 +36,11 @@ class Comment(Base):
         self.comment = state["comment"]
 
     def __eq__(self, other):
-        return (isinstance(other, Comment) and
-                other.addr == self.addr and
-                other.comment == self.comment
-                )
+        return (
+            isinstance(other, Comment)
+            and other.addr == self.addr
+            and other.comment == self.comment
+        )
 
     def dump(self):
         return toml.dumps(self.__getstate__())
@@ -65,7 +68,7 @@ class Comment(Base):
 
     @classmethod
     def dump_many(cls, path, comments):
-        comments_ = { }
+        comments_ = {}
         for k, v in comments.items():
             if type(v) is cls:
                 comments_["%x" % k] = v.__getstate__()

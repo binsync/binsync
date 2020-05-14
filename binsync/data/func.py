@@ -1,4 +1,3 @@
-
 import os
 
 import toml
@@ -15,7 +14,11 @@ class Function(Base):
     :ivar str notes:    Notes of the function.
     """
 
-    __slots__ = ('addr', 'name', 'notes', )
+    __slots__ = (
+        "addr",
+        "name",
+        "notes",
+    )
 
     def __init__(self, addr, name=None, notes=None):
         self.addr = addr
@@ -24,24 +27,25 @@ class Function(Base):
 
     def __getstate__(self):
         return {
-            'addr': self.addr,
-            'name': self.name,
-            'notes': self.notes,
+            "addr": self.addr,
+            "name": self.name,
+            "notes": self.notes,
         }
 
     def __setstate__(self, state):
         if not isinstance(state["addr"], (int, long)):
-            raise TypeError("Unsupported type %s for addr." % type(state['addr']))
+            raise TypeError("Unsupported type %s for addr." % type(state["addr"]))
         self.addr = state["addr"]
         self.name = state["name"]
         self.notes = state.get("notes", None)
 
     def __eq__(self, other):
-        return (isinstance(other, Function) and
-                other.name == self.name and
-                other.addr == self.addr and
-                other.notes == self.notes
-                )
+        return (
+            isinstance(other, Function)
+            and other.name == self.name
+            and other.addr == self.addr
+            and other.notes == self.notes
+        )
 
     def dump(self):
         return toml.dumps(self.__getstate__())

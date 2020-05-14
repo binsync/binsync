@@ -1,4 +1,3 @@
-
 import time
 import threading
 import os
@@ -21,8 +20,17 @@ class Client:
     :ivar int _commit_interval: The interval for committing local changes into the Git repo, pushing to the remote
                             side, and pulling from the remote.
     """
-    def __init__(self, master_user, repo_root, remote="origin", branch="master", commit_interval=10, init_repo=False,
-                 remote_url=None):
+
+    def __init__(
+        self,
+        master_user,
+        repo_root,
+        remote="origin",
+        branch="master",
+        commit_interval=10,
+        init_repo=False,
+        remote_url=None,
+    ):
         self.master_user = master_user
         self.repo_root = repo_root
         self.remote = remote
@@ -139,19 +147,24 @@ class Client:
 
         if users is not None:
             users = set(users)
+        else:
+            users = [x.name for x in self.users()]
 
-        all_info = { }
+        all_info = {}
 
         for user in self.users():
-            if users is not None and user.name not in users:
+            if user is None or user.name not in users:
                 continue
 
             # what information does this user provide?
-            info = { }
+            info = {}
             state = self.get_state(user=user.name)
-            info['function'] = list(state.functions.keys())
-            info['comments'] = list(state.comments.keys())
-            info['patches'] = list({'obj_name': p.obj_name, 'offset': p.offset} for p in state.patches.values())
+            info["function"] = list(state.functions.keys())
+            info["comments"] = list(state.comments.keys())
+            info["patches"] = list(
+                {"obj_name": p.obj_name, "offset": p.offset}
+                for p in state.patches.values()
+            )
 
             all_info[user.name] = info
 
@@ -167,7 +180,9 @@ class Client:
             # local state
             if self.state is None:
                 try:
-                    self.state = State.parse(self.base_path(user=user), version=version) #Also need to check if user is none here???
+                    self.state = State.parse(
+                        self.base_path(user=user), version=version
+                    )  # Also need to check if user is none here???
                 except MetadataNotFoundError:
                     # we should return a new state
                     self.state = State(user if user is not None else self.master_user)
@@ -188,15 +203,14 @@ class Client:
             self._worker_thread = threading.Thread(target=self._worker_routine)
             self._worker_thread.start()
         else:
-            raise Exception("start_auto() should not be called twice. There is already a worker thread running.")
+            raise Exception(
+                "start_auto() should not be called twice. There is already a worker thread running."
+            )
 
     def _worker_routine(self):
         while True:
-            time.sleep(0.5)
-            ts = time.time()
-
-            if ts - self._last_commit_ts > self._commit_interval:
-                self.update()
+            time.sleep(self._commit_interval)
+            self.update()
 
     def update(self):
         """
@@ -208,6 +222,7 @@ class Client:
         if self.has_remote:
             self.pull()
 
+        print("IS DIRTY??", self.get_state().dirty)
         if self.get_state().dirty:
             # do a save!
             self.save_state()

@@ -1,4 +1,3 @@
-
 import codecs
 import toml
 
@@ -14,6 +13,7 @@ class Patch(Base):
     """
     Describes a patch on the binary code.
     """
+
     def __init__(self, obj_name, offset, new_bytes):
         self.obj_name = obj_name
         self.offset = offset
@@ -21,27 +21,28 @@ class Patch(Base):
 
     def __getstate__(self):
         return {
-            'obj_name': self.obj_name,
-            'offset': int(self.offset),
+            "obj_name": self.obj_name,
+            "offset": int(self.offset),
             # we need to use codecs to be compatible with Python2 and Python3 at the same time
-            'new_bytes': codecs.encode(self.new_bytes, "hex"),
+            "new_bytes": codecs.encode(self.new_bytes, "hex"),
         }
 
     def __setstate__(self, state):
-        if isinstance(state['offset'], (str, unicode)):
-            state['offset'] = int(state['offset'].rstrip('L'))
+        if isinstance(state["offset"], (str, unicode)):
+            state["offset"] = int(state["offset"].rstrip("L"))
 
-        self.obj_name = state['obj_name']
-        self.offset = state['offset']
+        self.obj_name = state["obj_name"]
+        self.offset = state["offset"]
         # we need to use codecs to be compatible with Python2 and Python3 at the same time
-        self.new_bytes = codecs.decode(state['new_bytes'], "hex")
+        self.new_bytes = codecs.decode(state["new_bytes"], "hex")
 
     def __eq__(self, other):
-        return (isinstance(other, Patch) and
-                other.obj_name == self.obj_name and
-                other.offset == self.offset and
-                other.new_bytes == self.new_bytes
-                )
+        return (
+            isinstance(other, Patch)
+            and other.obj_name == self.obj_name
+            and other.offset == self.offset
+            and other.new_bytes == self.new_bytes
+        )
 
     def dump(self):
         return toml.dumps(self.__getstate__())
@@ -69,7 +70,7 @@ class Patch(Base):
 
     @classmethod
     def dump_many(cls, path, patches):
-        patches_ = { }
+        patches_ = {}
         for v in patches.values():
             patches_["%s_%x" % (v.obj_name, v.offset)] = v.__getstate__()
         with open(path, "w") as f:

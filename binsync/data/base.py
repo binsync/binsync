@@ -1,4 +1,3 @@
-
 class Base:
 
     __slots__ = tuple()

@@ -1,4 +1,3 @@
-
 import rpyc
 
 
@@ -27,7 +26,7 @@ class MainService(rpyc.Service):
         :return:        A list of user objects.
         :rtype:         list
         """
-        return [ ]
+        return []
 
     def exposed_get_all_function_metadata(self, db, user, version=None):
         """
@@ -39,11 +38,12 @@ class MainService(rpyc.Service):
         :return:            A list of function metadata objects.
         :rtype:             list
         """
-        return [ ]
+        return []
 
 
 def main():
     from rpyc.utils.server import ThreadedServer
+
     t = ThreadedServer(MainService, port=51200)
     t.start()
 

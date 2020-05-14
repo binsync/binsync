@@ -1,4 +1,3 @@
-
 try:
     FileNotFoundError
 except NameError:
@@ -21,6 +20,7 @@ def dirty_checker(f):
         if r is True:
             self._dirty = True
         return r
+
     return dirtycheck
 
 
@@ -31,6 +31,7 @@ class State:
     :ivar str user:     Name of the user.
     :ivar int version:  Version of the state, starting from 0.
     """
+
     def __init__(self, user, version=None):
         self.user = user
         self.version = version if version is not None else 0
@@ -39,7 +40,7 @@ class State:
         self._dirty = True
 
         # data
-        self.functions = { }
+        self.functions = {}
         self.comments = SortedDict()
         self.patches = SortedDict()
 
@@ -49,8 +50,8 @@ class State:
 
     def save_metadata(self, path):
         d = {
-            'user': self.user,
-            'version': self.version,
+            "user": self.user,
+            "version": self.version,
         }
         with open(path, "w") as f:
             toml.dump(d, f)
@@ -85,14 +86,14 @@ class State:
         except FileNotFoundError:
             # metadata is not found
             raise MetadataNotFoundError()
-        s.user = metadata['user']
+        s.user = metadata["user"]
 
-        s.version = version if version is not None else metadata['version']
+        s.version = version if version is not None else metadata["version"]
 
         # load function
         funcs_toml_path = os.path.join(base_path, "functions.toml")
         if os.path.isfile(funcs_toml_path):
-            functions = { }
+            functions = {}
             for func in Function.load_many(funcs_toml_path):
                 functions[func.addr] = func
             s.functions = functions
@@ -100,7 +101,7 @@ class State:
         # load comments
         comments_toml_path = os.path.join(base_path, "comments.toml")
         if os.path.isfile(comments_toml_path):
-            comments = { }
+            comments = {}
             for comm in Comment.load_many(comments_toml_path):
                 comments[comm.addr] = comm.comment
             s.comments = SortedDict(comments)
@@ -108,7 +109,7 @@ class State:
         # load patches
         patches_toml_path = os.path.join(base_path, "patches.toml")
         if os.path.isfile(patches_toml_path):
-            patches = { }
+            patches = {}
             for patch in Patch.load_many(patches_toml_path):
                 patches[patch.offset] = patch
             s.patches = SortedDict(patches)
@@ -126,7 +127,9 @@ class State:
     def set_function(self, func):
 
         if not isinstance(func, Function):
-            raise TypeError("Unsupported type %s. Expecting type %s." % (type(func), Function))
+            raise TypeError(
+                "Unsupported type %s. Expecting type %s." % (type(func), Function)
+            )
 
         if func.addr in self.functions and self.functions[func.addr] == func:
             # no update is required
