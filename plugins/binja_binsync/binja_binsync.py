@@ -1,19 +1,41 @@
-
 import os
 
-from binaryninjaui import DockHandler, DockContextHandler, UIAction, UIActionHandler, Menu
+from binaryninjaui import (
+    DockHandler,
+    DockContextHandler,
+    UIAction,
+    UIActionHandler,
+    Menu,
+)
 from binaryninja import PluginCommand
 from binaryninja.interaction import show_message_box, get_directory_name_input
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon
 from binaryninja.binaryview import BinaryDataNotification
 import binsync
 from binsync.data import Patch
-from PySide2.QtWidgets import (QDockWidget, QWidget, QApplication, QMenu, QMainWindow, QTabWidget, QMenuBar, QDialog,
-    QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QPushButton, QMessageBox, QGroupBox, QCheckBox)
+from PySide2.QtWidgets import (
+    QDockWidget,
+    QWidget,
+    QApplication,
+    QMenu,
+    QMainWindow,
+    QTabWidget,
+    QMenuBar,
+    QDialog,
+    QVBoxLayout,
+    QLabel,
+    QLineEdit,
+    QHBoxLayout,
+    QPushButton,
+    QMessageBox,
+    QGroupBox,
+    QCheckBox,
+)
 from PySide2.QtCore import Qt
 
 # Some code is derived from https://github.com/NOPDev/BinjaDock/tree/master/defunct
 # Thanks @NOPDev
+
 
 def find_main_window():
     main_window = None
@@ -30,6 +52,7 @@ def find_main_window():
         # oops cannot find the main window
         raise Exception("Main window is not found.")
     return main_window
+
 
 def instance():
     main_window = find_main_window()
@@ -55,14 +78,21 @@ class BinjaWidgetBase:
     @property
     def menu_bar(self):
         if self._menu_bar is None:
-            self._menu_bar = next(iter(x for x in self._main_window.children() if isinstance(x, QMenuBar)))
+            self._menu_bar = next(
+                iter(x for x in self._main_window.children() if isinstance(x, QMenuBar))
+            )
         return self._menu_bar
 
     @property
     def tool_menu(self):
         if self._tool_menu is None:
-            self._tool_menu = next(iter(x for x in self._menu_bar.children()
-                                        if isinstance(x, QMenu) and x.title() == u'Tools'))
+            self._tool_menu = next(
+                iter(
+                    x
+                    for x in self._menu_bar.children()
+                    if isinstance(x, QMenu) and x.title() == u"Tools"
+                )
+            )
         return self._tool_menu
 
     def add_tool_menu_action(self, name, func):
@@ -75,7 +105,7 @@ class BinjaDockWidget(QDockWidget):
 
         self.base = BinjaWidgetBase()
 
-        self.base.add_tool_menu_action('Toggle plugin dock', self.toggle)
+        self.base.add_tool_menu_action("Toggle plugin dock", self.toggle)
         # self._main_window.addDockWidget(Qt.RightDockWidgetArea, self)
         self._tabs = QTabWidget()
         self._tabs.setTabPosition(QTabWidget.East)
@@ -141,7 +171,9 @@ class BinsyncController:
             return
 
         # Push function
-        func = binsync.data.Function(int(bn_func.start))  # force conversion from long to int
+        func = binsync.data.Function(
+            int(bn_func.start)
+        )  # force conversion from long to int
         func.name = bn_func.name
         self._client.get_state().set_function(func)
 
@@ -195,7 +227,7 @@ class BinsyncWidget(BinjaWidget):
         # repo path
         self._repo_edit = QLineEdit(self)
 
-        #select_button
+        # select_button
         select_dir_button = QPushButton(self)
         select_dir_button.setText("...")
         select_dir_button.clicked.connect(self._on_dir_select_clicked)
@@ -211,7 +243,9 @@ class BinsyncWidget(BinjaWidget):
         init_repo_label.setText("Initialize repo")
         checkbox_layout.addWidget(init_repo_label)
         self._initrepo_checkbox = QCheckBox(self)
-        self._initrepo_checkbox.setToolTip("I'm the first user of this sync repo and I'd like to initialize it as a new repo.")
+        self._initrepo_checkbox.setToolTip(
+            "I'm the first user of this sync repo and I'd like to initialize it as a new repo."
+        )
         self._initrepo_checkbox.setChecked(False)
         self._initrepo_checkbox.setEnabled(True)
         checkbox_layout.addWidget(self._initrepo_checkbox)
@@ -242,7 +276,7 @@ class BinsyncWidget(BinjaWidget):
         main_layout.addWidget(config_box)
 
         self.setLayout(main_layout)
-    
+
     def _on_dir_select_clicked(self):
         dirpath = get_directory_name_input("Select Git Root Directory")
         self._repo_edit.setText(dirpath)
@@ -253,15 +287,15 @@ class BinsyncWidget(BinjaWidget):
         init_repo = self._initrepo_checkbox.isChecked()
 
         if not user:
-            QMessageBox(self).critical(None, "Invalid user name",
-                                       "User name cannot be empty."
-                                       )
+            QMessageBox(self).critical(
+                None, "Invalid user name", "User name cannot be empty."
+            )
             return
 
         if not os.path.isdir(path):
-            QMessageBox(self).critical(None, "Repo does not exist",
-                                       "The specified sync repo does not exist."
-                                       )
+            QMessageBox(self).critical(
+                None, "Repo does not exist", "The specified sync repo does not exist."
+            )
             return
 
         # TODO: Add a user ID to angr management
@@ -280,6 +314,7 @@ class BinsyncWidget(BinjaWidget):
 
 
 controller = BinsyncController()
+
 
 def launch_binsync_configure(*args):
     d = BinsyncDialog(controller)
@@ -315,15 +350,24 @@ def start_patch_monitor(view):
     notification = PatchDataNotification(view, controller)
     view.register_notification(notification)
 
+
 def start_function_monitor(view):
     notification = EditFunctionNotification(view, controller)
     view.register_notification(notification)
 
 
 UIAction.registerAction("Configure BinSync...")
-UIActionHandler.globalActions().bindAction("Configure BinSync...", UIAction(launch_binsync_configure))
+UIActionHandler.globalActions().bindAction(
+    "Configure BinSync...", UIAction(launch_binsync_configure)
+)
 Menu.mainMenu("Tools").addAction("Configure BinSync...", "BinSync")
-PluginCommand.register_for_function("Push function upwards", "Push function upwards", controller.push_function)
+PluginCommand.register_for_function(
+    "Push function upwards", "Push function upwards", controller.push_function
+)
 # TODO how can we avoid having users to click on this menu option?
-PluginCommand.register("Start Sharing Patches", "Start Sharing Patches", start_patch_monitor)
-PluginCommand.register("Start Sharing Functions", "Start Sharing Functions", start_function_monitor)
+PluginCommand.register(
+    "Start Sharing Patches", "Start Sharing Patches", start_patch_monitor
+)
+PluginCommand.register(
+    "Start Sharing Functions", "Start Sharing Functions", start_function_monitor
+)

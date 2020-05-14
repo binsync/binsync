@@ -13,6 +13,7 @@ from PyQt5.Qt import qApp
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QDialog, QFileSystemModel
 
+
 class RepoSelector(Form):
     """
     Form to prompt for target file, backup file, and the address
@@ -47,12 +48,48 @@ Select A Repo
         self.user_name = self.GetControlValue(self.iStr1)
         self.repo_dir = self.GetControlValue(self.iDir)
         self.init_repo = True if self.GetControlValue(self.cGroup1) == 1 else False
-        self.Close(1)
-        print("User Name: %s, Repo Dir: %s, Init Repo: %s" % (user_name, repo_dir, init_repo))
 
+        if not self.user_name:
+            self.display_error("Invalid user name\nUser name cannot be empty.")
+        elif not os.path.isdir(self.repo_dir):
+            self.display_error(
+                "Repo does not exist\nThe specified sync repo does not exist."
+            )
+        else:
+            self.Close(1)
+
+    def display_error(self, error_message):
+        idaapi.warning(error_message)
 
     def OnButton2(self, code=0):
-        self.Close(1)
+        self.Close(0)
+
+    def OnFormChange(self, fid):
+        return 1
+
+
+class RepoError(Form):
+    """
+    Form to prompt for target file, backup file, and the address
+    range to save patched bytes.
+    """
+
+    def __init__(self, err_message):
+        self.invert = False
+        Form.__init__(
+            self,
+            r"""STARTITEM {id:error_message}
+BUTTON YES OK
+BUTTON CANCEL NONE
+Error
+{FormChangeCb}
+{error_message}
+""",
+            {
+                "error_message": Form.StringLabel(err_message),
+                "FormChangeCb": Form.FormChangeCb(self.OnFormChange),
+            },
+        )
 
     def OnFormChange(self, fid):
         return 1
