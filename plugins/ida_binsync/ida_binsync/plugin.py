@@ -10,7 +10,7 @@ import binsync
 import IPython
 from binsync.data import Patch
 
-from ida_binsync.reposelector import RepoSelector
+from ida_binsync.reposelector import RepoSelector, UserSelector
 from PyQt5.Qt import qApp
 from PyQt5.QtCore import QObject, QDir
 from PyQt5.QtWidgets import QMessageBox
@@ -66,12 +66,18 @@ class BinsyncClient(binsync.Client):
         print("IS DIRTY??", self.get_state().dirty)
         if self.get_state().dirty:
             # do a save!
-            state = self.get_state()
-            for addr in state.functions.keys():
-                idaapi.set_name(addr, state.functions[addr].name)
+            user = [x for x in self.users() if x.name == "wgibbs16"][0]
+            print(user.name)
+            print(user.uid)
+            self.state = self.get_state(user=user)
+            #self.state = self.get_state(user=)
+            #for addr in state.functions.keys():
+            #    print("ADDR:", addr)
+            #    print("FUNC:", state.functions[addr].name)
+            #    idaapi.set_name(addr, state.functions[addr].name)
 
-            for addr in state.comments.keys():
-                idc.MakeRptCmt(addr, state.comments[addr].encode('ascii'))
+            #for addr in state.comments.keys():
+            #    idc.MakeRptCmt(addr, state.comments[addr].encode('ascii'))
 
             self.save_state()
 
@@ -150,25 +156,39 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
 
     def open_repo_selector(self):
 
-        self._repo_selector = RepoSelector()
-        self._repo_selector.Compile()
-        ok = self._repo_selector.Execute()
-        if ok == 1:
-            try:
-                controller.connect(
-                    self._repo_selector.user_name,
-                    self._repo_selector.repo_dir,
-                    self._repo_selector.init_repo,
-                )
-                self._repo_selector.Free()
-            except Exception as e:
-                # self._repo_selector.display_error(type(e).__name__)
-                import sys, traceback
+        was_canceled = False
+        if not self._repo_selector:
+            self._repo_selector = RepoSelector()
+            self._repo_selector.Compile()
+            ok = self._repo_selector.Execute()
+            if ok == 1:
+                try:
+                    controller.connect(
+                        self._repo_selector.user_name,
+                        self._repo_selector.repo_dir,
+                        self._repo_selector.init_repo,
+                    )
+                    self._repo_selector.Free()
+                except Exception as e:
+                    # self._repo_selector.display_error(type(e).__name__)
+                    import sys, traceback
 
-                traceback.print_exc(file=sys.stdout)
-                idaapi.warning(type(e).__name__)
-                self._repo_selector.Free()
-                self.open_repo_selector()
+                    traceback.print_exc(file=sys.stdout)
+                    idaapi.warning(type(e).__name__)
+                    self._repo_selector.Free()
+                    self._repo_selector = None
+                    self.open_repo_selector()
+                    return
+            else:
+                was_canceled = True
+
+        if not was_canceled:
+            user_select = UserSelector([x.name.encode('ascii') for x in controller._client.users()])
+            user_select.Compile()
+            has_selected = user_select.Execute()
+            if has_selected == 1:
+                print("SELECTED", user_select.selected_user)
+
 
     def init(self):
         action = idaapi.register_action(
@@ -187,6 +207,7 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
 
     def run(self, arg):
         print("RUN CALLED")
+        self._repo_selector = None
         self.open_repo_selector()
 
     def term(self):

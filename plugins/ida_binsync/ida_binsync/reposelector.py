@@ -93,3 +93,44 @@ Error
 
     def OnFormChange(self, fid):
         return 1
+
+class UserSelector(Form):
+    """
+    Form to prompt for target file, backup file, and the address
+    range to save patched bytes.
+    """
+
+    def __init__(self, user_list=[]):
+        self.invert = False
+        print("USERS")
+        self.user_list = user_list
+        Form.__init__(
+            self,
+            r"""STARTITEM {id:cbReadonly}
+BUTTON YES NONE
+BUTTON CANCEL NONE
+Select A User
+{FormChangeCb}
+<Dropdown list (readonly):{cbReadonly}>
+<##OK:{iButton1}> <##Cancel:{iButton2}>
+""", {
+            'FormChangeCb': Form.FormChangeCb(self.OnFormChange),
+            'cbReadonly': Form.DropdownListControl(
+                        items=user_list,
+                        readonly=True,
+                        selval=0,
+                        swidth=20),
+            "iButton1": Form.ButtonInput(self.OnButton1),
+            "iButton2": Form.ButtonInput(self.OnButton2),
+        })
+
+    def OnButton1(self, code=0):
+        self.selected_user = self.user_list[self.GetControlValue(self.cbReadonly)]
+        self.Close(1)
+
+    def OnButton2(self, code=0):
+        self.Close(0)
+
+    def OnFormChange(self, fid):
+        return 1
+
