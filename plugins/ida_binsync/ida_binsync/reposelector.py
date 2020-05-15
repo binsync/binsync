@@ -109,9 +109,9 @@ class UserSelector(Form):
             r"""STARTITEM {id:cbReadonly}
 BUTTON YES NONE
 BUTTON CANCEL NONE
-Select A User
+Select A User To Sync With
 {FormChangeCb}
-<Dropdown list (readonly):{cbReadonly}>
+<User list (readonly):{cbReadonly}>
 <##OK:{iButton1}> <##Cancel:{iButton2}>
 """, {
             'FormChangeCb': Form.FormChangeCb(self.OnFormChange),
