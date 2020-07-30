@@ -20,8 +20,8 @@ class Comment(Base):
     )
 
     def __init__(self, addr, comment):
-        self.addr = addr
-        self.comment = comment
+        self.addr = addr  # type: int
+        self.comment = comment  # type: str
 
     def __getstate__(self):
         return {

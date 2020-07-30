@@ -5,12 +5,17 @@ except NameError:
 
 import os
 from functools import wraps
+from collections import defaultdict
 
 from sortedcontainers import SortedDict
 import toml
 
 from .data import Function, Comment, Patch
 from .errors import MetadataNotFoundError
+from .utils import is_py3
+
+if is_py3():
+    from typing import Dict
 
 
 def dirty_checker(f):
@@ -33,15 +38,16 @@ class State:
     """
 
     def __init__(self, user, version=None):
-        self.user = user
-        self.version = version if version is not None else 0
+        self.user = user  # type: str
+        self.version = version if version is not None else 0  # type: int
 
         # dirty bit
-        self._dirty = True
+        self._dirty = True  # type: bool
 
         # data
-        self.functions = {}
-        self.comments = SortedDict()
+        self.functions = {}  # type: Dict[int,Function]
+        self.comments = SortedDict()  # type: Dict[int,str]
+        self.stack_variables = defaultdict(dict)
         self.patches = SortedDict()
 
     @property

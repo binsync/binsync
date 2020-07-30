@@ -16,8 +16,7 @@ from PyQt5.QtWidgets import QDialog, QFileSystemModel
 
 class RepoSelector(Form):
     """
-    Form to prompt for target file, backup file, and the address
-    range to save patched bytes.
+    Select the Git repo to use.
     """
 
     def __init__(self):
@@ -93,6 +92,7 @@ Error
 
     def OnFormChange(self, fid):
         return 1
+
 
 class UserSelector(Form):
     """

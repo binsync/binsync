@@ -1,4 +1,6 @@
 import os
+from functools import wraps
+from typing import Optional, Iterable
 
 from binaryninjaui import (
     DockHandler,
@@ -7,51 +9,17 @@ from binaryninjaui import (
     UIActionHandler,
     Menu,
 )
-from binaryninja import PluginCommand
-from binaryninja.interaction import show_message_box, get_directory_name_input
+import binaryninja
+from binaryninja import PluginCommand, BinaryView
+from binaryninja.interaction import show_message_box
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon
 from binaryninja.binaryview import BinaryDataNotification
 import binsync
-from binsync.data import Patch
-from PySide2.QtWidgets import (
-    QDockWidget,
-    QWidget,
-    QApplication,
-    QMenu,
-    QMainWindow,
-    QTabWidget,
-    QMenuBar,
-    QDialog,
-    QVBoxLayout,
-    QLabel,
-    QLineEdit,
-    QHBoxLayout,
-    QPushButton,
-    QMessageBox,
-    QGroupBox,
-    QCheckBox,
-)
-from PySide2.QtCore import Qt
+from binsync.data import Patch, Function, Comment
 
-# Some code is derived from https://github.com/NOPDev/BinjaDock/tree/master/defunct
-# Thanks @NOPDev
-
-
-def find_main_window():
-    main_window = None
-    for x in QApplication.allWidgets():
-        if not isinstance(x, QDockWidget):
-            continue
-        main_window = x.parent()
-        if isinstance(main_window, (QMainWindow, QWidget)):
-            break
-        else:
-            main_window = None
-
-    if main_window is None:
-        # oops cannot find the main window
-        raise Exception("Main window is not found.")
-    return main_window
+from .ui import find_main_window, BinjaDockWidget
+from .config_dialog import ConfigDialog
+from .control_panel import ControlPanelDialog
 
 
 def instance():
@@ -63,99 +31,30 @@ def instance():
     return dock
 
 
-class BinjaWidgetBase:
-    def __init__(self):
-        self._main_window = None
-        self._menu_bar = None
-        self._tool_menu = None
-
-    @property
-    def main_window(self):
-        if self._main_window is None:
-            self._main_window = find_main_window()
-        return self._main_window
-
-    @property
-    def menu_bar(self):
-        if self._menu_bar is None:
-            self._menu_bar = next(
-                iter(x for x in self._main_window.children() if isinstance(x, QMenuBar))
-            )
-        return self._menu_bar
-
-    @property
-    def tool_menu(self):
-        if self._tool_menu is None:
-            self._tool_menu = next(
-                iter(
-                    x
-                    for x in self._menu_bar.children()
-                    if isinstance(x, QMenu) and x.title() == u"Tools"
-                )
-            )
-        return self._tool_menu
-
-    def add_tool_menu_action(self, name, func):
-        self.tool_menu.addAction(name, func)
-
-
-class BinjaDockWidget(QDockWidget):
-    def __init__(self, *args):
-        super(BinjaDockWidget, self).__init__(*args)
-
-        self.base = BinjaWidgetBase()
-
-        self.base.add_tool_menu_action("Toggle plugin dock", self.toggle)
-        # self._main_window.addDockWidget(Qt.RightDockWidgetArea, self)
-        self._tabs = QTabWidget()
-        self._tabs.setTabPosition(QTabWidget.East)
-        self.setWidget(self._tabs)
-
-        # self.hide()
-        self.show()
-
-    def toggle(self):
-        if self.isVisible():
-            self.hide()
-        else:
-            self.show()
-
-
-class BinjaWidget(QWidget):
-    def __init__(self, tabname):
-        super(BinjaWidget, self).__init__()
-        # self._core = instance()
-        # self._core.addTabWidget(self, tabname)
-
-
-class BinsyncDialog(QDialog):
-    def __init__(self, controller):
-        super(BinsyncDialog, self).__init__()
-
-        self._w = None
-        self._controller = controller
-
-        self.setWindowTitle("BinSync")
-
-        self._init_widgets()
-
-    def _init_widgets(self):
-        self._w = BinsyncWidget(self._controller, dialog=self)
-
-        layout = QVBoxLayout()
-        layout.addWidget(self._w)
-
-        self.setLayout(layout)
+def init_checker(f):
+    @wraps(f)
+    def initcheck(self, *args, **kwargs):
+        if not self.check_client():
+            raise ValueError("Please connect to a repo first.")
+        return f(self, *args, **kwargs)
+    return initcheck
 
 
 class BinsyncController:
     def __init__(self):
         self._client = None  # type: binsync.Client
 
+        self.control_panel = None  # type: callable
+
+        self.curr_bv = None  # type: Optional[BinaryView]
+        self.curr_func_addr = None  # type: Optional[int]
+
     def connect(self, user, path, init_repo):
         self._client = binsync.Client(user, path, init_repo=init_repo)
+        if self.control_panel is not None:
+            self.control_panel.reload()
 
-    def _check_client(self):
+    def check_client(self):
         if self._client is None:
             show_message_box(
                 "BinSync client does not exist",
@@ -166,10 +65,24 @@ class BinsyncController:
             return False
         return True
 
-    def push_function(self, bv, bn_func):
-        if not self._check_client():
-            return
+    def mark_as_current_function(self, bv, bn_func):
+        self.curr_bv = bv
+        self.curr_func_addr = bn_func.start
+        self.control_panel.reload()
 
+    def current_function(self) -> Optional[Function]:
+        if self.curr_bv is None:
+            return None
+        if self.curr_func_addr is None:
+            return None
+        return self.curr_bv.get_function_at(self.curr_func_addr)
+
+    @init_checker
+    def users(self):
+        return self._client.users()
+
+    @init_checker
+    def push_function(self, bv, bn_func):
         # Push function
         func = binsync.data.Function(
             int(bn_func.start)
@@ -186,143 +99,97 @@ class BinsyncController:
         # TODO: Fixme
         self._client.save_state()
 
+    @init_checker
     def push_patch(self, patch):
-        if not self._check_client():
-            return
         self._client.get_state().set_patch(patch.offset, patch)
         self._client.save_state()
 
+    @init_checker
+    def pull_function(self, bn_func, user: Optional[str]=None) -> Optional[Function]:
+        """
+        Pull a function downwards.
 
-class BinsyncWidget(BinjaWidget):
-    def __init__(self, controller, dialog):
-        super(BinsyncWidget, self).__init__("BinSync")
+        :param bv:
+        :param bn_func:
+        :param user:
+        :return:
+        """
+        state = self._client.get_state(user=user)
 
-        self._funcaddr_edit = None  # type: QLineEdit
-        self._controller = controller
-        self._dialog = dialog
+        # pull function
+        try:
+            func = state.get_function(int(bn_func.start))
+            return func
+        except KeyError:
+            return None
 
-        self._init_widgets()
+    @init_checker
+    def fill_function(self, bn_func: binaryninja.function.Function, user: Optional[str]=None):
+        """
+        Grab all relevant information from the specified user and fill the @bn_func.
+        """
 
-    def _init_widgets(self):
-
-        #
-        # Config
-        #
-
-        # user label
-        user_label = QLabel(self)
-        user_label.setText("User name")
-
-        self._user_edit = QLineEdit(self)
-        self._user_edit.setText("user0_binja")
-
-        user_layout = QHBoxLayout()
-        user_layout.addWidget(user_label)
-        user_layout.addWidget(self._user_edit)
-
-        # binsync label
-        binsync_label = QLabel(self)
-        binsync_label.setText("Git repo")
-
-        # repo path
-        self._repo_edit = QLineEdit(self)
-
-        # select_button
-        select_dir_button = QPushButton(self)
-        select_dir_button.setText("...")
-        select_dir_button.clicked.connect(self._on_dir_select_clicked)
-
-        # layout
-        repo_layout = QHBoxLayout()
-        repo_layout.addWidget(binsync_label)
-        repo_layout.addWidget(self._repo_edit)
-        repo_layout.addWidget(select_dir_button)
-
-        checkbox_layout = QHBoxLayout()
-        init_repo_label = QLabel(self)
-        init_repo_label.setText("Initialize repo")
-        checkbox_layout.addWidget(init_repo_label)
-        self._initrepo_checkbox = QCheckBox(self)
-        self._initrepo_checkbox.setToolTip(
-            "I'm the first user of this sync repo and I'd like to initialize it as a new repo."
-        )
-        self._initrepo_checkbox.setChecked(False)
-        self._initrepo_checkbox.setEnabled(True)
-        checkbox_layout.addWidget(self._initrepo_checkbox)
-
-        # buttons
-        connect_button = QPushButton(self)
-        connect_button.setText("Connect")
-        connect_button.clicked.connect(self._on_connect_clicked)
-        cancel_button = QPushButton(self)
-        cancel_button.setText("Cancel")
-        cancel_button.clicked.connect(self._on_cancel_clicked)
-
-        buttons_layout = QHBoxLayout()
-        buttons_layout.addWidget(connect_button)
-        buttons_layout.addWidget(cancel_button)
-
-        config_box = QGroupBox()
-        config_box.setTitle("Configuration")
-        config_layout = QVBoxLayout()
-        config_layout.addLayout(user_layout)
-        config_layout.addLayout(repo_layout)
-        config_layout.addLayout(checkbox_layout)
-        config_layout.addLayout(buttons_layout)
-        config_box.setLayout(config_layout)
-
-        # main layout
-        main_layout = QVBoxLayout()
-        main_layout.addWidget(config_box)
-
-        self.setLayout(main_layout)
-
-    def _on_dir_select_clicked(self):
-        dirpath = get_directory_name_input("Select Git Root Directory")
-        self._repo_edit.setText(dirpath)
-
-    def _on_connect_clicked(self):
-        user = self._user_edit.text()
-        path = self._repo_edit.text()
-        init_repo = self._initrepo_checkbox.isChecked()
-
-        if not user:
-            QMessageBox(self).critical(
-                None, "Invalid user name", "User name cannot be empty."
-            )
+        _func = self.pull_function(bn_func, user=user)
+        if _func is None:
             return
 
-        if not os.path.isdir(path):
-            QMessageBox(self).critical(
-                None, "Repo does not exist", "The specified sync repo does not exist."
-            )
-            return
+        # name
+        bn_func.name = _func.name
+        # comments
+        for _, ins_addr in bn_func.instructions:
+            _comment = self.pull_comment(ins_addr, user=user)
+            if _comment is not None:
+                bn_func.set_comment_at(ins_addr, _comment)
 
-        # TODO: Add a user ID to angr management
-        self._controller.connect(user, path, init_repo)
+    @init_checker
+    def pull_comment(self, addr, user: Optional[str]=None) -> Optional[str]:
+        """
+        Pull comments downwards.
 
-        if self._dialog is not None:
-            self._dialog.close()
-        else:
-            self.close()
+        :param bv:
+        :param start_addr:
+        :param end_addr:
+        :param user:
+        :return:
+        """
+        state = self._client.get_state(user=user)
+        try:
+            return state.get_comment(addr)
+        except KeyError:
+            return None
 
-    def _on_cancel_clicked(self):
-        if self._dialog is not None:
-            self._dialog.close()
-        else:
-            self.close()
+    @init_checker
+    def pull_comments(self, start_addr, end_addr: Optional[int]=None,
+                      user: Optional[str]=None) -> Optional[Iterable[str]]:
+        """
+        Pull comments downwards.
+
+        :param bv:
+        :param start_addr:
+        :param end_addr:
+        :param user:
+        :return:
+        """
+        state = self._client.get_state(user=user)
+        return state.get_comments(start_addr, end_addr=end_addr)
 
 
 controller = BinsyncController()
 
 
 def launch_binsync_configure(*args):
-    d = BinsyncDialog(controller)
+    d = ConfigDialog(controller)
     d.exec_()
+
+
+def open_control_panel(*args):
+    d = ControlPanelDialog(controller)
+    d.show()
 
 
 class PatchDataNotification(BinaryDataNotification):
     def __init__(self, view, controller):
+        super().__init__()
         self._view = view
         self._controller = controller
         self._patch_number = 0
@@ -339,6 +206,7 @@ class PatchDataNotification(BinaryDataNotification):
 
 class EditFunctionNotification(BinaryDataNotification):
     def __init__(self, view, controller):
+        super().__init__()
         self._view = view
         self._controller = controller
 
@@ -361,6 +229,16 @@ UIActionHandler.globalActions().bindAction(
     "Configure BinSync...", UIAction(launch_binsync_configure)
 )
 Menu.mainMenu("Tools").addAction("Configure BinSync...", "BinSync")
+
+UIAction.registerAction("Open BinSync control panel")
+UIActionHandler.globalActions().bindAction(
+    "Open BinSync control panel", UIAction(open_control_panel)
+)
+Menu.mainMenu("Tools").addAction("Open BinSync control panel", "BinSync")
+
+PluginCommand.register_for_function(
+    "BinSync: Mark current", "Mark as the current function in BinSync", controller.mark_as_current_function,
+)
 PluginCommand.register_for_function(
     "Push function upwards", "Push function upwards", controller.push_function
 )
