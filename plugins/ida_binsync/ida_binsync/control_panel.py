@@ -2,7 +2,9 @@ from __future__ import absolute_import
 
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, QPushButton, QMessageBox, QDialog, QWidget
 from PyQt5.QtCore import Qt
+import idc
 import idaapi
+import idautils
 import sip
 
 from ida_binsync.team_table import QTeamTable
@@ -79,7 +81,7 @@ class ControlPanel(QWidget):
         self._status_label.setText("Ready.")  # TODO: User a proper status string in the controller
         curr_func = self._controller.current_function()
         if curr_func is not None:
-            self._status_label.setText("Ready. Current function: %s" % curr_func.name)
+            self._status_label.setText("Ready. Current function: %s" % idc.GetFunctionName(curr_func.start_ea))
         # update users
         if self._controller is not None and self._controller.check_client():
             self._team_table.update_users(self._controller.users())
@@ -185,7 +187,20 @@ class ControlPanel(QWidget):
         self._controller.push_function(func)
 
         # comments
-        self._controller.push_comments(func.comments)
+        comments = { }
+        for start_ea, end_ea in idautils.Chunks(func.start_ea):
+            for head in idautils.Heads(start_ea, end_ea):
+                cmt_0 = idc.GetCommentEx(head, 0)  # regular comment
+                cmt_1 = idc.GetCommentEx(head, 1)  # repeatable comment
+                if cmt_0 and cmt_1:
+                    cmt = cmt_0 + " | " + cmt_1
+                elif cmt_0 or cmt_1:
+                    cmt = cmt_0 or cmt_1
+                else:
+                    cmt = None
+                if cmt:
+                    comments[head] = cmt
+        self._controller.push_comments(comments)
 
         # stack variables
         self._controller.push_stack_variables(func)

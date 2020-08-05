@@ -45,7 +45,7 @@ class ConfigWidget(QWidget):
         user_label.setText("User name")
 
         self._user_edit = QLineEdit(self)
-        self._user_edit.setText("user0_binja")
+        self._user_edit.setText("user0_ida")
 
         user_layout = QHBoxLayout()
         user_layout.addWidget(user_label)

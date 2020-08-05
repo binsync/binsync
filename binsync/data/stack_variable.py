@@ -58,7 +58,14 @@ class StackVariable(Base):
         if offset_type == self.stack_offset_type:
             return self.stack_offset
         # conversion required
-        raise NotImplementedError()
+        if self.stack_offset_type in (StackOffsetType.IDA, StackOffsetType.BINJA):
+            off = self.stack_offset
+        else:
+            raise NotImplementedError()
+        if offset_type in (StackOffsetType.IDA, StackOffsetType.BINJA):
+            return off
+        else:
+            raise NotImplementedError()
 
     def dump(self):
         return toml.dumps(self.__getstate__())
