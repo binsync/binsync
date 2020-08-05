@@ -10,7 +10,7 @@ from collections import defaultdict
 from sortedcontainers import SortedDict
 import toml
 
-from .data import Function, Comment, Patch
+from .data import Function, Comment, Patch, StackVariable
 from .errors import MetadataNotFoundError
 from .utils import is_py3
 
@@ -47,12 +47,18 @@ class State:
         # data
         self.functions = {}  # type: Dict[int,Function]
         self.comments = SortedDict()  # type: Dict[int,str]
-        self.stack_variables = defaultdict(dict)
+        self.stack_variables = defaultdict(dict)  # type: Dict[int,Dict[int,StackVariable]]
         self.patches = SortedDict()
 
     @property
     def dirty(self):
         return self._dirty
+
+    def ensure_dir_exists(self, dir_name):
+        if not os.path.exists(dir_name):
+            os.mkdir(dir_name)
+        if not os.path.isdir(dir_name):
+            raise RuntimeError("Cannot create directory %s. Maybe it conflicts with an existing file?" % dir_name)
 
     def save_metadata(self, path):
         d = {
@@ -74,6 +80,13 @@ class State:
 
         # dump patches
         Patch.dump_many(os.path.join(base_path, "patches.toml"), self.patches)
+
+        # dump stack variables, one file per function
+        stack_var_base = os.path.join(base_path, "stack_vars")
+        self.ensure_dir_exists(stack_var_base)
+        for func_addr, stack_vars in self.stack_variables.items():
+            path = os.path.join(stack_var_base, "%08x.toml" % func_addr)
+            StackVariable.dump_many(path, stack_vars)
 
     @staticmethod
     def load_metadata(path):
@@ -120,6 +133,15 @@ class State:
                 patches[patch.offset] = patch
             s.patches = SortedDict(patches)
 
+        # load stack variables
+        stack_var_base = os.path.join(base_path, "stack_vars")
+        if os.path.isdir(stack_var_base):
+            for f in os.listdir(stack_var_base):
+                svs = list(StackVariable.load_many(os.path.join(stack_var_base, f)))
+                d = dict((v.stack_offset, v) for v in svs)
+                if svs:
+                    s.stack_variables[svs[0].func_addr] = d
+
         # clear the dirty bit
         s._dirty = False
 
@@ -164,6 +186,17 @@ class State:
         self.patches[addr] = patch
         return True
 
+    @dirty_checker
+    def set_stack_variable(self, func_addr, offset, variable):
+        if func_addr in self.stack_variables \
+                and offset in self.stack_variables[func_addr] \
+                and self.stack_variables[func_addr][offset] == variable:
+            # no update is required
+            return False
+
+        self.stack_variables[func_addr][offset] = variable
+        return True
+
     #
     # Pullers
     #
@@ -197,3 +230,15 @@ class State:
 
     def get_patches(self):
         return self.patches.values()
+
+    def get_stack_variable(self, func_addr, offset):
+        if func_addr not in self.stack_variables:
+            raise KeyError("No stack variables are defined for function %#x." % func_addr)
+        if offset not in self.stack_variables[func_addr]:
+            raise KeyError("No stack variable exists at offset %d in function %#x." % (offset, func_addr))
+        return self.stack_variables[func_addr][offset]
+
+    def get_stack_variables(self, func_addr):
+        if func_addr not in self.stack_variables:
+            raise KeyError("No stack variables are defined for function %#x." % func_addr)
+        return self.stack_variables[func_addr].items()

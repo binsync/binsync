@@ -8,6 +8,13 @@ if is_py3():
     long = int
 
 
+class StackOffsetType:
+    BINJA = 0
+    IDA = 1
+    GHIDRA = 2
+    ANGR = 3
+
+
 class StackVariable(Base):
     """
     Describes a stack variable for a given function.
@@ -17,12 +24,16 @@ class StackVariable(Base):
         "func_addr",
         "name",
         "stack_offset",
+        "stack_offset_type",
         "size",
+        "type",
     )
 
-    def __init__(self, stack_offset, name, size, func_addr):
+    def __init__(self, stack_offset, offset_type, name, type_, size, func_addr):
         self.stack_offset = stack_offset  # type: int
+        self.stack_offset_type = offset_type  # type: int
         self.name = name  # type: str
+        self.type = type_  # type: str
         self.size = size  # type: int
         self.func_addr = func_addr  # type: int
 
@@ -43,12 +54,18 @@ class StackVariable(Base):
             return True
         return False
 
+    def get_offset(self, offset_type):
+        if offset_type == self.stack_offset_type:
+            return self.stack_offset
+        # conversion required
+        raise NotImplementedError()
+
     def dump(self):
         return toml.dumps(self.__getstate__())
 
     @classmethod
     def parse(cls, s):
-        sv = StackVariable(None, None, None, None)
+        sv = StackVariable(None, None, None, None, None, None)
         sv.__setstate__(toml.loads(s))
         return sv
 
@@ -59,12 +76,14 @@ class StackVariable(Base):
         svs_toml = toml.loads(data)
 
         for sv_toml in svs_toml.values():
-            sv = StackVariable(None, None, None, None)
+            sv = StackVariable(None, None, None, None, None, None)
             sv.__setstate__(sv_toml)
             yield sv
 
     @classmethod
     def dump_many(cls, path, svs):
-        d = dict(svs.items())
+        d = { }
+        for v in sorted(svs.values(), key=lambda x: x.stack_offset):
+            d["%x" % v.stack_offset] = v.__getstate__()
         with open(path, "w") as f:
             toml.dump(d, f)

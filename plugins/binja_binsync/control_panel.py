@@ -132,7 +132,7 @@ class ControlPanel(BinjaWidget):
         current_function = self._controller.current_function()
         if current_function is None:
             QMessageBox.critical(None, 'Error',
-                                 "No function is current in the disassembly view.")
+                                 "Please set the current function first.")
             return
 
         # which user?
@@ -147,32 +147,20 @@ class ControlPanel(BinjaWidget):
 
     def _on_pushfunc_clicked(self):
 
-        disasm_view = self.workspace.view_manager.first_view_in_category("disassembly")
-        if disasm_view is None:
-            QMessageBox.critical(None, 'Error',
-                                 "Cannot determine the current function. No disassembly view is open.")
-            return
-
-        current_function = disasm_view._current_function
+        current_function = self._controller.current_function()
         if current_function is None:
             QMessageBox.critical(None, 'Error',
-                                 "No function is current in the disassembly view.")
+                                 "Please set the current function first.")
             return
 
         func = current_function
-        kb = self.workspace.instance.project.kb
-        kb.sync.push_function(func)
+        self._controller.push_function(func)
 
         # comments
-        comments = { }
-        for block in func.blocks:
-            for ins_addr in block.instruction_addrs:
-                if ins_addr in kb.comments:
-                    comments[ins_addr] = kb.comments[ins_addr]
-        kb.sync.push_comments(comments)
+        self._controller.push_comments(func.comments)
 
-        # TODO: Fix this
-        kb.sync.commit()
+        # stack variables
+        self._controller.push_stack_variables(func)
 
     def _on_pullpatches_clicked(self):
 
