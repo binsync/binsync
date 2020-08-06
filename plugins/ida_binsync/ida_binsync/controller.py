@@ -83,6 +83,8 @@ class BinsyncClient(Client):
         commit_interval=10,
         init_repo=False,
         remote_url=None,
+        ssh_agent_pid=None,
+        ssh_auth_sock=None
     ):
 
         binsync.Client.__init__(
@@ -94,6 +96,8 @@ class BinsyncClient(Client):
             commit_interval=commit_interval,
             init_repo=init_repo,
             remote_url=remote_url,
+            ssh_agent_pid=ssh_agent_pid,
+            ssh_auth_sock=ssh_auth_sock,
         )
 
         self.function_callback = function_callback
@@ -151,8 +155,9 @@ class BinsyncController:
     def __init__(self):
         self._client = None  # type: binsync.Client
 
-    def connect(self, user, path, init_repo):
-        self._client = BinsyncClient(user, path, None, None, None, init_repo=init_repo)
+    def connect(self, user, path, init_repo, ssh_agent_pid=None, ssh_auth_sock=None):
+        self._client = BinsyncClient(user, path, None, None, None, init_repo=init_repo, ssh_agent_pid=ssh_agent_pid,
+                                      ssh_auth_sock=ssh_auth_sock)
 
     def check_client(self):
         if self._client is None:
