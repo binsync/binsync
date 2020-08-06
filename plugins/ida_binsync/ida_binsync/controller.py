@@ -14,6 +14,8 @@ import binsync
 from binsync import Client
 from binsync.data import StackVariable, StackOffsetType
 
+from . import compat
+
 _l = logging.getLogger(name=__name__)
 
 #
@@ -193,10 +195,7 @@ class BinsyncController:
         :return:
         :rtype: Optional[ida_funcs.func_t]
         """
-        if hasattr(idc, "ScreenEA"):
-            ea = idc.ScreenEA()
-        else:
-            ea = idc.get_screen_ea()
+        ea = compat.get_screen_ea()
         func = idaapi.get_func(ea)
         return func
 
@@ -217,7 +216,7 @@ class BinsyncController:
         # Push function
         func_addr = int(ida_func.start_ea)
         func = binsync.data.Function(func_addr)
-        func.name = idc.GetFunctionName(func_addr)
+        func.name = compat.get_func_name(func_addr)
         state.set_function(func)
 
     @init_checker
@@ -251,7 +250,7 @@ class BinsyncController:
             return
 
         # name
-        if idc.GetFunctionName(ida_func.start_ea) != _func.name:
+        if compat.get_func_name(ida_func.start_ea) != _func.name:
             idaapi.set_name(ida_func.start_ea, _func.name, idaapi.SN_FORCE)
 
         # comments

@@ -10,6 +10,8 @@ import sip
 from ida_binsync.status_table import QStatusTable
 from ida_binsync.team_table import QTeamTable
 
+from . import compat
+
 
 class ControlPanelDialog(QDialog):
     def __init__(self, controller, parent=None):
@@ -82,7 +84,7 @@ class ControlPanel(QWidget):
         self._status_table.status = "ready"
         curr_func = self._controller.current_function()
         if curr_func is not None:
-            self._status_table.current_function = idc.GetFunctionName(curr_func.start_ea)
+            self._status_table.current_function = compat.get_func_name(curr_func.start_ea)
         self._status_table.reload()
         # update users
         if self._controller is not None and self._controller.check_client():
