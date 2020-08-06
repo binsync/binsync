@@ -1,6 +1,7 @@
 import time
 import threading
 import os
+import logging
 
 import git
 
@@ -8,8 +9,27 @@ from .data import User
 from .state import State
 from .errors import MetadataNotFoundError
 
+_l = logging.getLogger(name=__name__)
 
-class Client:
+
+class StateContext(object):
+    def __init__(self, client, state, locked=False):
+        self.client = client
+        self.state = state
+        self.locked = locked
+
+    def __enter__(self):
+        if self.locked:
+            self.client.commit_lock.acquire()
+        return self.state
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.locked:
+            self.client.commit_lock.release()
+        self.client.save_state(state=self.state)
+
+
+class Client(object):
     """
     The binsync Client.
 
@@ -175,21 +195,26 @@ class Client:
             user = self.master_user
         return os.path.join(self.repo_root, user)
 
+    def state_ctx(self, user=None, version=None, locked=False):
+        state = self.get_state(user=user, version=version)
+        return StateContext(self, state, locked=locked)
+
     def get_state(self, user=None, version=None):
         if user is None or user == self.master_user:
             # local state
             if self.state is None:
                 try:
                     self.state = State.parse(
-                        self.base_path(user=user), version=version
+                        self.base_path(user=user), version=version,
+                        client=self,
                     )  # Also need to check if user is none here???
                 except MetadataNotFoundError:
                     # we should return a new state
-                    self.state = State(user if user is not None else self.master_user)
+                    self.state = State(user if user is not None else self.master_user, client=self)
             return self.state
         else:
             try:
-                state = State.parse(self.base_path(user=user), version=version)
+                state = State.parse(self.base_path(user=user), version=version, client=self)
                 return state
             except MetadataNotFoundError:
                 return None

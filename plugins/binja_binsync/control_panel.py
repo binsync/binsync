@@ -154,13 +154,18 @@ class ControlPanel(BinjaWidget):
             return
 
         func = current_function
-        self._controller.push_function(func)
 
-        # comments
-        self._controller.push_comments(func.comments)
+        with self._controller.state_ctx(locked=True) as state:
 
-        # stack variables
-        self._controller.push_stack_variables(func)
+            # function name
+            self._controller.push_function(func, state=state)
+
+            # comments
+            self._controller.remove_all_comments(func, state=state)
+            self._controller.push_comments(func.comments, state=state)
+
+            # stack variables
+            self._controller.push_stack_variables(func, state=state)
 
     def _on_pullpatches_clicked(self):
 

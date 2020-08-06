@@ -18,6 +18,7 @@ from binaryninja.interaction import show_message_box
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourceType
 from binaryninja.binaryview import BinaryDataNotification
 import binsync
+from binsync import State, StateContext
 from binsync.data import Patch, Function, Comment, StackVariable, StackOffsetType
 
 from .ui import find_main_window, BinjaDockWidget
@@ -36,6 +37,10 @@ def instance():
     return dock
 
 
+#
+# Decorators
+#
+
 def init_checker(f):
     @wraps(f)
     def initcheck(self, *args, **kwargs):
@@ -43,6 +48,47 @@ def init_checker(f):
             raise ValueError("Please connect to a repo first.")
         return f(self, *args, **kwargs)
     return initcheck
+
+
+def make_state(f):
+    """
+    Build a writeable State instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
+    Function `f` should have have at least two kwargs, `user` and `state`.
+    """
+    @wraps(f)
+    def state_check(self, *args, **kwargs):
+        state = kwargs.pop('state', None)
+        user = kwargs.pop('user', None)
+        if state is None:
+            save_before_return = True
+            state = self._client.get_state(user=user)
+        else:
+            save_before_return = False
+        r = f(self, *args, **kwargs, state=state)
+        if save_before_return:
+            state.save()
+        return r
+    return state_check
+
+
+def make_ro_state(f):
+    """
+    Build a read-only State instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
+    Function `f` should have have at least two kwargs, `user` and `state`.
+    """
+    @wraps(f)
+    def state_check(self, *args, **kwargs):
+        state = kwargs.pop('state', None)
+        user = kwargs.pop('user', None)
+        if state is None:
+            state = self._client.get_state(user=user)
+        return f(self, *args, **kwargs, state=state)
+    return state_check
+
+
+#
+# Controller
+#
 
 
 class BinsyncController:
@@ -100,27 +146,32 @@ class BinsyncController:
 
         return func
 
+    def state_ctx(self, user=None, version=None, locked=False) -> StateContext:
+        return self._client.state_ctx(user=user, version=version, locked=locked)
+
     @init_checker
     def users(self):
         return self._client.users()
 
     @init_checker
-    def push_function(self, bn_func):
+    @make_state
+    def push_function(self, bn_func: binaryninja.function.Function, state: State=None):
         # Push function
         func = binsync.data.Function(
             int(bn_func.start)
         )  # force conversion from long to int
         func.name = bn_func.name
-        self._client.get_state().set_function(func)
-        self._client.save_state()
+        state.set_function(func)
 
     @init_checker
-    def push_patch(self, patch):
-        self._client.get_state().set_patch(patch.offset, patch)
-        self._client.save_state()
+    @make_state
+    def push_patch(self, patch, state: State=None):
+        state.set_patch(patch.offset, patch)
 
     @init_checker
-    def push_stack_variable(self, bn_func: binaryninja.Function, stack_var: binaryninja.function.Variable):
+    @make_state
+    def push_stack_variable(self, bn_func: binaryninja.Function, stack_var: binaryninja.function.Variable,
+                            state: State=None):
         if stack_var.source_type != VariableSourceType.StackVariableSourceType:
             raise TypeError("Unexpected source type %s of the variable %r." % (stack_var.source_type, stack_var))
 
@@ -132,10 +183,11 @@ class BinsyncController:
                           type_str,
                           size,
                           bn_func.start)
-        self._client.get_state().set_stack_variable(bn_func.start, stack_var.storage, v)
+        state.set_stack_variable(bn_func.start, stack_var.storage, v)
 
     @init_checker
-    def push_stack_variables(self, bn_func):
+    @make_state
+    def push_stack_variables(self, bn_func, state: State=None):
         for stack_var in bn_func.stack_layout:
             # ignore all unnamed variables
             # TODO: Do not ignore re-typed but unnamed variables
@@ -146,25 +198,24 @@ class BinsyncController:
                 continue
             if not stack_var.source_type == VariableSourceType.StackVariableSourceType:
                 continue
-            self.push_stack_variable(bn_func, stack_var)
-        # TODO: Fixme
-        self._client.save_state()
+            self.push_stack_variable(bn_func, stack_var, state=state)
 
     @init_checker
-    def pull_stack_variables(self, bn_func, user: Optional[str]=None) -> Dict[int,StackVariable]:
-        state = self._client.get_state(user=user)
+    @make_ro_state
+    def pull_stack_variables(self, bn_func, user: Optional[str]=None, state: State=None) -> Dict[int,StackVariable]:
         try:
             return dict(state.get_stack_variables(bn_func.start))
         except KeyError:
             return { }
 
     @init_checker
-    def pull_stack_variable(self, bn_func, offset: int, user: Optional[str]=None) -> StackVariable:
-        state = self._client.get_state(user=user)
+    @make_ro_state
+    def pull_stack_variable(self, bn_func, offset: int, user: Optional[str]=None, state: State=None) -> StackVariable:
         return state.get_stack_variable(bn_func.start, offset)
 
     @init_checker
-    def pull_function(self, bn_func, user: Optional[str]=None) -> Optional[Function]:
+    @make_ro_state
+    def pull_function(self, bn_func, user: Optional[str]=None, state: State=None) -> Optional[Function]:
         """
         Pull a function downwards.
 
@@ -173,7 +224,6 @@ class BinsyncController:
         :param user:
         :return:
         """
-        state = self._client.get_state(user=user)
 
         # pull function
         try:
@@ -183,12 +233,14 @@ class BinsyncController:
             return None
 
     @init_checker
-    def fill_function(self, bn_func: binaryninja.function.Function, user: Optional[str]=None):
+    @make_ro_state
+    def fill_function(self, bn_func: binaryninja.function.Function, user: Optional[str]=None,
+                      state: State=None) -> None:
         """
         Grab all relevant information from the specified user and fill the @bn_func.
         """
 
-        _func = self.pull_function(bn_func, user=user)
+        _func = self.pull_function(bn_func, user=user, state=state)
         if _func is None:
             return
 
@@ -197,14 +249,14 @@ class BinsyncController:
 
         # comments
         for _, ins_addr in bn_func.instructions:
-            _comment = self.pull_comment(ins_addr, user=user)
+            _comment = self.pull_comment(ins_addr, user=user, state=state)
             if _comment is not None:
                 bn_func.set_comment_at(ins_addr, _comment)
 
         # stack variables
         existing_stack_vars: Dict[int,Any] = dict((v.storage, v) for v in bn_func.stack_layout
                                                   if v.source_type == VariableSourceType.StackVariableSourceType)
-        for offset, stack_var in self.pull_stack_variables(bn_func, user=user).items():
+        for offset, stack_var in self.pull_stack_variables(bn_func, user=user, state=state).items():
             bn_offset = stack_var.get_offset(StackOffsetType.BINJA)
             # skip if this variable already exists
             type_, _ = bn_func.view.parse_type_string(stack_var.type)
@@ -215,17 +267,24 @@ class BinsyncController:
             bn_func.create_user_stack_var(bn_offset, type_, stack_var.name)
 
     @init_checker
-    def push_comments(self, comments: Dict[int,str]):
+    @make_state
+    def remove_all_comments(self, bn_func: binaryninja.function.Function, user: Optional[str]=None,
+                            state: State=None) -> None:
+        for _, ins_addr in bn_func.instructions:
+            if ins_addr in state.comments:
+                state.remove_comment(ins_addr)
+
+    @init_checker
+    @make_state
+    def push_comments(self, comments: Dict[int,str], state: State=None) -> None:
         # Push comments
         for addr, comment in comments.items():
             comm_addr = int(addr)
-            self._client.get_state().set_comment(comm_addr, comment)
-
-        # TODO: Fixme
-        self._client.save_state()
+            state.set_comment(comm_addr, comment)
 
     @init_checker
-    def pull_comment(self, addr, user: Optional[str]=None) -> Optional[str]:
+    @make_ro_state
+    def pull_comment(self, addr, user: Optional[str]=None, state: State=None) -> Optional[str]:
         """
         Pull comments downwards.
 
@@ -235,15 +294,15 @@ class BinsyncController:
         :param user:
         :return:
         """
-        state = self._client.get_state(user=user)
         try:
             return state.get_comment(addr)
         except KeyError:
             return None
 
     @init_checker
+    @make_ro_state
     def pull_comments(self, start_addr, end_addr: Optional[int]=None,
-                      user: Optional[str]=None) -> Optional[Iterable[str]]:
+                      user: Optional[str]=None, state: State=None) -> Optional[Iterable[str]]:
         """
         Pull comments downwards.
 
@@ -253,7 +312,6 @@ class BinsyncController:
         :param user:
         :return:
         """
-        state = self._client.get_state(user=user)
         return state.get_comments(start_addr, end_addr=end_addr)
 
 

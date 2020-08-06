@@ -15,7 +15,9 @@ from .errors import MetadataNotFoundError
 from .utils import is_py2, is_py3
 
 if is_py3():
-    from typing import Dict
+    from typing import Dict, TYPE_CHECKING, Optional
+    if TYPE_CHECKING:
+        from .client import Client
 
 
 def dirty_checker(f):
@@ -37,9 +39,10 @@ class State:
     :ivar int version:  Version of the state, starting from 0.
     """
 
-    def __init__(self, user, version=None):
+    def __init__(self, user, version=None, client=None):
         self.user = user  # type: str
         self.version = version if version is not None else 0  # type: int
+        self.client = client  # type: Optional[Client]
 
         # dirty bit
         self._dirty = True  # type: bool
@@ -96,8 +99,8 @@ class State:
         return metadata
 
     @classmethod
-    def parse(cls, base_path, version=None):
-        s = State(None)
+    def parse(cls, base_path, version=None, client=None):
+        s = State(None, client=client)
 
         # load metadata
         try:
@@ -147,6 +150,11 @@ class State:
 
         return s
 
+    def save(self):
+        if self.client is None:
+            raise RuntimeError("save(): State.client is None.")
+        self.client.save_state(self)
+
     #
     # Pushers
     #
@@ -175,6 +183,13 @@ class State:
 
         self.comments[addr] = comment
         return True
+
+    @dirty_checker
+    def remove_comment(self, addr):
+        if addr in self.comments:
+            del self.comments[addr]
+            return True
+        return False
 
     @dirty_checker
     def set_patch(self, addr, patch):
