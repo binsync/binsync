@@ -2,6 +2,7 @@ import os
 import re
 from functools import wraps
 from typing import Optional, Iterable, Dict, Any
+import logging
 
 from binaryninjaui import (
     DockHandler,
@@ -21,6 +22,8 @@ from binsync.data import Patch, Function, Comment, StackVariable, StackOffsetTyp
 from .ui import find_main_window, BinjaDockWidget
 from .config_dialog import ConfigDialog
 from .control_panel import ControlPanelDialog
+
+_l = logging.getLogger(name=__name__)
 
 
 def instance():
@@ -48,7 +51,7 @@ class BinsyncController:
         self.control_panel = None  # type: callable
 
         self.curr_bv = None  # type: Optional[BinaryView]
-        self.curr_func_addr = None  # type: Optional[int]
+        self.curr_func = None  # type: Optional[binaryninja.function.Function]
 
     def connect(self, user, path, init_repo):
         self._client = binsync.Client(user, path, init_repo=init_repo)
@@ -68,15 +71,20 @@ class BinsyncController:
 
     def mark_as_current_function(self, bv, bn_func):
         self.curr_bv = bv
-        self.curr_func_addr = bn_func.start
+        self.curr_func = bn_func
         self.control_panel.reload()
 
     def current_function(self) -> Optional[Function]:
-        if self.curr_bv is None:
+        if self.curr_func is None:
+            show_message_box(
+                "No function is in selection",
+                "Please navigate to a function in the disassembly view.",
+                MessageBoxButtonSet.OKButtonSet,
+                MessageBoxIcon.ErrorIcon,
+            )
             return None
-        if self.curr_func_addr is None:
-            return None
-        return self.curr_bv.get_function_at(self.curr_func_addr)
+
+        return self.curr_func
 
     @init_checker
     def users(self):
@@ -238,9 +246,47 @@ class BinsyncController:
 controller = BinsyncController()
 
 
-def launch_binsync_configure(*args):
+class CurrentFunctionNotification(BinaryDataNotification):
+    def __init__(self, controller):
+        super().__init__()
+        self.controller = controller
+
+    def function_update_requested(self, view, func):
+        print("function_update_requested", view, func)
+        self.controller.mark_as_current_function(view, func)
+
+    def function_updated(self, view, func):
+        print("function_updated", view, func)
+        self.controller.mark_as_current_function(view, func)
+
+    def symbol_added(self, view, sym):
+        print(view, sym)
+
+    def symbol_updated(self, view, sym):
+        print(view, sym)
+
+    def symbol_removed(self, view, sym):
+        print(view, sym)
+
+
+def launch_binsync_configure(context):
+
+    if context.binaryView is None:
+        show_message_box(
+            "No binary is loaded",
+            "There is no Binary View available. Please open a binary in Binary Ninja first.",
+            MessageBoxButtonSet.OKButtonSet,
+            MessageBoxIcon.ErrorIcon,
+        )
+        return
+
     d = ConfigDialog(controller)
     d.exec_()
+
+    # register a notification to get current functions
+    # TODO: This is a bad idea since more than one functions might be updated when editing one function :/
+    # notification = CurrentFunctionNotification(controller)
+    # context.binaryView.register_notification(notification)
 
 
 def open_control_panel(*args):
@@ -291,15 +337,17 @@ UIActionHandler.globalActions().bindAction(
 )
 Menu.mainMenu("Tools").addAction("Configure BinSync...", "BinSync")
 
-UIAction.registerAction("Open BinSync control panel")
+open_control_panel_id = "BinSync: Open control panel"
+UIAction.registerAction(open_control_panel_id)
 UIActionHandler.globalActions().bindAction(
-    "Open BinSync control panel", UIAction(open_control_panel)
+    open_control_panel_id, UIAction(open_control_panel)
 )
-Menu.mainMenu("Tools").addAction("Open BinSync control panel", "BinSync")
+Menu.mainMenu("Tools").addAction(open_control_panel_id, "BinSync")
 
 PluginCommand.register_for_function(
-    "BinSync: Mark current", "Mark as the current function in BinSync", controller.mark_as_current_function,
+    "BinSync: Mark current", "BinSync: Mark as current function", controller.mark_as_current_function,
 )
+
 PluginCommand.register_for_function(
     "Push function upwards", "Push function upwards", controller.push_function
 )
