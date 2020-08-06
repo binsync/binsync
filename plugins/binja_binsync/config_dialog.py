@@ -1,8 +1,10 @@
 import os
+import sys
 
 from PySide2.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QHBoxLayout, QLabel, QPushButton, QGroupBox, \
     QMessageBox, QCheckBox
 from binaryninja.interaction import get_directory_name_input
+import binsync
 
 from .ui import BinjaWidget
 
@@ -31,7 +33,10 @@ class ConfigWidget(BinjaWidget):
     def __init__(self, controller, dialog):
         super().__init__("BinSync")
 
-        self._funcaddr_edit = None  # type: QLineEdit
+        self._ssh_agent_edit = None  # type: QLineEdit
+        self._user_edit = None  # type: QLineEdit
+        self._repo_edit = None  # type: QLineEdit
+        self._ssh_auth_sock_edit = None  # type: QLineEdit
         self._controller = controller
         self._dialog = dialog
 
@@ -72,6 +77,33 @@ class ConfigWidget(BinjaWidget):
         repo_layout.addWidget(self._repo_edit)
         repo_layout.addWidget(select_dir_button)
 
+        # ssh agent
+        ssh_agent_label = QLabel(self)
+        ssh_agent_label.setText("SSH agent PID")
+        self._ssh_agent_edit = QLineEdit(self)
+
+        # ssh agent sock
+        ssh_agent_sock_label = QLabel(self)
+        ssh_agent_sock_label.setText("SSH auth socket")
+        self._ssh_auth_sock_edit = QLineEdit(self)
+
+        # ssh agent button
+        ssh_agent_btn = QPushButton(self)
+        ssh_agent_btn.setText("Discover SSH agent configuration")
+        ssh_agent_btn.clicked.connect(self._on_ssh_agent_btn_clicked)
+
+        # layout
+        ssh_layout = QVBoxLayout()
+        ssh0_layout = QHBoxLayout()
+        ssh0_layout.addWidget(ssh_agent_label)
+        ssh0_layout.addWidget(self._ssh_agent_edit)
+        ssh1_layout = QHBoxLayout()
+        ssh1_layout.addWidget(ssh_agent_sock_label)
+        ssh1_layout.addWidget(self._ssh_auth_sock_edit)
+        ssh_layout.addLayout(ssh0_layout)
+        ssh_layout.addLayout(ssh1_layout)
+        ssh_layout.addWidget(ssh_agent_btn)
+
         checkbox_layout = QHBoxLayout()
         init_repo_label = QLabel(self)
         init_repo_label.setText("Initialize repo")
@@ -101,6 +133,7 @@ class ConfigWidget(BinjaWidget):
         config_layout = QVBoxLayout()
         config_layout.addLayout(user_layout)
         config_layout.addLayout(repo_layout)
+        config_layout.addLayout(ssh_layout)
         config_layout.addLayout(checkbox_layout)
         config_layout.addLayout(buttons_layout)
         config_box.setLayout(config_layout)
@@ -115,7 +148,8 @@ class ConfigWidget(BinjaWidget):
         dirpath = get_directory_name_input("Select Git Root Directory")
         if isinstance(dirpath, bytes):
             dirpath = dirpath.decode("utf-8")  # TODO: Use the native encoding on Windows
-        self._repo_edit.setText(dirpath)
+        if dirpath:
+            self._repo_edit.setText(dirpath)
 
     def _on_connect_clicked(self):
         user = self._user_edit.text()
@@ -135,12 +169,47 @@ class ConfigWidget(BinjaWidget):
             return
 
         # TODO: Add a user ID to angr management
-        self._controller.connect(user, path, init_repo)
+        ssh_agent_pid = self._ssh_agent_edit.text()
+        ssh_auth_sock = self._ssh_auth_sock_edit.text()
+        if ssh_agent_pid:
+            try:
+                ssh_agent_pid = int(ssh_agent_pid)
+            except ValueError:
+                ssh_agent_pid = None
+        else:
+            ssh_agent_pid = None
+        if not ssh_auth_sock:
+            ssh_auth_sock = None
+
+        self._controller.connect(user, path, init_repo, ssh_agent_pid=ssh_agent_pid, ssh_auth_sock=ssh_auth_sock)
 
         if self._dialog is not None:
             self._dialog.close()
         else:
             self.close()
+
+    def _on_ssh_agent_btn_clicked(self):
+        ssh_agent_cmd = "ssh-agent"
+        if sys.platform.startswith("win"):
+            ssh_agent_cmd = "start-ssh-agent"
+
+        try:
+            pid, sock = binsync.Client.discover_ssh_agent(ssh_agent_cmd)
+            if pid is None or not sock:
+                QMessageBox(self).critical(
+                    None,
+                    "SSH agent discovery failed",
+                    "Failed to discover SSH agent. Please make sure SSH agent is already running."
+                )
+            else:
+                self._ssh_agent_edit.setText(str(pid))
+                self._ssh_auth_sock_edit.setText(sock)
+        except RuntimeError as ex:
+            QMessageBox(self).critical(
+                None,
+                "SSH agent discovery failed",
+                "Failed to discover SSH agent. Details: %s" % str(ex)
+            )
 
     def _on_cancel_clicked(self):
         if self._dialog is not None:

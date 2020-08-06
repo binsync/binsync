@@ -1,7 +1,7 @@
 from PySide2.QtWidgets import QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, QPushButton, QMessageBox, QDialog
 from PySide2.QtCore import Qt
 
-from .ui import BinjaWidget
+from .ui import BinjaWidget, BinjaDockWidget
 from .team_table import QTeamTable
 
 
@@ -17,6 +17,25 @@ class ControlPanelDialog(QDialog):
 
         # always on top
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
+
+    def _init_widgets(self):
+        self._w = ControlPanel(self._controller, dialog=self)
+
+        layout = QVBoxLayout()
+        layout.addWidget(self._w)
+
+        self.setLayout(layout)
+
+
+class ControlPanelDockWidget(BinjaDockWidget):
+    def __init__(self, controller, parent=None, name=None, data=None):
+        super().__init__(name, parent=parent)
+
+        self.data = data
+        self._w = None
+        self._controller = controller
+
+        self._init_widgets()
 
     def _init_widgets(self):
         self._w = ControlPanel(self._controller, dialog=self)

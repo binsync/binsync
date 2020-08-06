@@ -1,6 +1,8 @@
 import time
 import threading
 import os
+import subprocess
+import re
 import logging
 
 import git
@@ -8,6 +10,7 @@ import git
 from .data import User
 from .state import State
 from .errors import MetadataNotFoundError
+from .utils import is_py3
 
 _l = logging.getLogger(name=__name__)
 
@@ -50,12 +53,18 @@ class Client(object):
         commit_interval=10,
         init_repo=False,
         remote_url=None,
+        ssh_agent_pid=None,
+        ssh_auth_sock=None,
     ):
         self.master_user = master_user
         self.repo_root = repo_root
         self.remote = remote
         self.branch = branch
         self.repo = None
+
+        # ssh-agent info
+        self.ssh_agent_pid = ssh_agent_pid  # type: int
+        self.ssh_auth_sock = ssh_auth_sock  # type: str
 
         # three scenarios
         # 1. We already have the repo checked out
@@ -123,7 +132,15 @@ class Client(object):
         :return:                None
         """
 
-        git.Repo.clone_from(remote_url, self.repo_root)
+        if self.ssh_agent_pid is not None and self.ssh_auth_sock is not None:
+            env = {
+                'SSH_AGENT_PID': str(self.ssh_agent_pid),
+                'SSH_AUTH_SOCK': self.ssh_auth_sock
+            }
+        else:
+            env = { }
+
+        git.Repo.clone_from(remote_url, self.repo_root, env=env)
 
     def pull(self):
         """
@@ -279,6 +296,39 @@ class Client(object):
         # commit changes
         self.repo.index.add([os.path.join(".", state.user, "*")])
         self.repo.index.commit("Save state")
+
+        self.push()
+
+    @staticmethod
+    def discover_ssh_agent(ssh_agent_cmd):
+        proc = subprocess.Popen(ssh_agent_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = proc.communicate()
+
+        if is_py3:
+            stdout = stdout.decode("utf-8")
+            stderr = stderr.decode("utf-8")
+
+        if proc.returncode != 0 or stderr:
+            raise RuntimeError("Failed to discover SSH agent by running command %s.\n"
+                               "Return code: %d.\n"
+                               "stderr: %s" % (
+                ssh_agent_cmd,
+                proc.returncode,
+                stderr,
+            ))
+
+        # parse output
+        m = re.search(r"Found ssh-agent at (\d+)", stdout)
+        if m is None:
+            return None, None
+        ssh_agent_pid = int(m.group(1))
+
+        m = re.search(r"Found ssh-agent socket at ([^\s]+)", stdout)
+        if m is None:
+            return None, None
+        ssh_agent_sock = m.group(1)
+
+        return ssh_agent_pid, ssh_agent_sock
 
     def close(self):
         self.repo.close()

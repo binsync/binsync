@@ -4,6 +4,7 @@ from functools import wraps
 from typing import Optional, Iterable, Dict, Any
 import logging
 
+from PySide2.QtCore import Qt
 from binaryninjaui import (
     UIContext,
     DockHandler,
@@ -21,9 +22,9 @@ import binsync
 from binsync import State, StateContext
 from binsync.data import Patch, Function, Comment, StackVariable, StackOffsetType
 
-from .ui import find_main_window, BinjaDockWidget
+from .ui import find_main_window, BinjaDockWidget, create_widget
 from .config_dialog import ConfigDialog
-from .control_panel import ControlPanelDialog
+from .control_panel import ControlPanelDialog, ControlPanelDockWidget
 
 _l = logging.getLogger(name=__name__)
 
@@ -100,8 +101,9 @@ class BinsyncController:
         self.curr_bv = None  # type: Optional[BinaryView]
         self.curr_func = None  # type: Optional[binaryninja.function.Function]
 
-    def connect(self, user, path, init_repo):
-        self._client = binsync.Client(user, path, init_repo=init_repo)
+    def connect(self, user, path, init_repo, ssh_agent_pid=None, ssh_auth_sock=None):
+        self._client = binsync.Client(user, path, init_repo=init_repo, ssh_agent_pid=ssh_agent_pid,
+                                      ssh_auth_sock=ssh_auth_sock)
         if self.control_panel is not None:
             self.control_panel.reload()
 
@@ -133,6 +135,14 @@ class BinsyncController:
             return
         ctx = all_contexts[0]
         handler = ctx.contentActionHandler()
+        if handler is None:
+            show_message_box(
+                "Action handler not found",
+                "No action handler is available. Please open a binary first.",
+                MessageBoxButtonSet.OKButtonSet,
+                MessageBoxIcon.ErrorIcon,
+            )
+            return
         actionContext = handler.actionContext()
         func = actionContext.function
         if func is None:
@@ -415,6 +425,16 @@ UIActionHandler.globalActions().bindAction(
     open_control_panel_id, UIAction(open_control_panel)
 )
 Menu.mainMenu("Tools").addAction(open_control_panel_id, "BinSync")
+
+# register the control panel dock widget
+dock_handler = DockHandler.getActiveDockHandler()
+dock_handler.addDockWidget(
+    "BinSync: Control Panel",
+    lambda n,p,d: create_widget(ControlPanelDockWidget, n, p, d, controller),
+    Qt.RightDockWidgetArea,
+    Qt.Vertical,
+    True
+)
 
 PluginCommand.register_for_function(
     "Push function upwards", "Push function upwards", controller.push_function

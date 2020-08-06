@@ -1,3 +1,6 @@
+import traceback
+import sys
+
 from PySide2.QtWidgets import (
     QDockWidget,
     QWidget,
@@ -17,6 +20,7 @@ from PySide2.QtWidgets import (
     QCheckBox,
 )
 from PySide2.QtCore import Qt
+from binaryninjaui import DockContextHandler
 
 
 # Some code is derived from https://github.com/NOPDev/BinjaDock/tree/master/defunct
@@ -38,6 +42,54 @@ def find_main_window():
         # oops cannot find the main window
         raise Exception("Main window is not found.")
     return main_window
+
+
+dockwidgets = [ ]
+
+
+# shamelessly copied from https://github.com/Vector35/debugger
+def create_widget(widget_class, name, parent, data, *args):
+    # It is imperative this function return *some* value because Shiboken will try to deref what we return
+    # If we return nothing (or throw) there will be a null pointer deref (and we won't even get to see why)
+    # So in the event of an error or a nothing, return an empty widget that at least stops the crash
+    try:
+        widget = widget_class(*args, parent=parent, name=name, data=data)
+
+        if not widget:
+            raise Exception('expected widget, got None')
+
+        global dockwidgets
+
+        found = False
+        for (bv, widgets) in dockwidgets:
+            if bv == data:
+                widgets[name] = widget
+                found = True
+
+        if not found:
+            dockwidgets.append((data, {
+                name: widget
+            }))
+
+        widget.destroyed.connect(lambda destroyed: destroy_widget(destroyed, widget, data, name))
+
+        return widget
+    except Exception:
+        traceback.print_exc(file=sys.stderr)
+        return QWidget(parent)
+
+
+def destroy_widget(destroyed, old, data, name):
+    # Gotta be careful to delete the correct widget here
+    for (bv, widgets) in dockwidgets:
+        if bv == data:
+            for (name, widget) in widgets.items():
+                if widget == old:
+                    # If there are no other references to it, this will be the only one and the call
+                    # will delete it and invoke __del__.
+                    widgets.pop(name)
+                    return
+
 
 class BinjaWidgetBase:
     def __init__(self):
@@ -75,17 +127,17 @@ class BinjaWidgetBase:
         self.tool_menu.addAction(name, func)
 
 
-class BinjaDockWidget(QDockWidget):
-    def __init__(self, *args):
-        super(BinjaDockWidget, self).__init__(*args)
+class BinjaDockWidget(QWidget, DockContextHandler):
+    def __init__(self, name, parent=None):
+        QWidget.__init__(self, parent)
+        DockContextHandler.__init__(self, self, name)
 
         self.base = BinjaWidgetBase()
 
-        self.base.add_tool_menu_action("Toggle plugin dock", self.toggle)
         # self._main_window.addDockWidget(Qt.RightDockWidgetArea, self)
-        self._tabs = QTabWidget()
-        self._tabs.setTabPosition(QTabWidget.East)
-        self.setWidget(self._tabs)
+        #self._tabs = QTabWidget()
+        #self._tabs.setTabPosition(QTabWidget.East)
+        #self.setWidget(self._tabs)
 
         # self.hide()
         self.show()
