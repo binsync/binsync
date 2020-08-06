@@ -177,7 +177,10 @@ class BinsyncController:
         :return:
         :rtype: Optional[ida_funcs.func_t]
         """
-        ea = idc.ScreenEA()
+        if hasattr(idc, "ScreenEA"):
+            ea = idc.ScreenEA()
+        else:
+            ea = idc.get_screen_ea()
         func = idaapi.get_func(ea)
         return func
 
