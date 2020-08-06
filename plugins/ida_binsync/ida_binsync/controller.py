@@ -1,6 +1,8 @@
 from __future__ import absolute_import
 from functools import wraps
 import re
+import threading
+import time
 import logging
 
 from PyQt5.QtWidgets import QMessageBox
@@ -23,7 +25,7 @@ def init_checker(f):
     @wraps(f)
     def initcheck(self, *args, **kwargs):
         if not self.check_client():
-            raise ValueError("Please connect to a repo first.")
+            raise RuntimeError("Please connect to a repo first.")
         return f(self, *args, **kwargs)
     return initcheck
 
@@ -155,19 +157,33 @@ class BinsyncController:
     def __init__(self):
         self._client = None  # type: binsync.Client
 
+        self.control_panel = None
+
+        # start the worker routine
+        self.worker_thread = threading.Thread(target=self.worker_routine)
+        self.worker_thread.setDaemon(True)
+        self.worker_thread.start()
+
+    def worker_routine(self):
+        while True:
+            if self.control_panel is not None:
+                self.control_panel.reload()
+            time.sleep(1)
+
     def connect(self, user, path, init_repo, ssh_agent_pid=None, ssh_auth_sock=None):
         self._client = BinsyncClient(user, path, None, None, None, init_repo=init_repo, ssh_agent_pid=ssh_agent_pid,
                                       ssh_auth_sock=ssh_auth_sock)
 
-    def check_client(self):
+    def check_client(self, message_box=False):
         if self._client is None:
-            QMessageBox.critical(
-                None,
-                "BinSync: Error",
-                "BinSync client does not exist.\n"
-                "You haven't connected to a binsync repo. Please connect to a binsync repo first.",
-                QMessageBox.Ok,
-            )
+            if message_box:
+                QMessageBox.critical(
+                    None,
+                    "BinSync: Error",
+                    "BinSync client does not exist.\n"
+                    "You haven't connected to a binsync repo. Please connect to a binsync repo first.",
+                    QMessageBox.Ok,
+                )
             return False
         return True
 
@@ -186,6 +202,10 @@ class BinsyncController:
 
     def state_ctx(self, user=None, version=None, locked=False):
         return self._client.state_ctx(user=user, version=version, locked=locked)
+
+    @init_checker
+    def status(self):
+        return self._client.status()
 
     @init_checker
     def users(self):

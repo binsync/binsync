@@ -6,6 +6,7 @@ import re
 import logging
 
 import git
+import git.exc
 
 from .data import User
 from .state import State
@@ -83,6 +84,7 @@ class Client(object):
             if init_repo:
                 # case 3
                 self.repo = git.Repo.init(self.repo_root)
+                self._add_git_ignore(self.repo_root)
             elif remote_url is not None:
                 # case 2
                 self.clone(remote_url)
@@ -158,7 +160,18 @@ class Client(object):
         :return:    None
         """
 
-        self.repo.remotes[self.remote].push()
+        if self.remote and self.remote in self.repo.remotes:
+            try:
+                self.repo.remotes[self.remote].push()
+            except git.exc.GitCommandError as ex:
+                print("Failed to push to remote \"%s\".\n"
+                      "Did you setup %s/master as the upstream of the local master branch?\n"
+                      "\n"
+                      "Git error: %s." % (
+                    self.remote,
+                    self.remote,
+                    str(ex)
+                ))
 
     def users(self):
         for d in os.listdir(self.repo_root):
@@ -206,6 +219,28 @@ class Client(object):
             all_info[user.name] = info
 
         return all_info
+
+    def status(self):
+        """
+        Return a dict of status information.
+        """
+
+        d = {}
+
+        d['remote_name'] = self.remote
+
+        if self.repo is not None:
+            d['last_commit_hash'] = self.repo.heads[0].commit.hexsha
+            try:
+                d['last_commit_time'] = self.repo.heads[0].commit.committed_datetime
+            except IOError:  # sometimes GitPython throws this exception
+                d['last_commit_time'] = "<unknown>"
+            if any(r.name == self.remote for r in self.repo.remotes):
+                d['remote_url'] = ";".join(self.repo.remotes[self.remote].urls)
+            else:
+                d['remote_url'] = "<does not exist>"
+
+        return d
 
     def base_path(self, user=None):
         if user is None:
@@ -295,9 +330,10 @@ class Client(object):
 
         # commit changes
         self.repo.index.add([os.path.join(".", state.user, "*")])
-        self.repo.index.commit("Save state")
-
-        self.push()
+        if self.repo.index.diff("HEAD"):
+            # commit if there is any difference
+            self.repo.index.commit("Save state")
+            self.push()
 
     @staticmethod
     def discover_ssh_agent(ssh_agent_cmd):
@@ -333,3 +369,9 @@ class Client(object):
     def close(self):
         self.repo.close()
         del self.repo
+
+    def _add_git_ignore(self, repo_root):
+        with open(os.path.join(repo_root, ".gitignore"), "w") as f:
+            f.write(".git/*\n")
+        self.repo.index.add([".gitignore"])
+        self.repo.index.commit("Add .gitignore.")

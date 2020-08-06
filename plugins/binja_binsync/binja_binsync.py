@@ -1,5 +1,7 @@
 import os
 import re
+import time
+import threading
 from functools import wraps
 from typing import Optional, Iterable, Dict, Any
 import logging
@@ -34,7 +36,7 @@ def instance():
     try:
         dock = [x for x in main_window.children() if isinstance(x, BinjaDockWidget)][0]
     except:
-        dock = BinjaDockWidget()
+        dock = BinjaDockWidget("dummy")
     return dock
 
 
@@ -46,7 +48,7 @@ def init_checker(f):
     @wraps(f)
     def initcheck(self, *args, **kwargs):
         if not self.check_client():
-            raise ValueError("Please connect to a repo first.")
+            raise RuntimeError("Please connect to a repo first.")
         return f(self, *args, **kwargs)
     return initcheck
 
@@ -96,10 +98,20 @@ class BinsyncController:
     def __init__(self):
         self._client = None  # type: binsync.Client
 
-        self.control_panel = None  # type: callable
+        self.control_panel = None
 
         self.curr_bv = None  # type: Optional[BinaryView]
         self.curr_func = None  # type: Optional[binaryninja.function.Function]
+
+        # start the worker routine
+        self.worker_thread = threading.Thread(target=self.worker_routine, daemon=True)
+        self.worker_thread.start()
+
+    def worker_routine(self):
+        while True:
+            if self.control_panel is not None:
+                self.control_panel.reload()
+            time.sleep(1)
 
     def connect(self, user, path, init_repo, ssh_agent_pid=None, ssh_auth_sock=None):
         self._client = binsync.Client(user, path, init_repo=init_repo, ssh_agent_pid=ssh_agent_pid,
@@ -107,14 +119,15 @@ class BinsyncController:
         if self.control_panel is not None:
             self.control_panel.reload()
 
-    def check_client(self):
+    def check_client(self, message_box=False):
         if self._client is None:
-            show_message_box(
-                "BinSync client does not exist",
-                "You haven't connected to a binsync repo. Please connect to a binsync repo first.",
-                MessageBoxButtonSet.OKButtonSet,
-                MessageBoxIcon.ErrorIcon,
-            )
+            if message_box:
+                show_message_box(
+                    "BinSync client does not exist",
+                    "You haven't connected to a binsync repo. Please connect to a binsync repo first.",
+                    MessageBoxButtonSet.OKButtonSet,
+                    MessageBoxIcon.ErrorIcon,
+                )
             return False
         return True
 
@@ -123,41 +136,48 @@ class BinsyncController:
         self.curr_func = bn_func
         self.control_panel.reload()
 
-    def current_function(self) -> Optional[Function]:
+    def current_function(self, message_box=False) -> Optional[Function]:
         all_contexts = UIContext.allContexts()
         if not all_contexts:
-            show_message_box(
-                "UI contexts not found",
-                "No UI context is available. Please open a binary first.",
-                MessageBoxButtonSet.OKButtonSet,
-                MessageBoxIcon.ErrorIcon,
-            )
+            if message_box:
+                show_message_box(
+                    "UI contexts not found",
+                    "No UI context is available. Please open a binary first.",
+                    MessageBoxButtonSet.OKButtonSet,
+                    MessageBoxIcon.ErrorIcon,
+                )
             return
         ctx = all_contexts[0]
         handler = ctx.contentActionHandler()
         if handler is None:
-            show_message_box(
-                "Action handler not found",
-                "No action handler is available. Please open a binary first.",
-                MessageBoxButtonSet.OKButtonSet,
-                MessageBoxIcon.ErrorIcon,
-            )
+            if message_box:
+                show_message_box(
+                    "Action handler not found",
+                    "No action handler is available. Please open a binary first.",
+                    MessageBoxButtonSet.OKButtonSet,
+                    MessageBoxIcon.ErrorIcon,
+                )
             return
         actionContext = handler.actionContext()
         func = actionContext.function
         if func is None:
-            show_message_box(
-                "No function is in selection",
-                "Please navigate to a function in the disassembly view.",
-                MessageBoxButtonSet.OKButtonSet,
-                MessageBoxIcon.ErrorIcon,
-            )
+            if message_box:
+                show_message_box(
+                    "No function is in selection",
+                    "Please navigate to a function in the disassembly view.",
+                    MessageBoxButtonSet.OKButtonSet,
+                    MessageBoxIcon.ErrorIcon,
+                )
             return None
 
         return func
 
     def state_ctx(self, user=None, version=None, locked=False) -> StateContext:
         return self._client.state_ctx(user=user, version=version, locked=locked)
+
+    @init_checker
+    def status(self) -> Dict[str,Any]:
+        return self._client.status()
 
     @init_checker
     def users(self):

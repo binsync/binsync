@@ -188,6 +188,12 @@ class ConfigWidget(QWidget):
             self.close()
 
     def _on_ssh_agent_btn_clicked(self):
+        try:
+            return self._on_ssh_agent_btn_clicked_core()
+        except Exception as ex:
+            return None
+
+    def _on_ssh_agent_btn_clicked_core(self):
         ssh_agent_cmd = "ssh-agent"
         if sys.platform.startswith("win"):
             ssh_agent_cmd = "start-ssh-agent"
@@ -209,6 +215,7 @@ class ConfigWidget(QWidget):
                 "SSH agent discovery failed",
                 "Failed to discover SSH agent. Details: %s" % str(ex)
             )
+        print("RETURNING")
 
     def _on_cancel_clicked(self):
         if self._dialog is not None:

@@ -1,8 +1,9 @@
-from PySide2.QtWidgets import QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, QPushButton, QMessageBox, QDialog
+from PySide2.QtWidgets import QVBoxLayout, QHBoxLayout, QGroupBox, QPushButton, QMessageBox, QDialog
 from PySide2.QtCore import Qt
 
 from .ui import BinjaWidget, BinjaDockWidget
 from .team_table import QTeamTable
+from .status_table import QStatusTable
 
 
 class ControlPanelDialog(QDialog):
@@ -53,7 +54,7 @@ class ControlPanel(BinjaWidget):
         self._controller = controller
         self._dialog = dialog
 
-        self._status_label = None  # type: QLabel
+        self._status_table = None  # type: QStatusTable
         self._team_table = None  # type: QUserTable
 
         self._init_widgets()
@@ -67,10 +68,11 @@ class ControlPanel(BinjaWidget):
 
     def reload(self):
         # update status
-        self._status_label.setText("Ready.")  # TODO: User a proper status string in the controller
+        self._status_table.status = "ready"
         curr_func = self._controller.current_function()
         if curr_func is not None:
-            self._status_label.setText("Ready. Current function: %s" % curr_func.name)
+            self._status_table.current_function = curr_func.name
+        self._status_table.reload()
         # update users
         if self._controller is not None and self._controller.check_client():
             self._team_table.update_users(self._controller.users())
@@ -89,11 +91,11 @@ class ControlPanel(BinjaWidget):
         status_box = QGroupBox(self)
         status_box.setTitle("Status")
 
-        self._status_label = QLabel(self)
-        self._status_label.setText("Ready.")  # TODO: Use a proper status string in the controller
+        self._status_table = QStatusTable(self._controller)
+        self._status_table.status = "ready"
 
         status_layout = QVBoxLayout()
-        status_layout.addWidget(self._status_label)
+        status_layout.addWidget(self._status_table)
 
         status_box.setLayout(status_layout)
 
