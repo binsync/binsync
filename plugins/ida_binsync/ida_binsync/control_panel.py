@@ -184,26 +184,29 @@ class ControlPanel(QWidget):
             return
 
         func = current_function
-        self._controller.push_function(func)
 
-        # comments
-        comments = { }
-        for start_ea, end_ea in idautils.Chunks(func.start_ea):
-            for head in idautils.Heads(start_ea, end_ea):
-                cmt_0 = idc.GetCommentEx(head, 0)  # regular comment
-                cmt_1 = idc.GetCommentEx(head, 1)  # repeatable comment
-                if cmt_0 and cmt_1:
-                    cmt = cmt_0 + " | " + cmt_1
-                elif cmt_0 or cmt_1:
-                    cmt = cmt_0 or cmt_1
-                else:
-                    cmt = None
-                if cmt:
-                    comments[head] = cmt
-        self._controller.push_comments(comments)
+        with self._controller.state_ctx(locked=True) as state:
+            self._controller.push_function(func, state=state)
 
-        # stack variables
-        self._controller.push_stack_variables(func)
+            # comments
+            comments = { }
+            for start_ea, end_ea in idautils.Chunks(func.start_ea):
+                for head in idautils.Heads(start_ea, end_ea):
+                    cmt_0 = idc.GetCommentEx(head, 0)  # regular comment
+                    cmt_1 = idc.GetCommentEx(head, 1)  # repeatable comment
+                    if cmt_0 and cmt_1:
+                        cmt = cmt_0 + " | " + cmt_1
+                    elif cmt_0 or cmt_1:
+                        cmt = cmt_0 or cmt_1
+                    else:
+                        cmt = None
+                    if cmt:
+                        comments[head] = cmt
+            self._controller.remove_all_comments(func, state=state)
+            self._controller.push_comments(comments, state=state)
+
+            # stack variables
+            self._controller.push_stack_variables(func, state=state)
 
     def _on_pullpatches_clicked(self):
 

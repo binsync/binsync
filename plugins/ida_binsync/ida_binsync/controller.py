@@ -14,6 +14,10 @@ from binsync.data import StackVariable, StackOffsetType
 
 _l = logging.getLogger(name=__name__)
 
+#
+# Decorators
+#
+
 
 def init_checker(f):
     @wraps(f)
@@ -23,6 +27,48 @@ def init_checker(f):
         return f(self, *args, **kwargs)
     return initcheck
 
+
+def make_state(f):
+    """
+    Build a writeable State instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
+    Function `f` should have have at least two kwargs, `user` and `state`.
+    """
+    @wraps(f)
+    def state_check(self, *args, **kwargs):
+        state = kwargs.pop('state', None)
+        user = kwargs.pop('user', None)
+        if state is None:
+            save_before_return = True
+            state = self._client.get_state(user=user)
+        else:
+            save_before_return = False
+        kwargs['state'] = state
+        r = f(self, *args, **kwargs)
+        if save_before_return:
+            state.save()
+        return r
+    return state_check
+
+
+def make_ro_state(f):
+    """
+    Build a read-only State instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
+    Function `f` should have have at least two kwargs, `user` and `state`.
+    """
+    @wraps(f)
+    def state_check(self, *args, **kwargs):
+        state = kwargs.pop('state', None)
+        user = kwargs.pop('user', None)
+        if state is None:
+            state = self._client.get_state(user=user)
+        kwargs['state'] = state
+        return f(self, *args, **kwargs)
+    return state_check
+
+
+#
+# Classes
+#
 
 class BinsyncClient(Client):
     def __init__(
@@ -130,21 +176,25 @@ class BinsyncController:
         func = idaapi.get_func(ea)
         return func
 
+    def state_ctx(self, user=None, version=None, locked=False):
+        return self._client.state_ctx(user=user, version=version, locked=locked)
+
     @init_checker
     def users(self):
         return self._client.users()
 
     @init_checker
-    def push_function(self, ida_func):
+    @make_state
+    def push_function(self, ida_func, user=None, state=None):
         # Push function
         func_addr = int(ida_func.start_ea)
         func = binsync.data.Function(func_addr)
         func.name = idc.GetFunctionName(func_addr)
-        self._client.get_state().set_function(func)
-        self._client.save_state()
+        state.set_function(func)
 
     @init_checker
-    def pull_function(self, ida_func, user=None):
+    @make_ro_state
+    def pull_function(self, ida_func, user=None, state=None):
         """
         Pull a function downwards.
 
@@ -153,7 +203,6 @@ class BinsyncController:
         :param user:
         :return:
         """
-        state = self._client.get_state(user=user)
 
         # pull function
         try:
@@ -163,12 +212,13 @@ class BinsyncController:
             return None
 
     @init_checker
-    def fill_function(self, ida_func, user=None):
+    @make_ro_state
+    def fill_function(self, ida_func, user=None, state=None):
         """
         Grab all relevant information from the specified user and fill the @ida_func.
         """
 
-        _func = self.pull_function(ida_func, user=user)
+        _func = self.pull_function(ida_func, user=user, state=state)
         if _func is None:
             return
 
@@ -179,7 +229,7 @@ class BinsyncController:
         # comments
         for start_ea, end_ea in idautils.Chunks(ida_func.start_ea):
             for head in idautils.Heads(start_ea, end_ea):
-                comment = self.pull_comment(head, user=user)
+                comment = self.pull_comment(head, user=user, state=state)
                 if comment is not None:
                     idc.MakeRptCmt(head, comment)
 
@@ -200,7 +250,7 @@ class BinsyncController:
             stack_offset = member.soff - frame_size + last_member_size
             existing_stack_vars[stack_offset] = member
 
-        for offset, stack_var in self.pull_stack_variables(ida_func, user=user).items():
+        for offset, stack_var in self.pull_stack_variables(ida_func, user=user, state=state).items():
             ida_offset = stack_var.get_offset(StackOffsetType.IDA)
             # skip if this variable already exists
             if ida_offset in existing_stack_vars:
@@ -218,22 +268,29 @@ class BinsyncController:
                 # TODO: retype the existing variable
 
     @init_checker
-    def push_comments(self, comments):
+    @make_state
+    def remove_all_comments(self, ida_func, user=None, state=None):
+        for start_ea, end_ea in idautils.Chunks(ida_func.start_ea):
+            for ins_addr in idautils.Heads(start_ea, end_ea):
+                if ins_addr in state.comments:
+                    state.remove_comment(ins_addr)
+
+    @init_checker
+    @make_state
+    def push_comments(self, comments, user=None, state=None):
         # Push comments
         for addr, comment in comments.items():
             comm_addr = int(addr)
-            self._client.get_state().set_comment(comm_addr, comment)
-
-        # TODO: Fixme
-        self._client.save_state()
+            state.set_comment(comm_addr, comment)
 
     @init_checker
-    def push_comment(self, comment_addr, comment):
-        self._client.get_state().set_comment(comment_addr, comment)
-        self._client.save_state()
+    @make_state
+    def push_comment(self, comment_addr, comment, user=None, state=None):
+        state.set_comment(comment_addr, comment)
 
     @init_checker
-    def pull_comment(self, addr, user=None):
+    @make_ro_state
+    def pull_comment(self, addr, user=None, state=None):
         """
         Pull comments downwards.
 
@@ -243,20 +300,19 @@ class BinsyncController:
         :param user:
         :return:
         """
-        state = self._client.get_state(user=user)
         try:
             return state.get_comment(addr)
         except KeyError:
             return None
 
-    def push_patch(self, patch):
-        if not self.check_client():
-            return
-        self._client.get_state().set_patch(patch.offset, patch)
-        self._client.save_state()
+    @init_checker
+    @make_state
+    def push_patch(self, patch, user=None, state=None):
+        state.set_patch(patch.offset, patch)
 
     @init_checker
-    def push_stack_variable(self, ida_func, stack_offset, name, type_str, size):
+    @make_state
+    def push_stack_variable(self, ida_func, stack_offset, name, type_str, size, user=None, state=None):
         # convert longs to ints
         stack_offset = int(stack_offset)
         func_addr = int(ida_func.start_ea)
@@ -268,10 +324,11 @@ class BinsyncController:
                           type_str,
                           size,
                           func_addr)
-        self._client.get_state().set_stack_variable(func_addr, stack_offset, v)
+        state.set_stack_variable(func_addr, stack_offset, v)
 
     @init_checker
-    def push_stack_variables(self, ida_func):
+    @make_state
+    def push_stack_variables(self, ida_func, user=None, state=None):
 
         frame = idaapi.get_frame(ida_func.start_ea)
         if frame is None or frame.memqty <= 0:
@@ -296,21 +353,19 @@ class BinsyncController:
             stack_offset = member.soff - frame_size + last_member_size
             size = idaapi.get_member_size(member)
             type_str = self._get_type_str(member.flag)
-            self.push_stack_variable(ida_func, stack_offset, name, type_str, size)
-
-        self._client.save_state()
+            self.push_stack_variable(ida_func, stack_offset, name, type_str, size, user=user, state=state)
 
     @init_checker
-    def pull_stack_variables(self, ida_func, user=None):
-        state = self._client.get_state(user=user)
+    @make_ro_state
+    def pull_stack_variables(self, ida_func, user=None, state=None):
         try:
             return dict(state.get_stack_variables(ida_func.start_ea))
         except KeyError:
             return { }
 
     @init_checker
-    def pull_stack_variable(self, ida_func, offset, user=None):
-        state = self._client.get_state(user=user)
+    @make_ro_state
+    def pull_stack_variable(self, ida_func, offset, user=None, state=None):
         return state.get_stack_variable(ida_func.start_ea, offset)
 
     #
