@@ -6,6 +6,7 @@ import logging
 from PyQt5.QtWidgets import QMessageBox
 import idc
 import idaapi
+import idautils
 
 import binsync
 from binsync import Client
@@ -143,6 +144,80 @@ class BinsyncController:
         self._client.save_state()
 
     @init_checker
+    def pull_function(self, ida_func, user=None):
+        """
+        Pull a function downwards.
+
+        :param bv:
+        :param bn_func:
+        :param user:
+        :return:
+        """
+        state = self._client.get_state(user=user)
+
+        # pull function
+        try:
+            func = state.get_function(int(ida_func.start_ea))
+            return func
+        except KeyError:
+            return None
+
+    @init_checker
+    def fill_function(self, ida_func, user=None):
+        """
+        Grab all relevant information from the specified user and fill the @ida_func.
+        """
+
+        _func = self.pull_function(ida_func, user=user)
+        if _func is None:
+            return
+
+        # name
+        if idc.GetFunctionName(ida_func.start_ea) != _func.name:
+            idaapi.set_name(ida_func.start_ea, _func.name, idaapi.SN_FORCE)
+
+        # comments
+        for start_ea, end_ea in idautils.Chunks(ida_func.start_ea):
+            for head in idautils.Heads(start_ea, end_ea):
+                comment = self.pull_comment(head, user=user)
+                if comment is not None:
+                    idc.MakeRptCmt(head, comment)
+
+        # stack variables
+        existing_stack_vars = { }
+
+        frame = idaapi.get_frame(ida_func.start_ea)
+        if frame is None or frame.memqty <= 0:
+            _l.debug("Function %#x does not have an associated function frame. Skip variable name sync-up.",
+                     ida_func.start_ea)
+            return
+
+        frame_size = idc.GetStrucSize(frame)
+        last_member_size = idaapi.get_member_size(frame.get_member(frame.memqty - 1))
+
+        for i in range(frame.memqty):
+            member = frame.get_member(i)
+            stack_offset = member.soff - frame_size + last_member_size
+            existing_stack_vars[stack_offset] = member
+
+        for offset, stack_var in self.pull_stack_variables(ida_func, user=user).items():
+            ida_offset = stack_var.get_offset(StackOffsetType.IDA)
+            # skip if this variable already exists
+            if ida_offset in existing_stack_vars:
+                type_str = self._get_type_str(existing_stack_vars[ida_offset].flag)
+            else:
+                type_str = None
+
+            if ida_offset in existing_stack_vars:
+                if idc.GetMemberName(frame.id, existing_stack_vars[ida_offset].soff) == stack_var.name \
+                        and type_str is not None \
+                        and stack_var.type == type_str:
+                    continue
+                # rename the existing variable
+                idaapi.set_member_name(frame, existing_stack_vars[ida_offset].soff, stack_var.name)
+                # TODO: retype the existing variable
+
+    @init_checker
     def push_comments(self, comments):
         # Push comments
         for addr, comment in comments.items():
@@ -156,6 +231,23 @@ class BinsyncController:
     def push_comment(self, comment_addr, comment):
         self._client.get_state().set_comment(comment_addr, comment)
         self._client.save_state()
+
+    @init_checker
+    def pull_comment(self, addr, user=None):
+        """
+        Pull comments downwards.
+
+        :param bv:
+        :param start_addr:
+        :param end_addr:
+        :param user:
+        :return:
+        """
+        state = self._client.get_state(user=user)
+        try:
+            return state.get_comment(addr)
+        except KeyError:
+            return None
 
     def push_patch(self, patch):
         if not self.check_client():

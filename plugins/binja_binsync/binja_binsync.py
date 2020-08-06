@@ -5,6 +5,7 @@ from typing import Optional, Iterable, Dict, Any
 import logging
 
 from binaryninjaui import (
+    UIContext,
     DockHandler,
     DockContextHandler,
     UIAction,
@@ -75,7 +76,20 @@ class BinsyncController:
         self.control_panel.reload()
 
     def current_function(self) -> Optional[Function]:
-        if self.curr_func is None:
+        all_contexts = UIContext.allContexts()
+        if not all_contexts:
+            show_message_box(
+                "UI contexts not found",
+                "No UI context is available. Please open a binary first.",
+                MessageBoxButtonSet.OKButtonSet,
+                MessageBoxIcon.ErrorIcon,
+            )
+            return
+        ctx = all_contexts[0]
+        handler = ctx.contentActionHandler()
+        actionContext = handler.actionContext()
+        func = actionContext.function
+        if func is None:
             show_message_box(
                 "No function is in selection",
                 "Please navigate to a function in the disassembly view.",
@@ -84,7 +98,7 @@ class BinsyncController:
             )
             return None
 
-        return self.curr_func
+        return func
 
     @init_checker
     def users(self):
@@ -343,10 +357,6 @@ UIActionHandler.globalActions().bindAction(
     open_control_panel_id, UIAction(open_control_panel)
 )
 Menu.mainMenu("Tools").addAction(open_control_panel_id, "BinSync")
-
-PluginCommand.register_for_function(
-    "BinSync: Mark current", "BinSync: Mark as current function", controller.mark_as_current_function,
-)
 
 PluginCommand.register_for_function(
     "Push function upwards", "Push function upwards", controller.push_function

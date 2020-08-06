@@ -12,7 +12,7 @@ import toml
 
 from .data import Function, Comment, Patch, StackVariable
 from .errors import MetadataNotFoundError
-from .utils import is_py3
+from .utils import is_py2, is_py3
 
 if is_py3():
     from typing import Dict
@@ -213,13 +213,19 @@ class State:
         if addr not in self.comments:
             raise KeyError("There is no comment at address %#x." % addr)
 
-        return self.comments[addr]
+        cmt = self.comments[addr]
+        if is_py2() and isinstance(cmt, unicode):
+            cmt = str(cmt)
+        return cmt
 
     def get_comments(self, start_addr, end_addr=None):
         for k in self.comments.irange(start_addr, reverse=False):
             if k >= end_addr:
                 break
-            yield self.comments[k]
+            cmt = self.comments[k]
+            if is_py2() and isinstance(cmt, unicode):
+                cmt = str(cmt)
+            yield cmt
 
     def get_patch(self, addr):
 

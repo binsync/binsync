@@ -3,6 +3,7 @@ import os
 import toml
 
 from .base import Base
+from ..utils import is_py2
 
 long = int
 
@@ -25,6 +26,10 @@ class Function(Base):
         self.name = name
         self.notes = notes
 
+        if is_py2():
+            self.name = str(self.name)
+            self.notes = str(self.notes)
+
     def __getstate__(self):
         return {
             "addr": self.addr,
@@ -38,6 +43,10 @@ class Function(Base):
         self.addr = state["addr"]
         self.name = state["name"]
         self.notes = state.get("notes", None)
+
+        if is_py2():
+            self.name = str(self.name)
+            self.notes = str(self.notes)
 
     def __eq__(self, other):
         return (

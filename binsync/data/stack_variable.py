@@ -1,6 +1,6 @@
 import toml
 
-from ..utils import is_py3
+from ..utils import is_py2, is_py3
 from .base import Base
 
 if is_py3():
@@ -37,6 +37,10 @@ class StackVariable(Base):
         self.size = size  # type: int
         self.func_addr = func_addr  # type: int
 
+        if is_py2():
+            self.name = str(self.name)
+            self.type = str(self.type)
+
     def __getstate__(self):
         return dict(
             (k, getattr(self, k)) for k in self.__slots__
@@ -44,7 +48,10 @@ class StackVariable(Base):
 
     def __setstate__(self, state):
         for k in self.__slots__:
-            setattr(self, k, state[k])
+            if is_py2() and isinstance(state[k], unicode):
+                setattr(self, k, str(state[k]))
+            else:
+                setattr(self, k, state[k])
 
     def __eq__(self, other):
         if isinstance(other, StackVariable):
