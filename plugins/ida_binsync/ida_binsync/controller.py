@@ -211,6 +211,8 @@ class BinsyncController:
         :rtype: Optional[ida_funcs.func_t]
         """
         ea = compat.get_screen_ea()
+        if ea is None:
+            return None
         func = idaapi.get_func(ea)
         return func
 

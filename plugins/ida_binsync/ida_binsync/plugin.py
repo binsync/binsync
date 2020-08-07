@@ -22,6 +22,9 @@ from ida_binsync.control_panel import ControlPanelViewWrapper
 
 controller = BinsyncController()
 
+# disable the annoying "Running Python script" wait box that freezes IDA at times
+idaapi.set_script_timeout(0)
+
 
 class IDPHooks(idaapi.IDP_Hooks):
     def renamed(self, ea, new_name, local_name):
@@ -133,51 +136,17 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
     wanted_hotkey = "Ctrl-Shift-B"
 
     def __init__(self, *args, **kwargs):
-        print("[Binsync] {} by clasm loaded!".format(VERSION))
+        print("[Binsync] {} loaded!".format(VERSION))
 
         QObject.__init__(self, *args, **kwargs)
         idaapi.plugin_t.__init__(self)
-
-    def open_repo_selector(self):
-
-        was_canceled = False
-        if not self._repo_selector:
-            self._repo_selector = RepoSelector()
-            self._repo_selector.Compile()
-            ok = self._repo_selector.Execute()
-            if ok == 1:
-                try:
-                    controller.connect(
-                        self._repo_selector.user_name,
-                        self._repo_selector.repo_dir,
-                        self._repo_selector.init_repo,
-                    )
-                    self._repo_selector.Free()
-                except Exception as e:
-                    # self._repo_selector.display_error(type(e).__name__)
-                    import sys, traceback
-
-                    traceback.print_exc(file=sys.stdout)
-                    idaapi.warning(type(e).__name__)
-                    self._repo_selector.Free()
-                    self._repo_selector = None
-                    self.open_repo_selector()
-                    return
-            else:
-                was_canceled = True
-
-        if not was_canceled:
-            user_select = UserSelector([x.name.encode('ascii') for x in controller._client.users()])
-            user_select.Compile()
-            has_selected = user_select.Execute()
-            if has_selected == 1:
-                print("SELECTED", user_select.selected_user)
 
     def open_config_dialog(self):
         dialog = ConfigDialog(controller)
         dialog.exec_()
 
-        print(controller._client)
+        if controller.check_client():
+            self.open_control_panel()
 
     def open_control_panel(self):
         """
@@ -201,13 +170,6 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
 
     def install_actions(self):
         self.install_control_panel_action()
-        # action_open = idaapi.register_action(
-        #     idaapi.action_desc_t(
-        #         "binsync:test",
-        #         "Start Sharing Patches",
-        #         custom_action_handler_t(self, "func"),
-        #     )
-        # )
 
     def install_control_panel_action(self):
         action_id = "binsync:control_panel"

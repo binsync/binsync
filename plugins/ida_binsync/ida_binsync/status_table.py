@@ -72,6 +72,7 @@ class QStatusTable(QTableWidget):
 
         self.verticalHeader().setVisible(False)
         self.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        self.verticalHeader().setDefaultSectionSize(24)
 
         self._controller = controller
         self.items = [ ]
