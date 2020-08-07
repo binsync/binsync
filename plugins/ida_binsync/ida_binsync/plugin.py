@@ -213,7 +213,7 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         action_id = "binsync:control_panel"
         action_desc = idaapi.action_desc_t(
             action_id,
-            "~C~ontrol Panel",
+            "BinSync: ~C~ontrol Panel",
             IDAActionHandler(self.open_control_panel, None, None),
             None,
             "Open the BinSync control panel",
@@ -240,8 +240,6 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         return idaapi.PLUGIN_KEEP
 
     def run(self, arg):
-        print("RUN CALLED")
-        self._repo_selector = None
         self.open_config_dialog()
 
     def term(self):
