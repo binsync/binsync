@@ -11,6 +11,13 @@ class QStatusItem:
         self.key = key
         self.value = value
 
+    def friendly_value(self):
+        if isinstance(self.value, str):
+            return self.value
+        if isinstance(self.value, datetime.datetime):
+            return self.friendly_datetime(self.value)
+        return str(self.value)
+
     @staticmethod
     def friendly_datetime(dt):
         now = datetime.datetime.now()
@@ -40,7 +47,7 @@ class QStatusItem:
 
         widgets = [
             QTableWidgetItem(self.key),
-            QTableWidgetItem(self.friendly_datetime()),
+            QTableWidgetItem(self.friendly_value()),
         ]
 
         for w in widgets:
