@@ -54,6 +54,8 @@ class QTeamTable(QTableWidget):
             for i, it in enumerate(item.widgets()):
                 self.setItem(idx, i, it)
 
+        self.viewport().update()
+
     def selected_user(self):
 
         try:

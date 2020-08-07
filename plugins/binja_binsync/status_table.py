@@ -1,3 +1,4 @@
+import datetime
 
 from PySide2.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView
 from PySide2.QtCore import Qt
@@ -10,11 +11,36 @@ class QStatusItem:
         self.key = key
         self.value = value
 
+    @staticmethod
+    def friendly_datetime(dt):
+        now = datetime.datetime.now()
+        if dt <= now:
+            diff = now - dt
+            ago = True
+        else:
+            diff = dt - now
+            ago = False
+        diff_days = diff.days
+        diff_sec = diff.seconds
+
+        if diff_days >= 1:
+            s = "%d days" % diff_days
+            ago = diff_days < 0
+        elif diff_sec >= 60 * 60:
+            s = "%d hours" % int(diff_sec / 60 / 60)
+        elif diff_sec >= 60:
+            s = "%d minutes" % int(diff_sec / 60)
+        else:
+            s = "%d seconds" % diff_sec
+
+        s += " ago" if ago else " in the future"
+        return s
+
     def widgets(self):
 
         widgets = [
             QTableWidgetItem(self.key),
-            QTableWidgetItem(str(self.value)),
+            QTableWidgetItem(self.friendly_datetime()),
         ]
 
         for w in widgets:
@@ -72,6 +98,8 @@ class QStatusTable(QTableWidget):
         for idx, item in enumerate(self.items):
             for i, it in enumerate(item.widgets()):
                 self.setItem(idx, i, it)
+
+        self.viewport().update()
 
     def update(self):
         """

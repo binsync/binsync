@@ -37,7 +37,7 @@ class ControlPanelDialog(QDialog):
 
 class ControlPanelViewWrapper(object):
 
-    NAME = "Control Panel"
+    NAME = "BinSync: Control Panel"
 
     def __init__(self, controller):
 

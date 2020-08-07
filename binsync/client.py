@@ -3,6 +3,7 @@ import threading
 import os
 import subprocess
 import re
+import datetime
 import logging
 
 import git
@@ -95,6 +96,10 @@ class Client(object):
 
         self._commit_interval = commit_interval
         self._worker_thread = None
+        self._last_push_at = None  # type: datetime.datetime
+        self._last_push_attempt_at = None  # type: datetime.datetime
+        self._last_pull_at = None  # type: datetime.datetime
+        self._last_pull_attempt_at = None  # type: datetime.datetime
 
         # timestamps
         self._last_commit_ts = 0
@@ -109,11 +114,21 @@ class Client(object):
 
         :return:    True if there is a remote, False otherwise.
         """
-        return self.remote in self.repo.remotes
+        return self.remote and any(r.name == self.remote for r in self.repo.remotes)
 
     @property
     def last_update_timestamp(self):
         return self._last_commit_ts
+
+    def ssh_agent_env(self):
+        if self.ssh_agent_pid is not None and self.ssh_auth_sock is not None:
+            env = {
+                'SSH_AGENT_PID': str(self.ssh_agent_pid),
+                'SSH_AUTH_SOCK': str(self.ssh_auth_sock),
+            }
+        else:
+            env = { }
+        return env
 
     def add_remote(self, name, remote_url):
         """
@@ -134,44 +149,60 @@ class Client(object):
         :return:                None
         """
 
-        if self.ssh_agent_pid is not None and self.ssh_auth_sock is not None:
-            env = {
-                'SSH_AGENT_PID': str(self.ssh_agent_pid),
-                'SSH_AUTH_SOCK': self.ssh_auth_sock
-            }
-        else:
-            env = { }
-
+        env = self.ssh_agent_env()
         git.Repo.clone_from(remote_url, self.repo_root, env=env)
 
-    def pull(self):
+    def pull(self, print_error=False):
         """
         Pull changes from the remote side.
 
         :return:    None
         """
 
-        self.repo.remotes[self.remote].pull()
+        self._last_pull_attempt_at = datetime.datetime.now()
 
-    def push(self):
+        if self.has_remote:
+            try:
+                env = self.ssh_agent_env()
+                with self.repo.git.custom_environment(**env):
+                    self.repo.remotes[self.remote].pull()
+                self._last_pull_at = datetime.datetime.now()
+            except git.exc.GitCommandError as ex:
+                if print_error:
+                    print("Failed to pull from remote \"%s\".\n"
+                          "Did you setup %s/master as the upstream of the local master branch?\n"
+                          "\n"
+                          "Git error: %s." % (
+                              self.remote,
+                              self.remote,
+                              str(ex)
+                          ))
+
+    def push(self, print_error=False):
         """
         Push local changes to the remote side.
 
         :return:    None
         """
 
-        if self.remote and self.remote in self.repo.remotes:
+        self._last_push_attempt_at = datetime.datetime.now()
+
+        if self.has_remote:
             try:
-                self.repo.remotes[self.remote].push()
+                env = self.ssh_agent_env()
+                with self.repo.git.custom_environment(**env):
+                    self.repo.remotes[self.remote].push()
+                self._last_push_at = datetime.datetime.now()
             except git.exc.GitCommandError as ex:
-                print("Failed to push to remote \"%s\".\n"
-                      "Did you setup %s/master as the upstream of the local master branch?\n"
-                      "\n"
-                      "Git error: %s." % (
-                    self.remote,
-                    self.remote,
-                    str(ex)
-                ))
+                if print_error:
+                    print("Failed to push to remote \"%s\".\n"
+                          "Did you setup %s/master as the upstream of the local master branch?\n"
+                          "\n"
+                          "Git error: %s." % (
+                        self.remote,
+                        self.remote,
+                        str(ex)
+                    ))
 
     def users(self):
         for d in os.listdir(self.repo_root):
@@ -232,13 +263,18 @@ class Client(object):
         if self.repo is not None:
             d['last_commit_hash'] = self.repo.heads[0].commit.hexsha
             try:
-                d['last_commit_time'] = self.repo.heads[0].commit.committed_datetime
+                d['last_commit_time'] = self.repo.heads[0].commit.committed_datetime.replace(tzinfo=None)
             except IOError:  # sometimes GitPython throws this exception
                 d['last_commit_time'] = "<unknown>"
             if any(r.name == self.remote for r in self.repo.remotes):
                 d['remote_url'] = ";".join(self.repo.remotes[self.remote].urls)
             else:
                 d['remote_url'] = "<does not exist>"
+
+            d['last_push'] = self._last_push_at if self._last_push_at is not None else "never"
+            d['last_push_attempt'] = self._last_push_attempt_at if self._last_push_attempt_at is not None else "never"
+            d['last_pull'] = self._last_pull_at if self._last_pull_at is not None else "never"
+            d['last_pull_attempt'] = self._last_pull_attempt_at if self._last_pull_attempt_at is not None else "never"
 
         return d
 

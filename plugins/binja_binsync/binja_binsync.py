@@ -2,6 +2,7 @@ import os
 import re
 import time
 import threading
+import datetime
 from functools import wraps
 from typing import Optional, Iterable, Dict, Any
 import logging
@@ -109,8 +110,22 @@ class BinsyncController:
 
     def worker_routine(self):
         while True:
+            # reload the control panel if it's registered
             if self.control_panel is not None:
-                self.control_panel.reload()
+                try:
+                    self.control_panel.reload()
+                except RuntimeError:
+                    # the panel has been closed
+                    self.control_panel = None
+
+            # pull the repo every 10 seconds
+            if self.check_client() and self._client.has_remote \
+                    and (
+                         self._client._last_pull_attempt_at is None
+                         or (datetime.datetime.now() - self._client._last_pull_attempt_at).seconds > 10
+                         ):
+                self._client.pull()
+
             time.sleep(1)
 
     def connect(self, user, path, init_repo, ssh_agent_pid=None, ssh_auth_sock=None):
