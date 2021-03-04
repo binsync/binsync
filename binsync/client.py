@@ -365,7 +365,7 @@ class Client(object):
         state.dump(path)
 
         # commit changes
-        self.repo.index.add([os.path.join(".", state.user, "*")])
+        self.repo.index.add([os.path.join(state.user, "*")])
         if self.repo.index.diff("HEAD"):
             # commit if there is any difference
             self.repo.index.commit("Save state")
