@@ -209,8 +209,11 @@ class Client(object):
             metadata_path = os.path.join(self.repo_root, d, "metadata.toml")
             if os.path.isfile(metadata_path):
                 # Load metadata
-                metadata = State.load_metadata(metadata_path)
-                yield User.from_metadata(metadata)
+                try:
+                    metadata = State.load_metadata(metadata_path)
+                    yield User.from_metadata(metadata)
+                except:
+                    continue
 
     def tally(self, users=None):
         """
@@ -335,7 +338,7 @@ class Client(object):
         if self.has_remote:
             self.pull()
 
-        print("IS DIRTY??", self.get_state().dirty)
+        #print("IS DIRTY??", self.get_state().dirty)
         if self.get_state().dirty:
             # do a save!
             self.save_state()
