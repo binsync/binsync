@@ -13,6 +13,8 @@ Binsync enables manual and automated synchronization of the following reverse en
 
 All data is stored in a human-friendly text format (toml) inside a Git repo.
 
+For now, go check out the [Wiki](https://github.com/angr/binsync/wiki).
+
 ## Why not collabREate/Sol[IDA]rity/IDArling/copying IDBs around?
 
 ## How to install
