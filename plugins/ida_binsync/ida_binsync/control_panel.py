@@ -7,8 +7,8 @@ import idaapi
 import idautils
 import sip
 
-from ida_binsync.status_table import QStatusTable
-from ida_binsync.team_table import QTeamTable
+from .status_table import QStatusTable
+from .team_table import QTeamTable
 
 from . import compat
 

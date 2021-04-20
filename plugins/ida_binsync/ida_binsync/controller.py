@@ -275,7 +275,7 @@ class BinsyncController:
             for head in idautils.Heads(start_ea, end_ea):
                 comment = self.pull_comment(head, user=user, state=state)
                 if comment is not None:
-                    idc.MakeRptCmt(head, comment)
+                    idc.set_func_cmt(head, comment, 1)
 
         # stack variables
         existing_stack_vars = { }
@@ -286,7 +286,7 @@ class BinsyncController:
                      ida_func.start_ea)
             return
 
-        frame_size = idc.GetStrucSize(frame)
+        frame_size = idc.get_struc_size(frame)
         last_member_size = idaapi.get_member_size(frame.get_member(frame.memqty - 1))
 
         for i in range(frame.memqty):
@@ -303,7 +303,7 @@ class BinsyncController:
                 type_str = None
 
             if ida_offset in existing_stack_vars:
-                if idc.GetMemberName(frame.id, existing_stack_vars[ida_offset].soff) == stack_var.name \
+                if idc.get_member_name(frame.id, existing_stack_vars[ida_offset].soff) == stack_var.name \
                         and type_str is not None \
                         and stack_var.type == type_str:
                     continue
@@ -380,12 +380,12 @@ class BinsyncController:
             return
 
         # compute frame size
-        frame_size = idc.GetStrucSize(frame)
+        frame_size = idc.get_struc_size(frame)
         last_member_size = idaapi.get_member_size(frame.get_member(frame.memqty - 1))
 
         for i in range(frame.memqty):
             member = frame.get_member(i)
-            name = idc.GetMemberName(frame.id, member.soff)
+            name = idc.get_member_name(frame.id, member.soff)
 
             # ignore all unnamed variables
             # TODO: Do not ignore re-typed but unnamed variables

@@ -55,15 +55,9 @@ def execute_ui(func):
 
 
 def get_func_name(ea):
-    if hasattr(idc, 'get_func_name'):
-        return idc.get_func_name(ea)
-    else:
-        return idc.GetFunctionName(ea)
+    return idc.get_func_name(ea)
 
 
 @execute_read
 def get_screen_ea():
-    if hasattr(idc, 'get_screen_ea'):
-        return idc.get_screen_ea()
-    else:
-        return idc.ScreenEA()
+    return idc.get_screen_ea()
