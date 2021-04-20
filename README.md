@@ -13,20 +13,30 @@ Binsync enables manual and automated synchronization of the following reverse en
 
 All data is stored in a human-friendly text format (toml) inside a Git repo.
 
-## Why not collabREate/Sol[IDA]rity/IDArling/copying IDBs around?
-
-## How to install
+## Installing
 
 ### IDA Pro
-
-### Binary Ninja
+After cloning down this repo, simply copy the `ida_binsync` folder and python file into your IDA Pro plugins folder.
+```bash
+cp -r binsync/plugins/ida_binsync/* IDA_HOME/plugins/
+```
+For me `IDA_HOME=~/ida/ida-7.5sp2-py38`; it may be different for you. 
 
 ### angr management
+`binsync` is built into angr management. To use it, just activate the plugin by going to the plugins tab and
+selecting `binsync`, then configuring it. 
 
-## Use cases
+## Usage
 
-### Use case 1: Pushing artifacts to the Git repo
+Follow the user story described in the [Wiki](https://github.com/angr/binsync/wiki).
 
-### Use case 2: Synchronizing artifacts from Fish's IDB
+## TODO
+### Binsync Core
+- Make new users a new branch.
+- Gather real update times for repos
 
-## Development
+### IDA Integration
+- Fix Stack Variable Syncing
+- Attempt to do a context click on functions like in angr-management
+- Fix comments for locations 
+

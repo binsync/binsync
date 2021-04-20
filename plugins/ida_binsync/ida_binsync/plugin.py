@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import os
 import time
 
-import IPython
 from PyQt5.Qt import qApp
 from PyQt5.QtCore import QObject, QDir
 from PyQt5.QtWidgets import QMessageBox
@@ -14,7 +13,6 @@ import binsync
 from binsync.data import Patch
 
 from ida_binsync import IDA_DIR, VERSION
-from ida_binsync.reposelector import RepoSelector, UserSelector
 from ida_binsync.controller import BinsyncController
 from ida_binsync.config_dialog import ConfigDialog
 from ida_binsync.control_panel import ControlPanelViewWrapper

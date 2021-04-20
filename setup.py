@@ -12,7 +12,11 @@ setup(
     name='binsync',
     version='0.0.0.1',
     packages=packages,
-    install_requires=[],
+    install_requires=[
+        "sortedcontainers",
+        "toml",
+        "GitPython",
+    ],
     description='Collaboration framework for binary analysis tasks.',
     url='https://github.com/angr/binsync',
 )
