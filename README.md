@@ -13,6 +13,7 @@ Binsync enables manual and automated synchronization of the following reverse en
 
 All data is stored in a human-friendly text format (toml) inside a Git repo.
 
+
 ## Installing
 
 ### IDA Pro
