@@ -16,13 +16,16 @@ from ida_binsync import IDA_DIR, VERSION
 from ida_binsync.controller import BinsyncController
 from ida_binsync.config_dialog import ConfigDialog
 from ida_binsync.control_panel import ControlPanelViewWrapper
-
+from ida_binsync.sync_menu import SyncMenu
 
 controller = BinsyncController()
 
 # disable the annoying "Running Python script" wait box that freezes IDA at times
 idaapi.set_script_timeout(0)
 
+#
+#   Hooks for IDP, IDB, and UI
+#
 
 class IDPHooks(idaapi.IDP_Hooks):
     def renamed(self, ea, new_name, local_name):
@@ -39,6 +42,7 @@ class IDPHooks(idaapi.IDP_Hooks):
 
 class IDBHooks(idaapi.IDB_Hooks):
     def renamed(self, ea, new_name, local_name):
+        print("RENAME HOOKED")
         controller.push_function(new_name, ea)
         # on_renamed(ea, new_name, local_name)
         return idaapi.IDB_Hooks.renamed(self, ea, new_name, local_name)
@@ -69,10 +73,6 @@ class IDBHooks(idaapi.IDB_Hooks):
         return idaapi.IDB_Hooks.area_cmt_changed(self, cb, a, cmt, repeatable)
 
 
-class UIHooks(idaapi.UI_Hooks):
-    pass
-
-
 class UiHooks(idaapi.UI_Hooks):
     """
     UI hooks. Currently only used to display a warning when
@@ -83,7 +83,7 @@ class UiHooks(idaapi.UI_Hooks):
         super(UiHooks, self).__init__()
         self._last_event = None
 
-    def finish_populating_tform_popup(self, form, popup):
+    def finish_populating_widget_popup(self, form, popup):
         # We'll add our action to all "IDA View-*"s.
         # If we wanted to add it only to "IDA View-A", we could
         # also discriminate on the widget's title:
@@ -93,7 +93,11 @@ class UiHooks(idaapi.UI_Hooks):
         #
         # if idaapi.get_tform_type(form) == idaapi.BWN_DISASM:
         idaapi.attach_action_to_popup(form, popup, "binsync:test", None)
+        inject_binsync_actions(form, popup, idaapi.get_widget_type(form))
 
+#
+#   Action Handlers
+#
 
 class IDAActionHandler(idaapi.action_handler_t):
     def __init__(self, action, plugin, typ):
@@ -122,6 +126,9 @@ class IDAActionHandler(idaapi.action_handler_t):
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
 
+#
+#   Base Plugin
+#
 
 class BinsyncPlugin(QObject, idaapi.plugin_t):
     """Plugin entry point. Does most of the skinning magic."""
@@ -138,6 +145,25 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
 
         QObject.__init__(self, *args, **kwargs)
         idaapi.plugin_t.__init__(self)
+
+
+    def _init_action_sync_menu(self):
+        """
+        Register the sync_menu action with IDA.
+        """
+        menu = SyncMenu(controller)
+
+        # describe the action
+        action_desc = idaapi.action_desc_t(
+            "binsync:sync_menu",                        # The action name.
+            "Binsync action...",             # The action text.
+            menu.ctx_menu,                          # The action handler.
+            None,                                    # Optional: action shortcut
+            "Select actions to sync in Binsync", # Optional: tooltip
+        )
+
+        # register the action with IDA
+        assert idaapi.register_action(action_desc), "Action registration failed"
 
     def open_config_dialog(self):
         dialog = ConfigDialog(controller)
@@ -189,13 +215,17 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         )
         if not result:
             raise RuntimeError("Failed to attach the menu item for the control panel action.")
+    def _init_hooks(self):
+        self.install_actions()
+        self.hook1 = UiHooks()
+        self.hook1.hook()
+
+        #self.hook2 = IDBHooks()
+        #self.hook2.hook()
 
     def init(self):
-        self.install_actions()
-
-        self.hook1 = UiHooks()
-
-        self.hook1.hook()
+        self._init_hooks()
+        self._init_action_sync_menu()
 
         return idaapi.PLUGIN_KEEP
 
@@ -204,6 +234,118 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
 
     def term(self):
         print("term() called!")
+
+#
+#   Utils
+#
+
+def get_cursor_func_ref():
+    """
+    Get the function reference under the user cursor.
+
+    Returns BADADDR or a valid function address.
+    """
+    current_widget = idaapi.get_current_widget()
+    form_type = idaapi.get_widget_type(current_widget)
+    vu = idaapi.get_widget_vdui(current_widget)
+
+    #
+    # hexrays view is active
+    #
+
+    if vu:
+        cursor_addr = vu.item.get_ea()
+
+    #
+    # disassembly view is active
+    #
+
+    elif form_type == idaapi.BWN_DISASM:
+        cursor_addr = idaapi.get_screen_ea()
+        opnum = idaapi.get_opnum()
+
+        if opnum != -1:
+
+            #
+            # if the cursor is over an operand value that has a function ref,
+            # use that as a valid rename target
+            #
+
+            op_addr = idc.get_operand_value(cursor_addr, opnum)
+            op_func = idaapi.get_func(op_addr)
+
+            if op_func and op_func.start_ea == op_addr:
+                return op_addr
+
+    # unsupported/unknown view is active
+    else:
+        return idaapi.BADADDR
+
+    #
+    # if the cursor is over a function definition or other reference, use that
+    # as a valid rename target
+    #
+
+    cursor_func = idaapi.get_func(cursor_addr)
+    if cursor_func and cursor_func.start_ea == cursor_addr:
+        return cursor_addr
+
+    # fail
+    return idaapi.BADADDR
+
+def inject_binsync_actions(form, popup, form_type):
+    """
+    Inject binsync actions to popup menu(s) based on context.
+    """
+
+    #
+    # disassembly window
+    #
+
+    if form_type == idaapi.BWN_DISASMS:
+        if get_cursor_func_ref() == idaapi.BADADDR:
+            return
+
+        #
+        # the user cursor is hovering over a valid target for a recursive
+        # function prefix. insert the prefix action entry into the menu
+        #
+
+        idaapi.attach_action_to_popup(
+            form,
+            popup,
+            "binsync:sync_menu",
+            "Rename",
+            idaapi.SETMENU_APP
+        )
+
+    #
+    # functions window
+    #
+
+    elif form_type == idaapi.BWN_FUNCS:
+
+        idaapi.attach_action_to_popup(
+            form,
+            popup,
+            "binsync:sync_menu",
+            "Delete function(s)...",
+            idaapi.SETMENU_INS
+        )
+
+        # inject a menu separator
+        idaapi.attach_action_to_popup(
+            form,
+            popup,
+            None,
+            "Delete function(s)...",
+            idaapi.SETMENU_INS
+        )
+
+    # done
+    return 0
+
+
 
 
 

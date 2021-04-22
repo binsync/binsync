@@ -180,6 +180,7 @@ class ConfigWidget(QWidget):
         if not ssh_auth_sock:
             ssh_auth_sock = None
 
+        #XXX mahaloz: data = repo.branches['mahaloz'].commit.tree['temp_file'].data_stream.read()
         self._controller.connect(user, path, init_repo, ssh_agent_pid=ssh_agent_pid, ssh_auth_sock=ssh_auth_sock)
 
         if self._dialog is not None:
