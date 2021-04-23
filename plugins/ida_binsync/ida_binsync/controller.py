@@ -188,13 +188,13 @@ class BinsyncController:
                          ):
                 self._client.pull()
 
+            # push every 10 seconds
             if self.check_client() and self._client.has_remote \
                     and (
                         self.last_push is None
                         or (datetime.datetime.now() - self.last_push).seconds > 10
                         ):
                 self.push_tracked_functions()
-
 
             time.sleep(1)
 
