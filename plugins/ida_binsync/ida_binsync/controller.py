@@ -162,6 +162,9 @@ class BinsyncController:
 
         self.control_panel = None
 
+        # last push
+        self.last_push = None
+
         # start the worker routine
         self.worker_thread = threading.Thread(target=self.worker_routine)
         self.worker_thread.setDaemon(True)
@@ -184,6 +187,14 @@ class BinsyncController:
                          or (datetime.datetime.now() - self._client._last_pull_attempt_at).seconds > 10
                          ):
                 self._client.pull()
+
+            if self.check_client() and self._client.has_remote \
+                    and (
+                        self.last_push is None
+                        or (datetime.datetime.now() - self.last_push).seconds > 10
+                        ):
+                self.push_tracked_functions()
+
 
             time.sleep(1)
 
@@ -220,6 +231,32 @@ class BinsyncController:
         return self._client.state_ctx(user=user, version=version, locked=locked)
 
     @init_checker
+    @make_state
+    def push_tracked_functions(self, user=None, state=None):
+        funcs = state.functions
+        for func in state.functions.values():
+            if func.track:
+                self.push_function(func, state)
+
+    def push_function(self, binsync_func, state):
+        state.set_function(binsync_func)
+
+        """
+        # get the function name
+        func_addr = int(ida_func.start_ea)
+        func = binsync.data.Function(func_addr)
+        func.name = compat.get_func_name(func_addr)
+        state.set_function(func)
+
+        # get all the comments int the function
+        for start_ea, end_ea in idautils.Chunks(func_addr):
+            for head in idautils.Heads(start_ea, end_ea):
+                comment = self.pull_comment(head, user=user, state=state)
+                if comment is not None:
+                    idc.set_func_cmt(head, comment, 1)
+        """
+
+    @init_checker
     def status(self):
         return self._client.status()
 
@@ -229,12 +266,24 @@ class BinsyncController:
 
     @init_checker
     @make_state
-    def push_function(self, ida_func, user=None, state=None):
-        # Push function
+    def toggle_tracking(self, ida_func, user=None, state=None):
+        # first check if the function state exists
         func_addr = int(ida_func.start_ea)
-        func = binsync.data.Function(func_addr)
+        try:
+            func = state.get_function(func_addr)
+        except KeyError:
+            # if it does not exist, make a new one
+            func = binsync.data.Function(func_addr)
+
+        # toggle the current tracking
+        func.track = not func.track
+
+        # set other information
         func.name = compat.get_func_name(func_addr)
-        state.set_function(func)
+
+        if func.track:
+            self.push_function(func, state)
+
 
     @init_checker
     @make_ro_state

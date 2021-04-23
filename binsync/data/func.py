@@ -13,28 +13,28 @@ class Function(Base):
     :ivar int addr:     Address of the function.
     :ivar str name:     Name of the function.
     :ivar str notes:    Notes of the function.
+    :ivar bool track:   To track or not
     """
 
     __slots__ = (
         "addr",
         "name",
         "notes",
+        "track",
     )
 
-    def __init__(self, addr, name=None, notes=None):
+    def __init__(self, addr, name=None, track=False, notes=None):
         self.addr = addr
         self.name = name
         self.notes = notes
-
-        if is_py2():
-            self.name = str(self.name)
-            self.notes = str(self.notes)
+        self.track = track
 
     def __getstate__(self):
         return {
             "addr": self.addr,
             "name": self.name,
             "notes": self.notes,
+            "track": self.track,
         }
 
     def __setstate__(self, state):
@@ -43,10 +43,7 @@ class Function(Base):
         self.addr = state["addr"]
         self.name = state["name"]
         self.notes = state.get("notes", None)
-
-        if is_py2():
-            self.name = str(self.name)
-            self.notes = str(self.notes)
+        self.track = state["track"]
 
     def __eq__(self, other):
         return (
@@ -54,6 +51,7 @@ class Function(Base):
             and other.name == self.name
             and other.addr == self.addr
             and other.notes == self.notes
+            and other.track == self.track
         )
 
     def dump(self):

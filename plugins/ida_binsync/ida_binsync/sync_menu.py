@@ -152,6 +152,7 @@ class SyncMenu():
 
             self.controller.fill_function(ida_func, user=user)
             print(f"[Binsync]: Data has been synced from user: {user}.")
+
         elif action == "Toggle autosync":
             # confirm a selection has been made
             if user == None:
@@ -159,7 +160,7 @@ class SyncMenu():
                 return False
 
         elif action == "Toggle tracking":
-            self.controller.push_function(ida_func)
+            self.controller.toggle_tracking(ida_func)
             print(f"[Binsync]: function(s) toggled for tracking.")
 
         else:

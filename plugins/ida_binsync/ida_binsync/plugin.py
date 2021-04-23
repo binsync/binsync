@@ -8,6 +8,7 @@ from PyQt5.QtCore import QObject, QDir
 from PyQt5.QtWidgets import QMessageBox
 import idaapi
 import idc
+import ida_idp
 
 import binsync
 from binsync.data import Patch
@@ -39,6 +40,41 @@ class IDPHooks(idaapi.IDP_Hooks):
         # on_auto_empty_finally()
         return idaapi.IDP_Hooks.auto_empty_finally(self)
 
+class MoreHooks(ida_idp.IDB_Hooks):
+    """
+        IDB hooks, subclassed from ida_idp.py
+    """
+
+    def __init__(self):
+        ida_idp.IDB_Hooks.__init__(self)
+
+    def area_cmt_changed(self, *args):
+        """
+            Function comments are Area comments
+        """
+        cb, area, cmt, rpt = args
+        print(f"AREA COMMENT CHANGED: {cmt}")
+
+        return ida_idp.IDB_Hooks.area_cmt_changed(self, *args)
+
+    def renamed(self, *args):
+        ea, new_name, is_local_name = args
+        print(f"SOMETHING RENAMED: {new_name}")
+        min_ea = idc.get_inf_attr(idc.INF_MIN_EA)
+        max_ea = idc.get_inf_attr(idc.INF_MAX_EA)
+
+        return ida_idp.IDB_Hooks.renamed(self, *args)
+
+    def cmt_changed(self, *args):
+        """
+            A comment changed somewhere
+        """
+        addr, rpt = args
+        cmt = idc.get_cmt(addr, rpt)
+        print(f"COMMENT CHANGED: {cmt}")
+
+        return ida_idp.IDB_Hooks.cmt_changed(self, *args)
+
 
 class IDBHooks(idaapi.IDB_Hooks):
     def renamed(self, ea, new_name, local_name):
@@ -61,6 +97,15 @@ class IDBHooks(idaapi.IDB_Hooks):
         print("COMMENT CHANGED IDB", idaapi.get_cmt(ea, repeatable))
         controller.push_comment(ea, idaapi.get_cmt(ea, repeatable))
         return idaapi.IDB_Hooks.cmt_changed(self, ea, repeatable)
+
+    def area_cmt_changed(self, *args):
+        """
+            Function comments are Area comments
+        """
+        cb, area, cmt, rpt = args
+        print(f"COMMENT: {cmt}")
+
+        return idaapi.IDB_Hooks.area_cmt_changed(self, *args)
 
     def extra_cmt_changed(self, ea, line_idx, repeatable):
         print("EXTRA COMMENT CHANGED IDB")
@@ -222,6 +267,10 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
 
         #self.hook2 = IDBHooks()
         #self.hook2.hook()
+        #self.hook3 = IDPHooks()
+        #self.hook3.hook()
+        self.hook4 = MoreHooks()
+        self.hook4.hook()
 
     def init(self):
         self._init_hooks()
