@@ -54,6 +54,7 @@ def execute_ui(func):
     return execute_sync(func, idaapi.MFF_FAST)
 
 
+@execute_read
 def get_func_name(ea):
     return idc.get_func_name(ea)
 

@@ -40,42 +40,6 @@ class IDPHooks(idaapi.IDP_Hooks):
         # on_auto_empty_finally()
         return idaapi.IDP_Hooks.auto_empty_finally(self)
 
-class MoreHooks(ida_idp.IDB_Hooks):
-    """
-        IDB hooks, subclassed from ida_idp.py
-    """
-
-    def __init__(self):
-        ida_idp.IDB_Hooks.__init__(self)
-
-    def area_cmt_changed(self, *args):
-        """
-            Function comments are Area comments
-        """
-        cb, area, cmt, rpt = args
-        print(f"AREA COMMENT CHANGED: {cmt}")
-
-        return ida_idp.IDB_Hooks.area_cmt_changed(self, *args)
-
-    def renamed(self, *args):
-        ea, new_name, is_local_name = args
-        print(f"SOMETHING RENAMED: {new_name}")
-        min_ea = idc.get_inf_attr(idc.INF_MIN_EA)
-        max_ea = idc.get_inf_attr(idc.INF_MAX_EA)
-
-        return ida_idp.IDB_Hooks.renamed(self, *args)
-
-    def cmt_changed(self, *args):
-        """
-            A comment changed somewhere
-        """
-        addr, rpt = args
-        cmt = idc.get_cmt(addr, rpt)
-        print(f"COMMENT CHANGED: {cmt}")
-
-        return ida_idp.IDB_Hooks.cmt_changed(self, *args)
-
-
 class IDBHooks(idaapi.IDB_Hooks):
     def renamed(self, ea, new_name, local_name):
         print("RENAME HOOKED")
@@ -260,17 +224,12 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         )
         if not result:
             raise RuntimeError("Failed to attach the menu item for the control panel action.")
+
     def _init_hooks(self):
+        # GUI Hooks
         self.install_actions()
         self.hook1 = UiHooks()
         self.hook1.hook()
-
-        #self.hook2 = IDBHooks()
-        #self.hook2.hook()
-        #self.hook3 = IDPHooks()
-        #self.hook3.hook()
-        self.hook4 = MoreHooks()
-        self.hook4.hook()
 
     def init(self):
         self._init_hooks()

@@ -195,6 +195,7 @@ class BinsyncController:
                         or (datetime.datetime.now() - self.last_push).seconds > 10
                         ):
                 self.push_tracked_functions()
+                self.last_push = datetime.datetime.now()
 
             time.sleep(1)
 
@@ -233,13 +234,23 @@ class BinsyncController:
     @init_checker
     @make_state
     def push_tracked_functions(self, user=None, state=None):
-        funcs = state.functions
         for func in state.functions.values():
             if func.track:
                 self.push_function(func, state)
 
     def push_function(self, binsync_func, state):
+        func_addr = binsync_func.addr
+
+        # check if the function name changed
+        binsync_func.name = compat.get_func_name(func_addr)
+
+        # check if there are new comments
+
+        # check if there are new stack vars
+
+        # push the changes
         state.set_function(binsync_func)
+        print(f"[Binsync]: Function[{hex(binsync_func.addr)} | {binsync_func.name}] auto pushed.")
 
         """
         # get the function name
