@@ -206,12 +206,30 @@ class SyncMenu():
         # all the visible function metadata
         #
 
-        table = widget.findChild(QTableView)
+        table: QTableView = widget.findChild(QTableView)
 
         #
         # scrape the selected function names from the Functions window table
         #
 
+        from PyQt5.QtGui import QColor, QBrush
+        from PyQt5.QtCore import Qt
+
+        """
+        selected_rows = [s.row() for s in table.selectionModel().selectedRows()]
+        for row in selected_rows:
+            for j in range(13):
+                table.item(row, j).setBackground(QColor("#2d9d52"))
+        """
+        t_model = table.model()
+        t_model.setData(t_model.index(0,0), QBrush(Qt.green), Qt.BackgroundRole)
+
+
+        for s in table.selectionModel().selectedRows():
+            print(s.data())
+
+
+        # tmp.model().setData(tmp.model().index(0,0), QBrush(Qt.red), Qt.BackgroundRole)
         selected_funcs = [str(s.data()) for s in table.selectionModel().selectedRows()]
         return selected_funcs
 

@@ -40,8 +40,13 @@ class State:
     """
 
     def __init__(self, user, version=None, client=None):
+        # metadata info
         self.user = user  # type: str
         self.version = version if version is not None else 0  # type: int
+        self.last_func_push = "None"
+        self.last_push_time = 0 #TODO finish this
+
+        # the client
         self.client = client  # type: Optional[Client]
 
         # dirty bit
@@ -158,6 +163,11 @@ class State:
     #
     # Pushers
     #
+
+    @dirty_checker
+    def update_metadata(self, last_func_push: str, last_push_time: int):
+        pass
+
 
     @dirty_checker
     def set_function(self, func):
