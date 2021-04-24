@@ -21,9 +21,7 @@ class MenuDialog(QDialog):
 
         label = QLabel("Binsync Action")
         self.combo = QComboBox()
-        self.combo.addItems(["Sync", "Toggle autosync", "Toggle tracking"])
-        self.combo.currentTextChanged.connect(self.on_combo_changed)
-
+        self.combo.addItems(["Sync", "Toggle autosync"])
 
         self.tableWidget = QTableWidget(len(self.menu_table), 3)
         self.tableWidget.setHorizontalHeaderLabels(
@@ -73,12 +71,6 @@ class MenuDialog(QDialog):
         selected_row = selected_rows[0].row()
         selected_user = list(self.menu_table)[selected_row]
         return action, selected_user
-
-    def on_combo_changed(self, value):
-        if value == "Toggle tracking":
-            self.tableWidget.hide()
-        else:
-            self.tableWidget.show()
 
 #
 #   IDA Context Menu Hook
@@ -158,11 +150,6 @@ class SyncMenu():
             if user == None:
                 print(f"[Binsync]: Error! No user selected for syncing.")
                 return False
-
-        elif action == "Toggle tracking":
-            self.controller.toggle_tracking(ida_func)
-            print(f"[Binsync]: function(s) toggled for tracking.")
-
         else:
             return False
 
@@ -223,11 +210,6 @@ class SyncMenu():
         """
         t_model = table.model()
         t_model.setData(t_model.index(0,0), QBrush(Qt.green), Qt.BackgroundRole)
-
-
-        for s in table.selectionModel().selectedRows():
-            print(s.data())
-
 
         # tmp.model().setData(tmp.model().index(0,0), QBrush(Qt.red), Qt.BackgroundRole)
         selected_funcs = [str(s.data()) for s in table.selectionModel().selectedRows()]

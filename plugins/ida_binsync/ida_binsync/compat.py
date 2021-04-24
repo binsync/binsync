@@ -3,6 +3,7 @@ import threading
 
 import idc
 import idaapi
+import idautils
 
 
 def is_mainthread():
@@ -62,3 +63,28 @@ def get_func_name(ea):
 @execute_read
 def get_screen_ea():
     return idc.get_screen_ea()
+
+
+@execute_read
+def get_ida_func(ea):
+    return idaapi.get_func(ea)
+
+
+@execute_read
+def ida_func_to_chunks(ida_func):
+    return list(idautils.Chunks(ida_func.start_ea))
+
+@execute_read
+def ea_to_head(start_ea, end_ea):
+    return list(idautils.Heads(start_ea, end_ea))
+
+@execute_read
+def get_ida_comment(head, repeatable):
+    return idc.GetCommentEx(head, repeatable)
+
+def parse_struct_type(s_name):
+    if "$ F4" in s_name:
+        func_addr = int(s_name.split("$ F4")[1], 16)
+        return func_addr
+    else:
+        return s_name

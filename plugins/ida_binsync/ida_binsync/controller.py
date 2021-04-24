@@ -188,15 +188,6 @@ class BinsyncController:
                          ):
                 self._client.pull()
 
-            # push every 10 seconds
-            if self.check_client() and self._client.has_remote \
-                    and (
-                        self.last_push is None
-                        or (datetime.datetime.now() - self.last_push).seconds > 10
-                        ):
-                self.push_tracked_functions()
-                self.last_push = datetime.datetime.now()
-
             time.sleep(1)
 
     def connect(self, user, path, init_repo, ssh_agent_pid=None, ssh_auth_sock=None):
@@ -231,41 +222,6 @@ class BinsyncController:
     def state_ctx(self, user=None, version=None, locked=False):
         return self._client.state_ctx(user=user, version=version, locked=locked)
 
-    @init_checker
-    @make_state
-    def push_tracked_functions(self, user=None, state=None):
-        for func in state.functions.values():
-            if func.track:
-                self.push_function(func, state)
-
-    def push_function(self, binsync_func, state):
-        func_addr = binsync_func.addr
-
-        # check if the function name changed
-        binsync_func.name = compat.get_func_name(func_addr)
-
-        # check if there are new comments
-
-        # check if there are new stack vars
-
-        # push the changes
-        state.set_function(binsync_func)
-        print(f"[Binsync]: Function[{hex(binsync_func.addr)} | {binsync_func.name}] auto pushed.")
-
-        """
-        # get the function name
-        func_addr = int(ida_func.start_ea)
-        func = binsync.data.Function(func_addr)
-        func.name = compat.get_func_name(func_addr)
-        state.set_function(func)
-
-        # get all the comments int the function
-        for start_ea, end_ea in idautils.Chunks(func_addr):
-            for head in idautils.Heads(start_ea, end_ea):
-                comment = self.pull_comment(head, user=user, state=state)
-                if comment is not None:
-                    idc.set_func_cmt(head, comment, 1)
-        """
 
     @init_checker
     def status(self):
@@ -277,24 +233,11 @@ class BinsyncController:
 
     @init_checker
     @make_state
-    def toggle_tracking(self, ida_func, user=None, state=None):
-        # first check if the function state exists
-        func_addr = int(ida_func.start_ea)
-        try:
-            func = state.get_function(func_addr)
-        except KeyError:
-            # if it does not exist, make a new one
-            func = binsync.data.Function(func_addr)
-
-        # toggle the current tracking
-        func.track = not func.track
-
-        # set other information
+    def push_function_name(self, func_addr, user=None, state=None):
+        # Push function
+        func = binsync.data.Function(func_addr)
         func.name = compat.get_func_name(func_addr)
-
-        if func.track:
-            self.push_function(func, state)
-
+        state.set_function(func)
 
     @init_checker
     @make_ro_state
@@ -374,7 +317,8 @@ class BinsyncController:
     @init_checker
     @make_state
     def remove_all_comments(self, ida_func, user=None, state=None):
-        for start_ea, end_ea in idautils.Chunks(ida_func.start_ea):
+
+        for start_ea, end_ea in compat.ida_func_to_chunks(ida_func):
             for ins_addr in idautils.Heads(start_ea, end_ea):
                 if ins_addr in state.comments:
                     state.remove_comment(ins_addr)
@@ -416,10 +360,10 @@ class BinsyncController:
 
     @init_checker
     @make_state
-    def push_stack_variable(self, ida_func, stack_offset, name, type_str, size, user=None, state=None):
+    def push_stack_variable(self, func_addr, stack_offset, name, type_str, size, user=None, state=None):
         # convert longs to ints
         stack_offset = int(stack_offset)
-        func_addr = int(ida_func.start_ea)
+        func_addr = int(func_addr)
         size = int(size)
 
         v = StackVariable(stack_offset,
@@ -433,6 +377,7 @@ class BinsyncController:
     @init_checker
     @make_state
     def push_stack_variables(self, ida_func, user=None, state=None):
+        #TODO: DEPRECATE ME
 
         frame = idaapi.get_frame(ida_func.start_ea)
         if frame is None or frame.memqty <= 0:

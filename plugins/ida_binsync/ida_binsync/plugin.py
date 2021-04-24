@@ -13,6 +13,7 @@ import ida_idp
 import binsync
 from binsync.data import Patch
 
+from .hooks import MasterHook
 from ida_binsync import IDA_DIR, VERSION
 from ida_binsync.controller import BinsyncController
 from ida_binsync.config_dialog import ConfigDialog
@@ -27,59 +28,6 @@ idaapi.set_script_timeout(0)
 #
 #   Hooks for IDP, IDB, and UI
 #
-
-class IDPHooks(idaapi.IDP_Hooks):
-    def renamed(self, ea, new_name, local_name):
-        print("RENAMED IDP")
-        # on_renamed(ea, new_name, local_name)
-        return idaapi.IDP_Hooks.renamed(self, ea, new_name, local_name)
-
-    # TODO: make sure this is on 6.1
-    def auto_empty_finally(self):
-        print("AUTO EMPTY IDP")
-        # on_auto_empty_finally()
-        return idaapi.IDP_Hooks.auto_empty_finally(self)
-
-class IDBHooks(idaapi.IDB_Hooks):
-    def renamed(self, ea, new_name, local_name):
-        print("RENAME HOOKED")
-        controller.push_function(new_name, ea)
-        # on_renamed(ea, new_name, local_name)
-        return idaapi.IDB_Hooks.renamed(self, ea, new_name, local_name)
-
-    def byte_patched(self, ea, old_value):
-        print("AUTO EMPTY IDB")
-        # on_auto_empty_finally()
-        return idaapi.IDB_Hooks.byte_patched(self, ea, old_value)
-
-    def auto_empty_finally(self):
-        print("AUTO EMPTY IDB")
-        # on_auto_empty_finally()
-        return idaapi.IDB_Hooks.auto_empty_finally(self)
-
-    def cmt_changed(self, ea, repeatable):
-        print("COMMENT CHANGED IDB", idaapi.get_cmt(ea, repeatable))
-        controller.push_comment(ea, idaapi.get_cmt(ea, repeatable))
-        return idaapi.IDB_Hooks.cmt_changed(self, ea, repeatable)
-
-    def area_cmt_changed(self, *args):
-        """
-            Function comments are Area comments
-        """
-        cb, area, cmt, rpt = args
-        print(f"COMMENT: {cmt}")
-
-        return idaapi.IDB_Hooks.area_cmt_changed(self, *args)
-
-    def extra_cmt_changed(self, ea, line_idx, repeatable):
-        print("EXTRA COMMENT CHANGED IDB")
-        controller.push_comment(ea, idaapi.get_cmt(ea, repeatable))
-        return idaapi.IDB_Hooks.extra_cmt_changed(self, ea, line_idx, repeatable)
-
-    def area_cmt_changed(self, cb, a, cmt, repeatable):
-        print("AREA COMMENT CHANGED IDB")
-        # publish({'cmd': 'area_comment', 'range': [get_can_addr(a.startEA), get_can_addr(a.endEA)], 'text': cmt or ''}, send_uuid=False)
-        return idaapi.IDB_Hooks.area_cmt_changed(self, cb, a, cmt, repeatable)
 
 
 class UiHooks(idaapi.UI_Hooks):
@@ -230,6 +178,9 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         self.install_actions()
         self.hook1 = UiHooks()
         self.hook1.hook()
+
+        self.hook2 = MasterHook(controller)
+        self.hook2.hook()
 
     def init(self):
         self._init_hooks()
