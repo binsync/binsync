@@ -54,11 +54,7 @@ class Patch(Base):
         return patch
 
     @classmethod
-    def load_many(cls, path):
-        with open(path, "r") as f:
-            data = f.read()
-        patches_toml = toml.loads(data)
-
+    def load_many(cls, patches_toml):
         for patch_toml in patches_toml.values():
             patch = Patch(None, None, None)
             try:

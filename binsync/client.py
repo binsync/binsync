@@ -5,6 +5,8 @@ import subprocess
 import re
 import datetime
 import logging
+import typing
+import toml
 
 import git
 import git.exc
@@ -15,6 +17,7 @@ from .errors import MetadataNotFoundError
 from .utils import is_py3
 
 _l = logging.getLogger(name=__name__)
+BINSYNC_BRANCH_PREFIX = 'binsync/'
 
 
 class StateContext(object):
@@ -204,16 +207,16 @@ class Client(object):
                         str(ex)
                     ))
 
-    def users(self):
-        for d in os.listdir(self.repo_root):
-            metadata_path = os.path.join(self.repo_root, d, "metadata.toml")
-            if os.path.isfile(metadata_path):
-                # Load metadata
-                try:
-                    metadata = State.load_metadata(metadata_path)
-                    yield User.from_metadata(metadata)
-                except:
-                    continue
+    def users(self) -> typing.Iterable[User]:
+        for ref in self.repo.refs:  # type: git.Reference
+            if not ref.is_remote() or ref.remote_name != self.remote or not ref.name.startswith(f'{self.remote}/{BINSYNC_BRANCH_PREFIX}'):
+                continue
+            # Load metadata
+            try:
+                metadata = State.load_metadata(ref.commit.tree)
+                yield User.from_metadata(metadata)
+            except:
+                continue
 
     def tally(self, users=None):
         """
@@ -358,20 +361,19 @@ class Client(object):
         # case, please comment out the following assertion.
         assert self.master_user == state.user
 
-        path = self.base_path(user=state.user)
-
-        if not os.path.exists(path):
-            # create this folder if it does not exist
-            os.mkdir(path)
+        # TODO how do we create a new branch here
+        branch_name = f"{BINSYNC_BRANCH_PREFIX}{state.user.uid}"
+        branch = next(o for o in self.repo.branches if o.name == branch_name)
+        index = git.IndexFile.from_tree(self.repo, branch)
 
         # dump the state
-        state.dump(path)
+        state.dump(index)
 
         # commit changes
-        self.repo.index.add([os.path.join(state.user, "*")])
-        if self.repo.index.diff("HEAD"):
+        if index.diff(branch_name):
             # commit if there is any difference
-            self.repo.index.commit("Save state")
+            commit = index.commit("Save state")
+            branch.commit = commit
             self.push()
 
     @staticmethod

@@ -52,11 +52,7 @@ class Comment(Base):
         return comm
 
     @classmethod
-    def load_many(cls, path):
-        with open(path, "r") as f:
-            data = f.read()
-        comms_toml = toml.loads(data)
-
+    def load_many(cls, comms_toml):
         for comm_toml in comms_toml.values():
             comm = Comment(None, None)
             try:
@@ -67,7 +63,7 @@ class Comment(Base):
             yield comm
 
     @classmethod
-    def dump_many(cls, path, comments):
+    def dump_many(cls, comments):
         comments_ = {}
         for k, v in comments.items():
             if type(v) is cls:
@@ -76,5 +72,4 @@ class Comment(Base):
                 comments_["%x" % k] = Comment(k, v).__getstate__()
             else:
                 raise TypeError("Unsupported comment type %s." % type(v))
-        with open(path, "w") as f:
-            toml.dump(comments_, f)
+        return comments_

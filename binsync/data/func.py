@@ -4,6 +4,7 @@ import toml
 
 from .base import Base
 from ..utils import is_py2
+from ..state import add_data
 
 long = int
 
@@ -66,12 +67,7 @@ class Function(Base):
         return func
 
     @classmethod
-    def load_many(cls, path):
-
-        with open(path, "r") as f:
-            data = f.read()
-        funcs_toml = toml.loads(data)
-
+    def load_many(cls, funcs_toml):
         for func_toml in funcs_toml.values():
             func = Function(0)
             try:
@@ -82,7 +78,5 @@ class Function(Base):
             yield func
 
     @classmethod
-    def dump_many(cls, path, funcs):
-        funcs = dict(("%x" % k, v.__getstate__()) for k, v in funcs.items())
-        with open(path, "w") as f:
-            toml.dump(funcs, f)
+    def dump_many(cls, funcs):
+        return dict(("%x" % k, v.__getstate__()) for k, v in funcs.items())
