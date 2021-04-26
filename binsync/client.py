@@ -6,10 +6,10 @@ import re
 import datetime
 import logging
 import typing
-import toml
 
 import git
 import git.exc
+import filelock
 
 from .data import User
 from .state import State
@@ -17,7 +17,8 @@ from .errors import MetadataNotFoundError
 from .utils import is_py3
 
 _l = logging.getLogger(name=__name__)
-BINSYNC_BRANCH_PREFIX = 'binsync/'
+BINSYNC_BRANCH_PREFIX = 'binsync'
+BINSYNC_ROOT_BRANCH = f'{BINSYNC_BRANCH_PREFIX}/__root__'
 
 
 class StateContext(object):
@@ -44,7 +45,6 @@ class Client(object):
     :ivar str master_user:  User name of the master user.
     :ivar str repo_root:    Local path of the Git repo.
     :ivar str remote:       Git remote.
-    :ivar str branch:       Git branch.
     :ivar int _commit_interval: The interval for committing local changes into the Git repo, pushing to the remote
                             side, and pulling from the remote.
     """
@@ -54,18 +54,20 @@ class Client(object):
         master_user,
         repo_root,
         remote="origin",
-        branch="master",
         commit_interval=10,
         init_repo=False,
         remote_url=None,
         ssh_agent_pid=None,
         ssh_auth_sock=None,
     ):
+        if master_user.endswith('/'):
+            raise Exception(f"Bad username: {master_user}")
+
         self.master_user = master_user
         self.repo_root = repo_root
         self.remote = remote
-        self.branch = branch
         self.repo = None
+        self.repo_lock = None
 
         # ssh-agent info
         self.ssh_agent_pid = ssh_agent_pid  # type: int
@@ -82,13 +84,15 @@ class Client(object):
             # case 1
             # open the local repo
             self.repo = git.Repo(self.repo_root)
+            if init_repo:
+                raise Exception("Could not initialize repository - it already exists!")
         except (git.NoSuchPathError, git.InvalidGitRepositoryError):
             # initialization
             assert not (init_repo is True and remote_url)
             if init_repo:
                 # case 3
                 self.repo = git.Repo.init(self.repo_root)
-                self._add_git_ignore(self.repo_root)
+                self._setup_repo(self.repo_root)
             elif remote_url is not None:
                 # case 2
                 self.clone(remote_url)
@@ -96,6 +100,20 @@ class Client(object):
                 self.repo = git.Repo(self.repo_root)
 
         assert not self.repo.bare  # it should not be a bare repo
+
+        self.repo_lock = filelock.FileLock(self.repo_root + "/.git/binsync.lock")
+        try:
+            self.repo_lock.acquire(timeout=0)
+        except filelock.Timeout as e:
+            raise Exception("Can only have one binsync client touching a local repository at once.\n"
+                            "If the previous client crashed, you may need to delete " + self.repo_root + "/.git/binsync.lock")
+
+        # check out the appropriate branch
+        try:
+            branch = next(o for o in self.repo.branches if o.name == f"{BINSYNC_BRANCH_PREFIX}/{self.master_user}")
+        except StopIteration:
+            branch = self.repo.create_head(f"{BINSYNC_BRANCH_PREFIX}/{self.master_user}", BINSYNC_ROOT_BRANCH)
+        branch.checkout()
 
         self._commit_interval = commit_interval
         self._worker_thread = None
@@ -109,6 +127,10 @@ class Client(object):
 
         self.state = None  # TODO: Updating it
         self.commit_lock = threading.Lock()
+
+    def __del__(self):
+        if self.repo_lock is not None:
+            self.repo_lock.release()
 
     @property
     def has_remote(self):
@@ -190,11 +212,13 @@ class Client(object):
 
         self._last_push_attempt_at = datetime.datetime.now()
 
+        branch_name = f"{BINSYNC_BRANCH_PREFIX}/{self.master_user}"
         if self.has_remote:
             try:
                 env = self.ssh_agent_env()
                 with self.repo.git.custom_environment(**env):
-                    self.repo.remotes[self.remote].push()
+                    self.repo.remotes[self.remote].push(BINSYNC_ROOT_BRANCH)
+                    self.repo.remotes[self.remote].push(branch_name)
                 self._last_push_at = datetime.datetime.now()
             except git.exc.GitCommandError as ex:
                 if print_error:
@@ -209,7 +233,7 @@ class Client(object):
 
     def users(self) -> typing.Iterable[User]:
         for ref in self.repo.refs:  # type: git.Reference
-            if not ref.is_remote() or ref.remote_name != self.remote or not ref.name.startswith(f'{self.remote}/{BINSYNC_BRANCH_PREFIX}'):
+            if not ref.is_remote() or ref.remote_name != self.remote or not ref.name.startswith(f'{self.remote}/{BINSYNC_BRANCH_PREFIX}/'):
                 continue
             # Load metadata
             try:
@@ -361,10 +385,9 @@ class Client(object):
         # case, please comment out the following assertion.
         assert self.master_user == state.user
 
-        # TODO how do we create a new branch here
-        branch_name = f"{BINSYNC_BRANCH_PREFIX}{state.user.uid}"
+        branch_name = f"{BINSYNC_BRANCH_PREFIX}/{self.master_user}"
         branch = next(o for o in self.repo.branches if o.name == branch_name)
-        index = git.IndexFile.from_tree(self.repo, branch)
+        index = self.repo.index
 
         # dump the state
         state.dump(index)
@@ -411,8 +434,9 @@ class Client(object):
         self.repo.close()
         del self.repo
 
-    def _add_git_ignore(self, repo_root):
+    def _setup_repo(self, repo_root):
         with open(os.path.join(repo_root, ".gitignore"), "w") as f:
             f.write(".git/*\n")
         self.repo.index.add([".gitignore"])
-        self.repo.index.commit("Add .gitignore.")
+        self.repo.index.commit("Add .gitignore")
+        self.repo.create_head(BINSYNC_ROOT_BRANCH)

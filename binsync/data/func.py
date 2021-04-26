@@ -4,7 +4,6 @@ import toml
 
 from .base import Base
 from ..utils import is_py2
-from ..state import add_data
 
 long = int
 

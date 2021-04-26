@@ -35,10 +35,10 @@ def dirty_checker(f):
 
 
 def add_data(index: git.IndexFile, path: str, data: bytes):
-    stream = BytesIO(data)
-    istream = index.repo.odb.store(gitdb.IStream(git.Blob.type, len(data), stream))
-    index_entry = git.BaseIndexEntry((stat.S_IFREG | 0o644, istream.binsha, 0, path))
-    index.add([index_entry])
+    fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
+    with open(path, 'wb') as fp:
+        fp.write(data)
+    index.add([fullpath])
 
 
 class State:
@@ -78,25 +78,25 @@ class State:
             "user": self.user,
             "version": self.version,
         }
-        add_data(index, 'metadata.toml', toml.dumps(d))
+        add_data(index, 'metadata.toml', toml.dumps(d).encode())
 
     def dump(self, index: git.IndexFile):
         # dump metadata
         self.dump_metadata(index)
 
         # dump function
-        add_data(index, 'functions.toml', toml.dumps(Function.dump_many(self.functions)))
+        add_data(index, 'functions.toml', toml.dumps(Function.dump_many(self.functions)).encode())
 
         # dump comments
-        add_data(index, 'comments.toml', toml.dumps(Comment.dump_many(self.comments)))
+        add_data(index, 'comments.toml', toml.dumps(Comment.dump_many(self.comments)).encode())
 
         # dump patches
-        add_data(index, 'patches.toml', toml.dumps(Patch.dump_many(self.patches)))
+        add_data(index, 'patches.toml', toml.dumps(Patch.dump_many(self.patches)).encode())
 
         # dump stack variables, one file per function
         for func_addr, stack_vars in self.stack_variables.items():
             path = os.path.join('stack_vars', "%08x.toml" % func_addr)
-            add_data(index, path, toml.dumps(StackVariable.dump_many(stack_vars)))
+            add_data(index, path, toml.dumps(StackVariable.dump_many(stack_vars)).encode())
 
     @staticmethod
     def load_metadata(tree):
@@ -280,3 +280,4 @@ class State:
         if func_addr not in self.stack_variables:
             raise KeyError("No stack variables are defined for function %#x." % func_addr)
         return self.stack_variables[func_addr].items()
+

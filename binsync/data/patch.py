@@ -65,9 +65,8 @@ class Patch(Base):
             yield patch
 
     @classmethod
-    def dump_many(cls, path, patches):
+    def dump_many(cls, patches):
         patches_ = {}
         for v in patches.values():
             patches_["%s_%x" % (v.obj_name, v.offset)] = v.__getstate__()
-        with open(path, "w") as f:
-            toml.dump(patches_, f)
+        return patches_

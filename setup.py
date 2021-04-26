@@ -16,6 +16,7 @@ setup(
         "sortedcontainers",
         "toml",
         "GitPython",
+        "filelock",
     ],
     description='Collaboration framework for binary analysis tasks.',
     url='https://github.com/angr/binsync',
