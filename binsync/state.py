@@ -6,12 +6,11 @@ except NameError:
 import os
 from functools import wraps
 from collections import defaultdict
-from io import BytesIO
-import stat
+import pathlib
 
 from sortedcontainers import SortedDict
 import toml
-import git, gitdb
+import git
 
 from .data import Function, Comment, Patch, StackVariable
 from .errors import MetadataNotFoundError
@@ -36,7 +35,8 @@ def dirty_checker(f):
 
 def add_data(index: git.IndexFile, path: str, data: bytes):
     fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
-    with open(path, 'wb') as fp:
+    pathlib.Path(fullpath).parent.mkdir(parents=True, exist_ok=True)
+    with open(fullpath, 'wb') as fp:
         fp.write(data)
     index.add([fullpath])
 
@@ -100,7 +100,7 @@ class State:
 
     @staticmethod
     def load_metadata(tree):
-        return toml.load(tree['metadata.toml'].data_stream)
+        return toml.loads(tree['metadata.toml'].data_stream.read().decode())
 
     @classmethod
     def parse(cls, tree, version=None, client=None):
@@ -118,7 +118,7 @@ class State:
 
         # load function
         try:
-            funcs_toml = toml.load(tree['functions.toml'].data_stream)
+            funcs_toml = toml.loads(tree['functions.toml'].data_stream.read().decode())
         except:
             pass
         else:
@@ -129,7 +129,7 @@ class State:
 
         # load comments
         try:
-            comments_toml = toml.load(tree['comments.toml'].data_stream)
+            comments_toml = toml.loads(tree['comments.toml'].data_stream.read().decode())
         except:
             pass
         else:
@@ -140,7 +140,7 @@ class State:
 
         # load patches
         try:
-            patches_toml = toml.load(tree['patches.toml'].data_stream)
+            patches_toml = toml.loads(tree['patches.toml'].data_stream.read().decode())
         except:
             pass
         else:
@@ -153,7 +153,7 @@ class State:
         for func_addr in s.functions:
             try:
                 # TODO use unrebased address for more durability
-                svs_toml = toml.load(tree[os.path.join('stack_vars', '%08x.toml' % func_addr)])
+                svs_toml = toml.loads(tree[os.path.join('stack_vars', '%08x.toml' % func_addr)].data_stream.read().decode())
             except:
                 pass
             else:
