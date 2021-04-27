@@ -5,16 +5,18 @@ import threading
 import time
 import datetime
 import logging
+from typing import Dict
 
-from PyQt5.QtWidgets import QMessageBox
+import ida_hexrays
 import idc
 import idaapi
 import idautils
 
+from PyQt5.QtWidgets import QMessageBox
+
 import binsync
 from binsync import Client
-from binsync.data import StackVariable, StackOffsetType
-
+from binsync.data import StackVariable, StackOffsetType, Function
 from . import compat
 
 _l = logging.getLogger(name=__name__)
@@ -43,15 +45,21 @@ def make_state(f):
         state = kwargs.pop('state', None)
         user = kwargs.pop('user', None)
         if state is None:
-            save_before_return = True
-            state = self._client.get_state(user=user)
+            with self.state_ctx(user=user) as state:
+                kwargs['state'] = state
+                r = f(self, *args, **kwargs)
+
+                self.save_lock.acquire()
+                state.save()
+                time.sleep(1)
+                self.save_lock.release()
+
+                return r
+
         else:
-            save_before_return = False
-        kwargs['state'] = state
-        r = f(self, *args, **kwargs)
-        if save_before_return:
-            state.save()
-        return r
+            kwargs['state'] = state
+            r = f(self, *args, **kwargs)
+            return r
     return state_check
 
 
@@ -127,33 +135,12 @@ class BinsyncClient(Client):
             self.pull()
 
         print("IS DIRTY??", self.get_state().dirty)
-        if self.get_state().dirty:
-            # do a save!
-            user = [x for x in self.users() if x.name == "wgibbs16"][0]
-            print(user.name)
-            print(user.uid)
-            self.state = self.get_state(user=user)
-            #self.state = self.get_state(user=)
-            #for addr in state.functions.keys():
-            #    print("ADDR:", addr)
-            #    print("FUNC:", state.functions[addr].name)
-            #    idaapi.set_name(addr, state.functions[addr].name)
-
-            #for addr in state.comments.keys():
-            #    idc.MakeRptCmt(addr, state.comments[addr].encode('ascii'))
-
-            self.save_state()
 
         if self.has_remote:
             # do a push... if there is a remote
             self.push()
 
         self._last_commit_ts = time.time()
-        # for addr in state.comments.keys():
-        #    print("ADDR:", addr)
-        #    print("COMMENT:", state.comments[addr])
-        # idc.MakeRptCmt(addr, state.comments[addr].comment)
-        # print("EXITING")
 
 
 class BinsyncController:
@@ -161,6 +148,13 @@ class BinsyncController:
         self._client = None  # type: binsync.Client
 
         self.control_panel = None
+
+        # last push
+        self.last_push = None
+
+        # lock
+        self.save_lock = threading.Lock()
+
 
         # start the worker routine
         self.worker_thread = threading.Thread(target=self.worker_routine)
@@ -206,7 +200,6 @@ class BinsyncController:
 
     def current_function(self):
         """
-
         :return:
         :rtype: Optional[ida_funcs.func_t]
         """
@@ -219,6 +212,7 @@ class BinsyncController:
     def state_ctx(self, user=None, version=None, locked=False):
         return self._client.state_ctx(user=user, version=version, locked=locked)
 
+
     @init_checker
     def status(self):
         return self._client.status()
@@ -227,33 +221,9 @@ class BinsyncController:
     def users(self):
         return self._client.users()
 
-    @init_checker
-    @make_state
-    def push_function(self, ida_func, user=None, state=None):
-        # Push function
-        func_addr = int(ida_func.start_ea)
-        func = binsync.data.Function(func_addr)
-        func.name = compat.get_func_name(func_addr)
-        state.set_function(func)
-
-    @init_checker
-    @make_ro_state
-    def pull_function(self, ida_func, user=None, state=None):
-        """
-        Pull a function downwards.
-
-        :param bv:
-        :param bn_func:
-        :param user:
-        :return:
-        """
-
-        # pull function
-        try:
-            func = state.get_function(int(ida_func.start_ea))
-            return func
-        except KeyError:
-            return None
+    #
+    #   Pullers
+    #
 
     @init_checker
     @make_ro_state
@@ -262,24 +232,30 @@ class BinsyncController:
         Grab all relevant information from the specified user and fill the @ida_func.
         """
 
+        # == function name === #
         _func = self.pull_function(ida_func, user=user, state=state)
         if _func is None:
             return
 
-        # name
         if compat.get_func_name(ida_func.start_ea) != _func.name:
-            idaapi.set_name(ida_func.start_ea, _func.name, idaapi.SN_FORCE)
+            compat.set_ida_func_name(ida_func.start_ea, _func.name)
 
-        # comments
+        # === comments === #
+        # set the func comment
+        func_comment = self.pull_comment(_func.addr, user=user, state=state)
+        if func_comment is not None:
+            idc.set_func_cmt(_func.addr, func_comment, 1)
+            compat.set_ida_comment(_func.addr, func_comment, 1, func_cmt=True)
+
+        # set the disassembly comments
         for start_ea, end_ea in idautils.Chunks(ida_func.start_ea):
             for head in idautils.Heads(start_ea, end_ea):
                 comment = self.pull_comment(head, user=user, state=state)
                 if comment is not None:
-                    idc.set_func_cmt(head, comment, 1)
+                    compat.set_ida_comment(head, comment, 0, func_cmt=False)
 
-        # stack variables
+        # === stack variables === #
         existing_stack_vars = { }
-
         frame = idaapi.get_frame(ida_func.start_ea)
         if frame is None or frame.memqty <= 0:
             _l.debug("Function %#x does not have an associated function frame. Skip variable name sync-up.",
@@ -311,26 +287,40 @@ class BinsyncController:
                 idaapi.set_member_name(frame, existing_stack_vars[ida_offset].soff, stack_var.name)
                 # TODO: retype the existing variable
 
-    @init_checker
-    @make_state
-    def remove_all_comments(self, ida_func, user=None, state=None):
-        for start_ea, end_ea in idautils.Chunks(ida_func.start_ea):
-            for ins_addr in idautils.Heads(start_ea, end_ea):
-                if ins_addr in state.comments:
-                    state.remove_comment(ins_addr)
+        # ===== update the psuedocode ==== #
+        compat.refresh_pseudocode_view(_func.addr)
 
     @init_checker
-    @make_state
-    def push_comments(self, comments, user=None, state=None):
-        # Push comments
-        for addr, comment in comments.items():
-            comm_addr = int(addr)
-            state.set_comment(comm_addr, comment)
+    @make_ro_state
+    def pull_function(self, ida_func, user=None, state=None):
+        """
+        Pull a function downwards.
+
+        :param bv:
+        :param bn_func:
+        :param user:
+        :return:
+        """
+
+        # pull function
+        try:
+            func: Function = state.get_function(int(ida_func.start_ea))
+            return func
+        except KeyError:
+            return None
 
     @init_checker
-    @make_state
-    def push_comment(self, comment_addr, comment, user=None, state=None):
-        state.set_comment(comment_addr, comment)
+    @make_ro_state
+    def pull_stack_variables(self, ida_func, user=None, state=None):
+        try:
+            return dict(state.get_stack_variables(ida_func.start_ea))
+        except KeyError:
+            return { }
+
+    @init_checker
+    @make_ro_state
+    def pull_stack_variable(self, ida_func, offset, user=None, state=None):
+        return state.get_stack_variable(ida_func.start_ea, offset)
 
     @init_checker
     @make_ro_state
@@ -351,15 +341,57 @@ class BinsyncController:
 
     @init_checker
     @make_state
+    def remove_all_comments(self, ida_func, user=None, state=None):
+        for start_ea, end_ea in idautils.Chunks(ida_func):
+            for ins_addr in idautils.Heads(start_ea, end_ea):
+                if ins_addr in state.comments:
+                    state.remove_comment(ins_addr)
+
+    #
+    #   Pushers
+    #
+
+    @init_checker
+    @make_state
+    def push_comment(self, func_addr, comment_addr, comment, user=None, state=None):
+        # first collect the old func comment
+        try:
+            func_cmt = state.get_comment(func_addr)
+        except KeyError:
+            func_cmt = ""
+
+        # add the comment to the func comment
+        func_cmt += f"\n\n{hex(comment_addr)}: {comment}"
+        self.push_func_comment(func_addr, func_cmt)
+
+        # also put the comment alone
+        state.set_comment(comment_addr, comment)
+
+    @init_checker
+    @make_state
+    def push_func_comment(self, func_addr, comment, user=None, state=None):
+        # just push a functions comment, overwriting it
+        state.set_comment(func_addr, comment)
+
+
+    @init_checker
+    @make_state
     def push_patch(self, patch, user=None, state=None):
         state.set_patch(patch.offset, patch)
 
     @init_checker
     @make_state
-    def push_stack_variable(self, ida_func, stack_offset, name, type_str, size, user=None, state=None):
+    def push_function_name(self, func_addr, new_name, user=None, state=None):
+        func = binsync.data.Function(func_addr)
+        func.name = new_name
+        state.set_function(func)
+
+    @init_checker
+    @make_state
+    def push_stack_variable(self, func_addr, stack_offset, name, type_str, size, user=None, state=None):
         # convert longs to ints
         stack_offset = int(stack_offset)
-        func_addr = int(ida_func.start_ea)
+        func_addr = int(func_addr)
         size = int(size)
 
         v = StackVariable(stack_offset,
@@ -370,51 +402,20 @@ class BinsyncController:
                           func_addr)
         state.set_stack_variable(func_addr, stack_offset, v)
 
-    @init_checker
-    @make_state
-    def push_stack_variables(self, ida_func, user=None, state=None):
-
-        frame = idaapi.get_frame(ida_func.start_ea)
-        if frame is None or frame.memqty <= 0:
-            _l.debug("Function %#x does not have an associated function frame.", ida_func.start_ea)
-            return
-
-        # compute frame size
-        frame_size = idc.get_struc_size(frame)
-        last_member_size = idaapi.get_member_size(frame.get_member(frame.memqty - 1))
-
-        for i in range(frame.memqty):
-            member = frame.get_member(i)
-            name = idc.get_member_name(frame.id, member.soff)
-
-            # ignore all unnamed variables
-            # TODO: Do not ignore re-typed but unnamed variables
-            if re.match(r"var_\d+", name) or name in {
-                ' s', ' r',
-            }:
-                continue
-
-            stack_offset = member.soff - frame_size + last_member_size
-            size = idaapi.get_member_size(member)
-            type_str = self._get_type_str(member.flag)
-            self.push_stack_variable(ida_func, stack_offset, name, type_str, size, user=user, state=state)
-
-    @init_checker
-    @make_ro_state
-    def pull_stack_variables(self, ida_func, user=None, state=None):
-        try:
-            return dict(state.get_stack_variables(ida_func.start_ea))
-        except KeyError:
-            return { }
-
-    @init_checker
-    @make_ro_state
-    def pull_stack_variable(self, ida_func, offset, user=None, state=None):
-        return state.get_stack_variable(ida_func.start_ea, offset)
 
     #
     # Utils
     #
+
+    def set_ida_comments(self, comment: Dict[int,str]):
+        ida_cmts = ida_hexrays.user_cmts_new()
+        tl = ida_hexrays.treeloc_t()
+        tl.ea = list(comment.keys())[0]
+        tl.itp = 90 #XXX: need a real value here.
+
+        ida_cmts.insert(tl, ida_hexrays.citem_cmt_t(list(comment.values())[0]))
+        ida_hexrays.save_user_cmts(tl.ea, ida_cmts)
+
 
     @staticmethod
     def _get_type_str(flag):
