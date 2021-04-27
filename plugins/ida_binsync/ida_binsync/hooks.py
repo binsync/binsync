@@ -345,6 +345,9 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def renamed(self, ea, new_name, local_name):
+        screen_ea = idaapi.get_screen_ea()
+        if ea != screen_ea:
+            return 0
 
         print("renamed(ea = %x, new_name = %s, local_name = %d)" % (ea, new_name, local_name))
         if ida_struct.is_member_id(ea) or ida_struct.get_struc(ea) or ida_enum.get_enum_name(ea):
@@ -370,6 +373,10 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def cmt_changed(self, ea, repeatable_cmt):
+        screen_ea = idaapi.get_screen_ea()
+        if ea != screen_ea:
+            return 0
+
         print("cmt changed")
         cmt = ida_bytes.get_cmt(ea, repeatable_cmt)
         if cmt:
@@ -378,6 +385,10 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def range_cmt_changed(self, kind, a, cmt, repeatable):
+        screen_ea = idaapi.get_screen_ea()
+        if a.start_ea != screen_ea:
+            return 0
+
         print("range cmt changed")
         # verify it's a function comment
         cmt = idc.get_func_cmt(a.start_ea, repeatable)
@@ -397,21 +408,14 @@ class IDBHooks(ida_idp.IDB_Hooks):
     def ida_comment_changed(self, comment, address, cmt_type):
         # disass comment changed
         if cmt_type == "cmt":
-            # place this comment on the end of the func comment
+            # find the location this comment exists
             func_addr = idaapi.get_func(address).start_ea
-            func_cmt = idc.get_func_cmt(func_addr, 1)
-            func_cmt += f"\n{hex(address)}: {comment}"
-
-            # push the func comment
-            Thread(target=self.controller.push_comment, args=(func_addr, func_cmt)).start()
-
-            # push the normal comment
-            Thread(target=self.controller.push_comment, args=(address, comment)).start()
+            Thread(target=self.controller.push_comment, args=(func_addr, address, comment)).start()
 
         # function comment changed
         elif cmt_type == "range":
             # overwrite the entire function comment
-            Thread(target=self.controller.push_comment, args=(address, comment)).start()
+            Thread(target=self.controller.push_func_comment, args=(address, comment)).start()
 
         # XXX: other?
         elif cmt_type == "extra":
@@ -491,6 +495,10 @@ class HexRaysHooks:
     @quite_init_checker
     def _update_user_cmts(self, ea):
         cmts = HexRaysHooks._get_user_cmts(ea)
+
+        if len(cmts) == 0:
+            return
+
         print(f"Comments {cmts}")
         if cmts != self._cached_funcs[ea]["cmts"]:
             # convert the comment to binsync stuff

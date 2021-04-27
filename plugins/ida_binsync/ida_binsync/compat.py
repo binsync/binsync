@@ -68,9 +68,40 @@ def get_screen_ea():
     return idc.get_screen_ea()
 
 @execute_write
+def set_ida_func_name(func_addr, new_name):
+    idaapi.set_name(func_addr, new_name, idaapi.SN_FORCE)
+    ida_kernwin.request_refresh(ida_kernwin.IWID_DISASMS)
+    ida_kernwin.request_refresh(ida_kernwin.IWID_STRUCTS)
+    ida_kernwin.request_refresh(ida_kernwin.IWID_STKVIEW)
+
+
+@execute_write
 def set_ida_comment(addr, cmt, rpt, func_cmt=False):
     if func_cmt:
         print(f"SETTING FUNC COMMENT: '{cmt}'")
         idc.set_func_cmt(addr, cmt, rpt)
     else:
         ida_bytes.set_cmt(addr, cmt, rpt)
+
+@execute_write
+def refresh_pseudocode_view(ea):
+    """Refreshes the pseudocode view in IDA."""
+    names = ["Pseudocode-%c" % chr(ord("A") + i) for i in range(5)]
+    for name in names:
+        widget = ida_kernwin.find_widget(name)
+        if widget:
+            vu = ida_hexrays.get_widget_vdui(widget)
+
+            # Check if the address is in the same function
+            func_ea = vu.cfunc.entry_ea
+            func = ida_funcs.get_func(func_ea)
+            if ida_funcs.func_contains(func, ea):
+                vu.refresh_view(True)
+
+
+def parse_struct_type(s_name):
+    if "$ F4" in s_name:
+        func_addr = int(s_name.split("$ F4")[1], 16)
+        return func_addr
+    else:
+        return s_name

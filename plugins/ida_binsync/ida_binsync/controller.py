@@ -45,10 +45,14 @@ def make_state(f):
         state = kwargs.pop('state', None)
         user = kwargs.pop('user', None)
         if state is None:
-            with self.state_ctx() as state:
+            with self.state_ctx(user=user) as state:
                 kwargs['state'] = state
                 r = f(self, *args, **kwargs)
+
+                self.save_lock.acquire()
                 state.save()
+                time.sleep(1)
+                self.save_lock.release()
 
                 return r
 
@@ -151,6 +155,7 @@ class BinsyncController:
         # lock
         self.save_lock = threading.Lock()
 
+
         # start the worker routine
         self.worker_thread = threading.Thread(target=self.worker_routine)
         self.worker_thread.setDaemon(True)
@@ -229,13 +234,11 @@ class BinsyncController:
 
         # == function name === #
         _func = self.pull_function(ida_func, user=user, state=state)
-        print("CHECKING FUNC")
         if _func is None:
             return
 
-        print("PASSED IT!")
         if compat.get_func_name(ida_func.start_ea) != _func.name:
-            idaapi.set_name(ida_func.start_ea, _func.name, idaapi.SN_FORCE)
+            compat.set_ida_func_name(ida_func.start_ea, _func.name)
 
         # === comments === #
         # set the func comment
@@ -283,6 +286,9 @@ class BinsyncController:
                 # rename the existing variable
                 idaapi.set_member_name(frame, existing_stack_vars[ida_offset].soff, stack_var.name)
                 # TODO: retype the existing variable
+
+        # ===== update the psuedocode ==== #
+        compat.refresh_pseudocode_view(_func.addr)
 
     @init_checker
     @make_ro_state
@@ -347,9 +353,26 @@ class BinsyncController:
 
     @init_checker
     @make_state
-    def push_comment(self, comment_addr, comment, user=None, state=None):
-        # put the comment on the
+    def push_comment(self, func_addr, comment_addr, comment, user=None, state=None):
+        # first collect the old func comment
+        try:
+            func_cmt = state.get_comment(func_addr)
+        except KeyError:
+            func_cmt = ""
+
+        # add the comment to the func comment
+        func_cmt += f"\n\n{hex(comment_addr)}: {comment}"
+        self.push_func_comment(func_addr, func_cmt)
+
+        # also put the comment alone
         state.set_comment(comment_addr, comment)
+
+    @init_checker
+    @make_state
+    def push_func_comment(self, func_addr, comment, user=None, state=None):
+        # just push a functions comment, overwriting it
+        state.set_comment(func_addr, comment)
+
 
     @init_checker
     @make_state
