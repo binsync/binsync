@@ -79,7 +79,7 @@ class Client(object):
         self.repo = None
         self.repo_lock = None
 
-        if master_user.endswith('/'):
+        if master_user.endswith('/') or '__root__' in master_user:
             raise Exception(f"Bad username: {master_user}")
 
         # ssh-agent info
