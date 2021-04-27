@@ -12,6 +12,9 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 # import ctypes
 import pickle
+from threading import Thread
+from functools import wraps
+
 
 import ida_auto
 import ida_bytes
@@ -33,6 +36,20 @@ import idc
 from . import compat
 from .controller import BinsyncController
 
+#
+#   Decerators
+#
+
+
+def quite_init_checker(f):
+    @wraps(f)
+    def initcheck(self, *args, **kwargs):
+        if not self.controller.check_client():
+            return 0
+        return f(self, *args, **kwargs)
+    return initcheck
+
+
 # See idasdk74.zip: idasdk74/include/idp.hpp for methods' documentation
 # See C:\Program Files\IDA Pro 7.4\python\3\ida_idp.py for methods' prototypes
 # The order for methods below is the same as the idp.hpp file to ease making changes
@@ -42,14 +59,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         self.controller: BinsyncController = controller
         self.last_local_type = None
 
-    def auto_empty_finally(self):
-        print("auto_empty_finally() not implemented yet")
-        return 0
-
-    def auto_empty(self):
-        print("auto_empty() not implemented yet")
-        return 0
-
+    @quite_init_checker
     def local_types_changed(self):
         print("local type changed")
         return
@@ -93,6 +103,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         self._plugin.core.update_local_types_map()
         return 0
 
+    @quite_init_checker
     def ti_changed(self, ea, type, fname):
         print("ti_changed(ea = 0x%X, type = %s, fname = %s)" % (ea, type, fname))
         return
@@ -104,6 +115,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
             evt.TiChangedEvent(ea, (ParseTypeString(type[0]) if type else [], type[1] if type else None), name))
         return 0
 
+    @quite_init_checker
     def enum_created(self, enum):
         print("enum created")
         return
@@ -113,13 +125,14 @@ class IDBHooks(ida_idp.IDB_Hooks):
         return 0
 
     # XXX - use enum_deleted(self, id) instead?
+    @quite_init_checker
     def deleting_enum(self, id):
         print("enum deleted")
-        return
-        self._send_packet(evt.EnumDeletedEvent(ida_enum.get_enum_name(id)))
         return 0
+        enum_name = ida_enum.get_enum_name(id)
 
     # XXX - use enum_renamed(self, id) instead?
+    @quite_init_checker
     def renaming_enum(self, id, is_enum, newname):
         print("enum renamed")
         return
@@ -131,6 +144,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         self._send_packet(evt.EnumRenamedEvent(oldname, newname, is_enum))
         return 0
 
+    @quite_init_checker
     def enum_bf_changed(self, id):
         print("enum renamed")
         return
@@ -139,6 +153,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         self._send_packet(evt.EnumBfChangedEvent(ename, bf_flag))
         return 0
 
+    @quite_init_checker
     def enum_cmt_changed(self, tid, repeatable_cmt):
         print("enum renamed")
         return
@@ -147,6 +162,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         self._send_packet(evt.EnumCmtChangedEvent(emname, cmt, repeatable_cmt))
         return 0
 
+    @quite_init_checker
     def enum_member_created(self, id, cid):
         print("enum member created")
         return
@@ -160,6 +176,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         return 0
 
     # XXX - use enum_member_deleted(self, id, cid) instead?
+    @quite_init_checker
     def deleting_enum_member(self, id, cid):
         print("enum member")
         return
@@ -172,6 +189,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         )
         return 0
 
+    @quite_init_checker
     def struc_created(self, tid):
         print("struct created")
         return
@@ -181,6 +199,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         return 0
 
     # XXX - use struc_deleted(self, struc_id) instead?
+    @quite_init_checker
     def deleting_struc(self, sptr):
         print("struct deleted")
         return
@@ -188,20 +207,24 @@ class IDBHooks(ida_idp.IDB_Hooks):
         self._send_packet(evt.StrucDeletedEvent(sname))
         return 0
 
+    @quite_init_checker
     def struc_align_changed(self, sptr):
         print("struc_align_changed() not implemented yet")
         return 0
 
     # XXX - use struc_renamed(self, sptr) instead?
+    @quite_init_checker
     def renaming_struc(self, id, oldname, newname):
         print(f"rename struc: {id} | {oldname} | {newname}")
         return 0
 
     # XXX - use struc_expanded(self, sptr) instead
+    @quite_init_checker
     def expanding_struc(self, sptr, offset, delta):
         sname = ida_struct.get_struc_name(sptr.id)
         return 0
 
+    @quite_init_checker
     def struc_member_created(self, sptr, mptr):
         print("struc member created")
         extra = {}
@@ -227,11 +250,12 @@ class IDBHooks(ida_idp.IDB_Hooks):
                     extra["strtype"] = mt.strtype
         return 0
 
+    @quite_init_checker
     def struc_member_deleted(self, sptr, off1, off2):
         sname = ida_struct.get_struc_name(sptr.id)
         return 0
 
-    # XXX - use struc_member_renamed(self, sptr, mptr) instead?
+    @quite_init_checker
     def renaming_struc_member(self, sptr, mptr, newname):
         """
         Handles renaming of two things:
@@ -243,6 +267,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         :param newname: New Member Name
         :return:
         """
+
         sname = ida_struct.get_struc_name(sptr.id)
         s_type = compat.parse_struct_type(sname)
 
@@ -260,22 +285,20 @@ class IDBHooks(ida_idp.IDB_Hooks):
             size = idaapi.get_member_size(mptr)
             type_str = self.controller._get_type_str(mptr.flag)
 
-            self.controller.push_stack_variable(func_addr, stack_offset, newname, type_str, size)
+            # do the change on a new thread
+            Thread(target=self.controller.push_stack_variable,
+                   args=(func_addr, stack_offset, newname, type_str, size)).start()
 
-        # global struc
+        # actual struct
         elif isinstance(s_type, str):
             print("Not implemented")
 
         else:
             print("Error: bad parsing")
 
-
-
-        print(f"struc member renamed: {sptr} | {mptr} | {newname}")
-        print(f"---- struct name: {sname}")
-        offset = mptr.soff
         return 0
 
+    @quite_init_checker
     def struc_member_changed(self, sptr, mptr):
         print("struc member changed")
         extra = {}
@@ -299,6 +322,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
                     extra["strtype"] = mt.strtype
         return 0
 
+    @quite_init_checker
     def struc_cmt_changed(self, id, repeatable_cmt):
         fullname = ida_struct.get_struc_name(id)
         if "." in fullname:
@@ -309,57 +333,91 @@ class IDBHooks(ida_idp.IDB_Hooks):
         cmt = ida_struct.get_struc_cmt(id, repeatable_cmt)
         return 0
 
+    @quite_init_checker
     def func_added(self, func):
         return 0
 
-
+    @quite_init_checker
     def sgr_changed(self, start_ea, end_ea, regnum, value, old_value, tag):
         # FIXME: sgr_changed is not triggered when a segment register is
         # being deleted by the user, so we need to sent the complete list
         return 0
 
-    def make_data(self, ea, flags, tid, size):
-        return 0
-
+    @quite_init_checker
     def renamed(self, ea, new_name, local_name):
+
         print("renamed(ea = %x, new_name = %s, local_name = %d)" % (ea, new_name, local_name))
         if ida_struct.is_member_id(ea) or ida_struct.get_struc(ea) or ida_enum.get_enum_name(ea):
             # Drop hook to avoid duplicate since already handled by the following hooks:
             # - renaming_struc_member() -> sends 'StrucMemberRenamedEvent'
             # - renaming_struc() -> sends 'StrucRenamedEvent'
             # - renaming_enum() -> sends 'EnumRenamedEvent'
-            print("dropped")
             return 0
 
-        # if we are here, its a function renaming
-        self.controller.push_function_name(ea)
+        # confirm we are renaming a function
+        ida_func = idaapi.get_func(ea)
+        if ida_func is None:
+            return 0
+
+        # grab the name instead from ida
+        name = idc.get_func_name(ida_func.start_ea)
+        Thread(target=self.controller.push_function_name, args=(ida_func.start_ea, name)).start()
         return 0
 
+    @quite_init_checker
     def byte_patched(self, ea, old_value):
         return 0
 
+    @quite_init_checker
     def cmt_changed(self, ea, repeatable_cmt):
         print("cmt changed")
         cmt = ida_bytes.get_cmt(ea, repeatable_cmt)
         if cmt:
-            self.controller.push_comment(ea, cmt)
-
+            self.ida_comment_changed(cmt, ea, "cmt")
         return 0
 
+    @quite_init_checker
     def range_cmt_changed(self, kind, a, cmt, repeatable):
         print("range cmt changed")
-        return 0
+        # verify it's a function comment
+        cmt = idc.get_func_cmt(a.start_ea, repeatable)
+        if cmt:
+            self.ida_comment_changed(cmt, a.start_ea, "range")
 
         return 0
 
+    @quite_init_checker
     def extra_cmt_changed(self, ea, line_idx, cmt):
         print("extra cmt changed")
+        cmt = ida_bytes.get_cmt(ea, 0)
+        if cmt:
+            self.ida_comment_changed(cmt, ea, "cmt")
         return 0
 
-    def callee_addr_changed(self, ea, callee):
-        print("callee_addr_changed() not implemented yet")
-        return 0
+    def ida_comment_changed(self, comment, address, cmt_type):
+        # disass comment changed
+        if cmt_type == "cmt":
+            # place this comment on the end of the func comment
+            func_addr = idaapi.get_func(address).start_ea
+            func_cmt = idc.get_func_cmt(func_addr, 1)
+            func_cmt += f"\n{hex(address)}: {comment}"
 
+            # push the func comment
+            Thread(target=self.controller.push_comment, args=(func_addr, func_cmt)).start()
+
+            # push the normal comment
+            Thread(target=self.controller.push_comment, args=(address, comment)).start()
+
+        # function comment changed
+        elif cmt_type == "range":
+            # overwrite the entire function comment
+            Thread(target=self.controller.push_comment, args=(address, comment)).start()
+
+        # XXX: other?
+        elif cmt_type == "extra":
+            return 0
+
+        return 0
 
 class IDPHooks(ida_idp.IDP_Hooks):
     def __init__(self, controller):
@@ -376,10 +434,6 @@ class HexRaysHooks:
         super(HexRaysHooks, self).__init__()
         self._available = None
         self._installed = False
-        # We cache all HexRays data the first time we encounter a new function
-        # and only send events to IDArling server if we didn't encounter the
-        # specific data for a given function. This is just an optimization to
-        # reduce the amount of messages sent and replicated to other users
         self._cached_funcs = {}
 
     def hook(self):
@@ -398,6 +452,7 @@ class HexRaysHooks:
         if self._available:
             self._installed = False
 
+    @quite_init_checker
     def _hxe_callback(self, event, *_):
         if not self._installed:
             return 0
@@ -405,41 +460,16 @@ class HexRaysHooks:
         if event == ida_hexrays.hxe_func_printed:
             ea = ida_kernwin.get_screen_ea()
             func = ida_funcs.get_func(ea)
+
+            print("INSIDE HXE CALLBACK!")
             if func is None:
                 return 0
 
             if func.start_ea not in self._cached_funcs.keys():
-                self._cached_funcs[func.start_ea] = {}
-                self._cached_funcs[func.start_ea]["labels"] = []
-                self._cached_funcs[func.start_ea]["cmts"] = []
-                self._cached_funcs[func.start_ea]["iflags"] = []
-                self._cached_funcs[func.start_ea]["lvar_settings"] = []
-                self._cached_funcs[func.start_ea]["numforms"] = []
-            self._send_user_labels(func.start_ea)
-            self._send_user_cmts(func.start_ea)
-            self._send_user_iflags(func.start_ea)
-            self._send_user_lvar_settings(func.start_ea)
-            self._send_user_numforms(func.start_ea)
+                self._cached_funcs[func.start_ea] = {"cmts": []}
+
+            self._update_user_cmts(func.start_ea)
         return 0
-
-    @staticmethod
-    def _get_user_labels(ea):
-        user_labels = ida_hexrays.restore_user_labels(ea)
-        if user_labels is None:
-            user_labels = ida_hexrays.user_labels_new()
-        labels = []
-        it = ida_hexrays.user_labels_begin(user_labels)
-        while it != ida_hexrays.user_labels_end(user_labels):
-            org_label = ida_hexrays.user_labels_first(it)
-            name = ida_hexrays.user_labels_second(it)
-            it = ida_hexrays.user_labels_next(it)
-        ida_hexrays.user_labels_free(user_labels)
-        return labels
-
-    def _send_user_labels(self, ea):
-        labels = HexRaysHooks._get_user_labels(ea)
-        if labels != self._cached_funcs[ea]["labels"]:
-            self._cached_funcs[ea]["labels"] = labels
 
     @staticmethod
     def _get_user_cmts(ea):
@@ -451,44 +481,26 @@ class HexRaysHooks:
         while it != ida_hexrays.user_cmts_end(user_cmts):
             tl = ida_hexrays.user_cmts_first(it)
             cmt = ida_hexrays.user_cmts_second(it)
+            cmts.append(str(cmt))
+            print(f"TL EA: {tl.ea} | TL ITP: {tl.itp}")
+
             it = ida_hexrays.user_cmts_next(it)
         ida_hexrays.user_cmts_free(user_cmts)
         return cmts
 
-    def _send_user_cmts(self, ea):
+    @quite_init_checker
+    def _update_user_cmts(self, ea):
         cmts = HexRaysHooks._get_user_cmts(ea)
+        print(f"Comments {cmts}")
         if cmts != self._cached_funcs[ea]["cmts"]:
+            # convert the comment to binsync stuff
+            long_cmt = " | ".join(cmts)
+            print(f"Long Comment: {long_cmt}")
+
+            Thread(target=self.controller.push_comment, args=(ea, long_cmt)).start()
+
+            # cache so we don't double push a copy
             self._cached_funcs[ea]["cmts"] = cmts
-
-    @staticmethod
-    def _get_user_iflags(ea):
-        user_iflags = ida_hexrays.restore_user_iflags(ea)
-        if user_iflags is None:
-            user_iflags = ida_hexrays.user_iflags_new()
-        iflags = []
-        it = ida_hexrays.user_iflags_begin(user_iflags)
-        while it != ida_hexrays.user_iflags_end(user_iflags):
-            cl = ida_hexrays.user_iflags_first(it)
-            f = ida_hexrays.user_iflags_second(it)
-
-            # FIXME: Temporary while Hex-Rays update their API
-            def read_type_sign(obj):
-                import ctypes
-                import struct
-
-                buf = ctypes.string_at(id(obj), 4)
-                return struct.unpack("I", buf)[0]
-
-            f = read_type_sign(f)
-            iflags.append(((cl.ea, cl.op), f))
-            it = ida_hexrays.user_iflags_next(it)
-        ida_hexrays.user_iflags_free(user_iflags)
-        return iflags
-
-    def _send_user_iflags(self, ea):
-        iflags = HexRaysHooks._get_user_iflags(ea)
-        if iflags != self._cached_funcs[ea]["iflags"]:
-            self._cached_funcs[ea]["iflags"] = iflags
 
     @staticmethod
     def _get_user_lvar_settings(ea):
@@ -543,51 +555,20 @@ class HexRaysHooks:
             "ea": location.get_ea(),
         }
 
-    def _send_user_lvar_settings(self, ea):
-        lvar_settings = HexRaysHooks._get_user_lvar_settings(ea)
-        if lvar_settings != self._cached_funcs[ea]["lvar_settings"]:
-            self._cached_funcs[ea]["lvar_settings"] = lvar_settings
-
     @staticmethod
-    def _get_user_numforms(ea):
-        user_numforms = ida_hexrays.restore_user_numforms(ea)
-        if user_numforms is None:
-            user_numforms = ida_hexrays.user_numforms_new()
-        numforms = []
-        it = ida_hexrays.user_numforms_begin(user_numforms)
-        while it != ida_hexrays.user_numforms_end(user_numforms):
-            ol = ida_hexrays.user_numforms_first(it)
-            nf = ida_hexrays.user_numforms_second(it)
-            numforms.append(
-                (
-                    HexRaysHooks._get_operand_locator(ol),
-                    HexRaysHooks._get_number_format(nf),
-                )
-            )
-            it = ida_hexrays.user_numforms_next(it)
-        ida_hexrays.user_numforms_free(user_numforms)
-        return numforms
+    def refresh_pseudocode_view(ea):
+        """Refreshes the pseudocode view in IDA."""
+        names = ["Pseudocode-%c" % chr(ord("A") + i) for i in range(5)]
+        for name in names:
+            widget = ida_kernwin.find_widget(name)
+            if widget:
+                vu = ida_hexrays.get_widget_vdui(widget)
 
-    @staticmethod
-    def _get_operand_locator(ol):
-        return {"ea": ol.ea, "opnum": ol.opnum}
-
-    @staticmethod
-    def _get_number_format(nf):
-        return {
-            "flags": nf.flags,
-            "opnum": nf.opnum,
-            "props": nf.props,
-            "serial": nf.serial,
-            "org_nbytes": nf.org_nbytes,
-            "type_name": nf.type_name,
-        }
-
-    def _send_user_numforms(self, ea):
-        numforms = HexRaysHooks._get_user_numforms(ea)
-        if numforms != self._cached_funcs[ea]["numforms"]:
-            self._cached_funcs[ea]["numforms"] = numforms
-
+                # Check if the address is in the same function
+                func_ea = vu.cfunc.entry_ea
+                func = ida_funcs.get_func(func_ea)
+                if ida_funcs.func_contains(func, ea):
+                    vu.refresh_view(False)
 
 class MasterHook:
     def __init__(self, controller):

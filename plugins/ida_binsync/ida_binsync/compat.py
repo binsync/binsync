@@ -4,7 +4,10 @@ import threading
 import idc
 import idaapi
 import idautils
-
+import ida_kernwin
+import ida_hexrays
+import ida_funcs
+import ida_bytes
 
 def is_mainthread():
     """
@@ -64,27 +67,10 @@ def get_func_name(ea):
 def get_screen_ea():
     return idc.get_screen_ea()
 
-
-@execute_read
-def get_ida_func(ea):
-    return idaapi.get_func(ea)
-
-
-@execute_read
-def ida_func_to_chunks(ida_func):
-    return list(idautils.Chunks(ida_func.start_ea))
-
-@execute_read
-def ea_to_head(start_ea, end_ea):
-    return list(idautils.Heads(start_ea, end_ea))
-
-@execute_read
-def get_ida_comment(head, repeatable):
-    return idc.GetCommentEx(head, repeatable)
-
-def parse_struct_type(s_name):
-    if "$ F4" in s_name:
-        func_addr = int(s_name.split("$ F4")[1], 16)
-        return func_addr
+@execute_write
+def set_ida_comment(addr, cmt, rpt, func_cmt=False):
+    if func_cmt:
+        print(f"SETTING FUNC COMMENT: '{cmt}'")
+        idc.set_func_cmt(addr, cmt, rpt)
     else:
-        return s_name
+        ida_bytes.set_cmt(addr, cmt, rpt)
