@@ -17,6 +17,7 @@ setup(
         "toml",
         "GitPython",
         "filelock",
+        "sip",
     ],
     description='Collaboration framework for binary analysis tasks.',
     url='https://github.com/angr/binsync',

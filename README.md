@@ -16,6 +16,17 @@ All data is stored in a human-friendly text format (toml) inside a Git repo.
 
 ## Installing
 
+First install [Binsync Core](#binsync-core), then install the plugin associate to your decompiler of choice
+
+### Binsync Core
+
+While in the root of this GitHub repo run:
+```bash
+python3 -m pip install --user .
+```
+
+Or any modifications for custom enviornments.
+
 ### IDA Pro
 After cloning down this repo, simply copy the `ida_binsync` folder and python file into your IDA Pro plugins folder.
 ```bash
