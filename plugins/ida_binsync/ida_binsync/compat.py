@@ -1,5 +1,6 @@
 import functools
 import threading
+from typing import Dict
 
 import idc
 import idaapi
@@ -98,10 +99,26 @@ def refresh_pseudocode_view(ea):
             if ida_funcs.func_contains(func, ea):
                 vu.refresh_view(True)
 
+@execute_write
+def set_decomp_comments(func_addr, cmt_dict: Dict[int,str]):
+    print(f"setting: {cmt_dict}")
+
+    for addr in cmt_dict:
+        ida_cmts = ida_hexrays.user_cmts_new()
+
+        comment = cmt_dict[addr]
+        tl = ida_hexrays.treeloc_t()
+        tl.ea = addr
+        # XXX: need a real value here at some point
+        tl.itp = 90
+        ida_cmts.insert(tl, ida_hexrays.citem_cmt_t(comment))
+
+        ida_hexrays.save_user_cmts(addr, ida_cmts)
+
 
 def parse_struct_type(s_name):
-    if "$ F4" in s_name:
-        func_addr = int(s_name.split("$ F4")[1], 16)
+    if "$ F" in s_name:
+        func_addr = int(s_name.split("$ F")[1], 16)
         return func_addr
     else:
         return s_name

@@ -273,7 +273,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
         # stack offset variable
         if isinstance(s_type, int):
-            func_addr = idaapi.get_imagebase() + s_type
+            func_addr = s_type
 
             # compute stack frame for offset
             frame = idaapi.get_frame(func_addr)
@@ -334,10 +334,6 @@ class IDBHooks(ida_idp.IDB_Hooks):
         return 0
 
     @quite_init_checker
-    def func_added(self, func):
-        return 0
-
-    @quite_init_checker
     def sgr_changed(self, start_ea, end_ea, regnum, value, old_value, tag):
         # FIXME: sgr_changed is not triggered when a segment register is
         # being deleted by the user, so we need to sent the complete list
@@ -345,10 +341,6 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def renamed(self, ea, new_name, local_name):
-        screen_ea = idaapi.get_screen_ea()
-        if ea != screen_ea:
-            return 0
-
         print("renamed(ea = %x, new_name = %s, local_name = %d)" % (ea, new_name, local_name))
         if ida_struct.is_member_id(ea) or ida_struct.get_struc(ea) or ida_enum.get_enum_name(ea):
             # Drop hook to avoid duplicate since already handled by the following hooks:
@@ -373,10 +365,6 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def cmt_changed(self, ea, repeatable_cmt):
-        screen_ea = idaapi.get_screen_ea()
-        if ea != screen_ea:
-            return 0
-
         print("cmt changed")
         cmt = ida_bytes.get_cmt(ea, repeatable_cmt)
         if cmt:
@@ -385,10 +373,6 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def range_cmt_changed(self, kind, a, cmt, repeatable):
-        screen_ea = idaapi.get_screen_ea()
-        if a.start_ea != screen_ea:
-            return 0
-
         print("range cmt changed")
         # verify it's a function comment
         cmt = idc.get_func_cmt(a.start_ea, repeatable)
@@ -410,7 +394,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         if cmt_type == "cmt":
             # find the location this comment exists
             func_addr = idaapi.get_func(address).start_ea
-            Thread(target=self.controller.push_comment, args=(func_addr, address, comment)).start()
+            Thread(target=self.controller.push_comment, args=(address, comment)).start()
 
         # function comment changed
         elif cmt_type == "range":
@@ -480,32 +464,33 @@ class HexRaysHooks:
         user_cmts = ida_hexrays.restore_user_cmts(ea)
         if user_cmts is None:
             user_cmts = ida_hexrays.user_cmts_new()
-        cmts = []
+        cmts = {}
         it = ida_hexrays.user_cmts_begin(user_cmts)
         while it != ida_hexrays.user_cmts_end(user_cmts):
             tl = ida_hexrays.user_cmts_first(it)
             cmt = ida_hexrays.user_cmts_second(it)
-            cmts.append(str(cmt))
-            print(f"TL EA: {tl.ea} | TL ITP: {tl.itp}")
+            cmts[tl.ea] = str(cmt)
 
+            print(f"TL EA: {tl.ea} | TL ITP: {tl.itp}")
             it = ida_hexrays.user_cmts_next(it)
         ida_hexrays.user_cmts_free(user_cmts)
         return cmts
 
     @quite_init_checker
     def _update_user_cmts(self, ea):
+        # get the comments for the function
         cmts = HexRaysHooks._get_user_cmts(ea)
 
+        # validate we dont waste time
         if len(cmts) == 0:
             return
 
-        print(f"Comments {cmts}")
+        print(f"COMMENTS: {cmts}")
+        # never do the same push twice
         if cmts != self._cached_funcs[ea]["cmts"]:
-            # convert the comment to binsync stuff
-            long_cmt = " | ".join(cmts)
-            print(f"Long Comment: {long_cmt}")
-
-            Thread(target=self.controller.push_comment, args=(ea, long_cmt)).start()
+            # thread it!
+            print(f"SENDING {cmts}")
+            Thread(target=self.controller.push_comments, args=(cmts, )).start()
 
             # cache so we don't double push a copy
             self._cached_funcs[ea]["cmts"] = cmts

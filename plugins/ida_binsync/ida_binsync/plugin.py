@@ -106,12 +106,16 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         menu = SyncMenu(controller)
 
         # describe the action
+        print(f"PATH: {plugin_resource('binsync.png')}")
+        self._binsync_icon_id = idaapi.load_custom_icon(plugin_resource("binsync.png"))
+
         action_desc = idaapi.action_desc_t(
             "binsync:sync_menu",                        # The action name.
             "Binsync action...",             # The action text.
             menu.ctx_menu,                          # The action handler.
             None,                                    # Optional: action shortcut
             "Select actions to sync in Binsync", # Optional: tooltip
+            self._binsync_icon_id
         )
 
         # register the action with IDA
@@ -300,6 +304,17 @@ def inject_binsync_actions(form, popup, form_type):
     # done
     return 0
 
+
+def plugin_resource(resource_name):
+    """
+    Return the full path for a given plugin resource file.
+    """
+    plugin_path = os.path.abspath(os.path.dirname(__file__))
+
+    return os.path.join(
+        plugin_path,
+        resource_name
+    )
 
 
 

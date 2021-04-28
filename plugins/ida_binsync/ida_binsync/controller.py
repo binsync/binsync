@@ -5,7 +5,7 @@ import threading
 import time
 import datetime
 import logging
-from typing import Dict
+from typing import Dict, List, Tuple
 
 import ida_hexrays
 import idc
@@ -243,16 +243,25 @@ class BinsyncController:
         # === comments === #
         # set the func comment
         func_comment = self.pull_comment(_func.addr, user=user, state=state)
-        if func_comment is not None:
-            idc.set_func_cmt(_func.addr, func_comment, 1)
-            compat.set_ida_comment(_func.addr, func_comment, 1, func_cmt=True)
+        if func_comment is None:
+            func_comment = ""
+            #idc.set_func_cmt(_func.addr, func_comment, 1)
+            #compat.set_ida_comment(_func.addr, func_comment, 1, func_cmt=True)
 
         # set the disassembly comments
+        func_cmt_end = "\n"
         for start_ea, end_ea in idautils.Chunks(ida_func.start_ea):
             for head in idautils.Heads(start_ea, end_ea):
+                if head == _func.addr:
+                    continue
+
                 comment = self.pull_comment(head, user=user, state=state)
                 if comment is not None:
-                    compat.set_ida_comment(head, comment, 0, func_cmt=False)
+                    func_cmt_end += f"\n{hex(head)}: {comment}"
+                    #compat.set_decomp_comments(_func.addr, {head: comment})
+                    #compat.set_ida_comment(head, comment, 0, func_cmt=False)
+        func_comment += func_cmt_end
+        compat.set_ida_comment(_func.addr, func_comment, 1, func_cmt=True)
 
         # === stack variables === #
         existing_stack_vars = { }
@@ -353,26 +362,34 @@ class BinsyncController:
 
     @init_checker
     @make_state
-    def push_comment(self, func_addr, comment_addr, comment, user=None, state=None):
-        # first collect the old func comment
-        try:
-            func_cmt = state.get_comment(func_addr)
-        except KeyError:
-            func_cmt = ""
+    def push_func_comment(self, func_addr, comment, user=None, state=None):
+        # just push a functions comment, overwriting it
+        state.set_comment(func_addr, comment)
 
-        # add the comment to the func comment
-        func_cmt += f"\n\n{hex(comment_addr)}: {comment}"
-        self.push_func_comment(func_addr, func_cmt)
+    @init_checker
+    @make_state
+    def push_comment(self, comment_addr, comment, user=None, state=None):
+
+
+        # first collect the old func comment
+        #try:
+        #    func_cmt = state.get_comment(func_addr)
+        #except KeyError:
+        #    func_cmt = ""
+
+        ## add the comment to the func comment
+        #func_cmt += f"\n\n{hex(comment_addr)}: {comment}"
+        #self.push_func_comment(func_addr, func_cmt, user=user, state=state)
 
         # also put the comment alone
         state.set_comment(comment_addr, comment)
 
     @init_checker
     @make_state
-    def push_func_comment(self, func_addr, comment, user=None, state=None):
-        # just push a functions comment, overwriting it
-        state.set_comment(func_addr, comment)
-
+    def push_comments(self, cmt_dict: Dict[int, str], user=None, state=None):
+        print(cmt_dict)
+        for addr in cmt_dict:
+            self.push_comment(addr, cmt_dict[addr], user=user, state=state)
 
     @init_checker
     @make_state
@@ -407,14 +424,6 @@ class BinsyncController:
     # Utils
     #
 
-    def set_ida_comments(self, comment: Dict[int,str]):
-        ida_cmts = ida_hexrays.user_cmts_new()
-        tl = ida_hexrays.treeloc_t()
-        tl.ea = list(comment.keys())[0]
-        tl.itp = 90 #XXX: need a real value here.
-
-        ida_cmts.insert(tl, ida_hexrays.citem_cmt_t(list(comment.values())[0]))
-        ida_hexrays.save_user_cmts(tl.ea, ida_cmts)
 
 
     @staticmethod
