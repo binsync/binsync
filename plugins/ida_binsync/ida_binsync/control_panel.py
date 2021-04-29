@@ -67,7 +67,6 @@ class ControlPanel(QWidget):
         self._controller = controller
         self._dialog = dialog
 
-        self._status_table = None  # type: QStatusTable
         self._team_table = None  # type: QTeamTable
 
         self._init_widgets()
@@ -80,12 +79,7 @@ class ControlPanel(QWidget):
         self.reload()
 
     def reload(self):
-        # update status
-        self._status_table.status = "ready"
         curr_func = self._controller.current_function()
-        if curr_func is not None:
-            self._status_table.current_function = compat.get_func_name(curr_func.start_ea)
-        self._status_table.reload()
         # update users
         if self._controller is not None and self._controller.check_client():
             self._team_table.update_users(self._controller.users())
@@ -101,16 +95,16 @@ class ControlPanel(QWidget):
     def _init_widgets(self):
 
         # status
-        status_box = QGroupBox(self)
-        status_box.setTitle("Status")
+        #status_box = QGroupBox(self)
+        #status_box.setTitle("Status")
 
-        self._status_table = QStatusTable(self._controller)
-        self._status_table.status = "ready"
+        #self._status_table = QStatusTable(self._controller)
+        #self._status_table.status = "ready"
 
-        status_layout = QVBoxLayout()
-        status_layout.addWidget(self._status_table)
+        #status_layout = QVBoxLayout()
+        #status_layout.addWidget(self._status_table)
 
-        status_box.setLayout(status_layout)
+        #status_box.setLayout(status_layout)
 
         # table
 
@@ -152,7 +146,7 @@ class ControlPanel(QWidget):
         team_box.setLayout(team_layout)
 
         main_layout = QVBoxLayout()
-        main_layout.addWidget(status_box)
+        #main_layout.addWidget(status_box)
         main_layout.addWidget(team_box)
 
         self.setLayout(main_layout)
