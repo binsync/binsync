@@ -386,10 +386,18 @@ class BinsyncController:
         # just push a functions comment, overwriting it
         state.set_comment(func_addr, comment)
 
+        # Update last pushed values
+        self.last_push_time = int(time.time())
+        self.last_push_func = compat.ida_func_addr(func_addr)
+
     @init_checker
     @make_state
     def push_comment(self, comment_addr, comment, user=None, state=None):
         state.set_comment(comment_addr, comment)
+
+        # Update last pushed values
+        self.last_push_time = int(time.time())
+        self.last_push_func = compat.ida_func_addr(func_addr)
 
     @init_checker
     @make_state
@@ -397,11 +405,19 @@ class BinsyncController:
         print(cmt_dict)
         for addr in cmt_dict:
             self.push_comment(addr, cmt_dict[addr], user=user, state=state)
+        
+        # Update last pushed values
+        self.last_push_time = int(time.time())
+        self.last_push_func = compat.ida_func_addr(func_addr)
 
     @init_checker
     @make_state
     def push_patch(self, patch, user=None, state=None):
         state.set_patch(patch.offset, patch)
+
+        # Update last pushed values
+        self.last_push_time = int(time.time())
+        self.last_push_func = compat.ida_func_addr(func_addr)
 
     @init_checker
     @make_state
@@ -409,6 +425,10 @@ class BinsyncController:
         func = binsync.data.Function(func_addr)
         func.name = new_name
         state.set_function(func)
+
+        # Update last pushed values
+        self.last_push_time = int(time.time())
+        self.last_push_func = compat.ida_func_addr(func_addr)
 
     @init_checker
     @make_state
@@ -425,6 +445,10 @@ class BinsyncController:
                           size,
                           func_addr)
         state.set_stack_variable(func_addr, stack_offset, v)
+
+        # Update last pushed values
+        self.last_push_time = int(time.time())
+        self.last_push_func = compat.ida_func_addr(func_addr)
 
 
     #
