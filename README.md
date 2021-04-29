@@ -30,9 +30,9 @@ Or any modifications for custom enviornments.
 ### IDA Pro
 After cloning down this repo, simply copy the `ida_binsync` folder and python file into your IDA Pro plugins folder.
 ```bash
-cp -r binsync/plugins/ida_binsync/* IDA_HOME/plugins/
+cp -r plugins/ida_binsync/* IDA_HOME/plugins/
 ```
-For me `IDA_HOME=~/ida/ida-7.5sp2-py38`; it may be different for you. 
+For me `IDA_HOME=~/ida/IDA-7.6/`; it may be different for you. 
 
 ### angr management
 `binsync` is built into angr management. To use it, just activate the plugin by going to the plugins tab and
