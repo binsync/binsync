@@ -45,17 +45,11 @@ def make_state(f):
         state = kwargs.pop('state', None)
         user = kwargs.pop('user', None)
         if state is None:
-            with self.state_ctx(user=user) as state:
-                kwargs['state'] = state
-                r = f(self, *args, **kwargs)
-
-                self.save_lock.acquire()
-                state.save()
-                time.sleep(1)
-                self.save_lock.release()
-
-                return r
-
+            state = self._client.get_state(user=user)
+            kwargs['state'] = state
+            r = f(self, *args, **kwargs)
+            state.save()
+            return r
         else:
             kwargs['state'] = state
             r = f(self, *args, **kwargs)
@@ -88,11 +82,11 @@ class BinsyncClient(Client):
         self,
         master_user,
         repo_root,
+        binary_hash,
         function_callback,
         comment_callback,
         patch_callback,
         remote="origin",
-        branch="master",
         commit_interval=10,
         init_repo=False,
         remote_url=None,
@@ -104,8 +98,8 @@ class BinsyncClient(Client):
             self,
             master_user,
             repo_root,
+            binary_hash,
             remote=remote,
-            branch=branch,
             commit_interval=commit_interval,
             init_repo=init_repo,
             remote_url=remote_url,
@@ -153,15 +147,40 @@ class BinsyncController:
         self.last_push = None
 
         # lock
-        self.save_lock = threading.Lock()
+        self.queue_lock = threading.Lock()
+        self.cmd_queue = list()
 
+        # start the pull routine
+        self.pull_thread = threading.Thread(target=self.pull_routine)
+        self.pull_thread.setDaemon(True)
+        self.pull_thread.start()
 
-        # start the worker routine
-        self.worker_thread = threading.Thread(target=self.worker_routine)
-        self.worker_thread.setDaemon(True)
-        self.worker_thread.start()
+        # start the command routine
+        self.cmd_thread = threading.Thread(target=self.cmd_routine)
+        self.cmd_thread.setDaemon(True)
+        self.cmd_thread.start()
 
-    def worker_routine(self):
+    def make_controller_cmd(self, cmd_func, *args, **kwargs):
+        self.cmd_queue.append((cmd_func, args, kwargs))
+
+    def cmd_routine(self):
+        while True:
+            self.queue_lock.acquire()
+            if len(self.cmd_queue) > 0:
+                # pop the first command from the queue
+                cmd = self.cmd_queue.pop(0)
+
+                # parse the command
+                func = cmd[0]
+                f_args = cmd[1]
+                f_kargs = cmd[2]
+
+                # call it!
+                func(*f_args, **f_kargs)
+            time.sleep(0.8)
+            self.queue_lock.release()
+
+    def pull_routine(self):
         while True:
             # reload the control panel if it's registered
             if self.control_panel is not None:
@@ -182,7 +201,7 @@ class BinsyncController:
             time.sleep(1)
 
     def connect(self, user, path, init_repo, ssh_agent_pid=None, ssh_auth_sock=None):
-        self._client = BinsyncClient(user, path, None, None, None, init_repo=init_repo, ssh_agent_pid=ssh_agent_pid,
+        self._client = BinsyncClient(user, path, None, None, None, None, init_repo=init_repo, ssh_agent_pid=ssh_agent_pid,
                                       ssh_auth_sock=ssh_auth_sock)
 
     def check_client(self, message_box=False):
