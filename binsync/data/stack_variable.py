@@ -84,20 +84,15 @@ class StackVariable(Base):
         return sv
 
     @classmethod
-    def load_many(cls, path):
-        with open(path, "r") as f:
-            data = f.read()
-        svs_toml = toml.loads(data)
-
+    def load_many(cls, svs_toml):
         for sv_toml in svs_toml.values():
             sv = StackVariable(None, None, None, None, None, None)
             sv.__setstate__(sv_toml)
             yield sv
 
     @classmethod
-    def dump_many(cls, path, svs):
+    def dump_many(cls, svs):
         d = { }
         for v in sorted(svs.values(), key=lambda x: x.stack_offset):
             d["%x" % v.stack_offset] = v.__getstate__()
-        with open(path, "w") as f:
-            toml.dump(d, f)
+        return d
