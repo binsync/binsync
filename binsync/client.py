@@ -97,6 +97,10 @@ class Client(object):
             # case 1
             # open the local repo
             self.repo = git.Repo(self.repo_root)
+
+            # Initialize branches
+            self.init_remote()
+
             if init_repo:
                 raise Exception("Could not initialize repository - it already exists!")
             if not any(b.name == BINSYNC_ROOT_BRANCH for b in self.repo.branches):
@@ -148,6 +152,24 @@ class Client(object):
 
         self.state = None  # TODO: Updating it
         self.commit_lock = threading.Lock()
+
+    def init_remote(self):
+        '''Initialize remote branches. Thx GitHub'''
+        # Get all branches
+        branches = self.repo.remote().refs
+
+        # Iterate over all branches, track commits
+        for branch in branches:
+            # Yeet head
+            if "HEAD" in branch.name:
+                continue
+            # Checkout and track
+            try:
+                self.repo.git.checkout('--track', branch.name)
+            except git.GitCommandError as e:
+                # We don't care if it exists. RIP
+                #print(e)
+                pass
 
     def __del__(self):
         if self.repo_lock is not None:
