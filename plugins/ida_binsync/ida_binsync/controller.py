@@ -50,7 +50,6 @@ def make_state(f):
             r = f(self, *args, **kwargs)
             state.save()
             return r
-
         else:
             kwargs['state'] = state
             r = f(self, *args, **kwargs)
@@ -83,11 +82,11 @@ class BinsyncClient(Client):
         self,
         master_user,
         repo_root,
+        binary_hash,
         function_callback,
         comment_callback,
         patch_callback,
         remote="origin",
-        branch="master",
         commit_interval=10,
         init_repo=False,
         remote_url=None,
@@ -99,8 +98,8 @@ class BinsyncClient(Client):
             self,
             master_user,
             repo_root,
+            binary_hash,
             remote=remote,
-            branch=branch,
             commit_interval=commit_interval,
             init_repo=init_repo,
             remote_url=remote_url,
@@ -202,7 +201,7 @@ class BinsyncController:
             time.sleep(1)
 
     def connect(self, user, path, init_repo, ssh_agent_pid=None, ssh_auth_sock=None):
-        self._client = BinsyncClient(user, path, None, None, None, init_repo=init_repo, ssh_agent_pid=ssh_agent_pid,
+        self._client = BinsyncClient(user, path, None, None, None, None, init_repo=init_repo, ssh_agent_pid=ssh_agent_pid,
                                       ssh_auth_sock=ssh_auth_sock)
 
     def check_client(self, message_box=False):
