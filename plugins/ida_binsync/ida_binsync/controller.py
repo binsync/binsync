@@ -143,8 +143,9 @@ class BinsyncController:
 
         self.control_panel = None
 
-        # last push
-        self.last_push = None
+        # last push info
+        self.last_push_time: int = None
+        self.last_push_func: int = None
 
         # lock
         self.queue_lock = threading.Lock()
@@ -388,19 +389,6 @@ class BinsyncController:
     @init_checker
     @make_state
     def push_comment(self, comment_addr, comment, user=None, state=None):
-
-
-        # first collect the old func comment
-        #try:
-        #    func_cmt = state.get_comment(func_addr)
-        #except KeyError:
-        #    func_cmt = ""
-
-        ## add the comment to the func comment
-        #func_cmt += f"\n\n{hex(comment_addr)}: {comment}"
-        #self.push_func_comment(func_addr, func_cmt, user=user, state=state)
-
-        # also put the comment alone
         state.set_comment(comment_addr, comment)
 
     @init_checker
