@@ -5,8 +5,6 @@ class User:
     """
     :ivar str name: Name of the user
     :ivar str uid:  Internal user ID in the form of uuid.
-    :ivar int last_push_time: Last pushed time of user.
-    :ivar int last_push_func: Last pushed function address of user.
     """
 
     def __init__(self, name, uid=None, client=None):
