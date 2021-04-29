@@ -113,9 +113,9 @@ class Client(object):
             else:
                 raise
 
-        stored = self._get_stored_hash()
-        if stored != binary_hash:
-            raise Exception(f"This binsync repo is not for the provided binary:\nWe have {repr(binary_hash)} and the repository has {repr(stored)}")
+        #stored = self._get_stored_hash()
+        #if stored != binary_hash:
+        #    raise Exception(f"This binsync repo is not for the provided binary:\nWe have {repr(binary_hash)} and the repository has {repr(stored)}")
 
         assert not self.repo.bare, "it should not be a bare repo"
 
@@ -419,13 +419,12 @@ class Client(object):
         branch = next(o for o in self.repo.branches if o.name == self.user_branch_name)
         index = self.repo.index
 
+        self.commit_lock.acquire()
         # dump the state
         state.dump(index)
 
         # commit changes
-        self.commit_lock.acquire()
         self.repo.index.add([os.path.join(state.user, "*")])
-        time.sleep(1)
         self.commit_lock.release()
 
         if self.repo.index.diff("HEAD"):
@@ -480,4 +479,4 @@ class Client(object):
 
     def _get_stored_hash(self):
         branch = [ref for ref in self.repo.refs if ref.name.endswith(BINSYNC_ROOT_BRANCH)][0]
-        return branch.commit.tree["binary_hash"].data_stream.read().decode()
+        return branch.commit.tree["binary_hash"].data_stream.read().decode().strip("\n")
