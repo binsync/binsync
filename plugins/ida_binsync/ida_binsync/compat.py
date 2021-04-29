@@ -115,6 +115,11 @@ def set_decomp_comments(func_addr, cmt_dict: Dict[int,str]):
 
         ida_hexrays.save_user_cmts(addr, ida_cmts)
 
+@execute_read
+def ida_func_addr(addr):
+    ida_func = ida_funcs.get_func(addr)
+    func_addr = ida_func.start_ea
+    return func_addr
 
 def parse_struct_type(s_name):
     if "$ F" in s_name:

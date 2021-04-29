@@ -53,8 +53,8 @@ class State:
         # metadata info
         self.user = user  # type: str
         self.version = version if version is not None else 0  # type: int
-        self.last_func_push = "None"
-        self.last_push_time = 0 #TODO finish this
+        self.last_push_func = 0
+        self.last_push_time = 0
 
         # the client
         self.client = client  # type: Optional[Client]
@@ -82,6 +82,8 @@ class State:
         d = {
             "user": self.user,
             "version": self.version,
+            "last_push_func": self.last_push_func,
+            "last_push_time": self.last_push_time
         }
         add_data(index, 'metadata.toml', toml.dumps(d).encode())
 

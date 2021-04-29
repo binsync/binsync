@@ -6,6 +6,7 @@ import idc
 import idaapi
 import idautils
 from random import randint
+import time
 
 from .controller import BinsyncController
 
@@ -161,13 +162,19 @@ class SyncMenu():
         """
         Builds a menu for use in the Dialog
 
-        In the form of {user: (last_push, last_func_push)}
+        In the form of {user: (last_push, last_push_func)}
         :return:
         """
 
         menu_table = {}
         for user in self.controller.users():
-            menu_table[user.name] = (f"{randint(0,60)} min ago", hex(randint(0xcafebabe, 0xdeadbeef)))
+            # Find time delta
+            cur_time = int(time.time())
+            last_time = int(user.last_push_time)
+            delta = (cur_time - last_time) // 60
+
+            # Set table attributes | [NAME] | [TIME] | [FUNCTION] |
+            menu_table[user.name] = (f"{delta} min ago", hex(user.last_push_func))
 
         return menu_table
 
