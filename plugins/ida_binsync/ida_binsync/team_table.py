@@ -25,9 +25,9 @@ class QUserItem(object):
 class QTeamTable(QTableWidget):
 
     HEADER = [
-        'User',
-        'Last update',
-        'Auto pull',
+        'Edited functions',
+        'Local function'
+        # 'asd',
     ]
 
     def __init__(self, controller, parent=None):
@@ -35,6 +35,7 @@ class QTeamTable(QTableWidget):
 
         self.setColumnCount(len(self.HEADER))
         self.setHorizontalHeaderLabels(self.HEADER)
+        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch) # so text does not get cut off
         self.setHorizontalScrollMode(self.ScrollPerPixel)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
