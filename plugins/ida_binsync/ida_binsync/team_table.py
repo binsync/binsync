@@ -1,4 +1,3 @@
-
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QMenu, QHeaderView
 from PyQt5.QtCore import Qt, QItemSelectionModel
 
