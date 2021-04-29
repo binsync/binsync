@@ -8,6 +8,7 @@ import idautils
 from random import randint
 import time
 
+from . import compat
 from .controller import BinsyncController
 
 #
@@ -24,9 +25,9 @@ class MenuDialog(QDialog):
         self.combo = QComboBox()
         self.combo.addItems(["Sync", "Toggle autosync"])
 
-        self.tableWidget = QTableWidget(len(self.menu_table), 3)
+        self.tableWidget = QTableWidget(len(self.menu_table), 4)
         self.tableWidget.setHorizontalHeaderLabels(
-            "User;Last Push;Last Edited Function".split(";")
+            "User;Last Push;Last Edited Function;Local Name".split(";")
         )
 
         header = self.tableWidget.horizontalHeader()
@@ -38,9 +39,11 @@ class MenuDialog(QDialog):
             user_item = QTableWidgetItem(item[0])
             push_item = QTableWidgetItem(item[1][0])
             func_item = QTableWidgetItem(item[1][1])
+            func_name_item = QTableWidgetItem(item[1][2])
             self.tableWidget.setItem(row, 0, user_item)
             self.tableWidget.setItem(row, 1, push_item)
             self.tableWidget.setItem(row, 2, func_item)
+            self.tableWidget.setItem(row, 3, func_name_item)
 
         # set more table properties
         self.tableWidget.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -168,14 +171,19 @@ class SyncMenu():
 
         menu_table = {}
         for user in self.controller.users():
-            # Find time delta
-            cur_time = int(time.time())
             last_time = int(user.last_push_time)
-            print(f"CUR: {hex(cur_time)} LAS: {hex(last_time)}")
-            delta = (cur_time - last_time) // 60
+            last_func = int(user.last_push_func)
 
-            # Set table attributes | [NAME] | [TIME] | [FUNCTION] |
-            menu_table[user.name] = (f"{delta} min ago", hex(user.last_push_func))
+            if last_time == -1 or last_func == -1 or last_func == 0:
+                ret_string = (" ", " ", " ")
+            else:
+                time_ago = BinsyncController.friendly_datetime(last_time)
+                local_name = compat.get_func_name(last_func)
+                func = hex(last_func)
+                ret_string = (time_ago, func, local_name)
+
+            # Set table attributes | [NAME] | [TIME] | [FUNCTION] | [FUNC_NAME]
+            menu_table[user.name] = ret_string
 
         return menu_table
 

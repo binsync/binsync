@@ -472,6 +472,37 @@ class BinsyncController:
         else:
             return "unknown"
 
+    @staticmethod
+    def friendly_datetime(time_before):
+        # convert
+        if isinstance(time_before, int):
+            dt = datetime.datetime.fromtimestamp(time_before)
+        elif not isinstance(time_before, datetime.datetime):
+            return " "
+
+        now = datetime.datetime.now()
+        if dt <= now:
+            diff = now - dt
+            ago = True
+        else:
+            diff = dt - now
+            ago = False
+        diff_days = diff.days
+        diff_sec = diff.seconds
+
+        if diff_days >= 1:
+            s = "%d days" % diff_days
+            ago = diff_days < 0
+        elif diff_sec >= 60 * 60:
+            s = "%d hours" % int(diff_sec / 60 / 60)
+        elif diff_sec >= 60:
+            s = "%d minutes" % int(diff_sec / 60)
+        else:
+            s = "%d seconds" % diff_sec
+
+        s += " ago" if ago else " in the future"
+        return s
+
 
 def on_renamed(*args):
     pass

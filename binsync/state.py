@@ -53,8 +53,8 @@ class State:
         # metadata info
         self.user = user  # type: str
         self.version = version if version is not None else 0  # type: int
-        self.last_push_func = 0
-        self.last_push_time = 0
+        self.last_push_func = -1
+        self.last_push_time = -1
 
         # the client
         self.client = client  # type: Optional[Client]
