@@ -126,7 +126,8 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         dialog.exec_()
 
         if controller.check_client():
-            self.open_control_panel()
+            #XXX: TEMPORARY: self.open_control_panel()
+            pass
 
     def open_control_panel(self):
         """

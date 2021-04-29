@@ -6,11 +6,9 @@ except NameError:
 import os
 from functools import wraps
 from collections import defaultdict
-import pathlib
 
 from sortedcontainers import SortedDict
 import toml
-import git
 
 from .data import Function, Comment, Patch, StackVariable
 from .errors import MetadataNotFoundError
@@ -31,14 +29,6 @@ def dirty_checker(f):
         return r
 
     return dirtycheck
-
-
-def add_data(index: git.IndexFile, path: str, data: bytes):
-    fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
-    pathlib.Path(fullpath).parent.mkdir(parents=True, exist_ok=True)
-    with open(fullpath, 'wb') as fp:
-        fp.write(data)
-    index.add([fullpath])
 
 
 class State:
@@ -78,43 +68,49 @@ class State:
         if not os.path.isdir(dir_name):
             raise RuntimeError("Cannot create directory %s. Maybe it conflicts with an existing file?" % dir_name)
 
-    def dump_metadata(self, index):
+    def save_metadata(self, path):
         d = {
             "user": self.user,
             "version": self.version,
         }
-        add_data(index, 'metadata.toml', toml.dumps(d).encode())
+        with open(path, "w") as f:
+            toml.dump(d, f)
 
-    def dump(self, index: git.IndexFile):
+    def dump(self, base_path):
         # dump metadata
-        self.dump_metadata(index)
+        self.save_metadata(os.path.join(base_path, "metadata.toml"))
 
         # dump function
-        add_data(index, 'functions.toml', toml.dumps(Function.dump_many(self.functions)).encode())
+        Function.dump_many(os.path.join(base_path, "functions.toml"), self.functions)
 
         # dump comments
-        add_data(index, 'comments.toml', toml.dumps(Comment.dump_many(self.comments)).encode())
+        Comment.dump_many(os.path.join(base_path, "comments.toml"), self.comments)
 
         # dump patches
-        add_data(index, 'patches.toml', toml.dumps(Patch.dump_many(self.patches)).encode())
+        Patch.dump_many(os.path.join(base_path, "patches.toml"), self.patches)
 
         # dump stack variables, one file per function
+        stack_var_base = os.path.join(base_path, "stack_vars")
+        self.ensure_dir_exists(stack_var_base)
         for func_addr, stack_vars in self.stack_variables.items():
-            path = os.path.join('stack_vars', "%08x.toml" % func_addr)
-            add_data(index, path, toml.dumps(StackVariable.dump_many(stack_vars)).encode())
+            path = os.path.join(stack_var_base, "%08x.toml" % func_addr)
+            StackVariable.dump_many(path, stack_vars)
 
     @staticmethod
-    def load_metadata(tree):
-        return toml.loads(tree['metadata.toml'].data_stream.read().decode())
+    def load_metadata(path):
+        with open(path, "r") as f:
+            data = f.read()
+        metadata = toml.loads(data)
+        return metadata
 
     @classmethod
-    def parse(cls, tree, version=None, client=None):
-        s = cls(None, client=client)
+    def parse(cls, base_path, version=None, client=None):
+        s = State(None, client=client)
 
         # load metadata
         try:
-            metadata = cls.load_metadata(tree)
-        except:
+            metadata = cls.load_metadata(os.path.join(base_path, "metadata.toml"))
+        except FileNotFoundError:
             # metadata is not found
             raise MetadataNotFoundError()
         s.user = metadata["user"]
@@ -122,47 +118,34 @@ class State:
         s.version = version if version is not None else metadata["version"]
 
         # load function
-        try:
-            funcs_toml = toml.loads(tree['functions.toml'].data_stream.read().decode())
-        except:
-            pass
-        else:
+        funcs_toml_path = os.path.join(base_path, "functions.toml")
+        if os.path.isfile(funcs_toml_path):
             functions = {}
-            for func in Function.load_many(funcs_toml):
+            for func in Function.load_many(funcs_toml_path):
                 functions[func.addr] = func
             s.functions = functions
 
         # load comments
-        try:
-            comments_toml = toml.loads(tree['comments.toml'].data_stream.read().decode())
-        except:
-            pass
-        else:
+        comments_toml_path = os.path.join(base_path, "comments.toml")
+        if os.path.isfile(comments_toml_path):
             comments = {}
-            for comm in Comment.load_many(comments_toml):
+            for comm in Comment.load_many(comments_toml_path):
                 comments[comm.addr] = comm.comment
             s.comments = SortedDict(comments)
 
         # load patches
-        try:
-            patches_toml = toml.loads(tree['patches.toml'].data_stream.read().decode())
-        except:
-            pass
-        else:
+        patches_toml_path = os.path.join(base_path, "patches.toml")
+        if os.path.isfile(patches_toml_path):
             patches = {}
-            for patch in Patch.load_many(patches_toml):
+            for patch in Patch.load_many(patches_toml_path):
                 patches[patch.offset] = patch
             s.patches = SortedDict(patches)
 
         # load stack variables
-        for func_addr in s.functions:
-            try:
-                # TODO use unrebased address for more durability
-                svs_toml = toml.loads(tree[os.path.join('stack_vars', '%08x.toml' % func_addr)].data_stream.read().decode())
-            except:
-                pass
-            else:
-                svs = list(StackVariable.load_many(svs_toml))
+        stack_var_base = os.path.join(base_path, "stack_vars")
+        if os.path.isdir(stack_var_base):
+            for f in os.listdir(stack_var_base):
+                svs = list(StackVariable.load_many(os.path.join(stack_var_base, f)))
                 d = dict((v.stack_offset, v) for v in svs)
                 if svs:
                     s.stack_variables[svs[0].func_addr] = d
@@ -290,4 +273,3 @@ class State:
         if func_addr not in self.stack_variables:
             raise KeyError("No stack variables are defined for function %#x." % func_addr)
         return self.stack_variables[func_addr].items()
-
