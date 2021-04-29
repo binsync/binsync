@@ -171,6 +171,7 @@ class SyncMenu():
             # Find time delta
             cur_time = int(time.time())
             last_time = int(user.last_push_time)
+            print(f"CUR: {hex(cur_time)} LAS: {hex(last_time)}")
             delta = (cur_time - last_time) // 60
 
             # Set table attributes | [NAME] | [TIME] | [FUNCTION] |
