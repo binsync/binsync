@@ -5,11 +5,9 @@ import subprocess
 import re
 import datetime
 import logging
-import typing
 
 import git
 import git.exc
-import filelock
 
 from .data import User
 from .state import State
@@ -17,8 +15,6 @@ from .errors import MetadataNotFoundError
 from .utils import is_py3
 
 _l = logging.getLogger(name=__name__)
-BINSYNC_BRANCH_PREFIX = 'binsync'
-BINSYNC_ROOT_BRANCH = f'{BINSYNC_BRANCH_PREFIX}/__root__'
 
 
 class StateContext(object):
@@ -45,6 +41,7 @@ class Client(object):
     :ivar str master_user:  User name of the master user.
     :ivar str repo_root:    Local path of the Git repo.
     :ivar str remote:       Git remote.
+    :ivar str branch:       Git branch.
     :ivar int _commit_interval: The interval for committing local changes into the Git repo, pushing to the remote
                             side, and pulling from the remote.
     """
@@ -53,34 +50,19 @@ class Client(object):
         self,
         master_user,
         repo_root,
-        binary_hash,
         remote="origin",
+        branch="master",
         commit_interval=10,
         init_repo=False,
         remote_url=None,
         ssh_agent_pid=None,
         ssh_auth_sock=None,
     ):
-        """
-        :param str master_user:     The username of the current user
-        :param str repo_root:       The path to the repository directory to be loaded or created
-        :param str binary_hash:     The binary's md5 hash, as a hex string, for validation
-        :param remote:
-        :param commit_interval:
-        :param init_repo:
-        :param remote_url:
-        :param ssh_agent_pid:
-        :param ssh_auth_sock:
-        """
         self.master_user = master_user
         self.repo_root = repo_root
-        self.binary_hash = binary_hash
         self.remote = remote
+        self.branch = branch
         self.repo = None
-        self.repo_lock = None
-
-        if master_user.endswith('/') or '__root__' in master_user:
-            raise Exception(f"Bad username: {master_user}")
 
         # ssh-agent info
         self.ssh_agent_pid = ssh_agent_pid  # type: int
@@ -97,44 +79,20 @@ class Client(object):
             # case 1
             # open the local repo
             self.repo = git.Repo(self.repo_root)
-            if init_repo:
-                raise Exception("Could not initialize repository - it already exists!")
-            if not any(b.name == BINSYNC_ROOT_BRANCH for b in self.repo.branches):
-                raise Exception(f"This is not a binsync repo - it must have a {BINSYNC_ROOT_BRANCH} branch.")
         except (git.NoSuchPathError, git.InvalidGitRepositoryError):
             # initialization
-            if remote_url:
-                # case 2
-                self.repo = self.clone(remote_url)
-            elif init_repo:
+            assert not (init_repo is True and remote_url)
+            if init_repo:
                 # case 3
                 self.repo = git.Repo.init(self.repo_root)
-                self._setup_repo()
-            else:
-                raise
+                self._add_git_ignore(self.repo_root)
+            elif remote_url is not None:
+                # case 2
+                self.clone(remote_url)
+            if not self.repo:
+                self.repo = git.Repo(self.repo_root)
 
-        #stored = self._get_stored_hash()
-        #if stored != binary_hash:
-        #    raise Exception(f"This binsync repo is not for the provided binary:\nWe have {repr(binary_hash)} and the repository has {repr(stored)}")
-
-        assert not self.repo.bare, "it should not be a bare repo"
-
-        self.repo_lock = filelock.FileLock(self.repo_root + "/.git/binsync.lock")
-        try:
-            self.repo_lock.acquire(timeout=0)
-        except filelock.Timeout as e:
-            raise Exception("Can only have one binsync client touching a local repository at once.\n"
-                            "If the previous client crashed, you need to delete " + self.repo_root + "/.git/binsync.lock") from e
-
-        # check out the appropriate branch
-        try:
-            branch = next(o for o in self.repo.branches if o.name.endswith(self.user_branch_name))
-        except StopIteration:
-            branch = self.repo.create_head(self.user_branch_name, BINSYNC_ROOT_BRANCH)
-        else:
-            if branch.is_remote():
-                branch = self.repo.create_head(self.user_branch_name)
-        branch.checkout()
+        assert not self.repo.bare  # it should not be a bare repo
 
         self._commit_interval = commit_interval
         self._worker_thread = None
@@ -148,14 +106,6 @@ class Client(object):
 
         self.state = None  # TODO: Updating it
         self.commit_lock = threading.Lock()
-
-    def __del__(self):
-        if self.repo_lock is not None:
-            self.repo_lock.release()
-
-    @property
-    def user_branch_name(self):
-        return f"{BINSYNC_BRANCH_PREFIX}/{self.master_user}"
 
     @property
     def has_remote(self):
@@ -200,14 +150,7 @@ class Client(object):
         """
 
         env = self.ssh_agent_env()
-        repo = git.Repo.clone_from(remote_url, self.repo_root, env=env)
-
-        try:
-            repo.create_head(BINSYNC_ROOT_BRANCH, f'{self.remote}/{BINSYNC_ROOT_BRANCH}')
-        except git.BadName:
-            raise Exception(f"This is not a binsync repo - it must have a {BINSYNC_ROOT_BRANCH} branch")
-
-        return repo
+        git.Repo.clone_from(remote_url, self.repo_root, env=env)
 
     def pull(self, print_error=False):
         """
@@ -227,8 +170,10 @@ class Client(object):
             except git.exc.GitCommandError as ex:
                 if print_error:
                     print("Failed to pull from remote \"%s\".\n"
+                          "Did you setup %s/master as the upstream of the local master branch?\n"
                           "\n"
                           "Git error: %s." % (
+                              self.remote,
                               self.remote,
                               str(ex)
                           ))
@@ -246,8 +191,7 @@ class Client(object):
             try:
                 env = self.ssh_agent_env()
                 with self.repo.git.custom_environment(**env):
-                    self.repo.remotes[self.remote].push(BINSYNC_ROOT_BRANCH)
-                    self.repo.remotes[self.remote].push(self.user_branch_name)
+                    self.repo.remotes[self.remote].push()
                 self._last_push_at = datetime.datetime.now()
             except git.exc.GitCommandError as ex:
                 if print_error:
@@ -260,16 +204,16 @@ class Client(object):
                         str(ex)
                     ))
 
-    def users(self) -> typing.Iterable[User]:
-        for ref in self.repo.refs:  # type: git.Reference
-            if not ref.is_remote() or ref.remote_name != self.remote or not ref.name.startswith(f'{self.remote}/{BINSYNC_BRANCH_PREFIX}/'):
-                continue
-            # Load metadata
-            try:
-                metadata = State.load_metadata(ref.commit.tree)
-                yield User.from_metadata(metadata)
-            except:
-                continue
+    def users(self):
+        for d in os.listdir(self.repo_root):
+            metadata_path = os.path.join(self.repo_root, d, "metadata.toml")
+            if os.path.isfile(metadata_path):
+                # Load metadata
+                try:
+                    metadata = State.load_metadata(metadata_path)
+                    yield User.from_metadata(metadata)
+                except:
+                    continue
 
     def tally(self, users=None):
         """
@@ -337,16 +281,14 @@ class Client(object):
 
         return d
 
+    def base_path(self, user=None):
+        if user is None:
+            user = self.master_user
+        return os.path.join(self.repo_root, user)
+
     def state_ctx(self, user=None, version=None, locked=False):
         state = self.get_state(user=user, version=version)
         return StateContext(self, state, locked=locked)
-
-    def get_tree(self, user):
-        options = [ref for ref in self.repo.refs if ref.name.endswith(f"{BINSYNC_BRANCH_PREFIX}/{user}")]
-        if not options:
-            raise ValueError(f'No such user "{user}" found in repository')
-        best = max(options, key=lambda ref: ref.commit.authored_date)
-        return best.commit.tree
 
     def get_state(self, user=None, version=None):
         if user is None or user == self.master_user:
@@ -354,7 +296,7 @@ class Client(object):
             if self.state is None:
                 try:
                     self.state = State.parse(
-                        self.get_tree(user=self.master_user), version=version,
+                        self.base_path(user=user), version=version,
                         client=self,
                     )  # Also need to check if user is none here???
                 except MetadataNotFoundError:
@@ -363,7 +305,7 @@ class Client(object):
             return self.state
         else:
             try:
-                state = State.parse(self.get_tree(user=user), version=version, client=self)
+                state = State.parse(self.base_path(user=user), version=version, client=self)
                 return state
             except MetadataNotFoundError:
                 return None
@@ -416,21 +358,24 @@ class Client(object):
         # case, please comment out the following assertion.
         assert self.master_user == state.user
 
-        branch = next(o for o in self.repo.branches if o.name == self.user_branch_name)
-        index = self.repo.index
+        path = self.base_path(user=state.user)
 
-        self.commit_lock.acquire()
+        if not os.path.exists(path):
+            # create this folder if it does not exist
+            os.mkdir(path)
+
         # dump the state
-        state.dump(index)
+        state.dump(path)
 
         # commit changes
+        self.commit_lock.acquire()
         self.repo.index.add([os.path.join(state.user, "*")])
+        time.sleep(1)
         self.commit_lock.release()
 
         if self.repo.index.diff("HEAD"):
             # commit if there is any difference
-            commit = index.commit("Save state")
-            branch.commit = commit
+            self.repo.index.commit("Save state")
             self.push()
 
     @staticmethod
@@ -468,15 +413,8 @@ class Client(object):
         self.repo.close()
         del self.repo
 
-    def _setup_repo(self):
-        with open(os.path.join(self.repo_root, ".gitignore"), "w") as f:
+    def _add_git_ignore(self, repo_root):
+        with open(os.path.join(repo_root, ".gitignore"), "w") as f:
             f.write(".git/*\n")
-        with open(os.path.join(self.repo_root, "binary_hash"), "w") as f:
-            f.write(self.binary_hash)
-        self.repo.index.add([".gitignore", "binary_hash"])
-        self.repo.index.commit("Root commit")
-        self.repo.create_head(BINSYNC_ROOT_BRANCH)
-
-    def _get_stored_hash(self):
-        branch = [ref for ref in self.repo.refs if ref.name.endswith(BINSYNC_ROOT_BRANCH)][0]
-        return branch.commit.tree["binary_hash"].data_stream.read().decode().strip("\n")
+        self.repo.index.add([".gitignore"])
+        self.repo.index.commit("Add .gitignore.")

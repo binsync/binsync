@@ -54,7 +54,11 @@ class Patch(Base):
         return patch
 
     @classmethod
-    def load_many(cls, patches_toml):
+    def load_many(cls, path):
+        with open(path, "r") as f:
+            data = f.read()
+        patches_toml = toml.loads(data)
+
         for patch_toml in patches_toml.values():
             patch = Patch(None, None, None)
             try:
@@ -65,8 +69,9 @@ class Patch(Base):
             yield patch
 
     @classmethod
-    def dump_many(cls, patches):
+    def dump_many(cls, path, patches):
         patches_ = {}
         for v in patches.values():
             patches_["%s_%x" % (v.obj_name, v.offset)] = v.__getstate__()
-        return patches_
+        with open(path, "w") as f:
+            toml.dump(patches_, f)
