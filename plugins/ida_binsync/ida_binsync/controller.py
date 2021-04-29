@@ -48,12 +48,8 @@ def make_state(f):
             with self.state_ctx(user=user) as state:
                 kwargs['state'] = state
                 r = f(self, *args, **kwargs)
-
-                self.save_lock.acquire()
                 state.save()
                 time.sleep(1)
-                self.save_lock.release()
-
                 return r
 
         else:
@@ -154,14 +150,25 @@ class BinsyncController:
 
         # lock
         self.save_lock = threading.Lock()
+        self.cmd_queue = list()
 
+        # start the pull routine
+        self.pull_thread = threading.Thread(target=self.pull_routine)
+        self.pull_thread.setDaemon(True)
+        self.pull_thread.start()
 
-        # start the worker routine
-        self.worker_thread = threading.Thread(target=self.worker_routine)
-        self.worker_thread.setDaemon(True)
-        self.worker_thread.start()
+        # start the command routine
+        self.cmd_thread = threading.Thread()
+        self.cmd_thread.setDaemon(True)
+        self.cmd_thread.start()
 
-    def worker_routine(self):
+    def exec_controller_cmd(self):
+        pass
+
+    def cmd_routine(self):
+        pass
+
+    def pull_routine(self):
         while True:
             # reload the control panel if it's registered
             if self.control_panel is not None:
