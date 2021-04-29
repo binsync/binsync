@@ -286,8 +286,10 @@ class IDBHooks(ida_idp.IDB_Hooks):
             type_str = self.controller._get_type_str(mptr.flag)
 
             # do the change on a new thread
-            Thread(target=self.controller.push_stack_variable,
-                   args=(func_addr, stack_offset, newname, type_str, size)).start()
+            self.controller.make_controller_cmd(self.controller.push_stack_variable,
+                                                func_addr, stack_offset, newname, type_str, size)
+
+
 
         # actual struct
         elif isinstance(s_type, str):
@@ -356,7 +358,8 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
         # grab the name instead from ida
         name = idc.get_func_name(ida_func.start_ea)
-        Thread(target=self.controller.push_function_name, args=(ida_func.start_ea, name)).start()
+        self.controller.make_controller_cmd(self.controller.push_function_name, ida_func.start_ea, name)
+
         return 0
 
     @quite_init_checker
@@ -394,12 +397,14 @@ class IDBHooks(ida_idp.IDB_Hooks):
         if cmt_type == "cmt":
             # find the location this comment exists
             func_addr = idaapi.get_func(address).start_ea
-            Thread(target=self.controller.push_comment, args=(address, comment)).start()
+
+            self.controller.make_controller_cmd(self.controller.push_comments, address, comment)
+
 
         # function comment changed
         elif cmt_type == "range":
             # overwrite the entire function comment
-            Thread(target=self.controller.push_func_comment, args=(address, comment)).start()
+            self.controller.make_controller_cmd(self.controller.push_func_comment, address, comment)
 
         # XXX: other?
         elif cmt_type == "extra":
@@ -490,7 +495,7 @@ class HexRaysHooks:
         if cmts != self._cached_funcs[ea]["cmts"]:
             # thread it!
             print(f"SENDING {cmts}")
-            Thread(target=self.controller.push_comments, args=(cmts, )).start()
+            self.controller.make_controller_cmd(self.controller.push_comments, cmts)
 
             # cache so we don't double push a copy
             self._cached_funcs[ea]["cmts"] = cmts

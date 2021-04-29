@@ -45,12 +45,11 @@ def make_state(f):
         state = kwargs.pop('state', None)
         user = kwargs.pop('user', None)
         if state is None:
-            with self.state_ctx(user=user) as state:
-                kwargs['state'] = state
-                r = f(self, *args, **kwargs)
-                state.save()
-                time.sleep(1)
-                return r
+            state = self._client.get_state(user=user)
+            kwargs['state'] = state
+            r = f(self, *args, **kwargs)
+            state.save()
+            return r
 
         else:
             kwargs['state'] = state
@@ -149,7 +148,7 @@ class BinsyncController:
         self.last_push = None
 
         # lock
-        self.save_lock = threading.Lock()
+        self.queue_lock = threading.Lock()
         self.cmd_queue = list()
 
         # start the pull routine
@@ -158,15 +157,29 @@ class BinsyncController:
         self.pull_thread.start()
 
         # start the command routine
-        self.cmd_thread = threading.Thread()
+        self.cmd_thread = threading.Thread(target=self.cmd_routine)
         self.cmd_thread.setDaemon(True)
         self.cmd_thread.start()
 
-    def exec_controller_cmd(self):
-        pass
+    def make_controller_cmd(self, cmd_func, *args, **kwargs):
+        self.cmd_queue.append((cmd_func, args, kwargs))
 
     def cmd_routine(self):
-        pass
+        while True:
+            self.queue_lock.acquire()
+            if len(self.cmd_queue) > 0:
+                # pop the first command from the queue
+                cmd = self.cmd_queue.pop(0)
+
+                # parse the command
+                func = cmd[0]
+                f_args = cmd[1]
+                f_kargs = cmd[2]
+
+                # call it!
+                func(*f_args, **f_kargs)
+            time.sleep(0.8)
+            self.queue_lock.release()
 
     def pull_routine(self):
         while True:
