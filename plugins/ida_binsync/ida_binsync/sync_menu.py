@@ -161,7 +161,7 @@ class SyncMenu():
         """
         Builds a menu for use in the Dialog
 
-        In the form of {user: (last_push, last_func_push)}
+        In the form of {user: (last_push, last_push_func)}
         :return:
         """
 
