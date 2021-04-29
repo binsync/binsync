@@ -6,6 +6,7 @@ import idc
 import idaapi
 import idautils
 from random import randint
+import time
 
 from .controller import BinsyncController
 
