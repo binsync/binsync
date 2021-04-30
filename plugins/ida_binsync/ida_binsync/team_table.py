@@ -1,7 +1,9 @@
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QMenu, QHeaderView
 from PyQt5.QtCore import Qt, QItemSelectionModel
 from .controller import BinsyncController
+from typing import Dict
 from . import compat
+from binsync.data import Function
 
 
 class QUserItem(object):
@@ -100,32 +102,31 @@ class QTeamTable(QTableWidget):
 
         # Start by creating a list of recent pushes
         for user in self.controller.users():
-            # Get times/funcs
-            last_time = int(user.last_push_time)
-            last_func = int(user.last_push_func)
+            # Get user state. Func from user state
+            s = self.controller._client.get_state(user=user.name)
+            functions: Dict[int, Function] = s.functions
 
-            # Make sure they arent weird
-            if last_time == -1 or last_func == -1 or last_func == 0:
-                ret_string = (" ", " ", " ")
-            else:
-                # Parse out attributes we want
-                time_delta = BinsyncController.friendly_datetime(last_time)
-                local_name = compat.get_func_name(last_func)
-                u_name = user.name
+            # Per user metadata
+            u_name = user.name
 
-                # Key off address
-                # Check if stored is greater than another found
+            # Iterate over items, store last updated
+            for addr, func in functions.items():
+                # Function metadata
+                last_change = func.last_change
+                local_name = compat.get_func_name(addr)
+                time_delta = BinsyncController.friendly_datetime(last_change)
+
+                # Check last changes and set table
                 try:
                     # Check if this is newer or not
-                    stored_time = func_changes[last_func][3] # last_time
-                    if last_time > stored_time:
-                        func_changes[last_func] = (local_name, u_name, time_delta, last_time)
-
+                    stored_time = func_changes[addr][3]
+                    if last_change > stored_time:
+                        func_changes[addr] = (local_name, u_name, time_delta, last_change)
                 except KeyError as e:
-                    # In this case, it probably does not exist.
+                    # IN this case, it probably does not exist
                     # Let's make it
-                    func_changes[last_func] = (local_name, u_name, time_delta, last_time)
-                
+                    func_changes[addr] = (local_name, u_name, time_delta, last_change)
+                    
         # Create the table
         for key in sorted(func_changes):
             # Assign attribute by val: <func_addr> | <local_name> | <u_name> | <time_delta>
@@ -133,17 +134,3 @@ class QTeamTable(QTableWidget):
             self.items.append(QUserItem(key, item[0], item[1], item[2]))
         self.reload()
         return 
-
-        '''
-        selected_user = self.selected_user()
-
-        self.items = [ ]
-
-        for u in users:
-            self.items.append(QUserItem(u))
-
-        self.reload()
-
-        if selected_user is not None:
-            self.select_user(selected_user)
-        '''

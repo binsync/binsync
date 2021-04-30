@@ -161,6 +161,15 @@ class BinsyncController:
         self.cmd_thread.setDaemon(True)
         self.cmd_thread.start()
 
+        #  Callbacks
+        self.update_callbacks = list()
+
+    def add_update_callback(self, f):
+        '''
+        Add a call back for the update routine. 
+        '''
+        self.update_callbacks.append(f)        
+
     def make_controller_cmd(self, cmd_func, *args, **kwargs):
         self.cmd_queue.append((cmd_func, args, kwargs))
 
@@ -199,6 +208,11 @@ class BinsyncController:
                          ):
                 self._client.pull()
 
+            # Iterate over callbacks, execute
+            for func in self.update_callbacks:
+                func()
+            
+            # Snooze
             time.sleep(1)
 
     def connect(self, user, path, init_repo, ssh_agent_pid=None, ssh_auth_sock=None):
