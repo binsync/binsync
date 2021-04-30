@@ -170,7 +170,7 @@ class SyncMenu():
         """
         Builds a menu for use in the Dialog
 
-        In the form of {user: (last_push, last_push_func)}
+        In the form of {user: (last_change, last_push_func)}
         :return:
         """
         # First, let's see if any new homies showed up

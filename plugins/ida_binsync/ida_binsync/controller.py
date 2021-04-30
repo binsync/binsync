@@ -387,10 +387,11 @@ class BinsyncController:
         # Update last pushed values
         last_push_time = int(time.time())
         last_push_func = compat.ida_func_addr(func_addr)
-        self._client.last_push(last_push_func, last_push_time)
+        func_name = compat.get_func_name(last_push_func)
 
         # just push a functions comment, overwriting it
         state.set_comment(func_addr, comment)
+        self._client.last_push(last_push_func, last_push_time, func_name)
 
     @init_checker
     @make_state
@@ -398,9 +399,14 @@ class BinsyncController:
         # Update last pushed values
         last_push_time = int(time.time())
         last_push_func = compat.ida_func_addr(comment_addr)
-        self._client.last_push(last_push_func, last_push_time)
+        func_name = compat.get_func_name(last_push_func)
+
+        # check if the function exist
+        # if not; create it
+        # if it does; write to the last_push parameter
 
         state.set_comment(comment_addr, comment)
+        self._client.last_push(last_push_func, last_push_time, func_name)
 
     @init_checker
     @make_state
@@ -415,9 +421,10 @@ class BinsyncController:
         # Update last pushed values
         last_push_time = int(time.time())
         last_push_func = compat.ida_func_addr(patch.offset)
-        self._client.last_push(last_push_func, last_push_time)
+        func_name = compat.get_func_name(last_push_func)
 
         state.set_patch(patch.offset, patch)
+        self._client.last_push(last_push_func, last_push_time, func_name)
 
     @init_checker
     @make_state
@@ -425,11 +432,14 @@ class BinsyncController:
         # Update last pushed values
         last_push_time = int(time.time())
         last_push_func = compat.ida_func_addr(func_addr)
-        self._client.last_push(last_push_func, last_push_time)
 
+        # setup the new function for binsync
         func = binsync.data.Function(func_addr)
         func.name = new_name
         state.set_function(func)
+
+        # trigger a last push update
+        self._client.last_push(last_push_func, last_push_time, new_name)
 
     @init_checker
     @make_state
@@ -437,7 +447,7 @@ class BinsyncController:
         # Update last pushed values
         last_push_time = int(time.time())
         last_push_func = compat.ida_func_addr(func_addr)
-        self._client.last_push(last_push_func, last_push_time)
+        func_name = compat.get_func_name(last_push_func)
 
         # convert longs to ints
         stack_offset = int(stack_offset)
@@ -451,6 +461,8 @@ class BinsyncController:
                           size,
                           func_addr)
         state.set_stack_variable(func_addr, stack_offset, v)
+
+        self._client.last_push(last_push_func, last_push_time, func_name)
 
 
 
