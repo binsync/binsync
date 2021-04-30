@@ -99,7 +99,7 @@ class ControlPanel(QWidget):
     def _init_widgets(self):
 
         self._team_table = QTeamTable(self._controller)
-        self._controller.add_function_callback(self._team_table.reload)
+        self._controller.add_update_callback(self._team_table.reload)
 
         team_box = QGroupBox(self)
         team_box.setTitle("Binsync Function Syncs\n")

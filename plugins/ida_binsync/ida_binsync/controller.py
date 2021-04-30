@@ -200,18 +200,20 @@ class BinsyncController:
                     # the panel has been closed
                     self.control_panel = None
 
+            
             # pull the repo every 10 seconds
             if self.check_client() and self._client.has_remote \
                     and (
                          self._client._last_pull_attempt_at is None
                          or (datetime.datetime.now() - self._client._last_pull_attempt_at).seconds > 10
                          ):
+                # Pull new items
                 self._client.pull()
+                
+                # Iterate over callbacks, execute
+                for func in self.update_callbacks:
+                    func()
 
-            # Iterate over callbacks, execute
-            for func in self.update_callbacks:
-                func()
-            
             # Snooze
             time.sleep(1)
 
