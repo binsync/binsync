@@ -297,7 +297,7 @@ class Client(object):
                 metadata = State.load_metadata(ref.commit.tree)
                 yield User.from_metadata(metadata)
             except Exception as e:
-                print(e)
+                #print(e)
                 continue
 
     def tally(self, users=None):
