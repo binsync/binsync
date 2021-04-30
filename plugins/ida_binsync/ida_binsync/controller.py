@@ -322,6 +322,14 @@ class BinsyncController:
         # ===== update the psuedocode ==== #
         compat.refresh_pseudocode_view(_func.addr)
 
+    def sync_all(self, user=None, state=None):
+        self._client.sync_states(user=user)
+        func_addrs = self._client.state.functions.keys()
+        print("Target Addrs for sync:", [hex(x) for x in func_addrs])
+        for addr in func_addrs:
+            ida_func = idaapi.get_func(addr)
+            self.fill_function(ida_func, self._client.master_user)
+
     @init_checker
     @make_ro_state
     def pull_function(self, ida_func, user=None, state=None):

@@ -153,6 +153,7 @@ class SyncMenu():
             return False
 
         elif action == "Sync All":
+            self.controller.sync_all(user=user)
             print(f"[Binsync]: All data has been synced from user: {user}.")
             pass
 

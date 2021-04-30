@@ -482,6 +482,17 @@ class Client(object):
             branch.commit = commit
             self.push()
 
+    def sync_states(self, user=None):
+        target_state = self.get_state(user)
+        if target_state == None:
+            print("Unable to find state for user", user)
+            return
+
+        my_state = self.get_state(self.master_user)
+
+        my_state.copy_state(target_state)
+        self.save_state()    
+
     @staticmethod
     def discover_ssh_agent(ssh_agent_cmd):
         proc = subprocess.Popen(ssh_agent_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
