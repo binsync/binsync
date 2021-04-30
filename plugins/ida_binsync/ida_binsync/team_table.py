@@ -1,20 +1,23 @@
-
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QMenu, QHeaderView
 from PyQt5.QtCore import Qt, QItemSelectionModel
 
 
 class QUserItem(object):
-    def __init__(self, user):
+    def __init__(self, func_addr, local_name, user, last_push):
+        self.func_addr = func_addr
+        self.local_name = local_name
         self.user = user
+        self.last_push = last_push
 
     def widgets(self):
 
         u = self.user
 
         widgets = [
-            QTableWidgetItem(u.name),
-            QTableWidgetItem(),
-            QTableWidgetItem(),
+            QTableWidgetItem(hex(self.func_addr)),
+            QTableWidgetItem(self.local_name),
+            QTableWidgetItem(u), #normally u.name
+            QTableWidgetItem(self.last_push),
         ]
 
         for w in widgets:
@@ -22,13 +25,17 @@ class QUserItem(object):
 
         return widgets
 
+    def _build_table(self):
+        pass
+
 
 class QTeamTable(QTableWidget):
 
     HEADER = [
+        'Edited function',
+        'Local Name',
         'User',
-        'Last update',
-        'Auto pull',
+        'Last Push Time',
     ]
 
     def __init__(self, controller, parent=None):
@@ -36,6 +43,7 @@ class QTeamTable(QTableWidget):
 
         self.setColumnCount(len(self.HEADER))
         self.setHorizontalHeaderLabels(self.HEADER)
+        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch) # so text does not get cut off
         self.setHorizontalScrollMode(self.ScrollPerPixel)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -77,6 +85,13 @@ class QTeamTable(QTableWidget):
                 break
 
     def update_users(self, users):
+        print("UPDATING USERS")
+        self.items.append(QUserItem(0x40055c, "overflow_1", "fish", "10 mins ago"))
+        self.items.append(QUserItem(0x4005b6, "overflow_2", "fish", "15 mins ago"))
+        self.items.append(QUserItem(0x40063e, "overflow_3", "clasm", "20 mins ago"))
+        self.items.append(QUserItem(0x40068f, "main", "mahaloz", "25 mins ago"))
+        self.reload()
+        return
 
         selected_user = self.selected_user()
 

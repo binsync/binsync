@@ -21,6 +21,7 @@ class ControlPanelDialog(QDialog):
         self._controller = controller
 
         self.setWindowTitle("BinSync Control Panel")
+        
         self._init_widgets()
 
         # always on top
@@ -40,7 +41,7 @@ class ControlPanelViewWrapper(object):
     NAME = "BinSync: Control Panel"
 
     def __init__(self, controller):
-
+        
         # create a dockable view
         self.twidget = idaapi.create_empty_widget(ControlPanelViewWrapper.NAME)
         self.widget = sip.wrapinstance(int(self.twidget), QWidget)
@@ -63,11 +64,13 @@ class ControlPanelViewWrapper(object):
 class ControlPanel(QWidget):
     def __init__(self, controller, dialog, parent=None):
         super(ControlPanel, self).__init__(parent)
+        
+        #self.setMaximumHeight(400)
+        #self.setMaximumWidth(300)
 
         self._controller = controller
         self._dialog = dialog
 
-        self._status_table = None  # type: QStatusTable
         self._team_table = None  # type: QTeamTable
 
         self._init_widgets()
@@ -80,12 +83,7 @@ class ControlPanel(QWidget):
         self.reload()
 
     def reload(self):
-        # update status
-        self._status_table.status = "ready"
         curr_func = self._controller.current_function()
-        if curr_func is not None:
-            self._status_table.current_function = compat.get_func_name(curr_func.start_ea)
-        self._status_table.reload()
         # update users
         if self._controller is not None and self._controller.check_client():
             self._team_table.update_users(self._controller.users())
@@ -100,66 +98,22 @@ class ControlPanel(QWidget):
 
     def _init_widgets(self):
 
-        # status
-        status_box = QGroupBox(self)
-        status_box.setTitle("Status")
-
-        self._status_table = QStatusTable(self._controller)
-        self._status_table.status = "ready"
-
-        status_layout = QVBoxLayout()
-        status_layout.addWidget(self._status_table)
-
-        status_box.setLayout(status_layout)
-
-        # table
-
         self._team_table = QTeamTable(self._controller)
         team_box = QGroupBox(self)
-        team_box.setTitle("Team")
-
-        # operations
-
-        # pull function button
-        pullfunc_btn = QPushButton(self)
-        pullfunc_btn.setText("Pull func")
-        pullfunc_btn.setToolTip("Pull current function from the selected user")
-        pullfunc_btn.clicked.connect(self._on_pullfunc_clicked)
-
-        # push function button
-        pushfunc_btn = QPushButton()
-        pushfunc_btn.setText('Push func')
-        pushfunc_btn.setToolTip("Push current function to the repo")
-        pushfunc_btn.clicked.connect(self._on_pushfunc_clicked)
-
-        # pull patches button
-        pullpatches_btn = QPushButton(self)
-        pullpatches_btn.setText("Pull patches")
-        pullpatches_btn.setToolTip("Pull all patches from the selected user")
-        pullpatches_btn.clicked.connect(self._on_pullpatches_clicked)
-
-        actions_box = QGroupBox(self)
-        actions_box.setTitle("Actions")
-        actions_layout = QHBoxLayout()
-        actions_layout.addWidget(pullfunc_btn)
-        actions_layout.addWidget(pushfunc_btn)
-        actions_layout.addWidget(pullpatches_btn)
-        actions_box.setLayout(actions_layout)
+        team_box.setTitle("Binsync Function Syncs\n")
 
         team_layout = QVBoxLayout()
-        team_layout.addWidget(self._team_table)
-        team_layout.addWidget(actions_box)
+        team_layout.addWidget(self._team_table)    # stretch=1 optional
+        # team_layout.addWidget(actions_box)
         team_box.setLayout(team_layout)
 
         main_layout = QVBoxLayout()
-        main_layout.addWidget(status_box)
+        #main_layout.addWidget(status_box)
         main_layout.addWidget(team_box)
 
         self.setLayout(main_layout)
+        # self.setFixedWidth(500)
 
-    #
-    # Event callbacks
-    #
 
     def _on_pullfunc_clicked(self):
 

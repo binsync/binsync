@@ -143,8 +143,9 @@ class BinsyncController:
 
         self.control_panel = None
 
-        # last push
-        self.last_push = None
+        # last push info
+        self.last_push_time: int = None
+        self.last_push_func: int = None
 
         # lock
         self.queue_lock = threading.Lock()
@@ -201,8 +202,9 @@ class BinsyncController:
             time.sleep(1)
 
     def connect(self, user, path, init_repo, ssh_agent_pid=None, ssh_auth_sock=None):
-        self._client = BinsyncClient(user, path, None, None, None, None, init_repo=init_repo, ssh_agent_pid=ssh_agent_pid,
-                                      ssh_auth_sock=ssh_auth_sock)
+        self._client = BinsyncClient(user, path, None, None, None, None, init_repo=init_repo,
+                                     ssh_agent_pid=ssh_agent_pid, ssh_auth_sock=ssh_auth_sock)
+        print(f"[Binsync]: Client has connected to sync repo with user: {user}.")
 
     def check_client(self, message_box=False):
         if self._client is None:
@@ -382,25 +384,22 @@ class BinsyncController:
     @init_checker
     @make_state
     def push_func_comment(self, func_addr, comment, user=None, state=None):
+        # Update last pushed values
+        last_push_time = int(time.time())
+        last_push_func = compat.ida_func_addr(func_addr)
+        self._client.last_push(last_push_func, last_push_time)
+
         # just push a functions comment, overwriting it
         state.set_comment(func_addr, comment)
 
     @init_checker
     @make_state
     def push_comment(self, comment_addr, comment, user=None, state=None):
+        # Update last pushed values
+        last_push_time = int(time.time())
+        last_push_func = compat.ida_func_addr(comment_addr)
+        self._client.last_push(last_push_func, last_push_time)
 
-
-        # first collect the old func comment
-        #try:
-        #    func_cmt = state.get_comment(func_addr)
-        #except KeyError:
-        #    func_cmt = ""
-
-        ## add the comment to the func comment
-        #func_cmt += f"\n\n{hex(comment_addr)}: {comment}"
-        #self.push_func_comment(func_addr, func_cmt, user=user, state=state)
-
-        # also put the comment alone
         state.set_comment(comment_addr, comment)
 
     @init_checker
@@ -409,15 +408,25 @@ class BinsyncController:
         print(cmt_dict)
         for addr in cmt_dict:
             self.push_comment(addr, cmt_dict[addr], user=user, state=state)
-
+        
     @init_checker
     @make_state
     def push_patch(self, patch, user=None, state=None):
+        # Update last pushed values
+        last_push_time = int(time.time())
+        last_push_func = compat.ida_func_addr(patch.offset)
+        self._client.last_push(last_push_func, last_push_time)
+
         state.set_patch(patch.offset, patch)
 
     @init_checker
     @make_state
     def push_function_name(self, func_addr, new_name, user=None, state=None):
+        # Update last pushed values
+        last_push_time = int(time.time())
+        last_push_func = compat.ida_func_addr(func_addr)
+        self._client.last_push(last_push_func, last_push_time)
+
         func = binsync.data.Function(func_addr)
         func.name = new_name
         state.set_function(func)
@@ -425,6 +434,11 @@ class BinsyncController:
     @init_checker
     @make_state
     def push_stack_variable(self, func_addr, stack_offset, name, type_str, size, user=None, state=None):
+        # Update last pushed values
+        last_push_time = int(time.time())
+        last_push_func = compat.ida_func_addr(func_addr)
+        self._client.last_push(last_push_func, last_push_time)
+
         # convert longs to ints
         stack_offset = int(stack_offset)
         func_addr = int(func_addr)
@@ -437,6 +451,7 @@ class BinsyncController:
                           size,
                           func_addr)
         state.set_stack_variable(func_addr, stack_offset, v)
+
 
 
     #
@@ -457,6 +472,37 @@ class BinsyncController:
             return "unsigned long long"
         else:
             return "unknown"
+
+    @staticmethod
+    def friendly_datetime(time_before):
+        # convert
+        if isinstance(time_before, int):
+            dt = datetime.datetime.fromtimestamp(time_before)
+        elif not isinstance(time_before, datetime.datetime):
+            return " "
+
+        now = datetime.datetime.now()
+        if dt <= now:
+            diff = now - dt
+            ago = True
+        else:
+            diff = dt - now
+            ago = False
+        diff_days = diff.days
+        diff_sec = diff.seconds
+
+        if diff_days >= 1:
+            s = "%d days" % diff_days
+            ago = diff_days < 0
+        elif diff_sec >= 60 * 60:
+            s = "%d hours" % int(diff_sec / 60 / 60)
+        elif diff_sec >= 60:
+            s = "%d minutes" % int(diff_sec / 60)
+        else:
+            s = "%d seconds" % diff_sec
+
+        s += " ago" if ago else " in the future"
+        return s
 
 
 def on_renamed(*args):

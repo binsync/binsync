@@ -60,6 +60,8 @@ class Client(object):
         remote_url=None,
         ssh_agent_pid=None,
         ssh_auth_sock=None,
+        last_push_func=-1,
+        last_push_time=-1,
     ):
         """
         :param str master_user:     The username of the current user
@@ -146,6 +148,10 @@ class Client(object):
         self._last_push_attempt_at = None  # type: datetime.datetime
         self._last_pull_at = None  # type: datetime.datetime
         self._last_pull_attempt_at = None  # type: datetime.datetime
+
+        # User last push time/function
+        self._last_push_time = 0
+        self._last_push_function = 0
 
         # timestamps
         self._last_commit_ts = 0
@@ -290,7 +296,8 @@ class Client(object):
             try:
                 metadata = State.load_metadata(ref.commit.tree)
                 yield User.from_metadata(metadata)
-            except:
+            except Exception as e:
+                print(e)
                 continue
 
     def tally(self, users=None):
@@ -429,6 +436,13 @@ class Client(object):
 
         self._last_commit_ts = time.time()
 
+    def last_push(self, last_push_function: int, last_push_time:int):
+        """
+        Setter for the push variables.
+        """
+        self._last_push_function = last_push_function
+        self._last_push_time = last_push_time
+
     def save_state(self, state=None):
 
         if state is None:
@@ -443,7 +457,7 @@ class Client(object):
 
         self.commit_lock.acquire()
         # dump the state
-        state.dump(index)
+        state.dump(index, self._last_push_function, self._last_push_time)
 
         # commit changes
         self.repo.index.add([os.path.join(state.user, "*")])

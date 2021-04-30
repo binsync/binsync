@@ -6,7 +6,9 @@ import idc
 import idaapi
 import idautils
 from random import randint
+import time
 
+from . import compat
 from .controller import BinsyncController
 
 #
@@ -21,11 +23,11 @@ class MenuDialog(QDialog):
 
         label = QLabel("Binsync Action")
         self.combo = QComboBox()
-        self.combo.addItems(["Sync", "Toggle autosync"])
+        self.combo.addItems(["Sync", "Sync All", "Sync Structs"])
 
-        self.tableWidget = QTableWidget(len(self.menu_table), 3)
+        self.tableWidget = QTableWidget(len(self.menu_table), 4)
         self.tableWidget.setHorizontalHeaderLabels(
-            "User;Last Push;Last Edited Function".split(";")
+            "User;Last Push;Last Edited Function;Local Name".split(";")
         )
 
         header = self.tableWidget.horizontalHeader()
@@ -37,9 +39,11 @@ class MenuDialog(QDialog):
             user_item = QTableWidgetItem(item[0])
             push_item = QTableWidgetItem(item[1][0])
             func_item = QTableWidgetItem(item[1][1])
+            func_name_item = QTableWidgetItem(item[1][2])
             self.tableWidget.setItem(row, 0, user_item)
             self.tableWidget.setItem(row, 1, push_item)
             self.tableWidget.setItem(row, 2, func_item)
+            self.tableWidget.setItem(row, 3, func_name_item)
 
         # set more table properties
         self.tableWidget.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -136,21 +140,26 @@ class SyncMenu():
                 return
 
     def _do_action(self, action, user, ida_func):
-        if action == "Sync":
-            # confirm a selection has been made
-            if user == None:
-                print(f"[Binsync]: Error! No user selected for syncing.")
-                return False
+        if user is None:
+            print(f"[Binsync]: Error! No user selected for syncing.")
+            return False
 
+        if action == "Sync":
             self.controller.fill_function(ida_func, user=user)
             print(f"[Binsync]: Data has been synced from user: {user}.")
 
         elif action == "Toggle autosync":
-            # confirm a selection has been made
-            if user == None:
-                print(f"[Binsync]: Error! No user selected for syncing.")
-                return False
+            print(f"[Binsync]: Auto Sync not implemented yet.")
+            return False
+
+        elif action == "Sync All":
+            print(f"[Binsync]: All data has been synced from user: {user}.")
+            pass
+
+        elif action == "Sync Structs":
+            print(f"[Binsync]: All structs have been synced from user: {user}.")
         else:
+            print(f"[Binsync]: Error parsing sync action!")
             return False
 
         return True
@@ -161,13 +170,25 @@ class SyncMenu():
         """
         Builds a menu for use in the Dialog
 
-        In the form of {user: (last_push, last_func_push)}
+        In the form of {user: (last_push, last_push_func)}
         :return:
         """
 
         menu_table = {}
         for user in self.controller.users():
-            menu_table[user.name] = (f"{randint(0,60)} min ago", hex(randint(0xcafebabe, 0xdeadbeef)))
+            last_time = int(user.last_push_time)
+            last_func = int(user.last_push_func)
+
+            if last_time == -1 or last_func == -1 or last_func == 0:
+                ret_string = (" ", " ", " ")
+            else:
+                time_ago = BinsyncController.friendly_datetime(last_time)
+                local_name = compat.get_func_name(last_func)
+                func = hex(last_func)
+                ret_string = (time_ago, func, local_name)
+
+            # Set table attributes | [NAME] | [TIME] | [FUNCTION] | [FUNC_NAME]
+            menu_table[user.name] = ret_string
 
         return menu_table
 
