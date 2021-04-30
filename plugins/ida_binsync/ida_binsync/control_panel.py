@@ -83,7 +83,6 @@ class ControlPanel(QWidget):
         self.reload()
 
     def reload(self):
-        curr_func = self._controller.current_function()
         # update users
         if self._controller is not None and self._controller.check_client():
             self._team_table.update_users(self._controller.users())
@@ -99,7 +98,6 @@ class ControlPanel(QWidget):
     def _init_widgets(self):
 
         self._team_table = QTeamTable(self._controller)
-        self._controller.add_update_callback(self._team_table.reload)
 
         team_box = QGroupBox(self)
         team_box.setTitle("Binsync Function Syncs\n")

@@ -92,7 +92,9 @@ class QTeamTable(QTableWidget):
         """
         Update the status of all users within the repo.
         """
-        print("UPDATING USERS")
+
+        # reset the QItem list
+        self.items = []
         
         # First, let's see if any new homies showed up
         self.controller._client.init_remote()
@@ -101,7 +103,11 @@ class QTeamTable(QTableWidget):
         func_changes = {}
 
         # Start by creating a list of recent pushes
-        for user in self.controller.users():
+        pulled_users = self.controller.users()
+        print(f"UPDATING TABLE FROM: {pulled_users}")
+
+
+        for user in users:
             # Get user state. Func from user state
             s = self.controller._client.get_state(user=user.name)
             functions: Dict[int, Function] = s.functions

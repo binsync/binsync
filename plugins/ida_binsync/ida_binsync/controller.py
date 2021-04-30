@@ -161,15 +161,6 @@ class BinsyncController:
         self.cmd_thread.setDaemon(True)
         self.cmd_thread.start()
 
-        #  Callbacks
-        self.update_callbacks = list()
-
-    def add_update_callback(self, f):
-        '''
-        Add a call back for the update routine. 
-        '''
-        self.update_callbacks.append(f)        
-
     def make_controller_cmd(self, cmd_func, *args, **kwargs):
         self.cmd_queue.append((cmd_func, args, kwargs))
 
@@ -192,15 +183,6 @@ class BinsyncController:
 
     def pull_routine(self):
         while True:
-            # reload the control panel if it's registered
-            if self.control_panel is not None:
-                try:
-                    self.control_panel.reload()
-                except RuntimeError:
-                    # the panel has been closed
-                    self.control_panel = None
-
-            
             # pull the repo every 10 seconds
             if self.check_client() and self._client.has_remote \
                     and (
@@ -209,10 +191,14 @@ class BinsyncController:
                          ):
                 # Pull new items
                 self._client.pull()
-                
-                # Iterate over callbacks, execute
-                for func in self.update_callbacks:
-                    func()
+
+                # reload the control panel if it's registered
+                if self.control_panel is not None:
+                    try:
+                        self.control_panel.reload()
+                    except RuntimeError:
+                        # the panel has been closed
+                        self.control_panel = None
 
             # Snooze
             time.sleep(1)
