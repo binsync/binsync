@@ -174,6 +174,16 @@ class State:
 
         return s
 
+    def copy_state(self, target_state=None):
+        if target_state == None:
+            print("Cannot copy an empty state (state == None)")
+            return
+
+        self.functions = target_state.functions.copy()
+        self.comments = target_state.comments.copy()
+        self.stack_variables = target_state.stack_variables.copy()
+        self.patches = target_state.patches.copy()
+        
     def save(self):
         if self.client is None:
             raise RuntimeError("save(): State.client is None.")
