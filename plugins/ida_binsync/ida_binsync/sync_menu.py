@@ -23,7 +23,7 @@ class MenuDialog(QDialog):
 
         label = QLabel("Binsync Action")
         self.combo = QComboBox()
-        self.combo.addItems(["Sync", "Toggle autosync"])
+        self.combo.addItems(["Sync", "Sync All", "Sync Structs"])
 
         self.tableWidget = QTableWidget(len(self.menu_table), 4)
         self.tableWidget.setHorizontalHeaderLabels(
@@ -140,21 +140,26 @@ class SyncMenu():
                 return
 
     def _do_action(self, action, user, ida_func):
-        if action == "Sync":
-            # confirm a selection has been made
-            if user == None:
-                print(f"[Binsync]: Error! No user selected for syncing.")
-                return False
+        if user is None:
+            print(f"[Binsync]: Error! No user selected for syncing.")
+            return False
 
+        if action == "Sync":
             self.controller.fill_function(ida_func, user=user)
             print(f"[Binsync]: Data has been synced from user: {user}.")
 
         elif action == "Toggle autosync":
-            # confirm a selection has been made
-            if user == None:
-                print(f"[Binsync]: Error! No user selected for syncing.")
-                return False
+            print(f"[Binsync]: Auto Sync not implemented yet.")
+            return False
+
+        elif action == "Sync All":
+            print(f"[Binsync]: All data has been synced from user: {user}.")
+            pass
+
+        elif action == "Sync Structs":
+            print(f"[Binsync]: All structs have been synced from user: {user}.")
         else:
+            print(f"[Binsync]: Error parsing sync action!")
             return False
 
         return True

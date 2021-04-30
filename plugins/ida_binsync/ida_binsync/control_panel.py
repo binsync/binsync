@@ -65,8 +65,8 @@ class ControlPanel(QWidget):
     def __init__(self, controller, dialog, parent=None):
         super(ControlPanel, self).__init__(parent)
         
-        self.setMaximumHeight(400)
-        self.setMaximumWidth(300)
+        #self.setMaximumHeight(400)
+        #self.setMaximumWidth(300)
 
         self._controller = controller
         self._dialog = dialog
@@ -100,7 +100,7 @@ class ControlPanel(QWidget):
 
         self._team_table = QTeamTable(self._controller)
         team_box = QGroupBox(self)
-        team_box.setTitle("Changes")
+        team_box.setTitle("Binsync Function Syncs\n")
 
         team_layout = QVBoxLayout()
         team_layout.addWidget(self._team_table)    # stretch=1 optional

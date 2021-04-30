@@ -202,8 +202,9 @@ class BinsyncController:
             time.sleep(1)
 
     def connect(self, user, path, init_repo, ssh_agent_pid=None, ssh_auth_sock=None):
-        self._client = BinsyncClient(user, path, None, None, None, None, init_repo=init_repo, ssh_agent_pid=ssh_agent_pid,
-                                      ssh_auth_sock=ssh_auth_sock)
+        self._client = BinsyncClient(user, path, None, None, None, None, init_repo=init_repo,
+                                     ssh_agent_pid=ssh_agent_pid, ssh_auth_sock=ssh_auth_sock)
+        print(f"[Binsync]: Client has connected to sync repo with user: {user}.")
 
     def check_client(self, message_box=False):
         if self._client is None:

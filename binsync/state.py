@@ -293,3 +293,25 @@ class State:
             raise KeyError("No stack variables are defined for function %#x." % func_addr)
         return self.stack_variables[func_addr].items()
 
+    # TODO: it would be better if we stored the function addr with every state object, like comments
+    def get_modified_addrs(self):
+        """
+        Gets ever address that has been touched in the current state.
+        Returns a set of those addresses.
+
+        @rtype: Set(int)
+        """
+        moded_addrs = set()
+        # ==== functions ==== #
+        for addr in self.functions:
+            moded_addrs.add(addr)
+
+        # ==== comments ==== #
+        for addr in self.comments:
+            moded_addrs.add(addr)
+
+        # ==== stack vars ==== #
+        for addr in self.stack_variables:
+            moded_addrs.add(addr)
+
+        return moded_addrs
