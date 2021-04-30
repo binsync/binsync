@@ -173,7 +173,10 @@ class SyncMenu():
         In the form of {user: (last_push, last_push_func)}
         :return:
         """
+        # First, let's see if any new homies showed up
+        self.controller._client.init_remote()
 
+        # Build out the menu dictionary for the table
         menu_table = {}
         for user in self.controller.users():
             last_time = int(user.last_push_time)
