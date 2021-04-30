@@ -105,7 +105,6 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def ti_changed(self, ea, type, fname):
-        print("ti_changed(ea = 0x%X, type = %s, fname = %s)" % (ea, type, fname))
         return
         name = ""
         if ida_struct.is_member_id(ea):

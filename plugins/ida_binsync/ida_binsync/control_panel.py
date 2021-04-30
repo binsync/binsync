@@ -100,7 +100,7 @@ class ControlPanel(QWidget):
         self._team_table = QTeamTable(self._controller)
 
         team_box = QGroupBox(self)
-        team_box.setTitle("Binsync Function Syncs\n")
+        team_box.setTitle("Binsync Changed Function\n")
 
         team_layout = QVBoxLayout()
         team_layout.addWidget(self._team_table)    # stretch=1 optional

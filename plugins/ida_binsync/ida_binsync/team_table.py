@@ -102,12 +102,7 @@ class QTeamTable(QTableWidget):
         # Dict to track function changes
         func_changes = {}
 
-        # Start by creating a list of recent pushes
-        pulled_users = self.controller.users()
-        print(f"UPDATING TABLE FROM: {pulled_users}")
-
-
-        for user in users:
+        for user in self.controller.users():
             # Get user state. Func from user state
             s = self.controller._client.get_state(user=user.name)
             functions: Dict[int, Function] = s.functions
