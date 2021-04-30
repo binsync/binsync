@@ -1,4 +1,5 @@
 import os
+import time
 
 import toml
 
@@ -10,26 +11,30 @@ long = int
 
 class Function(Base):
     """
-    :ivar int addr:     Address of the function.
-    :ivar str name:     Name of the function.
-    :ivar str notes:    Notes of the function.
+    :ivar int addr:         Address of the function.
+    :ivar str name:         Name of the function.
+    :ivar int last_change:  Unix time of the last change.
+    :ivar str notes:        Notes of the function.
     """
 
     __slots__ = (
         "addr",
         "name",
+        "last_change",
         "notes",
     )
 
-    def __init__(self, addr, name=None, notes=None):
+    def __init__(self, addr, name=None, last_change=-1, notes=None):
         self.addr = addr
         self.name = name
+        self.last_change = last_change if last_change != -1 else int(time.time())
         self.notes = notes
 
     def __getstate__(self):
         return {
             "addr": self.addr,
             "name": self.name,
+            "last_change": self.last_change,
             "notes": self.notes,
         }
 
@@ -38,6 +43,7 @@ class Function(Base):
             raise TypeError("Unsupported type %s for addr." % type(state["addr"]))
         self.addr = state["addr"]
         self.name = state["name"]
+        self.last_change = state["last_change"]
         self.notes = state.get("notes", None)
 
     def __eq__(self, other):
@@ -45,6 +51,7 @@ class Function(Base):
             isinstance(other, Function)
             and other.name == self.name
             and other.addr == self.addr
+            and other.last_change == self.last_change
             and other.notes == self.notes
         )
 

@@ -11,7 +11,7 @@ import git
 import git.exc
 import filelock
 
-from .data import User
+from .data import User, Function
 from .state import State
 from .errors import MetadataNotFoundError
 from .utils import is_py3
@@ -297,7 +297,7 @@ class Client(object):
                 metadata = State.load_metadata(ref.commit.tree)
                 yield User.from_metadata(metadata)
             except Exception as e:
-                print(e)
+                #print(e)
                 continue
 
     def tally(self, users=None):
@@ -359,7 +359,7 @@ class Client(object):
             else:
                 d['remote_url'] = "<does not exist>"
 
-            d['last_push'] = self._last_push_at if self._last_push_at is not None else "never"
+            d['last_change'] = self._last_push_at if self._last_push_at is not None else "never"
             d['last_push_attempt'] = self._last_push_attempt_at if self._last_push_attempt_at is not None else "never"
             d['last_pull'] = self._last_pull_at if self._last_pull_at is not None else "never"
             d['last_pull_attempt'] = self._last_pull_attempt_at if self._last_pull_attempt_at is not None else "never"
@@ -436,12 +436,25 @@ class Client(object):
 
         self._last_commit_ts = time.time()
 
-    def last_push(self, last_push_function: int, last_push_time:int):
+    def last_push(self, last_push_function: int, last_push_time: int, func_name: str):
         """
         Setter for the push variables.
         """
         self._last_push_function = last_push_function
         self._last_push_time = last_push_time
+
+        # get the master state
+        state = self.get_state(user=self.master_user)
+
+        # check if the current function exists
+        try:
+            changed_func = state.get_function(last_push_function)
+        except KeyError:
+            changed_func = Function(last_push_function, name=func_name)
+
+        # set the new push time, and overwrite the function in state
+        changed_func.last_change = last_push_time
+        state.set_function(changed_func)
 
     def save_state(self, state=None):
 

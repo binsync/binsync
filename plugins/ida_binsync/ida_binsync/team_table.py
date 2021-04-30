@@ -1,5 +1,9 @@
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QMenu, QHeaderView
 from PyQt5.QtCore import Qt, QItemSelectionModel
+from .controller import BinsyncController
+from typing import Dict
+from . import compat
+from binsync.data import Function
 
 
 class QUserItem(object):
@@ -54,6 +58,8 @@ class QTeamTable(QTableWidget):
 
         self.items = [ ]
 
+        self.controller = controller
+
     def reload(self):
         self.setRowCount(len(self.items))
 
@@ -64,7 +70,6 @@ class QTeamTable(QTableWidget):
         self.viewport().update()
 
     def selected_user(self):
-
         try:
             idx = next(iter(self.selectedIndexes()))
         except StopIteration:
@@ -78,29 +83,55 @@ class QTeamTable(QTableWidget):
         return user_name
 
     def select_user(self, user_name):
-
         for i, item in enumerate(self.items):
             if item.user.name == user_name:
                 self.selectRow(i)
                 break
 
     def update_users(self, users):
-        print("UPDATING USERS")
-        self.items.append(QUserItem(0x40055c, "overflow_1", "fish", "10 mins ago"))
-        self.items.append(QUserItem(0x4005b6, "overflow_2", "fish", "15 mins ago"))
-        self.items.append(QUserItem(0x40063e, "overflow_3", "clasm", "20 mins ago"))
-        self.items.append(QUserItem(0x40068f, "main", "mahaloz", "25 mins ago"))
+        """
+        Update the status of all users within the repo.
+        """
+
+        # reset the QItem list
+        self.items = []
+        
+        # First, let's see if any new homies showed up
+        self.controller._client.init_remote()
+
+        # Dict to track function changes
+        func_changes = {}
+
+        for user in self.controller.users():
+            # Get user state. Func from user state
+            s = self.controller._client.get_state(user=user.name)
+            functions: Dict[int, Function] = s.functions
+
+            # Per user metadata
+            u_name = user.name
+
+            # Iterate over items, store last updated
+            for addr, func in functions.items():
+                # Function metadata
+                last_change = func.last_change
+                local_name = compat.get_func_name(addr)
+                time_delta = BinsyncController.friendly_datetime(last_change)
+
+                # Check last changes and set table
+                try:
+                    # Check if this is newer or not
+                    stored_time = func_changes[addr][3]
+                    if last_change > stored_time:
+                        func_changes[addr] = (local_name, u_name, time_delta, last_change)
+                except KeyError as e:
+                    # IN this case, it probably does not exist
+                    # Let's make it
+                    func_changes[addr] = (local_name, u_name, time_delta, last_change)
+                    
+        # Create the table
+        for key in sorted(func_changes):
+            # Assign attribute by val: <func_addr> | <local_name> | <u_name> | <time_delta>
+            item = func_changes[key]
+            self.items.append(QUserItem(key, item[0], item[1], item[2]))
         self.reload()
-        return
-
-        selected_user = self.selected_user()
-
-        self.items = [ ]
-
-        for u in users:
-            self.items.append(QUserItem(u))
-
-        self.reload()
-
-        if selected_user is not None:
-            self.select_user(selected_user)
+        return 
