@@ -1,5 +1,7 @@
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QMenu, QHeaderView
 from PyQt5.QtCore import Qt, QItemSelectionModel
+from .controller import BinsyncController
+from . import compat
 
 
 class QUserItem(object):
@@ -54,6 +56,8 @@ class QTeamTable(QTableWidget):
 
         self.items = [ ]
 
+        self.controller = controller
+
     def reload(self):
         self.setRowCount(len(self.items))
 
@@ -64,7 +68,6 @@ class QTeamTable(QTableWidget):
         self.viewport().update()
 
     def selected_user(self):
-
         try:
             idx = next(iter(self.selectedIndexes()))
         except StopIteration:
@@ -78,21 +81,60 @@ class QTeamTable(QTableWidget):
         return user_name
 
     def select_user(self, user_name):
-
         for i, item in enumerate(self.items):
             if item.user.name == user_name:
                 self.selectRow(i)
                 break
 
     def update_users(self, users):
+        """
+        Update the status of all users within the repo.
+        """
         print("UPDATING USERS")
-        self.items.append(QUserItem(0x40055c, "overflow_1", "fish", "10 mins ago"))
-        self.items.append(QUserItem(0x4005b6, "overflow_2", "fish", "15 mins ago"))
-        self.items.append(QUserItem(0x40063e, "overflow_3", "clasm", "20 mins ago"))
-        self.items.append(QUserItem(0x40068f, "main", "mahaloz", "25 mins ago"))
-        self.reload()
-        return
+        
+        # First, let's see if any new homies showed up
+        self.controller._client.init_remote()
 
+        # Dict to track function changes
+        func_changes = {}
+
+        # Start by creating a list of recent pushes
+        for user in self.controller.users():
+            # Get times/funcs
+            last_time = int(user.last_push_time)
+            last_func = int(user.last_push_func)
+
+            # Make sure they arent weird
+            if last_time == -1 or last_func == -1 or last_func == 0:
+                ret_string = (" ", " ", " ")
+            else:
+                # Parse out attributes we want
+                time_delta = BinsyncController.friendly_datetime(last_time)
+                local_name = compat.get_func_name(last_func)
+                u_name = user.name
+
+                # Key off address
+                # Check if stored is greater than another found
+                try:
+                    # Check if this is newer or not
+                    stored_time = func_changes[last_func][3] # last_time
+                    if last_time > stored_time:
+                        func_changes[last_func] = (local_name, u_name, time_delta, last_time)
+
+                except KeyError as e:
+                    # In this case, it probably does not exist.
+                    # Let's make it
+                    func_changes[last_func] = (local_name, u_name, time_delta, last_time)
+                
+        # Create the table
+        for key in sorted(func_changes):
+            # Assign attribute by val: <func_addr> | <local_name> | <u_name> | <time_delta>
+            item = func_changes[key]
+            self.items.append(QUserItem(key, item[0], item[1], item[2]))
+        self.reload()
+        return 
+
+        '''
         selected_user = self.selected_user()
 
         self.items = [ ]
@@ -104,3 +146,4 @@ class QTeamTable(QTableWidget):
 
         if selected_user is not None:
             self.select_user(selected_user)
+        '''
