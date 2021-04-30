@@ -323,12 +323,28 @@ class BinsyncController:
         compat.refresh_pseudocode_view(_func.addr)
 
     def sync_all(self, user=None, state=None):
+        """
+        TODO: to fix time overwrites
+        Idea:
+        How to fix overwritten times from hooks:
+        Make a semaphore. Increment the semaphore before each action that triggers a hook.
+        In the hook, decrement the semaphore. When the semaphore is 0, reset all the times
+        in the state AND all commiting. Stop commiting until semaphores are done.
+
+        Cache money.
+        """
+
         self._client.sync_states(user=user)
         func_addrs = self._client.state.functions.keys()
-        print("Target Addrs for sync:", [hex(x) for x in func_addrs])
+        print("[Binsync]: Target Addrs for sync:", [hex(x) for x in func_addrs])
+
+        # commit lock (stop commiting)
         for addr in func_addrs:
             ida_func = idaapi.get_func(addr)
-            self.fill_function(ida_func, self._client.master_user)
+            self.fill_function(ida_func, self._client.master_user) # semaphore inc
+        # semaphore unlock (by now we have decremented)
+        # -> rewind_time
+        # commit unlock (allow commiting)
 
     @init_checker
     @make_ro_state
