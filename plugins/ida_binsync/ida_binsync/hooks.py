@@ -396,8 +396,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         if cmt_type == "cmt":
             # find the location this comment exists
             func_addr = idaapi.get_func(address).start_ea
-
-            self.controller.make_controller_cmd(self.controller.push_comments, address, comment)
+            self.controller.make_controller_cmd(self.controller.push_comment, address, comment)
 
 
         # function comment changed
