@@ -13,7 +13,6 @@ import toml
 import git
 
 from .data import Function, Comment, Patch, StackVariable
-from .data.struct import StructMember
 from .errors import MetadataNotFoundError
 from .utils import is_py2, is_py3
 
@@ -67,7 +66,6 @@ class State:
         self.functions = {}  # type: Dict[int,Function]
         self.comments = SortedDict()  # type: Dict[int,str]
         self.stack_variables = defaultdict(dict)  # type: Dict[int,Dict[int,StackVariable]]
-        self.structs = defaultdict(dict)    # type: Dict[str, Dict[int, StructMember]]
         self.patches = SortedDict()
 
     @property
@@ -106,11 +104,6 @@ class State:
         for func_addr, stack_vars in self.stack_variables.items():
             path = os.path.join('stack_vars', "%08x.toml" % func_addr)
             add_data(index, path, toml.dumps(StackVariable.dump_many(stack_vars)).encode())
-
-        # dump struct members, one file per struct
-        for struct_name, struct_member in self.structs.items():
-            path = os.path.join('structs', f"{struct_name}.toml")
-            add_data(index, path, toml.dumps(StructMember.dump_many(struct_member)).encode())
 
     @staticmethod
     def load_metadata(tree):
