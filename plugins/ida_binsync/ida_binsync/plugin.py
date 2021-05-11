@@ -1,4 +1,12 @@
+# ----------------------------------------------------------------------------
+# This file is simply the entrypoint from the initial call in ida_binsync,
+# which will setup all the hooks for both the UI and IDB changes, and will
+# also create the config window.
+#
+# ----------------------------------------------------------------------------
+
 import os
+
 from PyQt5.QtCore import QObject
 
 import idaapi

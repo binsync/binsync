@@ -1,3 +1,14 @@
+# ----------------------------------------------------------------------------
+# This file is more of a library for making compatibility calls to IDA for
+# things such as getting decompiled function names, start addresses, and
+# asking for write permission to ida. This will mostly be called in the
+# controller.
+#
+# Note that anything that requires write permission to IDA will need to pass
+# through this program if it is not running in the main thread.
+#
+# ----------------------------------------------------------------------------
+
 import functools
 import threading
 from typing import Dict
@@ -9,6 +20,7 @@ import ida_kernwin
 import ida_hexrays
 import ida_funcs
 import ida_bytes
+
 
 def is_mainthread():
     """
