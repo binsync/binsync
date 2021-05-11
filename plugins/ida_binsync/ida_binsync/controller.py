@@ -490,13 +490,9 @@ class BinsyncController:
 
         self._client.last_push(last_push_func, last_push_time, func_name)
 
-
-
     #
     # Utils
     #
-
-
 
     @staticmethod
     def _get_type_str(flag):

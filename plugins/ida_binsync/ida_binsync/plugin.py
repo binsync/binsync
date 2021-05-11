@@ -1,24 +1,16 @@
-from __future__ import absolute_import, division, print_function
-
 import os
-import time
+from PyQt5.QtCore import QObject
 
-from PyQt5.Qt import qApp
-from PyQt5.QtCore import QObject, QDir
-from PyQt5.QtWidgets import QMessageBox
 import idaapi
 import idc
 import ida_idp
 
-import binsync
-from binsync.data import Patch
-
 from .hooks import MasterHook
-from ida_binsync import IDA_DIR, VERSION
-from ida_binsync.controller import BinsyncController
-from ida_binsync.config_dialog import ConfigDialog
-from ida_binsync.control_panel import ControlPanelViewWrapper
-from ida_binsync.sync_menu import SyncMenu
+from . import IDA_DIR, VERSION
+from .controller import BinsyncController
+from .ui.config_dialog import ConfigDialog
+from .ui.info_panel import InfoPanelViewWrapper
+from .ui.sync_menu import SyncMenu
 
 controller = BinsyncController()
 
@@ -26,7 +18,7 @@ controller = BinsyncController()
 idaapi.set_script_timeout(0)
 
 #
-#   Hooks for IDP, IDB, and UI
+#   UI Hook, placed here for convenience of reading UI implementation
 #
 
 
@@ -52,9 +44,11 @@ class UiHooks(idaapi.UI_Hooks):
         idaapi.attach_action_to_popup(form, popup, "binsync:test", None)
         inject_binsync_actions(form, popup, idaapi.get_widget_type(form))
 
+
 #
 #   Action Handlers
 #
+
 
 class IDAActionHandler(idaapi.action_handler_t):
     def __init__(self, action, plugin, typ):
@@ -82,6 +76,7 @@ class IDAActionHandler(idaapi.action_handler_t):
 #   Base Plugin
 #
 
+
 class BinsyncPlugin(QObject, idaapi.plugin_t):
     """Plugin entry point. Does most of the skinning magic."""
 
@@ -98,7 +93,6 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         QObject.__init__(self, *args, **kwargs)
         idaapi.plugin_t.__init__(self)
 
-
     def _init_action_sync_menu(self):
         """
         Register the sync_menu action with IDA.
@@ -106,8 +100,7 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         menu = SyncMenu(controller)
 
         # describe the action
-        print(f"PATH: {plugin_resource('binsync.png')}")
-        self._binsync_icon_id = idaapi.load_custom_icon(plugin_resource("binsync.png"))
+        self._binsync_icon_id = idaapi.load_custom_icon(plugin_resource("ui/binsync.png"))
 
         action_desc = idaapi.action_desc_t(
             "binsync:sync_menu",                        # The action name.
@@ -133,7 +126,7 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         Open the control panel view and attach it to IDA View-A or Pseudocode-A.
         """
 
-        wrapper = ControlPanelViewWrapper(controller)
+        wrapper = InfoPanelViewWrapper(controller)
         if not wrapper.twidget:
             raise RuntimeError("Unexpected: twidget does not exist.")
 
@@ -145,7 +138,7 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         for target in ["IDA View-A", "Pseudocode-A"]:
             dwidget = idaapi.find_widget(target)
             if dwidget:
-                idaapi.set_dock_pos(ControlPanelViewWrapper.NAME, target, idaapi.DP_RIGHT)
+                idaapi.set_dock_pos(InfoPanelViewWrapper.NAME, target, idaapi.DP_RIGHT)
                 break
 
     def install_actions(self):
@@ -173,13 +166,14 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
             raise RuntimeError("Failed to attach the menu item for the control panel action.")
 
     def _init_hooks(self):
-        # GUI Hooks
+        # Hook UI Startup in IDA
         self.install_actions()
-        self.hook1 = UiHooks()
-        self.hook1.hook()
+        self.ui_hook = UiHooks()
+        self.ui_hook.hook()
 
-        self.hook2 = MasterHook(controller)
-        self.hook2.hook()
+        # Hook IDB & Decomp Actions in IDA
+        self.action_hooks = MasterHook(controller)
+        self.action_hooks.hook()
 
     def init(self):
         self._init_hooks()
@@ -196,6 +190,7 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
 #
 #   Utils
 #
+
 
 def get_cursor_func_ref():
     """
@@ -250,6 +245,7 @@ def get_cursor_func_ref():
 
     # fail
     return idaapi.BADADDR
+
 
 def inject_binsync_actions(form, popup, form_type):
     """
