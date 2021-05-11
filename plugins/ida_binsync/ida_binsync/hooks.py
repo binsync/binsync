@@ -1,20 +1,27 @@
+# ----------------------------------------------------------------------------
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
-
+#
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
-# import ctypes
-import pickle
-from threading import Thread
-from functools import wraps
+#
+#
+# This program describes each hook in IDA that we want to overwrite on the
+# startup of IDA. Each hook function/class describes a different scenario
+# that we try to track when a user makes a change. For instance, the function
+# `cmt_changed` is activated every time a user changes a disassembly comment,
+# allowing us to send the new comment to be queued in the Controller actions.
+#
+# ----------------------------------------------------------------------------
 
+from functools import wraps
 
 import ida_auto
 import ida_bytes
@@ -36,8 +43,9 @@ import idc
 from . import compat
 from .controller import BinsyncController
 
+
 #
-#   Decerators
+#   Decorators
 #
 
 
@@ -49,10 +57,11 @@ def quite_init_checker(f):
         return f(self, *args, **kwargs)
     return initcheck
 
+#
+#   IDA Change Hooks
+#
 
-# See idasdk74.zip: idasdk74/include/idp.hpp for methods' documentation
-# See C:\Program Files\IDA Pro 7.4\python\3\ida_idp.py for methods' prototypes
-# The order for methods below is the same as the idp.hpp file to ease making changes
+
 class IDBHooks(ida_idp.IDB_Hooks):
     def __init__(self, controller):
         ida_idp.IDB_Hooks.__init__(self)

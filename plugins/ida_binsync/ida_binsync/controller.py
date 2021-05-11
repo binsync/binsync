@@ -1,3 +1,22 @@
+# ----------------------------------------------------------------------------
+# This file contains the BinsyncController class which acts as the the
+# bridge between the plugin UI and direct calls to the binsync client found in
+# the core of the binsync. In the controller, you will find code used to make
+# pushes and pulls of user changes.
+#
+# You will also notice that the BinsyncController runs two extra threads in
+# it:
+#   1. Binsync "git pulling" thread to constantly get changes from others
+#   2. Command Routine to get hooked changes to IDA attributes
+#
+# The second point is more complicated because it acts as the queue of
+# runnable actions that are queued from inside the hooks.py file.
+# Essentially, every change that happens in IDA from the main user triggers
+# a hook which will push an action to be preformed onto the command queue;
+# Causing a "git push" on every change.
+#
+# ----------------------------------------------------------------------------
+
 from __future__ import absolute_import
 from functools import wraps
 import re
@@ -7,12 +26,12 @@ import datetime
 import logging
 from typing import Dict, List, Tuple
 
+from PyQt5.QtWidgets import QMessageBox
+
 import ida_hexrays
 import idc
 import idaapi
 import idautils
-
-from PyQt5.QtWidgets import QMessageBox
 
 import binsync
 from binsync import Client
@@ -490,13 +509,9 @@ class BinsyncController:
 
         self._client.last_push(last_push_func, last_push_time, func_name)
 
-
-
     #
     # Utils
     #
-
-
 
     @staticmethod
     def _get_type_str(flag):

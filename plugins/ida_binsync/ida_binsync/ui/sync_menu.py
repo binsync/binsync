@@ -2,18 +2,17 @@ from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QHBoxLayout, QLabel
     QMessageBox, QCheckBox, QWidget, QFileDialog, QApplication, QComboBox, QTableWidget, QTableWidgetItem, \
     QDialogButtonBox, QGridLayout, QHeaderView, QTableView, QAbstractItemView
 import sip
-import idc
+
 import idaapi
 import idautils
-from random import randint
-import time
 
-from . import compat
-from .controller import BinsyncController
+from .. import compat
+from ..controller import BinsyncController
 
 #
 #   MenuDialog Box for Binsync Actions
 #
+
 
 class MenuDialog(QDialog):
     def __init__(self, menu_table, parent=None):
@@ -80,6 +79,7 @@ class MenuDialog(QDialog):
 #   IDA Context Menu Hook
 #
 
+
 class IDACtxEntry(idaapi.action_handler_t):
     """
     A basic Context Menu class to utilize IDA's action handlers.
@@ -106,6 +106,7 @@ class IDACtxEntry(idaapi.action_handler_t):
 #   Actions
 #
 
+
 class SyncMenu():
     def __init__(self, controller):
         self.controller: BinsyncController = controller
@@ -129,7 +130,6 @@ class SyncMenu():
         # parse action
         action, user = dialog.getActionSelection()
 
-
         # for every selected function perform the action!
         for func_name in self._get_selected_funcs():
             func_addr = idaapi.get_name_ea(idaapi.BADADDR, func_name)
@@ -149,23 +149,22 @@ class SyncMenu():
             print(f"[Binsync]: Data has been synced from user: {user}.")
 
         elif action == "Toggle autosync":
+            # TODO: implement auto-syncing
             print(f"[Binsync]: Auto Sync not implemented yet.")
-            return False
 
         elif action == "Sync All":
             self.controller.sync_all(user=user)
             print(f"[Binsync]: All data has been synced from user: {user}.")
-            pass
 
         elif action == "Sync Structs":
-            print(f"[Binsync]: All structs have been synced from user: {user}.")
+            # TODO: implement struct syncing
+            print(f"[Binsync]: Struct Syncing not implemented yet.")
+
         else:
             print(f"[Binsync]: Error parsing sync action!")
             return False
 
         return True
-
-
 
     def _build_menu_table(self):
         """
@@ -174,7 +173,7 @@ class SyncMenu():
         In the form of {user: (last_change, last_push_func)}
         :return:
         """
-        # First, let's see if any new homies showed up
+        # First, let's see if any new users has joined repo
         self.controller._client.init_remote()
 
         # Build out the menu dictionary for the table
@@ -191,7 +190,7 @@ class SyncMenu():
                 func = hex(last_func)
                 ret_string = (time_ago, func, local_name)
 
-            # Set table attributes | [NAME] | [TIME] | [FUNCTION] | [FUNC_NAME]
+            # Set table attributes | [PUSH TIME] | [FUNC ADDR] | [LOCAL NAME]
             menu_table[user.name] = ret_string
 
         return menu_table
@@ -200,7 +199,6 @@ class SyncMenu():
         """
         Return the list of function names selected in the Functions window.
 
-        XXX:
         Warning:
         It's possible that we don't get the correct name for a function lookup. In that case,
         this function will fail. See: https://github.com/gaasedelen/prefix/blob/master/plugin/ida_prefix.py#L567
@@ -223,20 +221,6 @@ class SyncMenu():
         #
         # scrape the selected function names from the Functions window table
         #
-
-        from PyQt5.QtGui import QColor, QBrush
-        from PyQt5.QtCore import Qt
-
-        """
-        selected_rows = [s.row() for s in table.selectionModel().selectedRows()]
-        for row in selected_rows:
-            for j in range(13):
-                table.item(row, j).setBackground(QColor("#2d9d52"))
-        """
-        t_model = table.model()
-        t_model.setData(t_model.index(0,0), QBrush(Qt.green), Qt.BackgroundRole)
-
-        # tmp.model().setData(tmp.model().index(0,0), QBrush(Qt.red), Qt.BackgroundRole)
         selected_funcs = [str(s.data()) for s in table.selectionModel().selectedRows()]
         return selected_funcs
 

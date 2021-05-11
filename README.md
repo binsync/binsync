@@ -13,6 +13,13 @@ Binsync enables manual and automated synchronization of the following reverse en
 
 All data is stored in a human-friendly text format (toml) inside a Git repo.
 
+## Supported Platforms
+Currently we support the following decompilers:
+- angr-management: **latest release**
+- IDA Pro: **>= 7.0**
+- Binary Nina: **latest release**
+
+Currently, we have no implementation for Ghidra, but we are looking into a solution.
 
 ## Installing
 
