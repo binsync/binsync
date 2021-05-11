@@ -23,7 +23,7 @@ Currently, we have no implementation for Ghidra, but we are looking into a solut
 
 ## Installing
 
-First install [Binsync Core](#binsync-core), then install the plugin associate to your decompiler of choice
+First install [Binsync Core](#binsync-core); then install the plugin associated to your decompiler of choice.
 
 ### Binsync Core
 
@@ -48,14 +48,3 @@ selecting `binsync`, then configuring it.
 ## Usage
 
 Follow the user story described in the [Wiki](https://github.com/angr/binsync/wiki).
-
-## TODO
-### Binsync Core
-- Make new users a new branch.
-- Gather real update times for repos
-
-### IDA Integration
-- Fix Stack Variable Syncing
-- Attempt to do a context click on functions like in angr-management
-- Fix comments for locations 
-
