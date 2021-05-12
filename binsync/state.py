@@ -13,7 +13,7 @@ import toml
 import git
 
 from .data import Function, Comment, Patch, StackVariable
-from .data.struct import StructMember
+from .data.struct import Struct
 from .errors import MetadataNotFoundError
 from .utils import is_py2, is_py3
 
@@ -64,10 +64,10 @@ class State:
         self._dirty = True  # type: bool
 
         # data
-        self.functions = {}  # type: Dict[int,Function]
-        self.comments = SortedDict()  # type: Dict[int,str]
-        self.stack_variables = defaultdict(dict)  # type: Dict[int,Dict[int,StackVariable]]
-        self.structs = defaultdict(dict)    # type: Dict[str, Dict[int, StructMember]]
+        self.functions = {}  # type: Dict[int, Function]
+        self.comments = SortedDict()  # type: Dict[int, str]
+        self.stack_variables = defaultdict(dict)  # type: Dict[int, Dict[int, StackVariable]]
+        self.structs = defaultdict(dict) # type: Dict[str, Struct]
         self.patches = SortedDict()
 
     @property
@@ -107,10 +107,10 @@ class State:
             path = os.path.join('stack_vars', "%08x.toml" % func_addr)
             add_data(index, path, toml.dumps(StackVariable.dump_many(stack_vars)).encode())
 
-        # dump struct members, one file per struct
-        for struct_name, struct_member in self.structs.items():
-            path = os.path.join('structs', f"{struct_name}.toml")
-            add_data(index, path, toml.dumps(StructMember.dump_many(struct_member)).encode())
+        # dump structs, one file per struct
+        for struct in self.structs:
+            path = os.path.join('structs', f"{struct.name}.toml")
+            add_data(index, path, toml.dumps(struct.dump()).encode())
 
     @staticmethod
     def load_metadata(tree):
@@ -176,13 +176,23 @@ class State:
                 if svs:
                     s.stack_variables[svs[0].func_addr] = d
 
+        # load structs
+        for struct in s.structs:
+            try:
+                struct_toml = toml.loads(tree[os.path.join('structs', f'{struct.name}.toml')].data_stream.read().decode())
+            except:
+                pass
+            else:
+                loaded_struct = Struct.load(struct_toml)
+                s.structs[loaded_struct.name] = loaded_struct
+
         # clear the dirty bit
         s._dirty = False
 
         return s
 
     def copy_state(self, target_state=None):
-        if target_state == None:
+        if target_state is None:
             print("Cannot copy an empty state (state == None)")
             return
 
@@ -190,6 +200,7 @@ class State:
         self.comments = target_state.comments.copy()
         self.stack_variables = target_state.stack_variables.copy()
         self.patches = target_state.patches.copy()
+        self.structs = target_state.structs.copy()
         
     def save(self):
         if self.client is None:
@@ -258,6 +269,23 @@ class State:
         self.stack_variables[func_addr][offset] = variable
         return True
 
+    @dirty_checker
+    def set_struct(self, old_name, struct: Struct):
+        if struct.name in self.structs \
+                and old_name == struct.name \
+                and self.structs[struct.name] == struct:
+            # no updated is required
+            return False
+
+        # try to remove the old struct reference
+        try:
+            del self.structs[old_name]
+        except KeyError:
+            pass
+
+        # set the new struct
+        self.structs[struct.name] = struct
+
     #
     # Pullers
     #
@@ -310,25 +338,11 @@ class State:
             raise KeyError("No stack variables are defined for function %#x." % func_addr)
         return self.stack_variables[func_addr].items()
 
-    # TODO: it would be better if we stored the function addr with every state object, like comments
-    def get_modified_addrs(self):
-        """
-        Gets ever address that has been touched in the current state.
-        Returns a set of those addresses.
+    def get_struct(self, struct_name):
+        if struct_name not in self.structs:
+            raise KeyError(f"No struct by the name {struct_name} defined.")
+        return self.structs[struct_name]
 
-        @rtype: Set(int)
-        """
-        moded_addrs = set()
-        # ==== functions ==== #
-        for addr in self.functions:
-            moded_addrs.add(addr)
+    def get_structs(self):
+        return self.structs.values()
 
-        # ==== comments ==== #
-        for addr in self.comments:
-            moded_addrs.add(addr)
-
-        # ==== stack vars ==== #
-        for addr in self.stack_variables:
-            moded_addrs.add(addr)
-
-        return moded_addrs
