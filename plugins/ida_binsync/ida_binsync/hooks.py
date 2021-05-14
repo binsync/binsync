@@ -42,6 +42,7 @@ import idc
 
 from . import compat
 from .controller import BinsyncController
+from binsync.data.struct import Struct
 
 
 #
@@ -200,41 +201,41 @@ class IDBHooks(ida_idp.IDB_Hooks):
     @quite_init_checker
     def struc_created(self, tid):
         print("struct created")
-        return
-        name = ida_struct.get_struc_name(tid)
-        is_union = ida_struct.is_union(tid)
-        self._send_packet(evt.StrucCreatedEvent(tid, name, is_union))
+        self.ida_struct_changed(tid)
+        #is_union = ida_struct.is_union(tid)
         return 0
 
     # XXX - use struc_deleted(self, struc_id) instead?
     @quite_init_checker
     def deleting_struc(self, sptr):
         print("struct deleted")
-        return
-        sname = ida_struct.get_struc_name(sptr.id)
-        self._send_packet(evt.StrucDeletedEvent(sname))
+        self.ida_struct_changed(sptr.id)
         return 0
 
     @quite_init_checker
     def struc_align_changed(self, sptr):
-        print("struc_align_changed() not implemented yet")
+        self.ida_struct_changed(sptr.id)
         return 0
 
     # XXX - use struc_renamed(self, sptr) instead?
     @quite_init_checker
     def renaming_struc(self, id, oldname, newname):
         print(f"rename struc: {id} | {oldname} | {newname}")
+        self.ida_struct_changed(id, old_name=oldname)
         return 0
 
     # XXX - use struc_expanded(self, sptr) instead
     @quite_init_checker
     def expanding_struc(self, sptr, offset, delta):
-        sname = ida_struct.get_struc_name(sptr.id)
+        self.ida_struct_changed(sptr.id)
         return 0
 
     @quite_init_checker
     def struc_member_created(self, sptr, mptr):
         print("struc member created")
+        self.ida_struct_changed(sptr.id)
+        return 0
+
         extra = {}
         sname = ida_struct.get_struc_name(sptr.id)
         fieldname = ida_struct.get_member_name(mptr.id)
@@ -260,7 +261,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def struc_member_deleted(self, sptr, off1, off2):
-        sname = ida_struct.get_struc_name(sptr.id)
+        self.ida_struct_changed(sptr.id)
         return 0
 
     @quite_init_checker
@@ -297,12 +298,11 @@ class IDBHooks(ida_idp.IDB_Hooks):
             self.controller.make_controller_cmd(self.controller.push_stack_variable,
                                                 func_addr, stack_offset, newname, type_str, size)
 
-
-
-        # actual struct
+        # an actual struct
         elif isinstance(s_type, str):
-            print("Not implemented")
+            self.ida_struct_changed(sptr.id)
 
+        # something else
         else:
             print("Error: bad parsing")
 
@@ -311,6 +311,14 @@ class IDBHooks(ida_idp.IDB_Hooks):
     @quite_init_checker
     def struc_member_changed(self, sptr, mptr):
         print("struc member changed")
+
+        sname = ida_struct.get_struc_name(sptr.id)
+        s_type = compat.parse_struct_type(sname)
+        if isinstance(s_type, str):
+            self.ida_struct_changed(sptr.id)
+
+        return 0
+
         extra = {}
 
         sname = ida_struct.get_struc_name(sptr.id)
@@ -400,13 +408,22 @@ class IDBHooks(ida_idp.IDB_Hooks):
             self.ida_comment_changed(cmt, ea, "cmt")
         return 0
 
-    def ida_comment_changed(self, comment, address, cmt_type):
+    #
+    #   Helpers
+    #
+
+    def ida_comment_changed(self, comment: str, address: int, cmt_type: str):
+        """
+        @param comment:
+        @param address:
+        @param cmt_type:
+        @return:
+        """
         # disass comment changed
         if cmt_type == "cmt":
             # find the location this comment exists
             func_addr = idaapi.get_func(address).start_ea
             self.controller.make_controller_cmd(self.controller.push_comment, address, comment)
-
 
         # function comment changed
         elif cmt_type == "range":
@@ -416,6 +433,36 @@ class IDBHooks(ida_idp.IDB_Hooks):
         # XXX: other?
         elif cmt_type == "extra":
             return 0
+
+        return 0
+
+    def ida_struct_changed(self, sid: int, old_name=None):
+        """
+        @param sid:         The struct id
+        @param old_name:    The struct name before renaming (used if renamed)
+        @return:
+
+        TODO:
+        Get struct size.
+        Iterate through each member in the struct.
+        """
+        # parse the info of the current struct
+        new_name = ida_struct.get_struc_name(sid)
+        sptr = ida_struct.get_struc(sid)
+        s_size = ida_struct.get_struc_size(sptr)
+
+        # convert the ida_struct into a binsync_struct
+        binsync_struct = Struct(new_name, s_size, [])
+        for mptr in sptr.members:
+            mid = mptr.id
+            m_name = ida_struct.get_member_name(mid)
+            m_off = mptr.soff
+            m_type = ida_typeinf.idc_get_type(mptr.id) if mptr.has_ti() else None
+            m_size = ida_struct.get_member_size(mptr)
+            binsync_struct.add_struct_member(m_name, m_off, m_type, m_size)
+
+        # make the controller update the local state and push
+        self.controller.make_controller_cmd(self.controller.push_struct, binsync_struct, old_name)
 
         return 0
 
@@ -574,6 +621,7 @@ class HexRaysHooks:
                 func = ida_funcs.get_func(func_ea)
                 if ida_funcs.func_contains(func, ea):
                     vu.refresh_view(False)
+
 
 class MasterHook:
     def __init__(self, controller):

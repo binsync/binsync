@@ -108,8 +108,8 @@ class State:
             add_data(index, path, toml.dumps(StackVariable.dump_many(stack_vars)).encode())
 
         # dump structs, one file per struct
-        for struct in self.structs:
-            path = os.path.join('structs', f"{struct.name}.toml")
+        for s_name, struct in self.structs.items():
+            path = os.path.join('structs', f"{s_name}.toml")
             add_data(index, path, toml.dumps(struct.dump()).encode())
 
     @staticmethod
@@ -270,18 +270,14 @@ class State:
         return True
 
     @dirty_checker
-    def set_struct(self, old_name, struct: Struct):
+    def set_struct(self, struct: Struct, old_name: str):
         if struct.name in self.structs \
-                and old_name == struct.name \
                 and self.structs[struct.name] == struct:
             # no updated is required
             return False
 
-        # try to remove the old struct reference
-        try:
+        if old_name is not None:
             del self.structs[old_name]
-        except KeyError:
-            pass
 
         # set the new struct
         self.structs[struct.name] = struct

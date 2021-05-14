@@ -200,6 +200,11 @@ class BinsyncController:
             time.sleep(0.8)
             self.queue_lock.release()
 
+    """
+    TODO:
+    there is a bug here since we do a state read in another thread at possibly the same time.
+    
+    """
     def pull_routine(self):
         while True:
             # pull the repo every 10 seconds
@@ -508,6 +513,12 @@ class BinsyncController:
         state.set_stack_variable(func_addr, stack_offset, v)
 
         self._client.last_push(last_push_func, last_push_time, func_name)
+
+    @init_checker
+    @make_state
+    def push_struct(self, struct, old_name, user=None, state=None):
+        state.set_struct(struct, old_name)
+
 
     #
     # Utils

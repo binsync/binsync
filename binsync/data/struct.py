@@ -44,7 +44,7 @@ class StructMember:
 
     @classmethod
     def parse(cls, s):
-        sv = StructMember(None, None, None, None, None)
+        sv = StructMember(None, None, None, None)
         sv.__setstate__(toml.loads(s))
         return sv
 
@@ -66,10 +66,12 @@ class Struct(Base):
         self.struct_members = struct_members
 
     def __getstate__(self):
-        strcut_data = {"struct_metadata": {"name": self.name, "size": self.size}}
+        struct_data = {"struct_metadata": {"name": self.name, "size": self.size}}
         for member in self.struct_members:
-            strcut_data.update({member.offset: member.__getstate__()})
-        return strcut_data
+            struct_data.update({"%x" % member.offset: member.__getstate__()})
+
+        print(struct_data)
+        return struct_data
 
     def __setstate__(self, state):
         struct_members = list()
@@ -82,8 +84,11 @@ class Struct(Base):
 
         self.struct_members = struct_members
 
+    def add_struct_member(self, mname, moff, mtype, size):
+        self.struct_members.append(StructMember(mname, moff, mtype, size))
+
     def dump(self):
-        return toml.dumps(self.__getstate__())
+        return self.__getstate__()
 
     @classmethod
     def parse(cls, s):
