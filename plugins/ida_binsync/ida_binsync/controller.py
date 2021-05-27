@@ -290,7 +290,6 @@ class BinsyncController:
         @return:
         """
         # sanity check, the desired user has some structs to sync
-        print(f"PULLING FROM USER: {user}")
         pulled_structs: List[Struct] = self.pull_structs(user=user, state=state)
         if len(pulled_structs) <= 0:
             print(f"[Binsync]: User {user} has no structs to sync!")
@@ -336,7 +335,10 @@ class BinsyncController:
                     #compat.set_decomp_comments(_func.addr, {head: comment})
                     #compat.set_ida_comment(head, comment, 0, func_cmt=False)
         func_comment += func_cmt_end
-        compat.set_ida_comment(_func.addr, func_comment, 1, func_cmt=True)
+
+        # apply a full function comment only if we have things to write.
+        if len(func_comment) > 0:
+            compat.set_ida_comment(_func.addr, func_comment, 1, func_cmt=True)
 
         # === stack variables === #
         existing_stack_vars = { }
@@ -390,13 +392,9 @@ class BinsyncController:
         func_addrs = self._client.state.functions.keys()
         print("[Binsync]: Target Addrs for sync:", [hex(x) for x in func_addrs])
 
-        # commit lock (stop commiting)
         for addr in func_addrs:
             ida_func = idaapi.get_func(addr)
             self.fill_function(ida_func, self._client.master_user) # semaphore inc
-        # semaphore unlock (by now we have decremented)
-        # -> rewind_time
-        # commit unlock (allow commiting)
 
     @init_checker
     @make_ro_state
@@ -457,7 +455,6 @@ class BinsyncController:
         @param state:
         @return:
         """
-        print(f"PULLING ON STATE USER: {state.user}")
         return state.get_structs()
 
 
@@ -504,7 +501,6 @@ class BinsyncController:
     @init_checker
     @make_state
     def push_comments(self, cmt_dict: Dict[int, str], user=None, state=None):
-        print(cmt_dict)
         for addr in cmt_dict:
             self.push_comment(addr, cmt_dict[addr], user=user, state=state)
         

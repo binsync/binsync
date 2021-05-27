@@ -213,7 +213,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
     @quite_init_checker
     def deleting_struc(self, sptr):
         #print("struct deleted")
-        self.ida_struct_changed(sptr.id)
+        self.ida_struct_changed(sptr.id, deleted=True)
         return 0
 
     @quite_init_checker
@@ -374,6 +374,8 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     def ida_comment_changed(self, comment: str, address: int, cmt_type: str):
         """
+        Utility function to catch all types of comment changes.
+
         @param comment:
         @param address:
         @param cmt_type:
@@ -396,16 +398,31 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
         return 0
 
-    def ida_struct_changed(self, sid: int, old_name=None, new_name=None):
+    def ida_struct_changed(self, sid: int, old_name=None, new_name=None, deleted=False):
         """
-        @param sid:         The struct id
-        @param old_name:    The struct name before renaming (used if renamed)
+        A utility function to catch all changes that can happen to a struct:
+        1. Renames
+        2. Member Changes
+        3. Deletes
+
+        Currently, any change to a struct will cause the main-thread to re-copy the entire struct from the local
+        state into the remote state. This is done so we don't need to have multiple cases for single member changes.
+
+        @param sid:         Struct ID (IDA Thing)
+        @param old_name:    Old struct name (before rename)
+        @param new_name:    New struct name (after rename)
+        @param deleted:     True only when the entire struct has been deleted.
         @return:
         """
         # parse the info of the current struct
         s_name = new_name if new_name else ida_struct.get_struc_name(sid)
         sptr = ida_struct.get_struc(sid)
         s_size = ida_struct.get_struc_size(sptr)
+
+        # if deleted, finish early
+        if deleted:
+            self.controller.make_controller_cmd(self.controller.push_struct, Struct(None, None, None), s_name)
+            return 0
 
         # convert the ida_struct into a binsync_struct
         binsync_struct = Struct(s_name, s_size, [])
@@ -418,8 +435,8 @@ class IDBHooks(ida_idp.IDB_Hooks):
             binsync_struct.add_struct_member(m_name, m_off, m_type, m_size)
 
         # make the controller update the local state and push
-        self.controller.make_controller_cmd(self.controller.push_struct, binsync_struct, old_name)
-
+        old_s_name = old_name if old_name else s_name
+        self.controller.make_controller_cmd(self.controller.push_struct, binsync_struct, old_s_name)
         return 0
 
 
