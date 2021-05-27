@@ -44,9 +44,9 @@ class StructMember:
 
     @classmethod
     def parse(cls, s):
-        sv = StructMember(None, None, None, None)
-        sv.__setstate__(toml.loads(s))
-        return sv
+        sm = StructMember(None, None, None, None)
+        sm.__setstate__(toml.loads(s))
+        return sm
 
 
 class Struct(Base):
@@ -70,7 +70,6 @@ class Struct(Base):
         for member in self.struct_members:
             struct_data.update({"%x" % member.offset: member.__getstate__()})
 
-        print(struct_data)
         return struct_data
 
     def __setstate__(self, state):
@@ -80,9 +79,17 @@ class Struct(Base):
                 self.name = state[k]["name"]
                 self.size = state[k]["size"]
             else:
-                struct_members.append(StructMember.parse(state[k]))
+                struct_members.append(StructMember.parse(toml.dumps(state[k])))
 
         self.struct_members = struct_members
+
+    def __eq__(self, other):
+        if isinstance(other, Struct):
+            for k in self.__slots__:
+                if getattr(self, k) != getattr(other, k):
+                    return False
+            return True
+        return False
 
     def add_struct_member(self, mname, moff, mtype, size):
         self.struct_members.append(StructMember(mname, moff, mtype, size))
@@ -100,6 +107,7 @@ class Struct(Base):
     def load(cls, struct_toml):
         s = Struct(None, None, None)
         s.__setstate__(struct_toml)
+        return s
 
 
 

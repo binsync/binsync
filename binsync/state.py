@@ -33,6 +33,24 @@ def dirty_checker(f):
 
     return dirtycheck
 
+def list_files_in_tree(base_tree: git.Tree):
+    """
+    Lists all the files in a repo at a given tree
+
+    :param commit: A gitpython Tree object
+    """
+
+    file_list = []
+    stack = [base_tree]
+    while len(stack) > 0:
+        tree = stack.pop()
+        # enumerate blobs (files) at this level
+        for b in tree.blobs:
+            file_list.append(b.path)
+        for subtree in tree.trees:
+            stack.append(subtree)
+
+    return file_list
 
 def add_data(index: git.IndexFile, path: str, data: bytes):
     fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
@@ -40,6 +58,12 @@ def add_data(index: git.IndexFile, path: str, data: bytes):
     with open(fullpath, 'wb') as fp:
         fp.write(data)
     index.add([fullpath])
+
+
+def remove_data(index: git.IndexFile, path: str):
+    fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
+    pathlib.Path(fullpath).parent.mkdir(parents=True, exist_ok=True)
+    index.remove([fullpath], working_tree=True)
 
 
 class State:
@@ -117,7 +141,7 @@ class State:
         return toml.loads(tree['metadata.toml'].data_stream.read().decode())
 
     @classmethod
-    def parse(cls, tree, version=None, client=None):
+    def parse(cls, tree: git.Tree, version=None, client=None):
         s = cls(None, client=client)
 
         # load metadata
@@ -177,14 +201,16 @@ class State:
                     s.stack_variables[svs[0].func_addr] = d
 
         # load structs
-        for struct in s.structs:
+        tree_files = list_files_in_tree(tree)
+        struct_files = [name for name in tree_files if name.startswith("structs")]
+        for struct_file in struct_files:
             try:
-                struct_toml = toml.loads(tree[os.path.join('structs', f'{struct.name}.toml')].data_stream.read().decode())
+                struct_toml = toml.loads(tree[struct_file].data_stream.read().decode())
             except:
                 pass
             else:
-                loaded_struct = Struct.load(struct_toml)
-                s.structs[loaded_struct.name] = loaded_struct
+                struct = Struct.load(struct_toml)
+                s.structs[struct.name] = struct
 
         # clear the dirty bit
         s._dirty = False
@@ -271,16 +297,32 @@ class State:
 
     @dirty_checker
     def set_struct(self, struct: Struct, old_name: str):
+        """
+        Sets a struct in the current state. If old_name is not defined (None), then
+        this indicates that the struct has not changed names. In that case, simply overwrite the
+        internal representation of the struct.
+
+        If the old_name is defined, than a struct has changed names. In that case, delete
+        the internal struct data and delete the related .toml file.
+
+        @param struct:
+        @param old_name:
+        @return:
+        """
         if struct.name in self.structs \
                 and self.structs[struct.name] == struct:
             # no updated is required
             return False
 
+        # delete old struct only when we know what it is
         if old_name is not None:
             del self.structs[old_name]
+            # delete the repo toml for the struct
+            remove_data(self.client.repo.index, os.path.join('structs', f'{old_name}.toml'))
 
         # set the new struct
-        self.structs[struct.name] = struct
+        if struct.name is not None:
+            self.structs[struct.name] = struct
 
     #
     # Pullers

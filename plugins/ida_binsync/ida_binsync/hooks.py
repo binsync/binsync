@@ -71,7 +71,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def local_types_changed(self):
-        print("local type changed")
+        #print("local type changed")
         return
 
         changed_types = []
@@ -126,7 +126,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def enum_created(self, enum):
-        print("enum created")
+        #print("enum created")
         return
 
         name = ida_enum.get_enum_name(enum)
@@ -136,14 +136,14 @@ class IDBHooks(ida_idp.IDB_Hooks):
     # XXX - use enum_deleted(self, id) instead?
     @quite_init_checker
     def deleting_enum(self, id):
-        print("enum deleted")
+        #print("enum deleted")
         return 0
         enum_name = ida_enum.get_enum_name(id)
 
     # XXX - use enum_renamed(self, id) instead?
     @quite_init_checker
     def renaming_enum(self, id, is_enum, newname):
-        print("enum renamed")
+        #print("enum renamed")
         return
 
         if is_enum:
@@ -155,7 +155,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def enum_bf_changed(self, id):
-        print("enum renamed")
+        #print("enum renamed")
         return
         bf_flag = 1 if ida_enum.is_bf(id) else 0
         ename = ida_enum.get_enum_name(id)
@@ -164,7 +164,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def enum_cmt_changed(self, tid, repeatable_cmt):
-        print("enum renamed")
+        #print("enum renamed")
         return
         cmt = ida_enum.get_enum_cmt(tid, repeatable_cmt)
         emname = ida_enum.get_enum_name(tid)
@@ -173,7 +173,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def enum_member_created(self, id, cid):
-        print("enum member created")
+        #print("enum member created")
         return
         ename = ida_enum.get_enum_name(id)
         name = ida_enum.get_enum_member_name(cid)
@@ -187,7 +187,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
     # XXX - use enum_member_deleted(self, id, cid) instead?
     @quite_init_checker
     def deleting_enum_member(self, id, cid):
-        print("enum member")
+        #print("enum member")
         return
         ename = ida_enum.get_enum_name(id)
         value = ida_enum.get_enum_member_value(cid)
@@ -198,9 +198,13 @@ class IDBHooks(ida_idp.IDB_Hooks):
         )
         return 0
 
+    #
+    #   Struct Hooks
+    #
+
     @quite_init_checker
     def struc_created(self, tid):
-        print("struct created")
+        #print("struct created")
         self.ida_struct_changed(tid)
         #is_union = ida_struct.is_union(tid)
         return 0
@@ -208,7 +212,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
     # XXX - use struc_deleted(self, struc_id) instead?
     @quite_init_checker
     def deleting_struc(self, sptr):
-        print("struct deleted")
+        #print("struct deleted")
         self.ida_struct_changed(sptr.id)
         return 0
 
@@ -220,43 +224,20 @@ class IDBHooks(ida_idp.IDB_Hooks):
     # XXX - use struc_renamed(self, sptr) instead?
     @quite_init_checker
     def renaming_struc(self, id, oldname, newname):
-        print(f"rename struc: {id} | {oldname} | {newname}")
-        self.ida_struct_changed(id, old_name=oldname)
+        #print(f"rename struc: {id} | {oldname} | {newname}")
+        self.ida_struct_changed(id, old_name=oldname, new_name=newname)
         return 0
 
-    # XXX - use struc_expanded(self, sptr) instead
     @quite_init_checker
-    def expanding_struc(self, sptr, offset, delta):
+    def struc_expanded(self, sptr):
+        #print("struct expanded")
         self.ida_struct_changed(sptr.id)
         return 0
 
     @quite_init_checker
     def struc_member_created(self, sptr, mptr):
-        print("struc member created")
+        #print("struc member created")
         self.ida_struct_changed(sptr.id)
-        return 0
-
-        extra = {}
-        sname = ida_struct.get_struc_name(sptr.id)
-        fieldname = ida_struct.get_member_name(mptr.id)
-        offset = 0 if mptr.unimem() else mptr.soff
-        flag = mptr.flag
-        nbytes = mptr.eoff if mptr.unimem() else mptr.eoff - mptr.soff
-        mt = ida_nalt.opinfo_t()
-        is_not_data = ida_struct.retrieve_member_info(mt, mptr)
-        if is_not_data:
-            if flag & ida_bytes.off_flag():
-                extra["target"] = mt.ri.target
-                extra["base"] = mt.ri.base
-                extra["tdelta"] = mt.ri.tdelta
-                extra["flags"] = mt.ri.flags
-            # Is it really possible to create an enum?
-            elif flag & ida_bytes.enum_flag():
-                extra["serial"] = mt.ec.serial
-            elif flag & ida_bytes.stru_flag():
-                extra["struc_name"] = ida_struct.get_struc_name(mt.tid)
-                if flag & ida_bytes.strlit_flag():
-                    extra["strtype"] = mt.strtype
         return 0
 
     @quite_init_checker
@@ -265,7 +246,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         return 0
 
     @quite_init_checker
-    def renaming_struc_member(self, sptr, mptr, newname):
+    def struc_member_renamed(self, sptr, mptr):
         """
         Handles renaming of two things:
         1. Global Structs
@@ -273,7 +254,6 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
         :param sptr:    Struct Pointer
         :param mptr:    Member Pointer
-        :param newname: New Member Name
         :return:
         """
 
@@ -293,10 +273,11 @@ class IDBHooks(ida_idp.IDB_Hooks):
             stack_offset = mptr.soff - frame_size + last_member_size
             size = idaapi.get_member_size(mptr)
             type_str = self.controller._get_type_str(mptr.flag)
+            new_name = ida_struct.get_member_name(mptr.id)
 
             # do the change on a new thread
             self.controller.make_controller_cmd(self.controller.push_stack_variable,
-                                                func_addr, stack_offset, newname, type_str, size)
+                                                func_addr, stack_offset, new_name, type_str, size)
 
         # an actual struct
         elif isinstance(s_type, str):
@@ -310,34 +291,13 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def struc_member_changed(self, sptr, mptr):
-        print("struc member changed")
+        #print("struc member changed")
 
         sname = ida_struct.get_struc_name(sptr.id)
         s_type = compat.parse_struct_type(sname)
         if isinstance(s_type, str):
             self.ida_struct_changed(sptr.id)
 
-        return 0
-
-        extra = {}
-
-        sname = ida_struct.get_struc_name(sptr.id)
-        soff = 0 if mptr.unimem() else mptr.soff
-        flag = mptr.flag
-        mt = ida_nalt.opinfo_t()
-        is_not_data = ida_struct.retrieve_member_info(mt, mptr)
-        if is_not_data:
-            if flag & ida_bytes.off_flag():
-                extra["target"] = mt.ri.target
-                extra["base"] = mt.ri.base
-                extra["tdelta"] = mt.ri.tdelta
-                extra["flags"] = mt.ri.flags
-            elif flag & ida_bytes.enum_flag():
-                extra["serial"] = mt.ec.serial
-            elif flag & ida_bytes.stru_flag():
-                extra["struc_name"] = ida_struct.get_struc_name(mt.tid)
-                if flag & ida_bytes.strlit_flag():
-                    extra["strtype"] = mt.strtype
         return 0
 
     @quite_init_checker
@@ -359,7 +319,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def renamed(self, ea, new_name, local_name):
-        print("renamed(ea = %x, new_name = %s, local_name = %d)" % (ea, new_name, local_name))
+        # #print("renamed(ea = %x, new_name = %s, local_name = %d)" % (ea, new_name, local_name))
         if ida_struct.is_member_id(ea) or ida_struct.get_struc(ea) or ida_enum.get_enum_name(ea):
             # Drop hook to avoid duplicate since already handled by the following hooks:
             # - renaming_struc_member() -> sends 'StrucMemberRenamedEvent'
@@ -384,7 +344,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def cmt_changed(self, ea, repeatable_cmt):
-        print("cmt changed")
+        #print("cmt changed")
         cmt = ida_bytes.get_cmt(ea, repeatable_cmt)
         if cmt:
             self.ida_comment_changed(cmt, ea, "cmt")
@@ -392,7 +352,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def range_cmt_changed(self, kind, a, cmt, repeatable):
-        print("range cmt changed")
+        #print("range cmt changed")
         # verify it's a function comment
         cmt = idc.get_func_cmt(a.start_ea, repeatable)
         if cmt:
@@ -402,7 +362,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def extra_cmt_changed(self, ea, line_idx, cmt):
-        print("extra cmt changed")
+        #print("extra cmt changed")
         cmt = ida_bytes.get_cmt(ea, 0)
         if cmt:
             self.ida_comment_changed(cmt, ea, "cmt")
@@ -436,28 +396,24 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
         return 0
 
-    def ida_struct_changed(self, sid: int, old_name=None):
+    def ida_struct_changed(self, sid: int, old_name=None, new_name=None):
         """
         @param sid:         The struct id
         @param old_name:    The struct name before renaming (used if renamed)
         @return:
-
-        TODO:
-        Get struct size.
-        Iterate through each member in the struct.
         """
         # parse the info of the current struct
-        new_name = ida_struct.get_struc_name(sid)
+        s_name = new_name if new_name else ida_struct.get_struc_name(sid)
         sptr = ida_struct.get_struc(sid)
         s_size = ida_struct.get_struc_size(sptr)
 
         # convert the ida_struct into a binsync_struct
-        binsync_struct = Struct(new_name, s_size, [])
+        binsync_struct = Struct(s_name, s_size, [])
         for mptr in sptr.members:
             mid = mptr.id
             m_name = ida_struct.get_member_name(mid)
             m_off = mptr.soff
-            m_type = ida_typeinf.idc_get_type(mptr.id) if mptr.has_ti() else None
+            m_type = ida_typeinf.idc_get_type(mptr.id) if mptr.has_ti() else ""
             m_size = ida_struct.get_member_size(mptr)
             binsync_struct.add_struct_member(m_name, m_off, m_type, m_size)
 
@@ -465,6 +421,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         self.controller.make_controller_cmd(self.controller.push_struct, binsync_struct, old_name)
 
         return 0
+
 
 class IDPHooks(ida_idp.IDP_Hooks):
     def __init__(self, controller):
@@ -508,7 +465,7 @@ class HexRaysHooks:
             ea = ida_kernwin.get_screen_ea()
             func = ida_funcs.get_func(ea)
 
-            print("INSIDE HXE CALLBACK!")
+            #print("INSIDE HXE CALLBACK!")
             if func is None:
                 return 0
 
@@ -530,7 +487,7 @@ class HexRaysHooks:
             cmt = ida_hexrays.user_cmts_second(it)
             cmts[tl.ea] = str(cmt)
 
-            print(f"TL EA: {tl.ea} | TL ITP: {tl.itp}")
+            #print(f"TL EA: {tl.ea} | TL ITP: {tl.itp}")
             it = ida_hexrays.user_cmts_next(it)
         ida_hexrays.user_cmts_free(user_cmts)
         return cmts
@@ -544,11 +501,11 @@ class HexRaysHooks:
         if len(cmts) == 0:
             return
 
-        print(f"COMMENTS: {cmts}")
+        #print(f"COMMENTS: {cmts}")
         # never do the same push twice
         if cmts != self._cached_funcs[ea]["cmts"]:
             # thread it!
-            print(f"SENDING {cmts}")
+            #print(f"SENDING {cmts}")
             self.controller.make_controller_cmd(self.controller.push_comments, cmts)
 
             # cache so we don't double push a copy
@@ -559,7 +516,7 @@ class HexRaysHooks:
         dct = {}
         lvinf = ida_hexrays.lvar_uservec_t()
         ret = ida_hexrays.restore_user_lvar_settings(lvinf, ea)
-        # print("_get_user_lvar_settings: ret = %x" % ret)
+        # #print("_get_user_lvar_settings: ret = %x" % ret)
         if ret:
             dct["lvvec"] = []
             for lv in lvinf.lvvec:

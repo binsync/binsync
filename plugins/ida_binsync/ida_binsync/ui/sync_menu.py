@@ -157,8 +157,8 @@ class SyncMenu():
             print(f"[Binsync]: All data has been synced from user: {user}.")
 
         elif action == "Sync Structs":
-            # TODO: implement struct syncing
-            print(f"[Binsync]: Struct Syncing not implemented yet.")
+            self.controller.fill_structs(user=user)
+            print(f"[Binsync]: All structs have been synced from user: {user}")
 
         else:
             print(f"[Binsync]: Error parsing sync action!")
