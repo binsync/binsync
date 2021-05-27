@@ -25,6 +25,7 @@ import time
 import datetime
 import logging
 from typing import Dict, List, Tuple
+from collections import OrderedDict
 
 from PyQt5.QtWidgets import QMessageBox
 
@@ -32,10 +33,12 @@ import ida_hexrays
 import idc
 import idaapi
 import idautils
+import ida_struct
+import ida_idaapi
 
 import binsync
 from binsync import Client
-from binsync.data import StackVariable, StackOffsetType, Function
+from binsync.data import StackVariable, StackOffsetType, Function, Struct
 from . import compat
 
 _l = logging.getLogger(name=__name__)
@@ -88,6 +91,7 @@ def make_ro_state(f):
         if state is None:
             state = self._client.get_state(user=user)
         kwargs['state'] = state
+        kwargs['user'] = user
         return f(self, *args, **kwargs)
     return state_check
 
@@ -168,38 +172,42 @@ class BinsyncController:
 
         # lock
         self.queue_lock = threading.Lock()
-        self.cmd_queue = list()
+        self.cmd_queue = OrderedDict()
 
         # start the pull routine
         self.pull_thread = threading.Thread(target=self.pull_routine)
         self.pull_thread.setDaemon(True)
         self.pull_thread.start()
 
-        # start the command routine
-        self.cmd_thread = threading.Thread(target=self.cmd_routine)
-        self.cmd_thread.setDaemon(True)
-        self.cmd_thread.start()
-
     def make_controller_cmd(self, cmd_func, *args, **kwargs):
-        self.cmd_queue.append((cmd_func, args, kwargs))
+        self.queue_lock.acquire()
+        if cmd_func == self.push_struct:
+            self.cmd_queue[args[0].name] = (cmd_func, args, kwargs)
+        else:
+            self.cmd_queue[time.time()] = (cmd_func, args, kwargs)
+        self.queue_lock.release()
 
-    def cmd_routine(self):
-        while True:
-            self.queue_lock.acquire()
-            if len(self.cmd_queue) > 0:
-                # pop the first command from the queue
-                cmd = self.cmd_queue.pop(0)
-
-                # parse the command
-                func = cmd[0]
-                f_args = cmd[1]
-                f_kargs = cmd[2]
-
-                # call it!
-                func(*f_args, **f_kargs)
-            time.sleep(0.8)
+    def eval_cmd_queue(self):
+        self.queue_lock.acquire()
+        if len(self.cmd_queue) > 0:
+            # pop the first command from the queue
+            cmd = self.cmd_queue.popitem(last=False)[1]
             self.queue_lock.release()
 
+            # parse the command
+            func = cmd[0]
+            f_args = cmd[1]
+            f_kargs = cmd[2]
+
+            # call it!
+            func(*f_args, **f_kargs)
+            return 0
+        self.queue_lock.release()
+
+    """
+    TODO:
+    there is a bug here since we do a state read in another thread at possibly the same time.
+    """
     def pull_routine(self):
         while True:
             # pull the repo every 10 seconds
@@ -218,6 +226,10 @@ class BinsyncController:
                     except RuntimeError:
                         # the panel has been closed
                         self.control_panel = None
+
+            # run an operation every second
+            if self.check_client() and self._client.has_remote:
+                self.eval_cmd_queue()
 
             # Snooze
             time.sleep(1)
@@ -269,6 +281,26 @@ class BinsyncController:
 
     @init_checker
     @make_ro_state
+    def fill_structs(self, user=None, state=None):
+        """
+        Grab all the structs from a specified user, then fill them locally
+
+        @param user:
+        @param state:
+        @return:
+        """
+        # sanity check, the desired user has some structs to sync
+        pulled_structs: List[Struct] = self.pull_structs(user=user, state=state)
+        if len(pulled_structs) <= 0:
+            print(f"[Binsync]: User {user} has no structs to sync!")
+            return 0
+
+        # convert each binsync struct into an ida struct and updated it
+        for struct in pulled_structs:
+            compat.update_struct(struct, self)
+
+    @init_checker
+    @make_ro_state
     def fill_function(self, ida_func, user=None, state=None):
         """
         Grab all relevant information from the specified user and fill the @ida_func.
@@ -303,7 +335,10 @@ class BinsyncController:
                     #compat.set_decomp_comments(_func.addr, {head: comment})
                     #compat.set_ida_comment(head, comment, 0, func_cmt=False)
         func_comment += func_cmt_end
-        compat.set_ida_comment(_func.addr, func_comment, 1, func_cmt=True)
+
+        # apply a full function comment only if we have things to write.
+        if len(func_comment) > 0:
+            compat.set_ida_comment(_func.addr, func_comment, 1, func_cmt=True)
 
         # === stack variables === #
         existing_stack_vars = { }
@@ -357,13 +392,9 @@ class BinsyncController:
         func_addrs = self._client.state.functions.keys()
         print("[Binsync]: Target Addrs for sync:", [hex(x) for x in func_addrs])
 
-        # commit lock (stop commiting)
         for addr in func_addrs:
             ida_func = idaapi.get_func(addr)
             self.fill_function(ida_func, self._client.master_user) # semaphore inc
-        # semaphore unlock (by now we have decremented)
-        # -> rewind_time
-        # commit unlock (allow commiting)
 
     @init_checker
     @make_ro_state
@@ -415,6 +446,20 @@ class BinsyncController:
             return None
 
     @init_checker
+    @make_ro_state
+    def pull_structs(self, user=None, state=None):
+        """
+        Pull structs downwards.
+
+        @param user:
+        @param state:
+        @return:
+        """
+        return state.get_structs()
+
+
+
+    @init_checker
     @make_state
     def remove_all_comments(self, ida_func, user=None, state=None):
         for start_ea, end_ea in idautils.Chunks(ida_func):
@@ -456,7 +501,6 @@ class BinsyncController:
     @init_checker
     @make_state
     def push_comments(self, cmt_dict: Dict[int, str], user=None, state=None):
-        print(cmt_dict)
         for addr in cmt_dict:
             self.push_comment(addr, cmt_dict[addr], user=user, state=state)
         
@@ -508,6 +552,12 @@ class BinsyncController:
         state.set_stack_variable(func_addr, stack_offset, v)
 
         self._client.last_push(last_push_func, last_push_time, func_name)
+
+    @init_checker
+    @make_state
+    def push_struct(self, struct, old_name, user=None, state=None):
+        state.set_struct(struct, old_name)
+
 
     #
     # Utils

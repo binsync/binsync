@@ -13,6 +13,7 @@ import toml
 import git
 
 from .data import Function, Comment, Patch, StackVariable
+from .data.struct import Struct
 from .errors import MetadataNotFoundError
 from .utils import is_py2, is_py3
 
@@ -32,6 +33,24 @@ def dirty_checker(f):
 
     return dirtycheck
 
+def list_files_in_tree(base_tree: git.Tree):
+    """
+    Lists all the files in a repo at a given tree
+
+    :param commit: A gitpython Tree object
+    """
+
+    file_list = []
+    stack = [base_tree]
+    while len(stack) > 0:
+        tree = stack.pop()
+        # enumerate blobs (files) at this level
+        for b in tree.blobs:
+            file_list.append(b.path)
+        for subtree in tree.trees:
+            stack.append(subtree)
+
+    return file_list
 
 def add_data(index: git.IndexFile, path: str, data: bytes):
     fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
@@ -39,6 +58,12 @@ def add_data(index: git.IndexFile, path: str, data: bytes):
     with open(fullpath, 'wb') as fp:
         fp.write(data)
     index.add([fullpath])
+
+
+def remove_data(index: git.IndexFile, path: str):
+    fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
+    pathlib.Path(fullpath).parent.mkdir(parents=True, exist_ok=True)
+    index.remove([fullpath], working_tree=True)
 
 
 class State:
@@ -63,9 +88,10 @@ class State:
         self._dirty = True  # type: bool
 
         # data
-        self.functions = {}  # type: Dict[int,Function]
-        self.comments = SortedDict()  # type: Dict[int,str]
-        self.stack_variables = defaultdict(dict)  # type: Dict[int,Dict[int,StackVariable]]
+        self.functions = {}  # type: Dict[int, Function]
+        self.comments = SortedDict()  # type: Dict[int, str]
+        self.stack_variables = defaultdict(dict)  # type: Dict[int, Dict[int, StackVariable]]
+        self.structs = defaultdict(dict) # type: Dict[str, Struct]
         self.patches = SortedDict()
 
     @property
@@ -105,12 +131,17 @@ class State:
             path = os.path.join('stack_vars', "%08x.toml" % func_addr)
             add_data(index, path, toml.dumps(StackVariable.dump_many(stack_vars)).encode())
 
+        # dump structs, one file per struct
+        for s_name, struct in self.structs.items():
+            path = os.path.join('structs', f"{s_name}.toml")
+            add_data(index, path, toml.dumps(struct.dump()).encode())
+
     @staticmethod
     def load_metadata(tree):
         return toml.loads(tree['metadata.toml'].data_stream.read().decode())
 
     @classmethod
-    def parse(cls, tree, version=None, client=None):
+    def parse(cls, tree: git.Tree, version=None, client=None):
         s = cls(None, client=client)
 
         # load metadata
@@ -169,13 +200,25 @@ class State:
                 if svs:
                     s.stack_variables[svs[0].func_addr] = d
 
+        # load structs
+        tree_files = list_files_in_tree(tree)
+        struct_files = [name for name in tree_files if name.startswith("structs")]
+        for struct_file in struct_files:
+            try:
+                struct_toml = toml.loads(tree[struct_file].data_stream.read().decode())
+            except:
+                pass
+            else:
+                struct = Struct.load(struct_toml)
+                s.structs[struct.name] = struct
+
         # clear the dirty bit
         s._dirty = False
 
         return s
 
     def copy_state(self, target_state=None):
-        if target_state == None:
+        if target_state is None:
             print("Cannot copy an empty state (state == None)")
             return
 
@@ -183,6 +226,7 @@ class State:
         self.comments = target_state.comments.copy()
         self.stack_variables = target_state.stack_variables.copy()
         self.patches = target_state.patches.copy()
+        self.structs = target_state.structs.copy()
         
     def save(self):
         if self.client is None:
@@ -251,6 +295,35 @@ class State:
         self.stack_variables[func_addr][offset] = variable
         return True
 
+    @dirty_checker
+    def set_struct(self, struct: Struct, old_name: str):
+        """
+        Sets a struct in the current state. If old_name is not defined (None), then
+        this indicates that the struct has not changed names. In that case, simply overwrite the
+        internal representation of the struct.
+
+        If the old_name is defined, than a struct has changed names. In that case, delete
+        the internal struct data and delete the related .toml file.
+
+        @param struct:
+        @param old_name:
+        @return:
+        """
+        if struct.name in self.structs \
+                and self.structs[struct.name] == struct:
+            # no updated is required
+            return False
+
+        # delete old struct only when we know what it is
+        if old_name is not None:
+            del self.structs[old_name]
+            # delete the repo toml for the struct
+            remove_data(self.client.repo.index, os.path.join('structs', f'{old_name}.toml'))
+
+        # set the new struct
+        if struct.name is not None:
+            self.structs[struct.name] = struct
+
     #
     # Pullers
     #
@@ -303,25 +376,11 @@ class State:
             raise KeyError("No stack variables are defined for function %#x." % func_addr)
         return self.stack_variables[func_addr].items()
 
-    # TODO: it would be better if we stored the function addr with every state object, like comments
-    def get_modified_addrs(self):
-        """
-        Gets ever address that has been touched in the current state.
-        Returns a set of those addresses.
+    def get_struct(self, struct_name):
+        if struct_name not in self.structs:
+            raise KeyError(f"No struct by the name {struct_name} defined.")
+        return self.structs[struct_name]
 
-        @rtype: Set(int)
-        """
-        moded_addrs = set()
-        # ==== functions ==== #
-        for addr in self.functions:
-            moded_addrs.add(addr)
+    def get_structs(self):
+        return self.structs.values()
 
-        # ==== comments ==== #
-        for addr in self.comments:
-            moded_addrs.add(addr)
-
-        # ==== stack vars ==== #
-        for addr in self.stack_variables:
-            moded_addrs.add(addr)
-
-        return moded_addrs
