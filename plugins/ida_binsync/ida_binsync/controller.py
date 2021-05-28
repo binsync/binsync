@@ -218,7 +218,6 @@ class BinsyncController:
     def inc_api_count(self):
         self.api_lock.acquire()
         self.api_count += 1
-        print(self.api_count)
         self.api_lock.release()
 
     def make_controller_cmd(self, cmd_func, *args, **kwargs):
