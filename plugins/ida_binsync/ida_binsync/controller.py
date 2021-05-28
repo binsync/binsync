@@ -56,6 +56,34 @@ def init_checker(f):
         return f(self, *args, **kwargs)
     return initcheck
 
+def last_push(f):
+    """
+    Once a push function has been executed, perform an update on the last push time,
+    last push function, and the local function name for the master user. 
+    """
+    @wraps(f)
+    def set_last_push(self, *args, **kwargs):
+        api_set = kwargs.pop('api_set', None)
+        if api_set is not None:
+            f(self, *args, **kwargs)
+        else:
+            # Get the attribute address
+            attr_addr = args[0] # First arg should be attr_addr. If not, be scared.
+
+            # Create our last push time, last push func, and func name
+            last_push_time = int(time.time())
+            last_push_func = compat.ida_func_addr(attr_addr)
+            func_name = compat.get_func_name(last_push_func)
+
+            # Call the function first. This way any changes
+            # can be set. (func changed, time finally modified, etc.)
+            f(self, *args, **kwargs)
+
+            # Call the binsync proper client last_push
+            self._client.last_push(last_push_func, last_push_time, func_name)
+
+    return set_last_push
+        
 
 def make_state(f):
     """
@@ -170,14 +198,27 @@ class BinsyncController:
         self.last_push_time: int = None
         self.last_push_func: int = None
 
-        # lock
+        # command locks
         self.queue_lock = threading.Lock()
         self.cmd_queue = OrderedDict()
+
+        # api locks
+        self.api_lock = threading.Lock()
+        self.api_count = 0
 
         # start the pull routine
         self.pull_thread = threading.Thread(target=self.pull_routine)
         self.pull_thread.setDaemon(True)
         self.pull_thread.start()
+
+    #
+    #   Multithreaded locks and setters
+    #
+
+    def inc_api_count(self):
+        self.api_lock.acquire()
+        self.api_count += 1
+        self.api_lock.release()
 
     def make_controller_cmd(self, cmd_func, *args, **kwargs):
         self.queue_lock.acquire()
@@ -312,6 +353,7 @@ class BinsyncController:
             return
 
         if compat.get_func_name(ida_func.start_ea) != _func.name:
+            self.inc_api_count()
             compat.set_ida_func_name(ida_func.start_ea, _func.name)
 
         # === comments === #
@@ -330,14 +372,17 @@ class BinsyncController:
                     continue
 
                 comment = self.pull_comment(head, user=user, state=state)
-                if comment is not None:
+                if comment is not None and len(comment) > 0:
                     func_cmt_end += f"\n{hex(head)}: {comment}"
                     #compat.set_decomp_comments(_func.addr, {head: comment})
-                    #compat.set_ida_comment(head, comment, 0, func_cmt=False)
+                    self.inc_api_count()
+                    compat.set_ida_comment(head, comment, 0, func_cmt=False)
+
         func_comment += func_cmt_end
 
         # apply a full function comment only if we have things to write.
-        if len(func_comment) > 0:
+        if len(func_comment) > 1:
+            self.inc_api_count()
             compat.set_ida_comment(_func.addr, func_comment, 1, func_cmt=True)
 
         # === stack variables === #
@@ -370,6 +415,7 @@ class BinsyncController:
                         and stack_var.type == type_str:
                     continue
                 # rename the existing variable
+                self.inc_api_count()
                 idaapi.set_member_name(frame, existing_stack_vars[ida_offset].soff, stack_var.name)
                 # TODO: retype the existing variable
 
@@ -473,40 +519,33 @@ class BinsyncController:
 
     @init_checker
     @make_state
-    def push_func_comment(self, func_addr, comment, user=None, state=None):
-        # Update last pushed values
-        last_push_time = int(time.time())
-        last_push_func = compat.ida_func_addr(func_addr)
-        func_name = compat.get_func_name(last_push_func)
-
+    @last_push
+    def push_func_comment(self, attr_addr, comment, user=None, state=None, api_set=False):
         # just push a functions comment, overwriting it
-        state.set_comment(func_addr, comment)
-        self._client.last_push(last_push_func, last_push_time, func_name)
+        state.set_comment(attr_addr, comment)
 
     @init_checker
     @make_state
-    def push_comment(self, comment_addr, comment, user=None, state=None):
-        # Update last pushed values
-        last_push_time = int(time.time())
-        last_push_func = compat.ida_func_addr(comment_addr)
-        func_name = compat.get_func_name(last_push_func)
-
+    @last_push
+    def push_comment(self, attr_addr, comment, user=None, state=None, api_set=False):
         # check if the function exist
         # if not; create it
         # if it does; write to the last_push parameter
 
-        state.set_comment(comment_addr, comment)
-        self._client.last_push(last_push_func, last_push_time, func_name)
+        state.set_comment(attr_addr, comment)
 
     @init_checker
     @make_state
-    def push_comments(self, cmt_dict: Dict[int, str], user=None, state=None):
+    @last_push
+    def push_comments(self, cmt_dict: Dict[int, str], user=None, state=None, api_set=False):
         for addr in cmt_dict:
             self.push_comment(addr, cmt_dict[addr], user=user, state=state)
         
+    '''
+    # TODO: Just pass along the offset. Why the whole patch ??
     @init_checker
     @make_state
-    def push_patch(self, patch, user=None, state=None):
+    def push_patch(self, patch, user=None, state=None, api_set=False):
         # Update last pushed values
         last_push_time = int(time.time())
         last_push_func = compat.ida_func_addr(patch.offset)
@@ -514,33 +553,24 @@ class BinsyncController:
 
         state.set_patch(patch.offset, patch)
         self._client.last_push(last_push_func, last_push_time, func_name)
+    '''
 
     @init_checker
     @make_state
-    def push_function_name(self, func_addr, new_name, user=None, state=None):
-        # Update last pushed values
-        last_push_time = int(time.time())
-        last_push_func = compat.ida_func_addr(func_addr)
-
+    @last_push
+    def push_function_name(self, attr_addr, new_name, user=None, state=None, api_set=False):
         # setup the new function for binsync
-        func = binsync.data.Function(func_addr)
+        func = binsync.data.Function(attr_addr)
         func.name = new_name
         state.set_function(func)
 
-        # trigger a last push update
-        self._client.last_push(last_push_func, last_push_time, new_name)
-
     @init_checker
     @make_state
-    def push_stack_variable(self, func_addr, stack_offset, name, type_str, size, user=None, state=None):
-        # Update last pushed values
-        last_push_time = int(time.time())
-        last_push_func = compat.ida_func_addr(func_addr)
-        func_name = compat.get_func_name(last_push_func)
-
+    @last_push
+    def push_stack_variable(self, attr_addr, stack_offset, name, type_str, size, user=None, state=None, api_set=False):
         # convert longs to ints
         stack_offset = int(stack_offset)
-        func_addr = int(func_addr)
+        func_addr = int(attr_addr)
         size = int(size)
 
         v = StackVariable(stack_offset,
@@ -551,11 +581,9 @@ class BinsyncController:
                           func_addr)
         state.set_stack_variable(func_addr, stack_offset, v)
 
-        self._client.last_push(last_push_func, last_push_time, func_name)
-
     @init_checker
     @make_state
-    def push_struct(self, struct, old_name, user=None, state=None):
+    def push_struct(self, struct, old_name, user=None, state=None, api_set=False):
         state.set_struct(struct, old_name)
 
 

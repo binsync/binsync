@@ -27,7 +27,7 @@ class Function(Base):
     def __init__(self, addr, name=None, last_change=-1, notes=None):
         self.addr = addr
         self.name = name
-        self.last_change = last_change if last_change != -1 else int(time.time())
+        self.last_change = last_change if last_change == -1 else int(time.time())
         self.notes = notes
 
     def __getstate__(self):

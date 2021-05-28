@@ -124,6 +124,10 @@ class IDBHooks(ida_idp.IDB_Hooks):
             evt.TiChangedEvent(ea, (ParseTypeString(type[0]) if type else [], type[1] if type else None), name))
         return 0
 
+    #
+    #   Enum Hooks
+    #
+
     @quite_init_checker
     def enum_created(self, enum):
         #print("enum created")
@@ -276,8 +280,9 @@ class IDBHooks(ida_idp.IDB_Hooks):
             new_name = ida_struct.get_member_name(mptr.id)
 
             # do the change on a new thread
-            self.controller.make_controller_cmd(self.controller.push_stack_variable,
-                                                func_addr, stack_offset, new_name, type_str, size)
+            self.binsync_state_change(self.controller.push_stack_variable,
+                                      func_addr, stack_offset, new_name, type_str, size)
+
 
         # an actual struct
         elif isinstance(s_type, str):
@@ -334,7 +339,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
         # grab the name instead from ida
         name = idc.get_func_name(ida_func.start_ea)
-        self.controller.make_controller_cmd(self.controller.push_function_name, ida_func.start_ea, name)
+        self.binsync_state_change(self.controller.push_function_name, ida_func.start_ea, name)
 
         return 0
 
@@ -385,12 +390,12 @@ class IDBHooks(ida_idp.IDB_Hooks):
         if cmt_type == "cmt":
             # find the location this comment exists
             func_addr = idaapi.get_func(address).start_ea
-            self.controller.make_controller_cmd(self.controller.push_comment, address, comment)
+            self.binsync_state_change(self.controller.push_comment, address, comment)
 
         # function comment changed
         elif cmt_type == "range":
             # overwrite the entire function comment
-            self.controller.make_controller_cmd(self.controller.push_func_comment, address, comment)
+            self.binsync_state_change(self.controller.push_func_comment, address, comment)
 
         # XXX: other?
         elif cmt_type == "extra":
@@ -421,7 +426,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
         # if deleted, finish early
         if deleted:
-            self.controller.make_controller_cmd(self.controller.push_struct, Struct(None, None, None), s_name)
+            self.binsync_state_change(self.controller.push_struct, Struct(None, None, None), s_name)
             return 0
 
         # convert the ida_struct into a binsync_struct
@@ -436,8 +441,19 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
         # make the controller update the local state and push
         old_s_name = old_name if old_name else s_name
-        self.controller.make_controller_cmd(self.controller.push_struct, binsync_struct, old_s_name)
+        self.binsync_state_change(self.controller.push_struct, binsync_struct, old_s_name)
         return 0
+
+    def binsync_state_change(self, *args, **kwargs):
+        # issue a new command to update the binsync state
+        self.controller.api_lock.acquire()
+        if self.controller.api_count > 0:
+            kwargs['api_set'] = True
+            self.controller.make_controller_cmd(*args, **kwargs)
+            self.controller.api_count -= 1
+        else:
+            self.controller.make_controller_cmd(*args, **kwargs)
+        self.controller.api_lock.release()
 
 
 class IDPHooks(ida_idp.IDP_Hooks):
@@ -523,7 +539,7 @@ class HexRaysHooks:
         if cmts != self._cached_funcs[ea]["cmts"]:
             # thread it!
             #print(f"SENDING {cmts}")
-            self.controller.make_controller_cmd(self.controller.push_comments, cmts)
+            self.binsync_state_change(self.controller.push_comments, cmts)
 
             # cache so we don't double push a copy
             self._cached_funcs[ea]["cmts"] = cmts
@@ -595,6 +611,16 @@ class HexRaysHooks:
                 func = ida_funcs.get_func(func_ea)
                 if ida_funcs.func_contains(func, ea):
                     vu.refresh_view(False)
+
+    def binsync_state_change(self, *args, **kwargs):
+        # issue a new command to update the binsync state
+        self.controller.api_lock.acquire()
+        if self.controller.api_count > 0:
+            kwargs['api_set'] = True
+            self.binsync_state_change(*args, **kwargs)
+        else:
+            self.binsync_state_change(*args, **kwargs)
+        self.controller.api_lock.release()
 
 
 class MasterHook:
