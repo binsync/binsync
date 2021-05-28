@@ -63,8 +63,6 @@ def last_push(f):
     """
     @wraps(f)
     def set_last_push(self, *args, **kwargs):
-        print(args)
-        print(kwargs)
         # Get the attribute address
         attr_addr = args[0] # First arg should be attr_addr. If not, be scared.
 
