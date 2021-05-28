@@ -63,21 +63,28 @@ def last_push(f):
     """
     @wraps(f)
     def set_last_push(self, *args, **kwargs):
-        # Get the attribute address
-        attr_addr = args[0] # First arg should be attr_addr. If not, be scared.
+        print(f"INSIDE LAST PUSH: {kwargs}")
 
-        # Create our last push time, last push func, and func name
-        last_push_time = int(time.time())
-        last_push_func = compat.ida_func_addr(attr_addr)
-        print(f"[LAST PUSH FUNC] {last_push_func}")
-        func_name = compat.get_func_name(last_push_func)        
+        api_set = kwargs.pop('api_set', None)
+        if api_set is not None:
+            f(self, *args, **kwargs)
+        else:
+            # Get the attribute address
+            attr_addr = args[0] # First arg should be attr_addr. If not, be scared.
 
-        # Call the function first. This way any changes
-        # can be set. (func changed, time finally modified, etc.)
-        f(self, *args, **kwargs)
+            # Create our last push time, last push func, and func name
+            last_push_time = int(time.time())
+            last_push_func = compat.ida_func_addr(attr_addr)
+            print(f"[LAST PUSH FUNC] {last_push_func}")
+            func_name = compat.get_func_name(last_push_func)
 
-        # Call the binsync proper client last_push
-        self._client.last_push(last_push_func, last_push_time, func_name)
+            # Call the function first. This way any changes
+            # can be set. (func changed, time finally modified, etc.)
+            f(self, *args, **kwargs)
+
+            # Call the binsync proper client last_push
+            self._client.last_push(last_push_func, last_push_time, func_name)
+
     return set_last_push
         
 

@@ -150,8 +150,8 @@ class Client(object):
         self._last_pull_attempt_at = None  # type: datetime.datetime
 
         # User last push time/function
-        self._last_push_time = 0
-        self._last_push_function = 0
+        self._last_push_time = -1
+        self._last_push_function = -1
 
         # timestamps
         self._last_commit_ts = 0
