@@ -207,6 +207,16 @@ class BinsyncController:
         self.pull_thread.setDaemon(True)
         self.pull_thread.start()
 
+    #
+    #   Multithreaded locks and setters
+    #
+
+    def inc_api_count(self):
+        self.api_lock.acquire()
+        self.api_count += 1
+        print(self.api_count)
+        self.api_lock.release()
+
     def make_controller_cmd(self, cmd_func, *args, **kwargs):
         self.queue_lock.acquire()
         if cmd_func == self.push_struct:
@@ -258,6 +268,10 @@ class BinsyncController:
             # run an operation every second
             if self.check_client() and self._client.has_remote:
                 self.eval_cmd_queue()
+
+            self.api_lock.acquire()
+            print(f"API COUNT: {self.api_count}")
+            self.api_lock.release()
 
             # Snooze
             time.sleep(1)
@@ -340,6 +354,7 @@ class BinsyncController:
             return
 
         if compat.get_func_name(ida_func.start_ea) != _func.name:
+            self.inc_api_count()
             compat.set_ida_func_name(ida_func.start_ea, _func.name)
 
         # === comments === #
@@ -361,11 +376,14 @@ class BinsyncController:
                 if comment is not None:
                     func_cmt_end += f"\n{hex(head)}: {comment}"
                     #compat.set_decomp_comments(_func.addr, {head: comment})
-                    #compat.set_ida_comment(head, comment, 0, func_cmt=False)
+                    self.inc_api_count()
+                    compat.set_ida_comment(head, comment, 0, func_cmt=False)
+
         func_comment += func_cmt_end
 
         # apply a full function comment only if we have things to write.
         if len(func_comment) > 0:
+            self.inc_api_count()
             compat.set_ida_comment(_func.addr, func_comment, 1, func_cmt=True)
 
         # === stack variables === #
@@ -398,6 +416,7 @@ class BinsyncController:
                         and stack_var.type == type_str:
                     continue
                 # rename the existing variable
+                self.inc_api_count()
                 idaapi.set_member_name(frame, existing_stack_vars[ida_offset].soff, stack_var.name)
                 # TODO: retype the existing variable
 
