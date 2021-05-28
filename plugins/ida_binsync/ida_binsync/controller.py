@@ -63,8 +63,6 @@ def last_push(f):
     """
     @wraps(f)
     def set_last_push(self, *args, **kwargs):
-        print(f"INSIDE LAST PUSH: {kwargs}")
-
         api_set = kwargs.pop('api_set', None)
         if api_set is not None:
             f(self, *args, **kwargs)
@@ -75,7 +73,6 @@ def last_push(f):
             # Create our last push time, last push func, and func name
             last_push_time = int(time.time())
             last_push_func = compat.ida_func_addr(attr_addr)
-            print(f"[LAST PUSH FUNC] {last_push_func}")
             func_name = compat.get_func_name(last_push_func)
 
             # Call the function first. This way any changes
@@ -276,10 +273,6 @@ class BinsyncController:
             if self.check_client() and self._client.has_remote:
                 self.eval_cmd_queue()
 
-            self.api_lock.acquire()
-            print(f"API COUNT: {self.api_count}")
-            self.api_lock.release()
-
             # Snooze
             time.sleep(1)
 
@@ -380,7 +373,7 @@ class BinsyncController:
                     continue
 
                 comment = self.pull_comment(head, user=user, state=state)
-                if comment is not None:
+                if comment is not None and len(comment) > 0:
                     func_cmt_end += f"\n{hex(head)}: {comment}"
                     #compat.set_decomp_comments(_func.addr, {head: comment})
                     self.inc_api_count()
@@ -389,7 +382,7 @@ class BinsyncController:
         func_comment += func_cmt_end
 
         # apply a full function comment only if we have things to write.
-        if len(func_comment) > 0:
+        if len(func_comment) > 1:
             self.inc_api_count()
             compat.set_ida_comment(_func.addr, func_comment, 1, func_cmt=True)
 
