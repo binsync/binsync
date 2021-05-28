@@ -170,9 +170,13 @@ class BinsyncController:
         self.last_push_time: int = None
         self.last_push_func: int = None
 
-        # lock
+        # command locks
         self.queue_lock = threading.Lock()
         self.cmd_queue = OrderedDict()
+
+        # api locks
+        self.api_lock = threading.Lock()
+        self.api_count = 0
 
         # start the pull routine
         self.pull_thread = threading.Thread(target=self.pull_routine)
