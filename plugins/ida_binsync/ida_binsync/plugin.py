@@ -153,7 +153,7 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         self.install_control_panel_action()
 
     def install_control_panel_action(self):
-        action_id = "binsync:control_panel"
+        action_id = "binsync:info_panel"
         action_desc = idaapi.action_desc_t(
             action_id,
             "BinSync: ~C~ontrol Panel",

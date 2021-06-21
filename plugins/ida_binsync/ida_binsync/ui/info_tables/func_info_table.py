@@ -2,8 +2,8 @@ from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, Q
 from PyQt5.QtCore import Qt, QItemSelectionModel
 from typing import Dict
 
-from ..controller import BinsyncController
-from .. import compat
+from ...controller import BinsyncController
+from ... import compat
 from binsync.data import Function
 
 
@@ -34,17 +34,17 @@ class QUserItem(object):
         pass
 
 
-class QInfoTable(QTableWidget):
+class QFuncInfoTable(QTableWidget):
 
     HEADER = [
-        'Edited function',
+        'Changed Func',
         'Local Name',
         'User',
-        'Last Push Time',
+        'Last Push',
     ]
 
     def __init__(self, controller, parent=None):
-        super(QInfoTable, self).__init__(parent)
+        super(QFuncInfoTable, self).__init__(parent)
 
         self.setColumnCount(len(self.HEADER))
         self.setHorizontalHeaderLabels(self.HEADER)
