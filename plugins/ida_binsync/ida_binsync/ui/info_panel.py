@@ -1,12 +1,11 @@
-from PyQt5.QtWidgets import QVBoxLayout, QGroupBox, QMessageBox, QDialog, QWidget
+from PyQt5.QtWidgets import QVBoxLayout, QGroupBox, QMessageBox, QDialog, QWidget, QLabel, QComboBox, QHBoxLayout
 from PyQt5.QtCore import Qt
 import sip
 
-import idc
 import idaapi
-import idautils
 
-from .info_table import QInfoTable
+from .info_tables.func_info_table import QFuncInfoTable
+from .info_tables.struct_info_table import QStructInfoTable
 
 
 class InfoPanelDialog(QDialog):
@@ -16,7 +15,7 @@ class InfoPanelDialog(QDialog):
         self._w = None
         self._controller = controller
 
-        self.setWindowTitle("BinSync Control Panel")
+        self.setWindowTitle("BinSync Info Panel")
         
         self._init_widgets()
 
@@ -34,7 +33,7 @@ class InfoPanelDialog(QDialog):
 
 class InfoPanelViewWrapper(object):
 
-    NAME = "BinSync: Control Panel"
+    NAME = "BinSync: Info Panel"
 
     def __init__(self, controller):
         
@@ -42,6 +41,7 @@ class InfoPanelViewWrapper(object):
         self.twidget = idaapi.create_empty_widget(InfoPanelViewWrapper.NAME)
         self.widget = sip.wrapinstance(int(self.twidget), QWidget)
         self.widget.name = InfoPanelViewWrapper.NAME
+        self.width_hint = 250
 
         self._controller = controller
         self._w = None
@@ -67,21 +67,25 @@ class InfoPanel(QWidget):
         self._controller = controller
         self._dialog = dialog
 
-        self._info_table = None  # type: QInfoTable
+        # info tables
+        self._func_table = None  # type: QFuncInfoTable
+        self._struct_table = None  # type: QStructInfoTable
+        self._active_table = None  # type: QTableWidget
 
         self._init_widgets()
 
         self.width_hint = 250
 
         # register callback
-        self._controller.control_panel = self
+        self._controller.info_panel = self
 
         self.reload()
 
     def reload(self):
+        # update status
         # update users
-        if self._controller is not None and self._controller.check_client():
-            self._info_table.update_users(self._controller.users())
+        if self._active_table is not None and self._controller is not None and self._controller.check_client():
+            self._active_table.update_users(self._controller.users())
 
     def closeEvent(self, event):
         if self._controller is not None:
@@ -93,51 +97,61 @@ class InfoPanel(QWidget):
 
     def _init_widgets(self):
 
-        self._info_table = QInfoTable(self._controller)
+        # status box
+        status_box = QGroupBox(self)
+        status_box.setTitle("Status")
+        self._status_label = QLabel(self)
+        self._status_label.setText("Not Connected")
+        status_layout = QVBoxLayout()
+        status_layout.addWidget(self._status_label)
+        status_box.setLayout(status_layout)
 
-        team_box = QGroupBox(self)
-        team_box.setTitle("Binsync Changed Function\n")
+        # info box
+        info_box = QGroupBox(self)
+        info_box.setTitle("Info Table")
+        info_layout = QVBoxLayout()
 
-        team_layout = QVBoxLayout()
-        team_layout.addWidget(self._info_table)    # stretch=1 optional
-        # team_layout.addWidget(actions_box)
-        team_box.setLayout(team_layout)
+        # table selector
+        combo_box = QGroupBox(self)
+        combo_layout = QHBoxLayout()
+        self.combo = QComboBox()
+        self.combo.addItems(["Functions", "Structs"])
+        self.combo.currentTextChanged.connect(self._on_combo_change)
+        combo_layout.addWidget(self.combo)
+        combo_box.setLayout(combo_layout)
+        info_layout.addWidget(combo_box)
+
+        # function info table
+        self._func_table = QFuncInfoTable(self._controller)
+        info_layout.addWidget(self._func_table)    # stretch=1 optional
+        self._active_table = self._func_table
+
+        # struct info table
+        self._struct_table = QStructInfoTable(self._controller)
+        self._struct_table.hide()
+        info_layout.addWidget(self._struct_table)
+
+        info_box.setLayout(info_layout)
 
         main_layout = QVBoxLayout()
-        #main_layout.addWidget(status_box)
-        main_layout.addWidget(team_box)
+        main_layout.addWidget(status_box)
+        main_layout.addWidget(info_box)
 
         self.setLayout(main_layout)
         # self.setFixedWidth(500)
 
-    def _on_pullpatches_clicked(self):
+    def _on_combo_change(self, value):
+        self._hide_all_tables()
+        if value == "Functions":
+            self._func_table.show()
+            self._active_table = self._func_table
+        elif value == "Structs":
+            self._struct_table.show()
+            self._active_table = self._struct_table
 
-        # which user?
-        u = self._info_table.selected_user()
-        if u is None:
-            QMessageBox.critical(None, 'Error',
-                                 "Cannot determine which user to pull from. "
-                                 "Please select a user in the team table first.")
-            return
-
-        kb = self.workspace.instance.project.kb
-        # currently we assume all patches are against the main object
-        main_object = self.workspace.instance.project.loader.main_object
-        patches = kb.sync.pull_patches(user=u)
-
-        patch_added = False
-        for patch in patches:
-            addr = main_object.mapped_base + patch.offset
-            kb.patches.add_patch(addr, patch.new_bytes)
-            patch_added = True
-
-        if patch_added:
-            # trigger a refresh
-            self.workspace.instance.patches.am_event()
-
-            # re-generate the CFG
-            # TODO: CFG refinement
-            self.workspace.instance.generate_cfg()
+    def _hide_all_tables(self):
+        self._func_table.hide()
+        self._struct_table.hide()
 
     def _update_users(self):
-        self._info_table.update_users(self.workspace.instance.sync.users)
+        self._active_table.update_users(self.workspace.instance.sync.users)

@@ -62,7 +62,7 @@ class ControlPanel(BinjaWidget):
         self.width_hint = 250
 
         # register callback
-        self._controller.control_panel = self
+        self._controller.info_panel = self
 
         self.reload()
 
