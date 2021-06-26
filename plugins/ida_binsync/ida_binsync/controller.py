@@ -56,6 +56,7 @@ def init_checker(f):
         return f(self, *args, **kwargs)
     return initcheck
 
+
 def last_push(f):
     """
     Once a push function has been executed, perform an update on the last push time,
@@ -276,7 +277,7 @@ class BinsyncController:
             time.sleep(1)
 
     def connect(self, user, path, init_repo, ssh_agent_pid=None, ssh_auth_sock=None):
-        self._client = BinsyncClient(user, path, None, None, None, None, init_repo=init_repo,
+        self._client = BinsyncClient(user, path, "", None, None, None, init_repo=init_repo,
                                      ssh_agent_pid=ssh_agent_pid, ssh_auth_sock=ssh_auth_sock)
         print(f"[Binsync]: Client has connected to sync repo with user: {user}.")
 
@@ -358,11 +359,15 @@ class BinsyncController:
 
         # === comments === #
         # set the func comment
-        func_comment = self.pull_comment(_func.addr, user=user, state=state)
+
+        # XXX: FIX ME: I changed pull_comment to return a Comment object now
+        func_comment = self.pull_comment(_func.addr, _func.addr, user=user, state=state)
         if func_comment is None:
             func_comment = ""
             #idc.set_func_cmt(_func.addr, func_comment, 1)
             #compat.set_ida_comment(_func.addr, func_comment, 1, func_cmt=True)
+        else:
+            func_comment = func_comment.comment
 
         # set the disassembly comments
         func_cmt_end = "\n"
@@ -371,7 +376,7 @@ class BinsyncController:
                 if head == _func.addr:
                     continue
 
-                comment = self.pull_comment(head, user=user, state=state)
+                comment = self.pull_comment(_func.addr, head, user=user, state=state)
                 if comment is not None and len(comment) > 0:
                     func_cmt_end += f"\n{hex(head)}: {comment}"
                     #compat.set_decomp_comments(_func.addr, {head: comment})
@@ -476,7 +481,7 @@ class BinsyncController:
 
     @init_checker
     @make_ro_state
-    def pull_comment(self, addr, user=None, state=None):
+    def pull_comment(self, func_addr, addr, user=None, state=None):
         """
         Pull comments downwards.
 
@@ -487,7 +492,7 @@ class BinsyncController:
         :return:
         """
         try:
-            return state.get_comment(addr)
+            return state.get_comment(func_addr, addr)
         except KeyError:
             return None
 
@@ -520,26 +525,18 @@ class BinsyncController:
     @init_checker
     @make_state
     @last_push
-    def push_func_comment(self, attr_addr, comment, user=None, state=None, api_set=False):
-        # just push a functions comment, overwriting it
-        state.set_comment(attr_addr, comment)
-
-    @init_checker
-    @make_state
-    @last_push
-    def push_comment(self, attr_addr, comment, user=None, state=None, api_set=False):
+    def push_comment(self, func_addr, addr, comment, user=None, state=None, api_set=False):
         # check if the function exist
         # if not; create it
         # if it does; write to the last_push parameter
-
-        state.set_comment(attr_addr, comment)
+        cmt = binsync.data.Comment(func_addr, addr, comment)
+        state.set_comment(func_addr, addr, cmt)
 
     @init_checker
     @make_state
-    @last_push
-    def push_comments(self, cmt_dict: Dict[int, str], user=None, state=None, api_set=False):
+    def push_comments(self, func_addr, cmt_dict: Dict[int, str], user=None, state=None, api_set=False):
         for addr in cmt_dict:
-            self.push_comment(addr, cmt_dict[addr], user=user, state=state)
+            self.push_comment(func_addr, addr, cmt_dict[addr], user=user, state=state)
         
     '''
     # TODO: Just pass along the offset. Why the whole patch ??

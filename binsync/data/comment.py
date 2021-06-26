@@ -1,60 +1,59 @@
 import toml
 
-from ..utils import is_py3
 from .base import Base
-
-if is_py3():
-    unicode = str
-    long = int
 
 
 class Comment(Base):
     """
-    :ivar int addr:     Address of the comment.
-    :ivar str comment:  Content.
+    :ivar int func_addr:    Address of the comments Function.
+    :ivar int addr:         Address of the comment.
+    :ivar str comment:      Content.
+    :ivar bool decompiled:  True if the comment is in decompilation
     """
 
     __slots__ = (
-        "addr",
         "comment",
+        "decompiled",
+        "func_addr",
+        "addr",
     )
 
-    def __init__(self, addr, comment):
-        self.addr = addr  # type: int
+    def __init__(self, func_addr, addr, comment, decompiled=False):
         self.comment = comment  # type: str
+        self.decompiled = decompiled  # TODO: use this in other places!
+        self.func_addr = func_addr  # type: int
+        self.addr = addr  # type: int
 
     def __getstate__(self):
-        return {
-            "addr": self.addr,
-            "comment": self.comment,
-        }
+        return dict(
+            (k, getattr(self, k)) for k in self.__slots__
+        )
 
     def __setstate__(self, state):
-        if not isinstance(state["addr"], (int, long)):
-            raise TypeError()
-        self.addr = state["addr"]
-        self.comment = state["comment"]
+        for k in self.__slots__:
+            setattr(self, k, state[k])
 
     def __eq__(self, other):
-        return (
-            isinstance(other, Comment)
-            and other.addr == self.addr
-            and other.comment == self.comment
-        )
+        if isinstance(other, Comment):
+            for k in self.__slots__:
+                if getattr(self, k) != getattr(other, k):
+                    return False
+            return True
+        return False
 
     def dump(self):
         return toml.dumps(self.__getstate__())
 
     @classmethod
     def parse(cls, s):
-        comm = Comment(None, None)
+        comm = Comment(None, None, None)
         comm.__setstate__(toml.loads(s))
         return comm
 
     @classmethod
     def load_many(cls, comms_toml):
         for comm_toml in comms_toml.values():
-            comm = Comment(None, None)
+            comm = Comment(None, None, None)
             try:
                 comm.__setstate__(comm_toml)
             except TypeError:
@@ -65,11 +64,6 @@ class Comment(Base):
     @classmethod
     def dump_many(cls, comments):
         comments_ = {}
-        for k, v in comments.items():
-            if type(v) is cls:
-                comments_["%x" % k] = v.__getstate__()
-            elif isinstance(v, (str, unicode)):
-                comments_["%x" % k] = Comment(k, v).__getstate__()
-            else:
-                raise TypeError("Unsupported comment type %s." % type(v))
+        for v in sorted(comments.values(), key=lambda x: x.addr):
+            comments_["%x" % v.addr] = v.__getstate__()
         return comments_
