@@ -1,7 +1,7 @@
 # ----------------------------------------------------------------------------
 # This file contains the BinsyncController class which acts as the the
 # bridge between the plugin UI and direct calls to the binsync client found in
-# the core of the binsync. In the controller, you will find code used to make
+# the core of binsync. In the controller, you will find code used to make
 # pushes and pulls of user changes.
 #
 # You will also notice that the BinsyncController runs two extra threads in
@@ -193,7 +193,7 @@ class BinsyncController:
     def __init__(self):
         self._client = None  # type: binsync.Client
 
-        self.control_panel = None
+        self.info_panel = None
 
         # last push info
         self.last_push_time: int = None
@@ -261,13 +261,13 @@ class BinsyncController:
                 # Pull new items
                 self._client.pull()
 
-                # reload the control panel if it's registered
-                if self.control_panel is not None:
+                # reload the info panel if it's registered
+                if self.info_panel is not None:
                     try:
-                        self.control_panel.reload()
+                        self.info_panel.reload()
                     except RuntimeError:
                         # the panel has been closed
-                        self.control_panel = None
+                        self.info_panel = None
 
             # run an operation every second
             if self.check_client() and self._client.has_remote:
