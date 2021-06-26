@@ -56,6 +56,7 @@ def init_checker(f):
         return f(self, *args, **kwargs)
     return initcheck
 
+
 def last_push(f):
     """
     Once a push function has been executed, perform an update on the last push time,
@@ -276,7 +277,7 @@ class BinsyncController:
             time.sleep(1)
 
     def connect(self, user, path, init_repo, ssh_agent_pid=None, ssh_auth_sock=None):
-        self._client = BinsyncClient(user, path, None, None, None, None, init_repo=init_repo,
+        self._client = BinsyncClient(user, path, "", None, None, None, init_repo=init_repo,
                                      ssh_agent_pid=ssh_agent_pid, ssh_auth_sock=ssh_auth_sock)
         print(f"[Binsync]: Client has connected to sync repo with user: {user}.")
 
@@ -346,44 +347,31 @@ class BinsyncController:
         """
         Grab all relevant information from the specified user and fill the @ida_func.
         """
-
-        # == function name === #
+        # check if the function exists in the pulled state
         _func = self.pull_function(ida_func, user=user, state=state)
         if _func is None:
             return
 
+        # == function name === #
         if compat.get_func_name(ida_func.start_ea) != _func.name:
             self.inc_api_count()
             compat.set_ida_func_name(ida_func.start_ea, _func.name)
 
         # === comments === #
-        # set the func comment
-        func_comment = self.pull_comment(_func.addr, user=user, state=state)
-        if func_comment is None:
-            func_comment = ""
-            #idc.set_func_cmt(_func.addr, func_comment, 1)
-            #compat.set_ida_comment(_func.addr, func_comment, 1, func_cmt=True)
-
-        # set the disassembly comments
-        func_cmt_end = "\n"
+        # set disassembly and decompiled comments
         for start_ea, end_ea in idautils.Chunks(ida_func.start_ea):
             for head in idautils.Heads(start_ea, end_ea):
-                if head == _func.addr:
-                    continue
-
-                comment = self.pull_comment(head, user=user, state=state)
-                if comment is not None and len(comment) > 0:
-                    func_cmt_end += f"\n{hex(head)}: {comment}"
-                    #compat.set_decomp_comments(_func.addr, {head: comment})
+                comment: binsync.data.Comment = self.pull_comment(_func.addr, head, user=user, state=state)
+                if comment is not None and comment.comment is not None:
                     self.inc_api_count()
-                    compat.set_ida_comment(head, comment, 0, func_cmt=False)
+                    res = compat.set_ida_comment(head, comment.comment, decompiled=comment.decompiled)
 
-        func_comment += func_cmt_end
+                    if not res:
+                        # XXX: this can be dangerous:
+                        # if the above comment fails and the api_count never gets decreased after
+                        # getting increased, we can be stalled for a long time.
+                        print(f"[BinSync]: Failed to sync comment at <{hex(head)}>: \'{comment.comment}\'")
 
-        # apply a full function comment only if we have things to write.
-        if len(func_comment) > 1:
-            self.inc_api_count()
-            compat.set_ida_comment(_func.addr, func_comment, 1, func_cmt=True)
 
         # === stack variables === #
         existing_stack_vars = { }
@@ -476,7 +464,7 @@ class BinsyncController:
 
     @init_checker
     @make_ro_state
-    def pull_comment(self, addr, user=None, state=None):
+    def pull_comment(self, func_addr, addr, user=None, state=None):
         """
         Pull comments downwards.
 
@@ -487,7 +475,7 @@ class BinsyncController:
         :return:
         """
         try:
-            return state.get_comment(addr)
+            return state.get_comment(func_addr, addr)
         except KeyError:
             return None
 
@@ -520,26 +508,16 @@ class BinsyncController:
     @init_checker
     @make_state
     @last_push
-    def push_func_comment(self, attr_addr, comment, user=None, state=None, api_set=False):
-        # just push a functions comment, overwriting it
-        state.set_comment(attr_addr, comment)
-
-    @init_checker
-    @make_state
-    @last_push
-    def push_comment(self, attr_addr, comment, user=None, state=None, api_set=False):
+    def push_comment(self, func_addr, addr, comment, decompiled=False, user=None, state=None, api_set=False):
         # check if the function exist
         # if not; create it
         # if it does; write to the last_push parameter
+        cmt = binsync.data.Comment(func_addr, addr, comment, decompiled=decompiled)
+        state.set_comment(func_addr, addr, cmt)
 
-        state.set_comment(attr_addr, comment)
-
-    @init_checker
-    @make_state
-    @last_push
-    def push_comments(self, cmt_dict: Dict[int, str], user=None, state=None, api_set=False):
+    def push_comments(self, func_addr, cmt_dict: Dict[int, str], decompiled=False, user=None, state=None, api_set=False):
         for addr in cmt_dict:
-            self.push_comment(addr, cmt_dict[addr], user=user, state=state)
+            self.push_comment(func_addr, addr, cmt_dict[addr], decompiled=decompiled, user=user, state=state)
         
     '''
     # TODO: Just pass along the offset. Why the whole patch ??
@@ -584,6 +562,7 @@ class BinsyncController:
     @init_checker
     @make_state
     def push_struct(self, struct, old_name, user=None, state=None, api_set=False):
+        old_name = None if old_name == "" else old_name
         state.set_struct(struct, old_name)
 
 

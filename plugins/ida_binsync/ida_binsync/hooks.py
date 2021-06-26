@@ -209,7 +209,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
     @quite_init_checker
     def struc_created(self, tid):
         #print("struct created")
-        self.ida_struct_changed(tid)
+        self.ida_struct_changed(tid, old_name="")
         #is_union = ida_struct.is_union(tid)
         return 0
 
@@ -390,12 +390,13 @@ class IDBHooks(ida_idp.IDB_Hooks):
         if cmt_type == "cmt":
             # find the location this comment exists
             func_addr = idaapi.get_func(address).start_ea
-            self.binsync_state_change(self.controller.push_comment, address, comment)
+            self.binsync_state_change(self.controller.push_comment, func_addr, address, comment)
 
         # function comment changed
         elif cmt_type == "range":
             # overwrite the entire function comment
-            self.binsync_state_change(self.controller.push_func_comment, address, comment)
+            func_addr = idaapi.get_func(address).start_ea
+            self.binsync_state_change(self.controller.push_comment, func_addr, address, comment)
 
         # XXX: other?
         elif cmt_type == "extra":
@@ -498,7 +499,6 @@ class HexRaysHooks:
             ea = ida_kernwin.get_screen_ea()
             func = ida_funcs.get_func(ea)
 
-            #print("INSIDE HXE CALLBACK!")
             if func is None:
                 return 0
 
@@ -534,12 +534,11 @@ class HexRaysHooks:
         if len(cmts) == 0:
             return
 
-        #print(f"COMMENTS: {cmts}")
         # never do the same push twice
         if cmts != self._cached_funcs[ea]["cmts"]:
             # thread it!
-            #print(f"SENDING {cmts}")
-            self.binsync_state_change(self.controller.push_comments, cmts)
+            kwargs = {}
+            self.binsync_state_change(self.controller.push_comments, ea, cmts, decompiled=True)
 
             # cache so we don't double push a copy
             self._cached_funcs[ea]["cmts"] = cmts
@@ -617,9 +616,10 @@ class HexRaysHooks:
         self.controller.api_lock.acquire()
         if self.controller.api_count > 0:
             kwargs['api_set'] = True
-            self.binsync_state_change(*args, **kwargs)
+            self.controller.make_controller_cmd(*args, **kwargs)
+            self.controller.api_count -= 1
         else:
-            self.binsync_state_change(*args, **kwargs)
+            self.controller.make_controller_cmd(*args, **kwargs)
         self.controller.api_lock.release()
 
 

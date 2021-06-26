@@ -95,13 +95,43 @@ def set_ida_func_name(func_addr, new_name):
 
 
 @execute_write
-def set_ida_comment(addr, cmt, rpt, func_cmt=False):
-    if func_cmt:
-        print(f"SETTING FUNC COMMENT: '{cmt}'")
+def set_ida_comment(addr, cmt, decompiled=False):
+    func = ida_funcs.get_func(addr)
+    rpt = 1
+
+    # function comment
+    if addr == func.start_ea:
         idc.set_func_cmt(addr, cmt, rpt)
+        return True
+
+    # a comment in decompilation
+    elif decompiled:
+        cfunc = idaapi.decompile(addr)
+        eamap = cfunc.get_eamap()
+        decomp_obj_addr = eamap[addr][0].ea
+        tl = idaapi.treeloc_t()
+
+        # try to set a comment using the cfunc obj and normal address
+        for a in [addr, decomp_obj_addr]:
+            tl.ea = a
+            for itp in range(idaapi.ITP_SEMI, idaapi.ITP_COLON):
+                tl.itp = itp
+                cfunc.set_user_cmt(tl, cmt)
+                cfunc.save_user_cmts()
+                cfunc.refresh_func_ctext()
+
+                # attempt to set until it does not fail (orphan itself)
+                if not cfunc.has_orphan_cmts():
+                    cfunc.save_user_cmts()
+                    return True
+                cfunc.del_orphan_cmts()
+
+        return False
+
+    # a comment in disassembly
     else:
         ida_bytes.set_cmt(addr, cmt, rpt)
-
+        return True
 
 @execute_write
 def refresh_pseudocode_view(ea):

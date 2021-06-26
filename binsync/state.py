@@ -52,6 +52,7 @@ def list_files_in_tree(base_tree: git.Tree):
 
     return file_list
 
+
 def add_data(index: git.IndexFile, path: str, data: bytes):
     fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
     pathlib.Path(fullpath).parent.mkdir(parents=True, exist_ok=True)
@@ -89,7 +90,7 @@ class State:
 
         # data
         self.functions = {}  # type: Dict[int, Function]
-        self.comments = SortedDict()  # type: Dict[int, str]
+        self.comments = defaultdict(dict)  # type: Dict[int, Dict[int, Comment]]
         self.stack_variables = defaultdict(dict)  # type: Dict[int, Dict[int, StackVariable]]
         self.structs = defaultdict(dict) # type: Dict[str, Struct]
         self.patches = SortedDict()
@@ -120,11 +121,13 @@ class State:
         # dump function
         add_data(index, 'functions.toml', toml.dumps(Function.dump_many(self.functions)).encode())
 
-        # dump comments
-        add_data(index, 'comments.toml', toml.dumps(Comment.dump_many(self.comments)).encode())
-
         # dump patches
         add_data(index, 'patches.toml', toml.dumps(Patch.dump_many(self.patches)).encode())
+
+        # dump comments, one file per function
+        for func_addr, cmts in self.comments.items():
+            path = os.path.join('comments', "%08x.toml" % func_addr)
+            add_data(index, path, toml.dumps(Comment.dump_many(cmts)).encode())
 
         # dump stack variables, one file per function
         for func_addr, stack_vars in self.stack_variables.items():
@@ -166,15 +169,17 @@ class State:
             s.functions = functions
 
         # load comments
-        try:
-            comments_toml = toml.loads(tree['comments.toml'].data_stream.read().decode())
-        except:
-            pass
-        else:
-            comments = {}
-            for comm in Comment.load_many(comments_toml):
-                comments[comm.addr] = comm.comment
-            s.comments = SortedDict(comments)
+        for func_addr in s.functions:
+            try:
+                # TODO use unrebased address for more durability
+                cmts_toml = toml.loads(tree[os.path.join('comments', '%08x.toml' % func_addr)].data_stream.read().decode())
+            except:
+                pass
+            else:
+                cmts = list(Comment.load_many(cmts_toml))
+                d = dict((c.addr, c) for c in cmts)
+                if cmts:
+                    s.comments[cmts[0].func_addr] = d
 
         # load patches
         try:
@@ -258,21 +263,24 @@ class State:
         return True
 
     @dirty_checker
-    def set_comment(self, addr, comment):
+    def set_comment(self, func_addr, addr, comment: Comment):
 
-        if addr in self.comments and self.comments[addr] == comment:
+        if func_addr in self.comments and \
+                addr in self.comments[func_addr] and \
+                self.comments[func_addr][addr] == comment:
             # no update is required
             return False
 
-        self.comments[addr] = comment
+        self.comments[func_addr][addr] = comment
         return True
 
     @dirty_checker
-    def remove_comment(self, addr):
-        if addr in self.comments:
-            del self.comments[addr]
+    def remove_comment(self, func_addr, addr):
+        try:
+            del self.comments[func_addr][addr]
             return True
-        return False
+        except KeyError:
+            return False
 
     @dirty_checker
     def set_patch(self, addr, patch):
@@ -316,9 +324,12 @@ class State:
 
         # delete old struct only when we know what it is
         if old_name is not None:
-            del self.structs[old_name]
-            # delete the repo toml for the struct
-            remove_data(self.client.repo.index, os.path.join('structs', f'{old_name}.toml'))
+            try:
+                del self.structs[old_name]
+                # delete the repo toml for the struct
+                remove_data(self.client.repo.index, os.path.join('structs', f'{old_name}.toml'))
+            except KeyError:
+                pass
 
         # set the new struct
         if struct.name is not None:
@@ -335,24 +346,24 @@ class State:
 
         return self.functions[addr]
 
-    def get_comment(self, addr):
-
-        if addr not in self.comments:
+    def get_comment(self, func_addr, addr):
+        if func_addr not in self.comments:
             raise KeyError("There is no comment at address %#x." % addr)
 
-        cmt = self.comments[addr]
-        if is_py2() and isinstance(cmt, unicode):
-            cmt = str(cmt)
+        if addr not in self.comments[func_addr]:
+            raise KeyError("There is no comment at address %#x." % addr)
+
+        cmt = self.comments[func_addr][addr]
         return cmt
 
     def get_comments(self, start_addr, end_addr=None):
         for k in self.comments.irange(start_addr, reverse=False):
             if k >= end_addr:
                 break
-            cmt = self.comments[k]
-            if is_py2() and isinstance(cmt, unicode):
-                cmt = str(cmt)
-            yield cmt
+            cmts = self.comments[k]
+            for addr in cmts:
+                if addr < end_addr:
+                    yield cmts[addr]
 
     def get_patch(self, addr):
 
