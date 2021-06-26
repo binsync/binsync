@@ -209,7 +209,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
     @quite_init_checker
     def struc_created(self, tid):
         #print("struct created")
-        self.ida_struct_changed(tid)
+        self.ida_struct_changed(tid, old_name="")
         #is_union = ida_struct.is_union(tid)
         return 0
 
@@ -537,7 +537,8 @@ class HexRaysHooks:
         # never do the same push twice
         if cmts != self._cached_funcs[ea]["cmts"]:
             # thread it!
-            self.binsync_state_change(self.controller.push_comments, ea, cmts)
+            kwargs = {}
+            self.binsync_state_change(self.controller.push_comments, ea, cmts, decompiled=True)
 
             # cache so we don't double push a copy
             self._cached_funcs[ea]["cmts"] = cmts

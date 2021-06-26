@@ -82,10 +82,15 @@ class InfoPanel(QWidget):
         self.reload()
 
     def reload(self):
-        # update status
-        # update users
+        # check if connected
         if self._active_table is not None and self._controller is not None and self._controller.check_client():
+            # update status
+            self._status_label.setText("Connected")
+            # self._status_label.setStyleSheet("color: green")
             self._active_table.update_users(self._controller.users())
+        else:
+            self._status_label.setText("Disconnected")
+            # self._status_label.setStyleSheet("color: red")
 
     def closeEvent(self, event):
         if self._controller is not None:

@@ -52,6 +52,7 @@ def list_files_in_tree(base_tree: git.Tree):
 
     return file_list
 
+
 def add_data(index: git.IndexFile, path: str, data: bytes):
     fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
     pathlib.Path(fullpath).parent.mkdir(parents=True, exist_ok=True)
@@ -176,7 +177,7 @@ class State:
                 pass
             else:
                 cmts = list(Comment.load_many(cmts_toml))
-                d = dict((c.addr, c.comment) for c in cmts)
+                d = dict((c.addr, c) for c in cmts)
                 if cmts:
                     s.comments[cmts[0].func_addr] = d
 
@@ -323,9 +324,12 @@ class State:
 
         # delete old struct only when we know what it is
         if old_name is not None:
-            del self.structs[old_name]
-            # delete the repo toml for the struct
-            remove_data(self.client.repo.index, os.path.join('structs', f'{old_name}.toml'))
+            try:
+                del self.structs[old_name]
+                # delete the repo toml for the struct
+                remove_data(self.client.repo.index, os.path.join('structs', f'{old_name}.toml'))
+            except KeyError:
+                pass
 
         # set the new struct
         if struct.name is not None:
