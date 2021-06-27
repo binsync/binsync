@@ -263,15 +263,15 @@ class State:
         return True
 
     @dirty_checker
-    def set_comment(self, func_addr, addr, comment: Comment):
+    def set_comment(self, comment: Comment):
 
-        if func_addr in self.comments and \
-                addr in self.comments[func_addr] and \
-                self.comments[func_addr][addr] == comment:
+        if comment and \
+                comment.func_addr in self.comments and \
+                self.comments[comment.func_addr][comment.addr] == comment:
             # no update is required
             return False
 
-        self.comments[func_addr][addr] = comment
+        self.comments[comment.func_addr][comment.addr] = comment
         return True
 
     @dirty_checker
@@ -356,14 +356,12 @@ class State:
         cmt = self.comments[func_addr][addr]
         return cmt
 
-    def get_comments(self, start_addr, end_addr=None):
-        for k in self.comments.irange(start_addr, reverse=False):
-            if k >= end_addr:
-                break
-            cmts = self.comments[k]
-            for addr in cmts:
-                if addr < end_addr:
-                    yield cmts[addr]
+    def get_comments(self, func_addr):
+        if func_addr not in self.comments:
+            raise KeyError("There is no comment at address %#x." % func_addr)
+
+        for addr in self.comments[func_addr]:
+            yield self.comments[func_addr][addr]
 
     def get_patch(self, addr):
 

@@ -512,8 +512,8 @@ class BinsyncController:
         # check if the function exist
         # if not; create it
         # if it does; write to the last_push parameter
-        cmt = binsync.data.Comment(func_addr, addr, comment, decompiled=decompiled)
-        state.set_comment(func_addr, addr, cmt)
+        sync_cmt = binsync.data.Comment(func_addr, addr, comment, decompiled=decompiled)
+        state.set_comment(sync_cmt)
 
     def push_comments(self, func_addr, cmt_dict: Dict[int, str], decompiled=False, user=None, state=None, api_set=False):
         for addr in cmt_dict:
