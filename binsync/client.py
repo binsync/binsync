@@ -150,8 +150,8 @@ class Client(object):
         self._last_pull_attempt_at = None  # type: datetime.datetime
 
         # User last push time/function
-        self._last_push_time = -1
-        self._last_push_function = -1
+        self.last_push_time = -1
+        self.last_push_function = -1
 
         # timestamps
         self._last_commit_ts = 0
@@ -436,24 +436,23 @@ class Client(object):
 
         self._last_commit_ts = time.time()
 
-    def last_push(self, last_push_function: int, last_push_time: int, func_name: str):
+    def last_push(self, func_addr: int, push_time: int):
         """
         Setter for the push variables.
         """
-        self._last_push_function = last_push_function
-        self._last_push_time = last_push_time
-
-        # get the master state
         state = self.get_state(user=self.master_user)
 
-        # check if the current function exists
-        try:
-            changed_func = state.get_function(last_push_function)
-        except KeyError:
-            changed_func = Function(last_push_function, name=func_name)
+        # update a users global metadata
+        state.last_push_func = func_addr
+        state.last_push_time = push_time
 
-        # set the new push time, and overwrite the function in state
-        changed_func.last_change = last_push_time
+        try:
+            changed_func = state.get_function(func_addr)
+        except KeyError:
+            changed_func = Function(func_addr, name="")
+
+        # update a users local, function level, metadata
+        changed_func.last_change = push_time
         state.set_function(changed_func)
 
     def save_state(self, state=None):
@@ -470,7 +469,7 @@ class Client(object):
 
         self.commit_lock.acquire()
         # dump the state
-        state.dump(index, self._last_push_function, self._last_push_time)
+        state.dump(index)
 
         # commit changes
         self.repo.index.add([os.path.join(state.user, "*")])

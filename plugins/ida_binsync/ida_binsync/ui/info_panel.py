@@ -6,6 +6,7 @@ import idaapi
 
 from .info_tables.func_info_table import QFuncInfoTable
 from .info_tables.struct_info_table import QStructInfoTable
+from ..controller import BinsyncController
 
 
 class InfoPanelDialog(QDialog):
@@ -43,7 +44,7 @@ class InfoPanelViewWrapper(object):
         self.widget.name = InfoPanelViewWrapper.NAME
         self.width_hint = 250
 
-        self._controller = controller
+        self._controller: BinsyncController = controller
         self._w = None
 
         self._init_widgets()
@@ -64,7 +65,7 @@ class InfoPanel(QWidget):
         #self.setMaximumHeight(400)
         #self.setMaximumWidth(300)
 
-        self._controller = controller
+        self._controller: BinsyncController = controller
         self._dialog = dialog
 
         # info tables
@@ -86,11 +87,12 @@ class InfoPanel(QWidget):
         if self._active_table is not None and self._controller is not None and self._controller.check_client():
             # update status
             self._status_label.setText("Connected")
-            # self._status_label.setStyleSheet("color: green")
             self._active_table.update_users(self._controller.users())
+
+            # update the tables
+            self._update_info_tables()
         else:
             self._status_label.setText("Disconnected")
-            # self._status_label.setStyleSheet("color: red")
 
     def closeEvent(self, event):
         if self._controller is not None:
@@ -158,5 +160,6 @@ class InfoPanel(QWidget):
         self._func_table.hide()
         self._struct_table.hide()
 
-    def _update_users(self):
-        self._active_table.update_users(self.workspace.instance.sync.users)
+    def _update_info_tables(self):
+        self._controller.client.init_remote()
+        self._active_table.update_users(self._controller.users())

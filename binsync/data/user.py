@@ -5,7 +5,7 @@ class User:
     """
     :ivar str name: Name of the user
     :ivar str uid:  Internal user ID in the form of uuid.
-    :ivar int last_push_time: Last push time of user.
+    :ivar int push_time: Last push time of user.
     :ivar int last_push_func: Last function address modified pushed.
     """
 
@@ -22,7 +22,7 @@ class User:
             metadata["user"],
             uid=metadata.get("uid", None),
             client=metadata.get("client", None),
-            last_push_time=metadata.get("last_push_time", -1),
+            last_push_time=metadata.get("push_time", -1),
             last_push_func=metadata.get("last_push_func", -1)
         )
         return u
