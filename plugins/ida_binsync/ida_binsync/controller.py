@@ -450,7 +450,7 @@ class BinsyncController:
 
         # pull function
         try:
-            func: Function = state.get_function(int(ida_func.start_ea + 0x400000))
+            func: Function = state.get_function(ida_func.start_ea)
             return func
         except KeyError:
             return None
@@ -459,14 +459,14 @@ class BinsyncController:
     @make_ro_state
     def pull_stack_variables(self, ida_func, user=None, state=None):
         try:
-            return dict(state.get_stack_variables(ida_func.start_ea + 0x400000))
+            return dict(state.get_stack_variables(ida_func.start_ea))
         except KeyError:
             return { }
 
     @init_checker
     @make_ro_state
     def pull_stack_variable(self, ida_func, offset, user=None, state=None):
-        return state.get_stack_variable(ida_func.start_ea + 0x400000, offset)
+        return state.get_stack_variable(ida_func.start_ea, offset)
 
     @init_checker
     @make_ro_state
@@ -481,7 +481,7 @@ class BinsyncController:
         :return:
         """
         try:
-            return state.get_comment(func_addr, addr + 0x400000)
+            return state.get_comment(func_addr, addr)
         except KeyError:
             return None
 
@@ -505,7 +505,7 @@ class BinsyncController:
         for start_ea, end_ea in idautils.Chunks(ida_func):
             for ins_addr in idautils.Heads(start_ea, end_ea):
                 if ins_addr in state.comments:
-                    state.remove_comment(ins_addr+ 0x400000)
+                    state.remove_comment(ins_addr)
 
     #
     #   Pushers
@@ -518,7 +518,7 @@ class BinsyncController:
         # check if the function exist
         # if not; create it
         # if it does; write to the last_push parameter
-        sync_cmt = binsync.data.Comment(func_addr+ 0x400000, addr+ 0x400000, comment, decompiled=decompiled)
+        sync_cmt = binsync.data.Comment(func_addr, addr, comment, decompiled=decompiled)
         state.set_comment(sync_cmt)
 
     def push_comments(self, func_addr, cmt_dict: Dict[int, str], decompiled=False, user=None, state=None, api_set=False):
@@ -544,7 +544,7 @@ class BinsyncController:
     @last_push
     def push_function_name(self, attr_addr, new_name, user=None, state=None, api_set=False):
         # setup the new function for binsync
-        func = binsync.data.Function(attr_addr+ 0x400000)
+        func = binsync.data.Function(attr_addr)
         func.name = new_name
         state.set_function(func)
 
@@ -554,7 +554,7 @@ class BinsyncController:
     def push_stack_variable(self, attr_addr, stack_offset, name, type_str, size, user=None, state=None, api_set=False):
         # convert longs to ints
         stack_offset = int(stack_offset)
-        func_addr = int(attr_addr+ 0x400000)
+        func_addr = int(attr_addr)
         size = int(size)
 
         v = StackVariable(stack_offset,
