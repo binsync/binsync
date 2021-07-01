@@ -86,14 +86,5 @@ class QStructInfoTable(QTableWidget):
         """
         Update the status of all users within the repo.
         """
+        pass
 
-        # reset the QItem list
-        self.items = []
-        
-        # First, let's see if any new homies showed up
-        self.controller._client.init_remote()
-
-        for user in self.controller.users():
-            self.items.append(QUserItem("", 0, user.name))
-
-        self.reload()

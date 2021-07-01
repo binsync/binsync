@@ -174,7 +174,7 @@ class SyncMenu():
         :return:
         """
         # First, let's see if any new users has joined repo
-        self.controller._client.init_remote()
+        self.controller.client.init_remote()
 
         # Build out the menu dictionary for the table
         menu_table = {}

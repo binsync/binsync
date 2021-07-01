@@ -105,18 +105,18 @@ class State:
         if not os.path.isdir(dir_name):
             raise RuntimeError("Cannot create directory %s. Maybe it conflicts with an existing file?" % dir_name)
 
-    def dump_metadata(self, index, last_push_time: int, last_push_func: int):
+    def dump_metadata(self, index):
         d = {
             "user": self.user,
             "version": self.version,
-            "last_push_func": last_push_func,
-            "last_push_time": last_push_time
+            "last_push_func": self.last_push_func,
+            "push_time": self.last_push_time
         }
         add_data(index, 'metadata.toml', toml.dumps(d).encode())
 
-    def dump(self, index: git.IndexFile, last_push_func: int, last_push_time: int):
+    def dump(self, index: git.IndexFile):
         # dump metadata
-        self.dump_metadata(index, last_push_time, last_push_func)
+        self.dump_metadata(index)
 
         # dump function
         add_data(index, 'functions.toml', toml.dumps(Function.dump_many(self.functions)).encode())
@@ -267,6 +267,7 @@ class State:
 
         if comment and \
                 comment.func_addr in self.comments and \
+                comment.addr in self.comments[comment.func_addr] and \
                 self.comments[comment.func_addr][comment.addr] == comment:
             # no update is required
             return False

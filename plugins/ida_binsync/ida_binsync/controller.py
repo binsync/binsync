@@ -74,14 +74,14 @@ def last_push(f):
             # Create our last push time, last push func, and func name
             last_push_time = int(time.time())
             last_push_func = compat.ida_func_addr(attr_addr)
-            func_name = compat.get_func_name(last_push_func)
+            #func_name = compat.get_func_name(last_push_func)
 
             # Call the function first. This way any changes
             # can be set. (func changed, time finally modified, etc.)
             f(self, *args, **kwargs)
 
             # Call the binsync proper client last_push
-            self._client.last_push(last_push_func, last_push_time, func_name)
+            self.client.last_push(last_push_func, last_push_time)
 
     return set_last_push
         
@@ -96,7 +96,7 @@ def make_state(f):
         state = kwargs.pop('state', None)
         user = kwargs.pop('user', None)
         if state is None:
-            state = self._client.get_state(user=user)
+            state = self.client.get_state(user=user)
             kwargs['state'] = state
             r = f(self, *args, **kwargs)
             state.save()
@@ -118,7 +118,7 @@ def make_ro_state(f):
         state = kwargs.pop('state', None)
         user = kwargs.pop('user', None)
         if state is None:
-            state = self._client.get_state(user=user)
+            state = self.client.get_state(user=user)
         kwargs['state'] = state
         kwargs['user'] = user
         return f(self, *args, **kwargs)
@@ -191,7 +191,7 @@ class BinsyncClient(Client):
 
 class BinsyncController:
     def __init__(self):
-        self._client = None  # type: binsync.Client
+        self.client = None  # type: binsync.Client
 
         self.info_panel = None
 
@@ -253,13 +253,13 @@ class BinsyncController:
     def pull_routine(self):
         while True:
             # pull the repo every 10 seconds
-            if self.check_client() and self._client.has_remote \
+            if self.check_client() and self.client.has_remote \
                     and (
-                         self._client._last_pull_attempt_at is None
-                         or (datetime.datetime.now() - self._client._last_pull_attempt_at).seconds > 10
+                    self.client._last_pull_attempt_at is None
+                    or (datetime.datetime.now() - self.client._last_pull_attempt_at).seconds > 10
                          ):
                 # Pull new items
-                self._client.pull()
+                self.client.pull()
 
                 # reload the info panel if it's registered
                 if self.info_panel is not None:
@@ -270,19 +270,19 @@ class BinsyncController:
                         self.info_panel = None
 
             # run an operation every second
-            if self.check_client() and self._client.has_remote:
+            if self.check_client() and self.client.has_remote:
                 self.eval_cmd_queue()
 
             # Snooze
             time.sleep(1)
 
     def connect(self, user, path, init_repo, ssh_agent_pid=None, ssh_auth_sock=None):
-        self._client = BinsyncClient(user, path, "", None, None, None, init_repo=init_repo,
-                                     ssh_agent_pid=ssh_agent_pid, ssh_auth_sock=ssh_auth_sock)
+        self.client = BinsyncClient(user, path, "", None, None, None, init_repo=init_repo,
+                                    ssh_agent_pid=ssh_agent_pid, ssh_auth_sock=ssh_auth_sock)
         print(f"[Binsync]: Client has connected to sync repo with user: {user}.")
 
     def check_client(self, message_box=False):
-        if self._client is None:
+        if self.client is None:
             if message_box:
                 QMessageBox.critical(
                     None,
@@ -306,16 +306,16 @@ class BinsyncController:
         return func
 
     def state_ctx(self, user=None, version=None, locked=False):
-        return self._client.state_ctx(user=user, version=version, locked=locked)
+        return self.client.state_ctx(user=user, version=version, locked=locked)
 
 
     @init_checker
     def status(self):
-        return self._client.status()
+        return self.client.status()
 
     @init_checker
     def users(self):
-        return self._client.users()
+        return self.client.users()
 
     #
     #   Pullers
@@ -353,6 +353,12 @@ class BinsyncController:
             return
 
         # == function name === #
+
+        # catch the case where a user did an update to something in a function
+        # but did not change it's name. In that case, keep the local name
+        if _func.name == "":
+            _func.name = compat.get_func_name(ida_func.start_ea)
+
         if compat.get_func_name(ida_func.start_ea) != _func.name:
             self.inc_api_count()
             compat.set_ida_func_name(ida_func.start_ea, _func.name)
@@ -422,13 +428,13 @@ class BinsyncController:
         Cache money.
         """
 
-        self._client.sync_states(user=user)
-        func_addrs = self._client.state.functions.keys()
+        self.client.sync_states(user=user)
+        func_addrs = self.client.state.functions.keys()
         print("[Binsync]: Target Addrs for sync:", [hex(x) for x in func_addrs])
 
         for addr in func_addrs:
             ida_func = idaapi.get_func(addr)
-            self.fill_function(ida_func, self._client.master_user) # semaphore inc
+            self.fill_function(ida_func, self.client.master_user) # semaphore inc
 
     @init_checker
     @make_ro_state
@@ -444,7 +450,7 @@ class BinsyncController:
 
         # pull function
         try:
-            func: Function = state.get_function(int(ida_func.start_ea))
+            func: Function = state.get_function(int(ida_func.start_ea + 0x400000))
             return func
         except KeyError:
             return None
@@ -453,14 +459,14 @@ class BinsyncController:
     @make_ro_state
     def pull_stack_variables(self, ida_func, user=None, state=None):
         try:
-            return dict(state.get_stack_variables(ida_func.start_ea))
+            return dict(state.get_stack_variables(ida_func.start_ea + 0x400000))
         except KeyError:
             return { }
 
     @init_checker
     @make_ro_state
     def pull_stack_variable(self, ida_func, offset, user=None, state=None):
-        return state.get_stack_variable(ida_func.start_ea, offset)
+        return state.get_stack_variable(ida_func.start_ea + 0x400000, offset)
 
     @init_checker
     @make_ro_state
@@ -475,7 +481,7 @@ class BinsyncController:
         :return:
         """
         try:
-            return state.get_comment(func_addr, addr)
+            return state.get_comment(func_addr, addr + 0x400000)
         except KeyError:
             return None
 
@@ -499,7 +505,7 @@ class BinsyncController:
         for start_ea, end_ea in idautils.Chunks(ida_func):
             for ins_addr in idautils.Heads(start_ea, end_ea):
                 if ins_addr in state.comments:
-                    state.remove_comment(ins_addr)
+                    state.remove_comment(ins_addr+ 0x400000)
 
     #
     #   Pushers
@@ -512,7 +518,7 @@ class BinsyncController:
         # check if the function exist
         # if not; create it
         # if it does; write to the last_push parameter
-        sync_cmt = binsync.data.Comment(func_addr, addr, comment, decompiled=decompiled)
+        sync_cmt = binsync.data.Comment(func_addr+ 0x400000, addr+ 0x400000, comment, decompiled=decompiled)
         state.set_comment(sync_cmt)
 
     def push_comments(self, func_addr, cmt_dict: Dict[int, str], decompiled=False, user=None, state=None, api_set=False):
@@ -525,12 +531,12 @@ class BinsyncController:
     @make_state
     def push_patch(self, patch, user=None, state=None, api_set=False):
         # Update last pushed values
-        last_push_time = int(time.time())
+        push_time = int(time.time())
         last_push_func = compat.ida_func_addr(patch.offset)
         func_name = compat.get_func_name(last_push_func)
 
         state.set_patch(patch.offset, patch)
-        self._client.last_push(last_push_func, last_push_time, func_name)
+        self.client.last_push(last_push_func, push_time, func_name)
     '''
 
     @init_checker
@@ -538,7 +544,7 @@ class BinsyncController:
     @last_push
     def push_function_name(self, attr_addr, new_name, user=None, state=None, api_set=False):
         # setup the new function for binsync
-        func = binsync.data.Function(attr_addr)
+        func = binsync.data.Function(attr_addr+ 0x400000)
         func.name = new_name
         state.set_function(func)
 
@@ -548,7 +554,7 @@ class BinsyncController:
     def push_stack_variable(self, attr_addr, stack_offset, name, type_str, size, user=None, state=None, api_set=False):
         # convert longs to ints
         stack_offset = int(stack_offset)
-        func_addr = int(attr_addr)
+        func_addr = int(attr_addr+ 0x400000)
         size = int(size)
 
         v = StackVariable(stack_offset,
@@ -588,8 +594,10 @@ class BinsyncController:
         # convert
         if isinstance(time_before, int):
             dt = datetime.datetime.fromtimestamp(time_before)
-        elif not isinstance(time_before, datetime.datetime):
-            return " "
+        elif isinstance(time_before, datetime.datetime):
+            dt = time_before
+        else:
+            return ""
 
         now = datetime.datetime.now()
         if dt <= now:

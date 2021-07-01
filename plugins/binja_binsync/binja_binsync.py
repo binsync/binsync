@@ -65,7 +65,7 @@ def make_state(f):
         user = kwargs.pop('user', None)
         if state is None:
             save_before_return = True
-            state = self._client.get_state(user=user)
+            state = self.client.get_state(user=user)
         else:
             save_before_return = False
         r = f(self, *args, **kwargs, state=state)
@@ -85,7 +85,7 @@ def make_ro_state(f):
         state = kwargs.pop('state', None)
         user = kwargs.pop('user', None)
         if state is None:
-            state = self._client.get_state(user=user)
+            state = self.client.get_state(user=user)
         return f(self, *args, **kwargs, state=state)
     return state_check
 
