@@ -92,7 +92,7 @@ class State:
         self.functions = {}  # type: Dict[int, Function]
         self.comments = defaultdict(dict)  # type: Dict[int, Dict[int, Comment]]
         self.stack_variables = defaultdict(dict)  # type: Dict[int, Dict[int, StackVariable]]
-        self.structs = defaultdict(dict) # type: Dict[str, Struct]
+        self.structs = defaultdict()  # type: Dict[str, Struct]
         self.patches = SortedDict()
 
     @property
@@ -361,8 +361,7 @@ class State:
         if func_addr not in self.comments:
             raise KeyError("There is no comment at address %#x." % func_addr)
 
-        for addr in self.comments[func_addr]:
-            yield self.comments[func_addr][addr]
+        return self.comments[func_addr]
 
     def get_patch(self, addr):
 

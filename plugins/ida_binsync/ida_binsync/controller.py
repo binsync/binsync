@@ -38,7 +38,7 @@ import ida_idaapi
 
 import binsync
 from binsync import Client
-from binsync.data import StackVariable, StackOffsetType, Function, Struct
+from binsync.data import StackVariable, StackOffsetType, Function, Struct, Comment
 from . import compat
 
 _l = logging.getLogger(name=__name__)
@@ -365,19 +365,15 @@ class BinsyncController:
 
         # === comments === #
         # set disassembly and decompiled comments
-        for start_ea, end_ea in idautils.Chunks(ida_func.start_ea):
-            for head in idautils.Heads(start_ea, end_ea):
-                comment: binsync.data.Comment = self.pull_comment(_func.addr, head, user=user, state=state)
-                if comment is not None and comment.comment is not None:
-                    self.inc_api_count()
-                    res = compat.set_ida_comment(head, comment.comment, decompiled=comment.decompiled)
-
-                    if not res:
-                        # XXX: this can be dangerous:
-                        # if the above comment fails and the api_count never gets decreased after
-                        # getting increased, we can be stalled for a long time.
-                        print(f"[BinSync]: Failed to sync comment at <{hex(head)}>: \'{comment.comment}\'")
-
+        sync_cmts = self.pull_comments(ida_func.start_ea)
+        for addr, cmt in sync_cmts.items():
+            self.inc_api_count()
+            res = compat.set_ida_comment(addr, cmt.comment, decompiled=cmt.decompiled)
+            if not res:
+                # XXX: this can be dangerous:
+                # if the above comment fails and the api_count never gets decreased after
+                # getting increased, we can be stalled for a long time.
+                print(f"[BinSync]: Failed to sync comment at <{hex(addr)}>: \'{cmt.comment}\'")
 
         # === stack variables === #
         existing_stack_vars = { }
@@ -470,16 +466,15 @@ class BinsyncController:
 
     @init_checker
     @make_ro_state
-    def pull_comment(self, func_addr, addr, user=None, state=None):
-        """
-        Pull comments downwards.
+    def pull_comments(self, func_addr, user=None, state=None) -> Dict[int, List['Comment']]:
+        try:
+            return state.get_comments(func_addr)
+        except KeyError:
+            return {}
 
-        :param bv:
-        :param start_addr:
-        :param end_addr:
-        :param user:
-        :return:
-        """
+    @init_checker
+    @make_ro_state
+    def pull_comment(self, func_addr, addr, user=None, state=None):
         try:
             return state.get_comment(func_addr, addr)
         except KeyError:
