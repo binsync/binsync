@@ -115,7 +115,7 @@ class QFuncInfoTable(QTableWidget):
                         # don't change it if the other user is more recent
                         continue
 
-                local_func_name = compat.get_func_name(func_addr - 0x400000)
+                local_func_name = compat.get_func_name(func_addr)
                 known_funcs[func_addr] = [func_addr, local_func_name, user.name, func_change_time]
 
         for row in known_funcs.values():

@@ -161,5 +161,6 @@ class InfoPanel(QWidget):
         self._struct_table.hide()
 
     def _update_info_tables(self):
-        self._controller.client.init_remote()
-        self._active_table.update_users(self._controller.users())
+        if self._controller.client.has_remote:
+            self._controller.client.init_remote()
+            self._active_table.update_users(self._controller.users())
