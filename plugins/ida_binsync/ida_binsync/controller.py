@@ -74,14 +74,14 @@ def last_push(f):
             # Create our last push time, last push func, and func name
             last_push_time = int(time.time())
             last_push_func = compat.ida_func_addr(attr_addr)
-            #func_name = compat.get_func_name(last_push_func)
+            func_name = compat.get_func_name(last_push_func)
 
             # Call the function first. This way any changes
             # can be set. (func changed, time finally modified, etc.)
             f(self, *args, **kwargs)
 
-            # Call the binsync proper client last_push
-            self.client.last_push(last_push_func, last_push_time)
+            # Call the binsync proper client set_last_push
+            self.client.set_last_push(last_push_func, last_push_time, func_name)
 
     return set_last_push
         
@@ -512,7 +512,7 @@ class BinsyncController:
     def push_comment(self, func_addr, addr, comment, decompiled=False, user=None, state=None, api_set=False):
         # check if the function exist
         # if not; create it
-        # if it does; write to the last_push parameter
+        # if it does; write to the set_last_push parameter
         sync_cmt = binsync.data.Comment(func_addr, addr, comment, decompiled=decompiled)
         state.set_comment(sync_cmt)
 
@@ -531,7 +531,7 @@ class BinsyncController:
         func_name = compat.get_func_name(last_push_func)
 
         state.set_patch(patch.offset, patch)
-        self.client.last_push(last_push_func, push_time, func_name)
+        self.client.set_last_push(last_push_func, push_time, func_name)
     '''
 
     @init_checker
@@ -606,7 +606,6 @@ class BinsyncController:
 
         if diff_days >= 1:
             s = "%d days" % diff_days
-            ago = diff_days < 0
         elif diff_sec >= 60 * 60:
             s = "%d hours" % int(diff_sec / 60 / 60)
         elif diff_sec >= 60:

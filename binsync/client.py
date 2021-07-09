@@ -436,7 +436,7 @@ class Client(object):
 
         self._last_commit_ts = time.time()
 
-    def last_push(self, func_addr: int, push_time: int):
+    def set_last_push(self, func_addr: int, push_time: int, func_name: str):
         """
         Setter for the push variables.
         """
@@ -446,13 +446,15 @@ class Client(object):
         state.last_push_func = func_addr
         state.last_push_time = push_time
 
+        # create a function if it does not exist in this users state
         try:
             changed_func = state.get_function(func_addr)
         except KeyError:
-            changed_func = Function(func_addr, name="")
+            changed_func = Function(func_addr)
 
         # update a users local, function level, metadata
         changed_func.last_change = push_time
+        changed_func.name = func_name
         state.set_function(changed_func)
 
     def save_state(self, state=None):
