@@ -24,7 +24,6 @@ import ida_struct
 import ida_idaapi
 
 from binsync.data import Struct
-from .controller import BinsyncController
 
 
 def is_mainthread():
@@ -174,7 +173,7 @@ def ida_func_addr(addr):
 
 
 @execute_write
-def update_struct(struct: Struct, controller: BinsyncController):
+def update_struct(struct: Struct, controller):
     # first, delete any struct by the same name if it exists
     sid = ida_struct.get_struc_id(struct.name)
     if sid != 0xffffffffffffffff:

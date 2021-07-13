@@ -1,12 +1,12 @@
 # ----------------------------------------------------------------------------
-# This file contains the BinsyncController class which acts as the the
+# This file contains the BinSyncController class which acts as the the
 # bridge between the plugin UI and direct calls to the binsync client found in
 # the core of binsync. In the controller, you will find code used to make
 # pushes and pulls of user changes.
 #
-# You will also notice that the BinsyncController runs two extra threads in
+# You will also notice that the BinSyncController runs two extra threads in
 # it:
-#   1. Binsync "git pulling" thread to constantly get changes from others
+#   1. BinSync "git pulling" thread to constantly get changes from others
 #   2. Command Routine to get hooked changes to IDA attributes
 #
 # The second point is more complicated because it acts as the queue of
@@ -37,7 +37,7 @@ import ida_struct
 import ida_idaapi
 
 import binsync
-from binsync import Client
+from binsync import Client, ConnectionWarnings
 from binsync.data import StackVariable, StackOffsetType, Function, Struct, Comment
 from . import compat
 
@@ -129,65 +129,10 @@ def make_ro_state(f):
 # Classes
 #
 
-class BinsyncClient(Client):
-    def __init__(
-        self,
-        master_user,
-        repo_root,
-        binary_hash,
-        function_callback,
-        comment_callback,
-        patch_callback,
-        remote="origin",
-        commit_interval=10,
-        init_repo=False,
-        remote_url=None,
-        ssh_agent_pid=None,
-        ssh_auth_sock=None
-    ):
-
-        binsync.Client.__init__(
-            self,
-            master_user,
-            repo_root,
-            binary_hash,
-            remote=remote,
-            commit_interval=commit_interval,
-            init_repo=init_repo,
-            remote_url=remote_url,
-            ssh_agent_pid=ssh_agent_pid,
-            ssh_auth_sock=ssh_auth_sock,
-        )
-
-        self.function_callback = function_callback
-        self.comment_callback = comment_callback
-        self.patch_callback = patch_callback
-
-    # def save_state(self, state=None):
-    #    print("ENTERING SAVE")
-    #    binsync.Client.save_state(self, state=state)
-    #    state = self.get_state()
-    #    for addr in state.functions.keys():
-    #        idaapi.set_name(addr, state.functions[addr].name)
-
-    def update(self):
-        """
-
-        :return:
-        """
-
-        # do a pull... if there is a remote
-        if self.has_remote:
-            self.pull()
-
-        print("IS DIRTY??", self.get_state().dirty)
-
-        if self.has_remote:
-            # do a push... if there is a remote
-            self.push()
-
-        self._last_commit_ts = time.time()
-
+class SyncControlStatus:
+    CONNECTED = 0
+    CONNECTED_NO_REMOTE = 1
+    DISCONNECTED = 2
 
 class BinsyncController:
     def __init__(self):
@@ -202,6 +147,8 @@ class BinsyncController:
         # command locks
         self.queue_lock = threading.Lock()
         self.cmd_queue = OrderedDict()
+
+        self._last_reload = time.time()
 
         # api locks
         self.api_lock = threading.Lock()
@@ -246,10 +193,6 @@ class BinsyncController:
             return 0
         self.queue_lock.release()
 
-    """
-    TODO:
-    there is a bug here since we do a state read in another thread at possibly the same time.
-    """
     def pull_routine(self):
         while True:
             # pull the repo every 10 seconds
@@ -261,25 +204,35 @@ class BinsyncController:
                 # Pull new items
                 self.client.pull()
 
-                # reload the info panel if it's registered
-                if self.info_panel is not None:
+            if self.check_client():
+                # run an operation every second
+                self.eval_cmd_queue()
+
+                # reload info panel every 10 seconds
+                if self.info_panel is not None and time.time() - self._last_reload > 10:
                     try:
+                        self._last_reload = time.time()
                         self.info_panel.reload()
                     except RuntimeError:
                         # the panel has been closed
                         self.info_panel = None
 
-            # run an operation every second
-            if self.check_client() and self.client.has_remote:
-                self.eval_cmd_queue()
-
             # Snooze
             time.sleep(1)
 
+    #
+    #   State Interaction Functions
+    #
+
     def connect(self, user, path, init_repo, ssh_agent_pid=None, ssh_auth_sock=None):
-        self.client = BinsyncClient(user, path, "", None, None, None, init_repo=init_repo,
-                                    ssh_agent_pid=ssh_agent_pid, ssh_auth_sock=ssh_auth_sock)
-        print(f"[Binsync]: Client has connected to sync repo with user: {user}.")
+        binary_md5 = idc.retrieve_input_file_md5()
+        self.client = Client(user, path, binary_md5,
+                             init_repo=init_repo,
+                             ssh_agent_pid=ssh_agent_pid,
+                             ssh_auth_sock=ssh_auth_sock
+                             )
+        BinsyncController._parse_and_display_connection_warnings(self.client.connection_warnings)
+        print(f"[BinSync]: Client has connected to sync repo with user: {user}.")
 
     def check_client(self, message_box=False):
         if self.client is None:
@@ -294,24 +247,24 @@ class BinsyncController:
             return False
         return True
 
-    def current_function(self):
-        """
-        :return:
-        :rtype: Optional[ida_funcs.func_t]
-        """
-        ea = compat.get_screen_ea()
-        if ea is None:
-            return None
-        func = idaapi.get_func(ea)
-        return func
-
     def state_ctx(self, user=None, version=None, locked=False):
         return self.client.state_ctx(user=user, version=version, locked=locked)
 
-
-    @init_checker
     def status(self):
-        return self.client.status()
+        if self.check_client():
+            if self.client.has_remote:
+                return SyncControlStatus.CONNECTED
+            return SyncControlStatus.CONNECTED_NO_REMOTE
+        return SyncControlStatus.DISCONNECTED
+
+    def status_string(self):
+        stat = self.status()
+        if stat == SyncControlStatus.CONNECTED:
+            return "Connected to a sync repo"
+        elif stat == SyncControlStatus.CONNECTED_NO_REMOTE:
+            return "Connected to a sync repo (no remote)"
+        else:
+            return "Not connected to a sync repo"
 
     @init_checker
     def users(self):
@@ -334,7 +287,7 @@ class BinsyncController:
         # sanity check, the desired user has some structs to sync
         pulled_structs: List[Struct] = self.pull_structs(user=user, state=state)
         if len(pulled_structs) <= 0:
-            print(f"[Binsync]: User {user} has no structs to sync!")
+            print(f"[BinSync]: User {user} has no structs to sync!")
             return 0
 
         # convert each binsync struct into an ida struct and updated it
@@ -426,7 +379,7 @@ class BinsyncController:
 
         self.client.sync_states(user=user)
         func_addrs = self.client.state.functions.keys()
-        print("[Binsync]: Target Addrs for sync:", [hex(x) for x in func_addrs])
+        print("[BinSync]: Target Addrs for sync:", [hex(x) for x in func_addrs])
 
         for addr in func_addrs:
             ida_func = idaapi.get_func(addr)
@@ -566,10 +519,26 @@ class BinsyncController:
         old_name = None if old_name == "" else old_name
         state.set_struct(struct, old_name)
 
-
     #
     # Utils
     #
+    @staticmethod
+    def _parse_and_display_connection_warnings(warnings):
+        warning_text = ""
+
+        for warning in warnings:
+            if warning == ConnectionWarnings.HASH_MISMATCH:
+                warning_text += "Warning: the hash stored for this BinSync project does not match"
+                warning_text += " the hash of the binary you are attempting to analyze. It's possible"
+                warning_text += " you are working on a different binary.\n"
+
+        if len(warning_text) > 0:
+            QMessageBox.warning(
+                None,
+                "BinSync: Connection Warnings",
+                warning_text,
+                QMessageBox.Ok,
+            )
 
     @staticmethod
     def _get_type_str(flag):

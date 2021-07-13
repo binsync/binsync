@@ -85,14 +85,12 @@ class InfoPanel(QWidget):
     def reload(self):
         # check if connected
         if self._active_table is not None and self._controller is not None and self._controller.check_client():
-            # update status
-            self._status_label.setText("Connected")
-            self._active_table.update_users(self._controller.users())
 
             # update the tables
             self._update_info_tables()
-        else:
-            self._status_label.setText("Disconnected")
+
+        # update status
+        self._status_label.setText(self._controller.status_string())
 
     def closeEvent(self, event):
         if self._controller is not None:
@@ -163,4 +161,5 @@ class InfoPanel(QWidget):
     def _update_info_tables(self):
         if self._controller.client.has_remote:
             self._controller.client.init_remote()
-            self._active_table.update_users(self._controller.users())
+
+        self._active_table.update_users(self._controller.users())

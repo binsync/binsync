@@ -21,6 +21,10 @@ BINSYNC_BRANCH_PREFIX = 'binsync'
 BINSYNC_ROOT_BRANCH = f'{BINSYNC_BRANCH_PREFIX}/__root__'
 
 
+class ConnectionWarnings:
+    HASH_MISMATCH = 0
+
+
 class StateContext(object):
     def __init__(self, client, state, locked=False):
         self.client = client
@@ -87,6 +91,7 @@ class Client(object):
         # ssh-agent info
         self.ssh_agent_pid = ssh_agent_pid  # type: int
         self.ssh_auth_sock = ssh_auth_sock  # type: str
+        self.connection_warnings = []
 
         # three scenarios
         # 1. We already have the repo checked out
@@ -119,9 +124,9 @@ class Client(object):
             else:
                 raise
 
-        #stored = self._get_stored_hash()
-        #if stored != binary_hash:
-        #    raise Exception(f"This binsync repo is not for the provided binary:\nWe have {repr(binary_hash)} and the repository has {repr(stored)}")
+        stored = self._get_stored_hash()
+        if stored != binary_hash:
+            self.connection_warnings.append(ConnectionWarnings.HASH_MISMATCH)
 
         assert not self.repo.bare, "it should not be a bare repo"
 
@@ -156,13 +161,20 @@ class Client(object):
         # timestamps
         self._last_commit_ts = 0
 
-        self.state = None  # TODO: Updating it
+        self.state = None
         self.commit_lock = threading.Lock()
 
     def init_remote(self):
-        '''Initialize remote branches. Thx GitHub'''
+        """
+        Init PyGits view of remote references in a repo. If the remote can not be found,
+        exit early.
+
+        """
         # Get all branches
-        branches = self.repo.remote().refs
+        try:
+            branches = self.repo.remote().refs
+        except ValueError:
+            return
 
         # Iterate over all branches, track commits
         for branch in branches:
@@ -173,8 +185,6 @@ class Client(object):
             try:
                 self.repo.git.checkout('--track', branch.name)
             except git.GitCommandError as e:
-                # We don't care if it exists. RIP
-                #print(e)
                 pass
 
     def __del__(self):
@@ -192,7 +202,7 @@ class Client(object):
 
         :return:    True if there is a remote, False otherwise.
         """
-        return self.remote and any(r.name == self.remote for r in self.repo.remotes)
+        return self.remote and self.repo.remotes and any(r.name == self.remote for r in self.repo.remotes)
 
     @property
     def last_update_timestamp(self):
@@ -289,15 +299,11 @@ class Client(object):
                     ))
 
     def users(self) -> typing.Iterable[User]:
-        for ref in self.repo.refs:  # type: git.Reference
-            if not ref.is_remote() or ref.remote_name != self.remote or not ref.name.startswith(f'{self.remote}/{BINSYNC_BRANCH_PREFIX}/'):
-                continue
-            # Load metadata
+        for ref in self._get_best_refs():
             try:
                 metadata = State.load_metadata(ref.commit.tree)
                 yield User.from_metadata(metadata)
             except Exception as e:
-                #print(e)
                 continue
 
     def tally(self, users=None):
@@ -528,6 +534,21 @@ class Client(object):
     def close(self):
         self.repo.close()
         del self.repo
+
+    def _get_best_refs(self):
+        candidates = {}
+        for ref in self.repo.refs:  # type: git.Reference
+            if f'{BINSYNC_BRANCH_PREFIX}/' not in ref.name:
+                continue
+
+            branch_name = ref.name.split("/")[-1]
+            if branch_name in candidates:
+                # if the candidate exists, and the new one is not remote, don't replace it
+                if not ref.is_remote() or ref.remote_name != self.remote:
+                    continue
+
+            candidates[branch_name] = ref
+        return candidates.values()
 
     def _setup_repo(self):
         with open(os.path.join(self.repo_root, ".gitignore"), "w") as f:
