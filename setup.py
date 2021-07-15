@@ -10,14 +10,14 @@ except ImportError:
 
 setup(
     name='binsync',
-    version='0.0.0.1',
+    version='1.0.0',
     packages=packages,
     install_requires=[
         "sortedcontainers",
         "toml",
         "GitPython",
         "filelock",
-        "sip",
+        "PyQt5-sip",
     ],
     description='Collaboration framework for binary analysis tasks.',
     url='https://github.com/angr/binsync',
