@@ -43,7 +43,6 @@ import idc
 from . import compat
 from .controller import BinsyncController
 from binsync.data.struct import Struct
-from .type_helper import ParseTypeString
 
 
 #
