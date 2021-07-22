@@ -22,7 +22,7 @@ class MenuDialog(QDialog):
 
         label = QLabel("Binsync Action")
         self.combo = QComboBox()
-        self.combo.addItems(["Sync", "Sync All", "Sync Structs"])
+        self.combo.addItems(["Sync Selected Functions", "Sync All Functions", "Sync Structs"])
 
         self.tableWidget = QTableWidget(len(self.menu_table), 4)
         self.tableWidget.setHorizontalHeaderLabels(
