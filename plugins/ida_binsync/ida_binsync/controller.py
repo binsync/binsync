@@ -35,6 +35,7 @@ import idaapi
 import idautils
 import ida_struct
 import ida_idaapi
+import ida_typeinf
 
 import binsync
 from binsync import Client, ConnectionWarnings
@@ -305,8 +306,7 @@ class BinsyncController:
         if _func is None:
             return
 
-        # == function name === #
-
+        # === function name === #
         # catch the case where a user did an update to something in a function
         # but did not change it's name. In that case, keep the local name
         if _func.name == "":
@@ -329,16 +329,43 @@ class BinsyncController:
                 print(f"[BinSync]: Failed to sync comment at <{hex(addr)}>: \'{cmt.comment}\'")
 
         # === stack variables === #
-        existing_stack_vars = { }
+        existing_stack_vars = {}
         frame = idaapi.get_frame(ida_func.start_ea)
         if frame is None or frame.memqty <= 0:
             _l.debug("Function %#x does not have an associated function frame. Skip variable name sync-up.",
                      ida_func.start_ea)
             return
 
+        # convert each ida stack offset into an angr stack offset
+        for i in range(frame.memqty):
+            ida_stack_var = frame.get_member(i)
+            angr_stack_offset = compat.ida_to_angr_stack_offset(ida_func.start_ea, ida_stack_var.soff)
+            existing_stack_vars[angr_stack_offset] = ida_stack_var
+
+        # only try to set stack vars that actually exist
+        for offset, stack_var in self.pull_stack_variables(ida_func, user=user, state=state).items():
+            if offset in existing_stack_vars:
+                # change the variable's name
+                if stack_var.name != ida_struct.get_member_name(existing_stack_vars[offset].id):
+                    self.inc_api_count()
+                    ida_struct.set_member_name(frame, existing_stack_vars[offset].soff, stack_var.name)
+
+                # change the variable's type
+                if stack_var.type != ida_typeinf.idc_get_type(existing_stack_vars[offset].id):
+                    # validate the type is convertible
+                    ida_type = compat.convert_type_str_to_ida_type(stack_var.type)
+                    if ida_type is None:
+                        print(f"[BinSync]: Failed to sync stack-variable-type at offset"
+                              f" {hex(existing_stack_vars[offset].soff)} with type {stack_var.type}.")
+                        continue
+                    else:
+                        # self.inc_api_count()
+                        compat.set_stack_var_type(ida_func.start_ea, existing_stack_vars[offset].soff, ida_type)
+
+
+        """
         frame_size = idc.get_struc_size(frame)
         last_member_size = idaapi.get_member_size(frame.get_member(frame.memqty - 1))
-
         for i in range(frame.memqty):
             member = frame.get_member(i)
             stack_offset = member.soff - frame_size + last_member_size
@@ -348,7 +375,7 @@ class BinsyncController:
             ida_offset = stack_var.get_offset(StackOffsetType.IDA)
             # skip if this variable already exists
             if ida_offset in existing_stack_vars:
-                type_str = self._get_type_str(existing_stack_vars[ida_offset].flag)
+                type_str = self.get_default_type_str(existing_stack_vars[ida_offset].flag)
             else:
                 type_str = None
 
@@ -361,6 +388,7 @@ class BinsyncController:
                 self.inc_api_count()
                 idaapi.set_member_name(frame, existing_stack_vars[ida_offset].soff, stack_var.name)
                 # TODO: retype the existing variable
+        """
 
         # ===== update the psuedocode ==== #
         compat.refresh_pseudocode_view(_func.addr)
@@ -522,6 +550,7 @@ class BinsyncController:
     #
     # Utils
     #
+
     @staticmethod
     def _parse_and_display_connection_warnings(warnings):
         warning_text = ""
@@ -541,7 +570,7 @@ class BinsyncController:
             )
 
     @staticmethod
-    def _get_type_str(flag):
+    def get_default_type_str(flag):
         if idc.is_byte(flag):
             return "unsigned char"
         elif idc.is_word(flag):
@@ -584,15 +613,3 @@ class BinsyncController:
 
         s += " ago" if ago else " in the future"
         return s
-
-
-def on_renamed(*args):
-    pass
-
-
-def on_auto_empty_finally(*args):
-    pass
-
-
-def get_cmt(*args):
-    pass
