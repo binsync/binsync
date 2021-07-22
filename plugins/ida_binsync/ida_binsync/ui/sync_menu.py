@@ -16,6 +16,7 @@ class BinsyncMenuActionItem:
     SYNC_SELECTED_FUNCTIONS = "Sync Selected Functions"1
     SYNC_ALL_FUNCTIONS = "Sync All Functions"
     SYNC_STRUCTS = "Sync All Structs"
+    TOGGLE_AUTO_SYNC = "Toggle Auto Sync"
 
 class MenuDialog(QDialog):
     def __init__(self, menu_table, parent=None):
@@ -153,7 +154,7 @@ class SyncMenu():
             self.controller.fill_function(ida_func, user=user)
             print(f"[Binsync]: Data has been synced from user: {user}.")
 
-        elif action == "Toggle autosync":
+        elif action == BinsyncMenuActionItem.TOGGLE_AUTO_SYNC:
             # TODO: implement auto-syncing
             print(f"[Binsync]: Auto Sync not implemented yet.")
 
