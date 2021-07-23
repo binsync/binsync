@@ -306,6 +306,11 @@ class BinsyncController:
         if _func is None:
             return
 
+        # open the current view in ida to this function
+        ida_code_view = ida_hexrays.open_pseudocode(ida_func.start_ea, 0)
+        if ida_code_view is None:
+            print("[BinSync]: failed to open pseudocode view! Type syncing disabled!")
+
         # === function name === #
         # catch the case where a user did an update to something in a function
         # but did not change it's name. In that case, keep the local name
@@ -329,66 +334,43 @@ class BinsyncController:
                 print(f"[BinSync]: Failed to sync comment at <{hex(addr)}>: \'{cmt.comment}\'")
 
         # === stack variables === #
-        existing_stack_vars = {}
+        # sanity check that this function has a stack frame
         frame = idaapi.get_frame(ida_func.start_ea)
         if frame is None or frame.memqty <= 0:
             _l.debug("Function %#x does not have an associated function frame. Skip variable name sync-up.",
                      ida_func.start_ea)
             return
 
-        # convert each ida stack offset into an angr stack offset
-        for i in range(frame.memqty):
-            ida_stack_var = frame.get_member(i)
-            angr_stack_offset = compat.ida_to_angr_stack_offset(ida_func.start_ea, ida_stack_var.soff)
-            existing_stack_vars[angr_stack_offset] = ida_stack_var
+        # collect and covert the info of each stack variable
+        existing_stack_vars = {}
+        for offset, ida_var in compat.get_func_stack_var_info(ida_func.start_ea).items():
+            existing_stack_vars[compat.ida_to_angr_stack_offset(ida_func.start_ea, offset)] = ida_var
 
+        stack_vars_to_set = {}
         # only try to set stack vars that actually exist
         for offset, stack_var in self.pull_stack_variables(ida_func, user=user, state=state).items():
             if offset in existing_stack_vars:
                 # change the variable's name
-                if stack_var.name != ida_struct.get_member_name(existing_stack_vars[offset].id):
+                if stack_var.name != existing_stack_vars[offset].name:
                     self.inc_api_count()
-                    ida_struct.set_member_name(frame, existing_stack_vars[offset].soff, stack_var.name)
+                    ida_struct.set_member_name(frame, existing_stack_vars[offset].offset, stack_var.name)
 
-                # change the variable's type
-                if stack_var.type != ida_typeinf.idc_get_type(existing_stack_vars[offset].id):
+                # check if the variables type should be changed
+                if ida_code_view and stack_var.type != existing_stack_vars[offset].type_str:
                     # validate the type is convertible
                     ida_type = compat.convert_type_str_to_ida_type(stack_var.type)
                     if ida_type is None:
-                        print(f"[BinSync]: Failed to sync stack-variable-type at offset"
-                              f" {hex(existing_stack_vars[offset].soff)} with type {stack_var.type}.")
+                        print(f"[BinSync]: Failed to parse stored stack-variable-type at offset"
+                              f" {hex(existing_stack_vars[offset].offset)} with type {stack_var.type}.")
                         continue
-                    else:
-                        # self.inc_api_count()
-                        compat.set_stack_var_type(ida_func.start_ea, existing_stack_vars[offset].soff, ida_type)
 
+                    # queue up the change!
+                    # TODO: add the api count for each one
+                    # self.inc_api_count()
+                    stack_vars_to_set[existing_stack_vars[offset].offset] = ida_type
 
-        """
-        frame_size = idc.get_struc_size(frame)
-        last_member_size = idaapi.get_member_size(frame.get_member(frame.memqty - 1))
-        for i in range(frame.memqty):
-            member = frame.get_member(i)
-            stack_offset = member.soff - frame_size + last_member_size
-            existing_stack_vars[stack_offset] = member
-
-        for offset, stack_var in self.pull_stack_variables(ida_func, user=user, state=state).items():
-            ida_offset = stack_var.get_offset(StackOffsetType.IDA)
-            # skip if this variable already exists
-            if ida_offset in existing_stack_vars:
-                type_str = self.get_default_type_str(existing_stack_vars[ida_offset].flag)
-            else:
-                type_str = None
-
-            if ida_offset in existing_stack_vars:
-                if idc.get_member_name(frame.id, existing_stack_vars[ida_offset].soff) == stack_var.name \
-                        and type_str is not None \
-                        and stack_var.type == type_str:
-                    continue
-                # rename the existing variable
-                self.inc_api_count()
-                idaapi.set_member_name(frame, existing_stack_vars[ida_offset].soff, stack_var.name)
-                # TODO: retype the existing variable
-        """
+        # change the type of all vars that need to be changed
+        compat.set_stack_vars_type(stack_vars_to_set, ida_code_view)
 
         # ===== update the psuedocode ==== #
         compat.refresh_pseudocode_view(_func.addr)

@@ -25,6 +25,20 @@ import ida_typeinf
 
 from binsync.data import Struct
 
+
+#
+#   Helper classes for wrapping data
+#
+
+class IDAStackVar:
+    def __init__(self, func_addr, offset, name, type_str, size):
+        self.func_addr = func_addr
+        self.offset = offset
+        self.name = name
+        self.type_str = type_str
+        self.size = size
+
+
 #
 #   Wrappers for IDA Main thread r/w operations
 #
@@ -154,8 +168,6 @@ def set_ida_comment(addr, cmt, decompiled=False):
 
 @execute_write
 def set_decomp_comments(func_addr, cmt_dict: Dict[int, str]):
-    print(f"setting: {cmt_dict}")
-
     for addr in cmt_dict:
         ida_cmts = ida_hexrays.user_cmts_new()
 
@@ -173,8 +185,45 @@ def set_decomp_comments(func_addr, cmt_dict: Dict[int, str]):
 #   IDA Stack Var r/w
 #
 
+def get_func_stack_var_info(func_addr) -> Dict[int, IDAStackVar]:
+    decompilation = ida_hexrays.decompile(func_addr)
+    stack_var_info = {}
+
+    for var in decompilation.lvars:
+        if not var.is_stk_var():
+            continue
+
+        size = var.width
+        name = var.name
+        offset = var.location.stkoff()
+        type_str = str(var.type())
+        stack_var_info[offset] = IDAStackVar(func_addr, offset, name, type_str, size)
+
+    return stack_var_info
+
+
+@execute_read
+def get_func_stack_var_type_strs(func_addr):
+    decomp_code = ida_hexrays.decompile(func_addr)
+    type_dict = {}
+
+    for var in decomp_code.lvars:
+        if var.is_stk_var():
+            type_dict[var.location.stkoff()] = str(var.type())
+
+    return type_dict
+
+
 @execute_write
-def set_stack_var_type(func_addr, ida_stack_var_offset, ida_type):
+def set_stack_vars_type(var_type_dict, code_view):
+    for lvar in code_view.cfunc.lvars:
+        cur_off = lvar.location.stkoff()
+        if lvar.is_stk_var() and cur_off in var_type_dict:
+            code_view.set_lvar_type(lvar, var_type_dict[cur_off]);
+
+
+@execute_write
+def set_stack_var_type_old(func_addr, ida_stack_var_offset, ida_type):
     """
     Sets a stack variable's type in the GUI and IDB
 

@@ -116,12 +116,6 @@ class IDBHooks(ida_idp.IDB_Hooks):
     @quite_init_checker
     def ti_changed(self, ea, type_, fname):
         print(f"TI CHANGED: {ea}, {type_}, {fname}")
-        if ida_struct.is_member_id(ea):
-            name = ida_struct.get_struc_name(ea)
-        type_ = ida_typeinf.idc_get_type_raw(ea)
-
-        parsed_type = ParseTypeString(type_[0]) if type_ else []
-
         return 0
 
     #
@@ -260,7 +254,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def struc_member_renamed(self, sptr, mptr):
-        print(f"struc member renamed: {sptr.id}")
+        print(f"struc member renamed: {sptr.id}: {mptr.id}")
         """
         Handles renaming of two things:
         1. Global Structs
@@ -274,25 +268,20 @@ class IDBHooks(ida_idp.IDB_Hooks):
         # struct pointer is actually a stack frame
         if sptr.is_frame():
             stack_frame = sptr
-            stack_var = mptr
             func_addr = idaapi.get_func_by_frame(stack_frame.id)
-
-            # compute stack frame for offset
-            frame_size = idc.get_struc_size(stack_frame)
-            last_member_size = idaapi.get_member_size(stack_frame.get_member(stack_frame.memqty - 1))
+            stack_var_info = compat.get_func_stack_var_info(func_addr)[mptr.soff]
 
             # find the properties of the changed stack var
-            stack_offset = stack_var.soff - frame_size + last_member_size
-            size = idaapi.get_member_size(stack_var)
-            type_str = ida_typeinf.idc_get_type(stack_var.id) if stack_var.has_ti() \
-                else self.controller.get_default_type_str(stack_var.flag)
+            angr_offset = compat.ida_to_angr_stack_offset(func_addr, stack_var_info.offset)
+            size = stack_var_info.size
+            type_str = stack_var_info.type_str
 
-            # recover the new name made by the user
-            new_name = ida_struct.get_member_name(stack_var.id)
+            # TODO: correct this fix in the get_func_stack_var_info
+            new_name = ida_struct.get_member_name(mptr.id)
 
             # do the change on a new thread
             self.binsync_state_change(self.controller.push_stack_variable,
-                                      func_addr, stack_offset, new_name, type_str, size)
+                                      func_addr, angr_offset, new_name, type_str, size)
 
         # an actual struct
         else:
@@ -302,10 +291,26 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def struc_member_changed(self, sptr, mptr):
-        print(f"struc member changed: {sptr.id}")
+        print(f"struc member changed: {sptr.id}, {mptr.id}")
 
-        # assure it is a real struct
-        if not sptr.is_frame():
+        # struct pointer is actually a stack frame
+        if sptr.is_frame():
+            stack_frame = sptr
+            func_addr = idaapi.get_func_by_frame(stack_frame.id)
+            stack_var_info = compat.get_func_stack_var_info(func_addr)[mptr.soff]
+
+            # find the properties of the changed stack var
+            angr_offset = compat.ida_to_angr_stack_offset(func_addr, stack_var_info.offset)
+            size = stack_var_info.size
+            type_str = stack_var_info.type_str
+
+            # TODO: correct this fix in the get_func_stack_var_info
+            new_name = ida_struct.get_member_name(mptr.id)
+
+            # do the change on a new thread
+            self.binsync_state_change(self.controller.push_stack_variable,
+                                      func_addr, angr_offset, new_name, type_str, size)
+        else:
             self.ida_struct_changed(sptr.id)
 
         return 0
