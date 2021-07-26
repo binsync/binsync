@@ -146,7 +146,7 @@ class SyncMenu():
 
         if action == "Sync":
             self.controller.fill_function(ida_func, user=user)
-            print(f"[Binsync]: Data has been synced from user: {user}.")
+            print(f"[Binsync]: Data has been synced from user \'{user}\' on function {hex(ida_func.start_ea)}.")
 
         elif action == "Toggle autosync":
             # TODO: implement auto-syncing

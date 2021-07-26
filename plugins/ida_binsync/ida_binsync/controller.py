@@ -135,6 +135,7 @@ class SyncControlStatus:
     CONNECTED_NO_REMOTE = 1
     DISCONNECTED = 2
 
+
 class BinsyncController:
     def __init__(self):
         self.client = None  # type: binsync.Client
@@ -165,17 +166,15 @@ class BinsyncController:
     #
 
     def inc_api_count(self):
-        self.api_lock.acquire()
-        self.api_count += 1
-        self.api_lock.release()
+        with self.api_lock:
+            self.api_count += 1
 
     def make_controller_cmd(self, cmd_func, *args, **kwargs):
-        self.queue_lock.acquire()
-        if cmd_func == self.push_struct:
-            self.cmd_queue[args[0].name] = (cmd_func, args, kwargs)
-        else:
-            self.cmd_queue[time.time()] = (cmd_func, args, kwargs)
-        self.queue_lock.release()
+        with self.queue_lock:
+            if cmd_func == self.push_struct:
+                self.cmd_queue[args[0].name] = (cmd_func, args, kwargs)
+            else:
+                self.cmd_queue[time.time()] = (cmd_func, args, kwargs)
 
     def eval_cmd_queue(self):
         self.queue_lock.acquire()
@@ -226,7 +225,7 @@ class BinsyncController:
     #
 
     def connect(self, user, path, init_repo, ssh_agent_pid=None, ssh_auth_sock=None):
-        binary_md5 = idc.retrieve_input_file_md5()
+        binary_md5 = idc.retrieve_input_file_md5().hex()
         self.client = Client(user, path, binary_md5,
                              init_repo=init_repo,
                              ssh_agent_pid=ssh_agent_pid,
@@ -306,11 +305,6 @@ class BinsyncController:
         if _func is None:
             return
 
-        # open the current view in ida to this function
-        ida_code_view = ida_hexrays.open_pseudocode(ida_func.start_ea, 0)
-        if ida_code_view is None:
-            print("[BinSync]: failed to open pseudocode view! Type syncing disabled!")
-
         # === function name === #
         # catch the case where a user did an update to something in a function
         # but did not change it's name. In that case, keep the local name
@@ -347,53 +341,51 @@ class BinsyncController:
             existing_stack_vars[compat.ida_to_angr_stack_offset(ida_func.start_ea, offset)] = ida_var
 
         stack_vars_to_set = {}
-        # only try to set stack vars that actually exist
-        for offset, stack_var in self.pull_stack_variables(ida_func, user=user, state=state).items():
-            if offset in existing_stack_vars:
-                # change the variable's name
-                if stack_var.name != existing_stack_vars[offset].name:
-                    self.inc_api_count()
-                    ida_struct.set_member_name(frame, existing_stack_vars[offset].offset, stack_var.name)
+        with compat.IDAViewCTX(ida_func.start_ea) as ida_code_view:
+            # only try to set stack vars that actually exist
+            for offset, stack_var in self.pull_stack_variables(ida_func, user=user, state=state).items():
+                if offset in existing_stack_vars:
+                    # change the variable's name
+                    if stack_var.name != existing_stack_vars[offset].name:
+                        self.inc_api_count()
+                        ida_struct.set_member_name(frame, existing_stack_vars[offset].offset, stack_var.name)
 
-                # check if the variables type should be changed
-                if ida_code_view and stack_var.type != existing_stack_vars[offset].type_str:
-                    # validate the type is convertible
-                    ida_type = compat.convert_type_str_to_ida_type(stack_var.type)
-                    if ida_type is None:
-                        print(f"[BinSync]: Failed to parse stored stack-variable-type at offset"
-                              f" {hex(existing_stack_vars[offset].offset)} with type {stack_var.type}.")
-                        continue
+                    # check if the variables type should be changed
+                    if ida_code_view and stack_var.type != existing_stack_vars[offset].type_str:
+                        # validate the type is convertible
+                        ida_type = compat.convert_type_str_to_ida_type(stack_var.type)
+                        if ida_type is None:
+                            # its possible the type is just a custom type from the same user
+                            # TODO: make it possible to sync a single struct
+                            if self._typestr_in_state_structs(stack_var.type, user=user, state=state):
+                                self.fill_structs(user=user, state=state)
 
-                    # queue up the change!
-                    # TODO: add the api count for each one
-                    # self.inc_api_count()
-                    stack_vars_to_set[existing_stack_vars[offset].offset] = ida_type
+                            ida_type = compat.convert_type_str_to_ida_type(stack_var.type)
+                            # it really is just a bad type
+                            if ida_type is None:
+                                print(f"[BinSync]: Failed to parse stored type at offset"
+                                      f" {hex(existing_stack_vars[offset].offset)} with type {stack_var.type}.")
+                                continue
 
-        # change the type of all vars that need to be changed
-        compat.set_stack_vars_type(stack_vars_to_set, ida_code_view)
+                        # queue up the change!
+                        stack_vars_to_set[existing_stack_vars[offset].offset] = ida_type
+
+            # change the type of all vars that need to be changed
+            # NOTE: api_count is incremented inside the function
+            compat.set_stack_vars_type(stack_vars_to_set, ida_code_view, self)
 
         # ===== update the psuedocode ==== #
         compat.refresh_pseudocode_view(_func.addr)
 
+    @init_checker
     def sync_all(self, user=None, state=None):
-        """
-        TODO: to fix time overwrites
-        Idea:
-        How to fix overwritten times from hooks:
-        Make a semaphore. Increment the semaphore before each action that triggers a hook.
-        In the hook, decrement the semaphore. When the semaphore is 0, reset all the times
-        in the state AND all commiting. Stop commiting until semaphores are done.
-
-        Cache money.
-        """
-
         self.client.sync_states(user=user)
         func_addrs = self.client.state.functions.keys()
         print("[BinSync]: Target Addrs for sync:", [hex(x) for x in func_addrs])
 
         for addr in func_addrs:
             ida_func = idaapi.get_func(addr)
-            self.fill_function(ida_func, self.client.master_user) # semaphore inc
+            self.fill_function(ida_func, user=self.client.master_user)
 
     @init_checker
     @make_ro_state
@@ -532,6 +524,16 @@ class BinsyncController:
     #
     # Utils
     #
+
+    @init_checker
+    def _typestr_in_state_structs(self, type_str, user=None, state=None):
+        binsync_structs = state.get_structs()
+        for struct in binsync_structs:
+            if struct.name in type_str:
+                return True
+
+        return False
+
 
     @staticmethod
     def _parse_and_display_connection_warnings(warnings):

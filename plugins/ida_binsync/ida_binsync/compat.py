@@ -24,6 +24,7 @@ import ida_idaapi
 import ida_typeinf
 
 from binsync.data import Struct
+from .controller import BinsyncController
 
 
 #
@@ -215,11 +216,12 @@ def get_func_stack_var_type_strs(func_addr):
 
 
 @execute_write
-def set_stack_vars_type(var_type_dict, code_view):
+def set_stack_vars_type(var_type_dict, code_view, controller: "BinsyncController"):
     for lvar in code_view.cfunc.lvars:
         cur_off = lvar.location.stkoff()
         if lvar.is_stk_var() and cur_off in var_type_dict:
-            code_view.set_lvar_type(lvar, var_type_dict[cur_off]);
+            controller.inc_api_count()
+            code_view.set_lvar_type(lvar, var_type_dict[cur_off])
 
 
 @execute_write
@@ -254,7 +256,6 @@ def set_stack_var_type_old(func_addr, ida_stack_var_offset, ida_type):
 
     mods = my_modifier_t(ida_stack_var_offset, ida_type)
     ida_hexrays.modify_user_lvars(func_addr, mods)
-
 
 
 #
@@ -298,7 +299,7 @@ def update_struct(struct: Struct, controller):
 #   IDA GUI r/w
 #
 
-@execute_write
+@execute_ui
 def refresh_pseudocode_view(ea):
     """Refreshes the pseudocode view in IDA."""
     names = ["Pseudocode-%c" % chr(ord("A") + i) for i in range(5)]
@@ -314,7 +315,22 @@ def refresh_pseudocode_view(ea):
                 vu.refresh_view(True)
 
 
-@execute_read
+class IDAViewCTX:
+    def __init__(self, func_addr):
+        self.view = ida_hexrays.open_pseudocode(func_addr, 1)
+
+    def __enter__(self):
+        return self.view
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close_pseudocode_view(self.view)
+
+    @execute_ui
+    def close_pseudocode_view(self, ida_vdui_t):
+        widget = ida_vdui_t.toplevel
+        idaapi.close_pseudocode(widget)
+
+
 def get_screen_ea():
     return idc.get_screen_ea()
 
