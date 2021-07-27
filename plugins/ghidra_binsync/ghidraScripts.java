@@ -1,0 +1,366 @@
+/*
+ * LICENSE
+ */
+// Description
+//@author Tristan B
+//@category Skeleton
+//@keybinding
+//@menupath Skeleton
+//@toolbar Skeleton
+
+import java.awt.event.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.HashMap;
+import javax.swing.*;
+import java.io.*;
+import java.net.http.*;
+import java.net.URI;
+
+import ghidra.app.script.GhidraScript;
+import ghidra.app.decompiler.DecompInterface;
+import ghidra.app.decompiler.DecompileOptions;
+import ghidra.app.decompiler.DecompileResults;
+
+import ghidra.util.task.ConsoleTaskMonitor;
+
+import ghidra.program.database.function.FunctionManagerDB;
+import ghidra.program.model.listing.*;
+import ghidra.program.model.symbol.*;
+import ghidra.program.model.address.*;
+import ghidra.program.flatapi.*;
+
+public class ghidraScripts extends GhidraScript {
+
+	public JFrame frame;
+	private javax.swing.JList<String> ListOfConnectedPeople;
+    private javax.swing.JButton PushButton;
+    private javax.swing.JButton SyncButton;
+    private javax.swing.JLabel jLabel1;
+    private javax.swing.JLabel jLabel2;
+    private javax.swing.JScrollPane jScrollPane1;
+
+	public String tempAddr = "001011b0";
+	public String [] connectedUsers = {"YOU", "Tristan", "Fish", "Zion", "Shellphish"};
+	public String selectedUser = "";
+
+	@Override
+	protected void run() {
+		// new PluginWindow().setVisible(true);
+		initComponents();
+	}
+	
+
+	private void SyncButtonMouseClicked() {
+		get_request(selectedUser);
+		// rename_stack_var(toAddr(tempAddr), -0x10, "LOCAL_VAR");
+		// println(get_all_func_names().toString());
+		// rename_func(toAddr(tempAddr), "ENTRY_FUNCTION");
+		// find_pointer(-0x10);
+		// get_comments(toAddr(tempAddr), false);
+	}
+
+	private void PushButtonActionPerformed() {
+		println("Pushing!");
+	}
+
+	private void LOCPMouseClicked(MouseEvent e) {
+		int row = ListOfConnectedPeople.locationToIndex(e.getPoint());
+		ListOfConnectedPeople.setSelectedIndex(row);
+		selectedUser = ListOfConnectedPeople.getSelectedValue();
+		println("CLICKED: " + selectedUser);
+	}
+
+	public  void rename_stack_var(Address func_addr, int stack_offset, String new_name) {
+
+		try {
+			boolean found = false;
+			FunctionManager functionManager = currentProgram.getFunctionManager();
+			FunctionIterator functions = functionManager.getFunctions(true);
+			for (Function function : functions) {
+				if(!function.getEntryPoint().equals(func_addr)) continue;
+				DecompInterface ifc = new DecompInterface();
+				ifc.setOptions(new DecompileOptions());
+				ifc.openProgram(function.getProgram());
+				DecompileResults res = ifc.decompileFunction(function, 60, new ConsoleTaskMonitor());
+				for (Variable v : res.getFunction().getAllVariables()) {
+					if(v.getStackOffset() == stack_offset) {
+						v.setName(new_name, SourceType.ANALYSIS);
+						println("FOUND THE OFFSET VARIABLE!");
+						found = true;
+						break;
+					}
+				}
+			}
+			if (!found) {
+				println("Didn't find variable with specified stack offset");
+			}
+		} catch(Exception e) {
+			e.printStackTrace();
+		} 
+	}
+
+
+	public List get_all_func_names() {
+		List<String> ret = new ArrayList<String>();
+		try {
+			FunctionManager functionManager = currentProgram.getFunctionManager();
+			FunctionIterator functions = functionManager.getFunctions(true);
+			for (Function function : functions) {
+				ret.add(function.getName());
+			}
+		} catch(Exception e) {
+			e.printStackTrace();
+		} finally{
+			return ret;
+		}
+	}
+
+
+	private void rename_func(Address func_addr, String new_name) {
+		try {
+			FunctionManager functionManager = currentProgram.getFunctionManager();
+			FunctionIterator functions = functionManager.getFunctions(true);
+			for (Function function : functions) {
+				if (function.getEntryPoint().equals(func_addr)) {
+					function.setName(new_name, SourceType.ANALYSIS);
+				}
+			}
+		} catch(Exception e) {
+			e.printStackTrace();
+		} 
+	}
+
+
+
+	private void find_pointer(int offset) {
+		boolean found = false;
+
+		try{
+			FunctionManager functionManager = currentProgram.getFunctionManager();
+			FunctionIterator functions = functionManager.getFunctions(true);
+			for (Function function : functions) {
+				function.setName(function.getName().substring(5), SourceType.ANALYSIS);
+				DecompInterface ifc = new DecompInterface();
+				ifc.setOptions(new DecompileOptions());
+				ifc.openProgram(function.getProgram());
+				DecompileResults res = ifc.decompileFunction(function, 60, new ConsoleTaskMonitor());
+				for (Variable v : res.getFunction().getAllVariables()) {
+					if(v.getStackOffset() == offset) {
+						println("\n\nFOUND IN FUNCTION: " + function.getName() + " @ 0x" + function.getEntryPoint());
+						println("Symbol: " + v.getName() + " offset " + v.getStackOffset());
+						found = true;
+						break;
+					}
+				}
+			}
+			if (!found) {
+				println("Didn't find variable with specified stack offset");
+			}
+		} catch(Exception e) {
+			e.printStackTrace();
+		} 
+	}
+
+	public HashMap<Address, String> get_comments(Address func_addr, boolean decompiler) {
+		HashMap<Address, String> ret = new HashMap<>();
+
+		try {
+
+			FunctionManagerDB functionManagerDB = (FunctionManagerDB) currentProgram.getFunctionManager();
+			Function function = functionManagerDB.getFunctionAt(func_addr);
+			AddressSetView set = function.getBody();
+			AddressIterator iterator = set.getAddresses(true);
+
+			FlatProgramAPI api = new FlatProgramAPI(currentProgram);
+
+			for (Address address : iterator) {
+				String fullComments = "";
+				if (api.getEOLComment(address) != null && !decompiler) {
+					fullComments += "\nEOL COMMENT: " + api.getEOLComment(address);
+				}
+				if (api.getPlateComment(address) != null) {
+					fullComments += "\nPLATE COMMENT: " + api.getPlateComment(address);
+				}
+				if (api.getPreComment(address) != null) {
+					fullComments += "\nPRE COMMENT: " + api.getPreComment(address);
+				}
+				if (api.getPostComment(address) != null && !decompiler) {
+					fullComments += "\nPOST COMMENT: " + api.getPostComment(address);
+				}
+				if (api.getRepeatableComment(address) != null && !decompiler) {
+					fullComments += "\nREPEATABLE COMMENT: " + api.getRepeatableComment(address);
+				}
+
+				ret.put(address, fullComments);
+			}
+
+		} catch(Exception e) {
+			e.printStackTrace();
+		} finally {
+			return ret;
+		}
+
+	}
+	//___________________________________________________________________________________________
+	//___________________________________________________________________________________________
+	//_______________________________HTTP REQUEST FOR PULL______________________________________
+	//___________________________________________________________________________________________
+	//___________________________________________________________________________________________
+
+	public void get_request(String username) {
+		String requestUrl = "http://127.0.0.1:7962/pull?user=" + username;
+		HttpClient client = HttpClient.newHttpClient();
+		HttpRequest request = HttpRequest.newBuilder()
+			.uri(URI.create(requestUrl))
+			.build();
+		try {
+			String response = client.send(request, HttpResponse.BodyHandlers.ofString()).body().toString();
+			if (response.indexOf("Ok") != -1) {
+				println("Got Data");
+			}
+		} catch(Exception e) {
+			e.printStackTrace();
+		}
+
+	}
+
+	//___________________________________________________________________________________________
+	//___________________________________________________________________________________________
+	// _______________________________INITIALIZING THE COMPONENTS OF THE BOX_____________________
+	//___________________________________________________________________________________________
+	//___________________________________________________________________________________________
+
+	private void initComponents () {
+
+		frame = new JFrame();
+		jLabel1 = new javax.swing.JLabel();
+        SyncButton = new javax.swing.JButton();
+        PushButton = new javax.swing.JButton();
+        jScrollPane1 = new javax.swing.JScrollPane();
+        ListOfConnectedPeople = new javax.swing.JList<>();
+        jLabel2 = new javax.swing.JLabel();
+
+        frame.setBackground(new java.awt.Color(255, 102, 102));
+		frame.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+
+        jLabel1.setForeground(new java.awt.Color(0, 153, 0));
+        jLabel1.setText("Status: CONNECTED");
+
+        SyncButton.setText("Sync");
+        SyncButton.addMouseListener(new java.awt.event.MouseAdapter() {
+			@Override
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                SyncButtonMouseClicked();
+            }
+        });
+
+        PushButton.setText("Push");
+        PushButton.addActionListener(new java.awt.event.ActionListener() {
+			@Override
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                PushButtonActionPerformed();
+            }
+        });
+
+        ListOfConnectedPeople.setModel(new javax.swing.AbstractListModel<String>() {
+            String[] strings = connectedUsers;
+            public int getSize() { return strings.length; }
+            public String getElementAt(int i) { return strings[i]; }
+        });
+        ListOfConnectedPeople.addMouseListener(new java.awt.event.MouseAdapter() {
+			@Override
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                LOCPMouseClicked(evt);
+            }
+        });
+        jScrollPane1.setViewportView(ListOfConnectedPeople);
+
+        jLabel2.setFont(new java.awt.Font("Lucida Grande", 0, 20)); // NOI18N
+        jLabel2.setText("TEAM:");
+
+		javax.swing.GroupLayout layout = new javax.swing.GroupLayout(frame.getContentPane());
+        frame.getContentPane().setLayout(layout);
+        layout.setHorizontalGroup(
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(layout.createSequentialGroup()
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(layout.createSequentialGroup()
+                        .addComponent(SyncButton, javax.swing.GroupLayout.PREFERRED_SIZE, 200, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addComponent(PushButton, javax.swing.GroupLayout.PREFERRED_SIZE, 200, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addGroup(layout.createSequentialGroup()
+                        .addGap(137, 137, 137)
+                        .addComponent(jLabel1))
+                    .addGroup(layout.createSequentialGroup()
+                        .addGap(50, 50, 50)
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(jLabel2)
+                            .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 300, javax.swing.GroupLayout.PREFERRED_SIZE))))
+                .addContainerGap())
+        );
+        layout.setVerticalGroup(
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
+                .addContainerGap()
+                .addComponent(jLabel1, javax.swing.GroupLayout.PREFERRED_SIZE, 39, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(13, 13, 13)
+                .addComponent(jLabel2)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 174, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 31, Short.MAX_VALUE)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(SyncButton)
+                    .addComponent(PushButton))
+                .addGap(34, 34, 34))
+        );
+
+        frame.pack();
+
+		frame.setVisible(true);
+	}
+
+	//___________________________________________________________________________________________
+	//___________________________________________________________________________________________
+	//______________________________ANCILLARY FUNCTIONS FOR TESTING______________________________
+	//___________________________________________________________________________________________
+	//___________________________________________________________________________________________
+
+
+	public void renameAllFunctions() {
+		int id = currentProgram.startTransaction("Set string translated value");
+		try {
+			FunctionManager functionManager = currentProgram.getFunctionManager();
+			FunctionIterator functions = functionManager.getFunctions(true);
+			for (Function function : functions) {
+				function.setName("FAKE_" + function.getName(), SourceType.DEFAULT);
+				println("Function: " + function.getName());
+			}
+		} catch(Exception e) {
+			println(e.getMessage().toString());
+			println("AN ERROR OCCURRED");
+		} finally {
+			println("FUNCTIONS RENAMED");
+			currentProgram.endTransaction(id, true);
+		}
+	}
+
+
+	public void resetAllFunctions() {
+		int id = currentProgram.startTransaction("Set string translated value");
+		try {
+			FunctionManager functionManager = currentProgram.getFunctionManager();
+			FunctionIterator functions = functionManager.getFunctions(true);
+			for (Function function : functions) {
+				function.setName(function.getName().substring(5), SourceType.DEFAULT);
+				println("Function: " + function.getName());
+			}
+		} catch(Exception e) {
+			println(e.getMessage().toString());
+			println("AN ERROR OCCURRED");
+		} finally {
+			println("FUNCTIONS RENAMED");
+			currentProgram.endTransaction(id, true);
+		}
+	}
+}
