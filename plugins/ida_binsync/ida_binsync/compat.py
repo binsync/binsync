@@ -11,19 +11,44 @@
 
 import functools
 import threading
+import time
 from typing import Dict
 
 import idc
 import idaapi
-import idautils
 import ida_kernwin
 import ida_hexrays
 import ida_funcs
 import ida_bytes
 import ida_struct
 import ida_idaapi
+import ida_typeinf
 
 from binsync.data import Struct
+from .controller import BinsyncController
+
+
+#
+#   Helper classes for wrapping data
+#
+
+class IDAStackVar:
+    def __init__(self, func_addr, offset, name, type_str, size):
+        self.func_addr = func_addr
+        self.offset = offset
+        self.name = name
+        self.type_str = type_str
+        self.size = size
+
+
+#
+#   Wrappers for IDA Main thread r/w operations
+#
+
+# a special note about these functions:
+# Any operation that needs to do some type of write to the ida db (idb), needs to be in the main thread due to
+# some ida constraints. Sometimes reads also need to be in the main thread. To make things efficient, most heavy
+# things are done in the controller and just setters and getters are done here.
 
 
 def is_mainthread():
@@ -75,14 +100,20 @@ def execute_ui(func):
     return execute_sync(func, idaapi.MFF_FAST)
 
 
+#
+#   IDA Function r/w
+#
+
+@execute_read
+def ida_func_addr(addr):
+    ida_func = ida_funcs.get_func(addr)
+    func_addr = ida_func.start_ea
+    return func_addr
+
+
 @execute_read
 def get_func_name(ea):
     return idc.get_func_name(ea)
-
-
-@execute_read
-def get_screen_ea():
-    return idc.get_screen_ea()
 
 
 @execute_write
@@ -92,6 +123,10 @@ def set_ida_func_name(func_addr, new_name):
     ida_kernwin.request_refresh(ida_kernwin.IWID_STRUCTS)
     ida_kernwin.request_refresh(ida_kernwin.IWID_STKVIEW)
 
+
+#
+#   IDA Comment r/w
+#
 
 @execute_write
 def set_ida_comment(addr, cmt, decompiled=False):
@@ -132,26 +167,9 @@ def set_ida_comment(addr, cmt, decompiled=False):
         ida_bytes.set_cmt(addr, cmt, rpt)
         return True
 
-@execute_write
-def refresh_pseudocode_view(ea):
-    """Refreshes the pseudocode view in IDA."""
-    names = ["Pseudocode-%c" % chr(ord("A") + i) for i in range(5)]
-    for name in names:
-        widget = ida_kernwin.find_widget(name)
-        if widget:
-            vu = ida_hexrays.get_widget_vdui(widget)
-
-            # Check if the address is in the same function
-            func_ea = vu.cfunc.entry_ea
-            func = ida_funcs.get_func(func_ea)
-            if ida_funcs.func_contains(func, ea):
-                vu.refresh_view(True)
-
 
 @execute_write
 def set_decomp_comments(func_addr, cmt_dict: Dict[int, str]):
-    print(f"setting: {cmt_dict}")
-
     for addr in cmt_dict:
         ida_cmts = ida_hexrays.user_cmts_new()
 
@@ -165,12 +183,66 @@ def set_decomp_comments(func_addr, cmt_dict: Dict[int, str]):
         ida_hexrays.save_user_cmts(func_addr, ida_cmts)
 
 
-@execute_read
-def ida_func_addr(addr):
-    ida_func = ida_funcs.get_func(addr)
-    func_addr = ida_func.start_ea
-    return func_addr
+#
+#   IDA Stack Var r/w
+#
 
+def get_func_stack_var_info(func_addr) -> Dict[int, IDAStackVar]:
+    decompilation = ida_hexrays.decompile(func_addr)
+    stack_var_info = {}
+
+    for var in decompilation.lvars:
+        if not var.is_stk_var():
+            continue
+
+        size = var.width
+        name = var.name
+        offset = var.location.stkoff()
+        type_str = str(var.type())
+        stack_var_info[offset] = IDAStackVar(func_addr, offset, name, type_str, size)
+
+    return stack_var_info
+
+
+@execute_write
+def set_stack_vars_types(var_type_dict, code_view, controller: "BinsyncController") -> bool:
+    """
+    Sets the type of a stack variable, which should be a local variable.
+    Take special note of the types of first two parameters used here:
+    var_type_dict is a dictionary of the offsets and the new proposed type info for each offset.
+    This typeinfo should be gotten either by manully making a new typeinfo object or using the
+    parse_decl function. code_view is a instance of vdui_t, which should be gotten through
+    open_pseudocode() from ida_hexrays.
+
+    This function also is special since it needs to iterate all of the stack variables an unknown amount
+    of times until a fixed point of variables types not changing is met.
+
+
+    @param var_type_dict:       Dict[stack_offset, ida_typeinf_t]
+    @param code_view:           A pointer to a vdui_t screen
+    @param controller:          The BinSync controller to do operations on
+    @return:
+    """
+
+    all_success = True
+    fixed_point = False
+    while not fixed_point:
+        fixed_point = True
+        for lvar in code_view.cfunc.lvars:
+            cur_off = lvar.location.stkoff()
+            if lvar.is_stk_var() and cur_off in var_type_dict:
+                controller.inc_api_count()
+                all_success &= code_view.set_lvar_type(lvar, var_type_dict.pop(cur_off))
+                fixed_point = False
+                # make sure to break, in case the size of lvars array has now changed
+                break
+
+    return all_success
+
+
+#
+#   IDA Struct r/w
+#
 
 @execute_write
 def update_struct(struct: Struct, controller):
@@ -205,22 +277,64 @@ def update_struct(struct: Struct, controller):
         )
 
 
-def parse_struct_type(s_name):
-    """
-    Utility function to parse the struct name returned by IDA to determine
-    if the structure is an actual Struct (user-made) or is a stack variable
-    that is located in the stack struct of a function.
+#
+#   IDA GUI r/w
+#
 
-    @param s_name:
-    @return:
-    """
-    # its a stack variable
-    if "$ F" in s_name:
-        func_addr = int(s_name.split("$ F")[1], 16)
-        return func_addr
-    # it's a real struct
-    else:
-        return s_name
+@execute_ui
+def refresh_pseudocode_view(ea):
+    """Refreshes the pseudocode view in IDA."""
+    names = ["Pseudocode-%c" % chr(ord("A") + i) for i in range(5)]
+    for name in names:
+        widget = ida_kernwin.find_widget(name)
+        if widget:
+            vu = ida_hexrays.get_widget_vdui(widget)
+
+            # Check if the address is in the same function
+            func_ea = vu.cfunc.entry_ea
+            func = ida_funcs.get_func(func_ea)
+            if ida_funcs.func_contains(func, ea):
+                vu.refresh_view(True)
+
+
+class IDAViewCTX:
+    def __init__(self, func_addr):
+        self.view = ida_hexrays.open_pseudocode(func_addr, 0)
+
+    def __enter__(self):
+        return self.view
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close_pseudocode_view(self.view)
+
+    @execute_ui
+    def close_pseudocode_view(self, ida_vdui_t):
+        widget = ida_vdui_t.toplevel
+        idaapi.close_pseudocode(widget)
+
+
+def get_screen_ea():
+    return idc.get_screen_ea()
+
+
+#
+#   Data Type Converters
+#
+
+def convert_type_str_to_ida_type(type_str):
+    ida_type_str = type_str + ";"
+    tif = ida_typeinf.tinfo_t()
+    valid_parse = ida_typeinf.parse_decl(tif, None, ida_type_str, 1)
+
+    return tif if valid_parse is not None else None
+
+
+def ida_to_angr_stack_offset(func_addr, angr_stack_offset):
+    frame = idaapi.get_frame(func_addr)
+    frame_size = idc.get_struc_size(frame)
+    last_member_size = idaapi.get_member_size(frame.get_member(frame.memqty - 1))
+    ida_stack_offset = angr_stack_offset - frame_size + last_member_size
+    return ida_stack_offset
 
 
 def convert_member_flag(size):

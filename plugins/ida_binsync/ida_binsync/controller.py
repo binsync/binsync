@@ -17,7 +17,6 @@
 #
 # ----------------------------------------------------------------------------
 
-from __future__ import absolute_import
 from functools import wraps
 import re
 import threading
@@ -29,12 +28,10 @@ from collections import OrderedDict
 
 from PyQt5.QtWidgets import QMessageBox
 
-import ida_hexrays
 import idc
 import idaapi
 import idautils
 import ida_struct
-import ida_idaapi
 
 import binsync
 from binsync import Client, ConnectionWarnings
@@ -134,6 +131,7 @@ class SyncControlStatus:
     CONNECTED_NO_REMOTE = 1
     DISCONNECTED = 2
 
+
 class BinsyncController:
     def __init__(self):
         self.client = None  # type: binsync.Client
@@ -164,17 +162,15 @@ class BinsyncController:
     #
 
     def inc_api_count(self):
-        self.api_lock.acquire()
-        self.api_count += 1
-        self.api_lock.release()
+        with self.api_lock:
+            self.api_count += 1
 
     def make_controller_cmd(self, cmd_func, *args, **kwargs):
-        self.queue_lock.acquire()
-        if cmd_func == self.push_struct:
-            self.cmd_queue[args[0].name] = (cmd_func, args, kwargs)
-        else:
-            self.cmd_queue[time.time()] = (cmd_func, args, kwargs)
-        self.queue_lock.release()
+        with self.queue_lock:
+            if cmd_func == self.push_struct:
+                self.cmd_queue[args[0].name] = (cmd_func, args, kwargs)
+            else:
+                self.cmd_queue[time.time()] = (cmd_func, args, kwargs)
 
     def eval_cmd_queue(self):
         self.queue_lock.acquire()
@@ -225,7 +221,7 @@ class BinsyncController:
     #
 
     def connect(self, user, path, init_repo, ssh_agent_pid=None, ssh_auth_sock=None):
-        binary_md5 = idc.retrieve_input_file_md5()
+        binary_md5 = idc.retrieve_input_file_md5().hex()
         self.client = Client(user, path, binary_md5,
                              init_repo=init_repo,
                              ssh_agent_pid=ssh_agent_pid,
@@ -271,7 +267,7 @@ class BinsyncController:
         return self.client.users()
 
     #
-    #   Pullers
+    #   IDA DataBase Fillers
     #
 
     @init_checker
@@ -305,8 +301,7 @@ class BinsyncController:
         if _func is None:
             return
 
-        # == function name === #
-
+        # === function name === #
         # catch the case where a user did an update to something in a function
         # but did not change it's name. In that case, keep the local name
         if _func.name == "":
@@ -329,61 +324,69 @@ class BinsyncController:
                 print(f"[BinSync]: Failed to sync comment at <{hex(addr)}>: \'{cmt.comment}\'")
 
         # === stack variables === #
-        existing_stack_vars = { }
+        # sanity check that this function has a stack frame
         frame = idaapi.get_frame(ida_func.start_ea)
         if frame is None or frame.memqty <= 0:
             _l.debug("Function %#x does not have an associated function frame. Skip variable name sync-up.",
                      ida_func.start_ea)
             return
 
-        frame_size = idc.get_struc_size(frame)
-        last_member_size = idaapi.get_member_size(frame.get_member(frame.memqty - 1))
+        # collect and covert the info of each stack variable
+        existing_stack_vars = {}
+        for offset, ida_var in compat.get_func_stack_var_info(ida_func.start_ea).items():
+            existing_stack_vars[compat.ida_to_angr_stack_offset(ida_func.start_ea, offset)] = ida_var
 
-        for i in range(frame.memqty):
-            member = frame.get_member(i)
-            stack_offset = member.soff - frame_size + last_member_size
-            existing_stack_vars[stack_offset] = member
+        stack_vars_to_set = {}
+        with compat.IDAViewCTX(ida_func.start_ea) as ida_code_view:
+            # only try to set stack vars that actually exist
+            for offset, stack_var in self.pull_stack_variables(ida_func, user=user, state=state).items():
+                if offset in existing_stack_vars:
+                    # change the variable's name
+                    if stack_var.name != existing_stack_vars[offset].name:
+                        self.inc_api_count()
+                        ida_struct.set_member_name(frame, existing_stack_vars[offset].offset, stack_var.name)
 
-        for offset, stack_var in self.pull_stack_variables(ida_func, user=user, state=state).items():
-            ida_offset = stack_var.get_offset(StackOffsetType.IDA)
-            # skip if this variable already exists
-            if ida_offset in existing_stack_vars:
-                type_str = self._get_type_str(existing_stack_vars[ida_offset].flag)
-            else:
-                type_str = None
+                    # check if the variables type should be changed
+                    if ida_code_view and stack_var.type != existing_stack_vars[offset].type_str:
+                        # validate the type is convertible
+                        ida_type = compat.convert_type_str_to_ida_type(stack_var.type)
+                        if ida_type is None:
+                            # its possible the type is just a custom type from the same user
+                            # TODO: make it possible to sync a single struct
+                            if self._typestr_in_state_structs(stack_var.type, user=user, state=state):
+                                self.fill_structs(user=user, state=state)
 
-            if ida_offset in existing_stack_vars:
-                if idc.get_member_name(frame.id, existing_stack_vars[ida_offset].soff) == stack_var.name \
-                        and type_str is not None \
-                        and stack_var.type == type_str:
-                    continue
-                # rename the existing variable
-                self.inc_api_count()
-                idaapi.set_member_name(frame, existing_stack_vars[ida_offset].soff, stack_var.name)
-                # TODO: retype the existing variable
+                            ida_type = compat.convert_type_str_to_ida_type(stack_var.type)
+                            # it really is just a bad type
+                            if ida_type is None:
+                                print(f"[BinSync]: Failed to parse stack variable stored type at offset"
+                                      f" {hex(existing_stack_vars[offset].offset)} with type {stack_var.type}"
+                                      f" on function {hex(ida_func.start_ea)}.")
+                                continue
 
-        # ===== update the psuedocode ==== #
+                        # queue up the change!
+                        stack_vars_to_set[existing_stack_vars[offset].offset] = ida_type
+
+            # change the type of all vars that need to be changed
+            # NOTE: api_count is incremented inside the function
+            compat.set_stack_vars_types(stack_vars_to_set, ida_code_view, self)
+
+        # ===== update the pseudocode ==== #
         compat.refresh_pseudocode_view(_func.addr)
 
+    #
+    #   Pullers
+    #
+
+    @init_checker
     def sync_all(self, user=None, state=None):
-        """
-        TODO: to fix time overwrites
-        Idea:
-        How to fix overwritten times from hooks:
-        Make a semaphore. Increment the semaphore before each action that triggers a hook.
-        In the hook, decrement the semaphore. When the semaphore is 0, reset all the times
-        in the state AND all commiting. Stop commiting until semaphores are done.
-
-        Cache money.
-        """
-
         self.client.sync_states(user=user)
         func_addrs = self.client.state.functions.keys()
         print("[BinSync]: Target Addrs for sync:", [hex(x) for x in func_addrs])
 
         for addr in func_addrs:
             ida_func = idaapi.get_func(addr)
-            self.fill_function(ida_func, self.client.master_user) # semaphore inc
+            self.fill_function(ida_func, user=self.client.master_user)
 
     @init_checker
     @make_ro_state
@@ -399,8 +402,12 @@ class BinsyncController:
 
         # pull function
         try:
-            func: Function = state.get_function(ida_func.start_ea)
-            return func
+            if hasattr(ida_func, "start_ea"):
+                func: Function = state.get_function(ida_func.start_ea)
+                return func
+            else:
+                print("[BinSync]: IDA Function does not exist")
+                return None
         except KeyError:
             return None
 
@@ -522,6 +529,17 @@ class BinsyncController:
     #
     # Utils
     #
+
+    @init_checker
+    def _typestr_in_state_structs(self, type_str, user=None, state=None):
+        binsync_structs = state.get_structs()
+        for struct in binsync_structs:
+            if struct.name in type_str:
+                return True
+
+        return False
+
+
     @staticmethod
     def _parse_and_display_connection_warnings(warnings):
         warning_text = ""
@@ -541,7 +559,7 @@ class BinsyncController:
             )
 
     @staticmethod
-    def _get_type_str(flag):
+    def get_default_type_str(flag):
         if idc.is_byte(flag):
             return "unsigned char"
         elif idc.is_word(flag):
@@ -584,15 +602,3 @@ class BinsyncController:
 
         s += " ago" if ago else " in the future"
         return s
-
-
-def on_renamed(*args):
-    pass
-
-
-def on_auto_empty_finally(*args):
-    pass
-
-
-def get_cmt(*args):
-    pass

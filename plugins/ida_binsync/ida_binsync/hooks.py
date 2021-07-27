@@ -72,56 +72,11 @@ class IDBHooks(ida_idp.IDB_Hooks):
     @quite_init_checker
     def local_types_changed(self):
         #print("local type changed")
-        return
-
-        changed_types = []
-        # self._plugin.logger.trace(self._plugin.core.local_type_map)
-        for i in range(1, ida_typeinf.get_ordinal_qty(ida_typeinf.get_idati())):
-            t = ImportLocalType(i)
-            if t and t.name and ida_struct.get_struc_id(t.name) == ida_idaapi.BADADDR and ida_enum.get_enum(
-                    t.name) == ida_idaapi.BADADDR:
-                if i in self._plugin.core.local_type_map:
-                    t_old = self._plugin.core.local_type_map[i]
-                    if t_old and not t.isEqual(t_old):
-                        changed_types.append((t_old.to_tuple(), t.to_tuple()))
-                    elif t_old is None and i in self._plugin.core.delete_candidates:
-                        if not self._plugin.core.delete_candidates[i].isEqual(t):
-                            changed_types.append((self._plugin.core.delete_candidates[i].to_tuple(), t.to_tuple()))
-                        del self._plugin.core.delete_candidates[i]
-
-                else:
-                    changed_types.append((None, t.to_tuple()))
-            if t is None:
-                assert i in self._plugin.core.local_type_map
-                if i in self._plugin.core.local_type_map:
-                    t_old = self._plugin.core.local_type_map[i]
-                    if t_old != t:
-                        self._plugin.core.delete_candidates[i] = t_old
-                    elif i in self._plugin.core.delete_candidates:
-                        # changed_types.append((self._plugin.core.delete_candidates[i],None))
-                        del self._plugin.core.delete_candidates[i]
-
-                    # t_old = self._plugin.core.local_type_map[i]
-                    # changed_types.append((t_old,None))
-        # self._plugin.logger.trace(changed_types)
-        if fDebug:
-            pydevd_pycharm.settrace('localhost', port=2233, stdoutToServer=True, stderrToServer=True, suspend=False)
-        self._plugin.logger.trace("Changed_types: %s" % list(
-            map(lambda x: (x[0][0] if x[0] else None, x[1][0] if x[1] else None), changed_types)))
-        if len(changed_types) > 0:
-            self._send_packet(evt.LocalTypesChangedEvent(changed_types))
-        self._plugin.core.update_local_types_map()
         return 0
 
     @quite_init_checker
-    def ti_changed(self, ea, type, fname):
-        return
-        name = ""
-        if ida_struct.is_member_id(ea):
-            name = ida_struct.get_struc_name(ea)
-        type = ida_typeinf.idc_get_type_raw(ea)
-        self._send_packet(
-            evt.TiChangedEvent(ea, (ParseTypeString(type[0]) if type else [], type[1] if type else None), name))
+    def ti_changed(self, ea, type_, fname):
+        #print(f"TI CHANGED: {ea}, {type_}, {fname}")
         return 0
 
     #
@@ -131,10 +86,6 @@ class IDBHooks(ida_idp.IDB_Hooks):
     @quite_init_checker
     def enum_created(self, enum):
         #print("enum created")
-        return
-
-        name = ida_enum.get_enum_name(enum)
-        self._send_packet(evt.EnumCreatedEvent(enum, name))
         return 0
 
     # XXX - use enum_deleted(self, id) instead?
@@ -142,64 +93,32 @@ class IDBHooks(ida_idp.IDB_Hooks):
     def deleting_enum(self, id):
         #print("enum deleted")
         return 0
-        enum_name = ida_enum.get_enum_name(id)
 
     # XXX - use enum_renamed(self, id) instead?
     @quite_init_checker
     def renaming_enum(self, id, is_enum, newname):
         #print("enum renamed")
-        return
-
-        if is_enum:
-            oldname = ida_enum.get_enum_name(id)
-        else:
-            oldname = ida_enum.get_enum_member_name(id)
-        self._send_packet(evt.EnumRenamedEvent(oldname, newname, is_enum))
         return 0
 
     @quite_init_checker
     def enum_bf_changed(self, id):
         #print("enum renamed")
-        return
-        bf_flag = 1 if ida_enum.is_bf(id) else 0
-        ename = ida_enum.get_enum_name(id)
-        self._send_packet(evt.EnumBfChangedEvent(ename, bf_flag))
         return 0
 
     @quite_init_checker
     def enum_cmt_changed(self, tid, repeatable_cmt):
         #print("enum renamed")
-        return
-        cmt = ida_enum.get_enum_cmt(tid, repeatable_cmt)
-        emname = ida_enum.get_enum_name(tid)
-        self._send_packet(evt.EnumCmtChangedEvent(emname, cmt, repeatable_cmt))
         return 0
 
     @quite_init_checker
     def enum_member_created(self, id, cid):
         #print("enum member created")
-        return
-        ename = ida_enum.get_enum_name(id)
-        name = ida_enum.get_enum_member_name(cid)
-        value = ida_enum.get_enum_member_value(cid)
-        bmask = ida_enum.get_enum_member_bmask(cid)
-        self._send_packet(
-            evt.EnumMemberCreatedEvent(ename, name, value, bmask)
-        )
         return 0
 
     # XXX - use enum_member_deleted(self, id, cid) instead?
     @quite_init_checker
     def deleting_enum_member(self, id, cid):
         #print("enum member")
-        return
-        ename = ida_enum.get_enum_name(id)
-        value = ida_enum.get_enum_member_value(cid)
-        serial = ida_enum.get_enum_member_serial(cid)
-        bmask = ida_enum.get_enum_member_bmask(cid)
-        self._send_packet(
-            evt.EnumMemberDeletedEvent(ename, value, serial, bmask)
-        )
         return 0
 
     #
@@ -210,7 +129,6 @@ class IDBHooks(ida_idp.IDB_Hooks):
     def struc_created(self, tid):
         #print("struct created")
         self.ida_struct_changed(tid, old_name="")
-        #is_union = ida_struct.is_union(tid)
         return 0
 
     # XXX - use struc_deleted(self, struc_id) instead?
@@ -222,7 +140,9 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def struc_align_changed(self, sptr):
-        self.ida_struct_changed(sptr.id)
+        if not sptr.is_frame():
+            self.ida_struct_changed(sptr.id)
+
         return 0
 
     # XXX - use struc_renamed(self, sptr) instead?
@@ -235,22 +155,30 @@ class IDBHooks(ida_idp.IDB_Hooks):
     @quite_init_checker
     def struc_expanded(self, sptr):
         #print("struct expanded")
-        self.ida_struct_changed(sptr.id)
+        if not sptr.is_frame():
+            self.ida_struct_changed(sptr.id)
+
         return 0
 
     @quite_init_checker
     def struc_member_created(self, sptr, mptr):
         #print("struc member created")
-        self.ida_struct_changed(sptr.id)
+        if not sptr.is_frame():
+            self.ida_struct_changed(sptr.id)
+
         return 0
 
     @quite_init_checker
     def struc_member_deleted(self, sptr, off1, off2):
-        self.ida_struct_changed(sptr.id)
+        #print("struc member deleted")
+        if not sptr.is_frame():
+            self.ida_struct_changed(sptr.id)
+
         return 0
 
     @quite_init_checker
     def struc_member_renamed(self, sptr, mptr):
+        #print(f"struc member renamed: {sptr.id}: {mptr.id}")
         """
         Handles renaming of two things:
         1. Global Structs
@@ -261,46 +189,52 @@ class IDBHooks(ida_idp.IDB_Hooks):
         :return:
         """
 
-        sname = ida_struct.get_struc_name(sptr.id)
-        s_type = compat.parse_struct_type(sname)
+        # struct pointer is actually a stack frame
+        if sptr.is_frame():
+            stack_frame = sptr
+            func_addr = idaapi.get_func_by_frame(stack_frame.id)
+            stack_var_info = compat.get_func_stack_var_info(func_addr)[mptr.soff]
 
-        # stack offset variable
-        if isinstance(s_type, int):
-            func_addr = s_type
+            # find the properties of the changed stack var
+            angr_offset = compat.ida_to_angr_stack_offset(func_addr, stack_var_info.offset)
+            size = stack_var_info.size
+            type_str = stack_var_info.type_str
 
-            # compute stack frame for offset
-            frame = idaapi.get_frame(func_addr)
-            frame_size = idc.get_struc_size(frame)
-            last_member_size = idaapi.get_member_size(frame.get_member(frame.memqty - 1))
-
-            # stack offset
-            stack_offset = mptr.soff - frame_size + last_member_size
-            size = idaapi.get_member_size(mptr)
-            type_str = self.controller._get_type_str(mptr.flag)
+            # TODO: correct this fix in the get_func_stack_var_info
             new_name = ida_struct.get_member_name(mptr.id)
 
             # do the change on a new thread
             self.binsync_state_change(self.controller.push_stack_variable,
-                                      func_addr, stack_offset, new_name, type_str, size)
-
+                                      func_addr, angr_offset, new_name, type_str, size)
 
         # an actual struct
-        elif isinstance(s_type, str):
-            self.ida_struct_changed(sptr.id)
-
-        # something else
         else:
-            print("Error: bad parsing")
+            self.ida_struct_changed(sptr.id)
 
         return 0
 
     @quite_init_checker
     def struc_member_changed(self, sptr, mptr):
-        #print("struc member changed")
+        #print(f"struc member changed: {sptr.id}, {mptr.id}")
 
-        sname = ida_struct.get_struc_name(sptr.id)
-        s_type = compat.parse_struct_type(sname)
-        if isinstance(s_type, str):
+        # struct pointer is actually a stack frame
+        if sptr.is_frame():
+            stack_frame = sptr
+            func_addr = idaapi.get_func_by_frame(stack_frame.id)
+            stack_var_info = compat.get_func_stack_var_info(func_addr)[mptr.soff]
+
+            # find the properties of the changed stack var
+            angr_offset = compat.ida_to_angr_stack_offset(func_addr, stack_var_info.offset)
+            size = stack_var_info.size
+            type_str = stack_var_info.type_str
+
+            # TODO: correct this fix in the get_func_stack_var_info
+            new_name = stack_var_info.name #ida_struct.get_member_name(mptr.id)
+
+            # do the change on a new thread
+            self.binsync_state_change(self.controller.push_stack_variable,
+                                      func_addr, angr_offset, new_name, type_str, size)
+        else:
             self.ida_struct_changed(sptr.id)
 
         return 0
