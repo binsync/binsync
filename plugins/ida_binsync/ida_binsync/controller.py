@@ -359,8 +359,9 @@ class BinsyncController:
                             ida_type = compat.convert_type_str_to_ida_type(stack_var.type)
                             # it really is just a bad type
                             if ida_type is None:
-                                print(f"[BinSync]: Failed to parse stored type at offset"
-                                      f" {hex(existing_stack_vars[offset].offset)} with type {stack_var.type}.")
+                                print(f"[BinSync]: Failed to parse stack variable stored type at offset"
+                                      f" {hex(existing_stack_vars[offset].offset)} with type {stack_var.type}"
+                                      f" on function {hex(ida_func.start_ea)}.")
                                 continue
 
                         # queue up the change!
