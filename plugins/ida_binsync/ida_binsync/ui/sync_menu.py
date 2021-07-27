@@ -13,7 +13,7 @@ from ..controller import BinsyncController
 #   MenuDialog Box for Binsync Actions
 #
 class BinsyncMenuActionItem:
-    SYNC_SELECTED_FUNCTIONS = "Sync Selected Functions"1
+    SYNC_SELECTED_FUNCTIONS = "Sync Selected Functions"
     SYNC_ALL_FUNCTIONS = "Sync All Functions"
     SYNC_STRUCTS = "Sync All Structs"
     TOGGLE_AUTO_SYNC = "Toggle Auto Sync"
