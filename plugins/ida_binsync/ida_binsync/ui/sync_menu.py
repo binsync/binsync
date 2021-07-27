@@ -107,7 +107,7 @@ class IDACtxEntry(idaapi.action_handler_t):
 #
 
 
-class SyncMenu():
+class SyncMenu:
     def __init__(self, controller):
         self.controller: BinsyncController = controller
         self.ctx_menu = IDACtxEntry(self.open_sync_menu)

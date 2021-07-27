@@ -11,6 +11,7 @@
 
 import functools
 import threading
+import time
 from typing import Dict
 
 import idc
@@ -203,59 +204,40 @@ def get_func_stack_var_info(func_addr) -> Dict[int, IDAStackVar]:
     return stack_var_info
 
 
-@execute_read
-def get_func_stack_var_type_strs(func_addr):
-    decomp_code = ida_hexrays.decompile(func_addr)
-    type_dict = {}
-
-    for var in decomp_code.lvars:
-        if var.is_stk_var():
-            type_dict[var.location.stkoff()] = str(var.type())
-
-    return type_dict
-
-
 @execute_write
-def set_stack_vars_type(var_type_dict, code_view, controller: "BinsyncController"):
-    for lvar in code_view.cfunc.lvars:
-        cur_off = lvar.location.stkoff()
-        if lvar.is_stk_var() and cur_off in var_type_dict:
-            controller.inc_api_count()
-            code_view.set_lvar_type(lvar, var_type_dict[cur_off])
-
-
-@execute_write
-def set_stack_var_type_old(func_addr, ida_stack_var_offset, ida_type):
+def set_stack_vars_types(var_type_dict, code_view, controller: "BinsyncController") -> bool:
     """
-    Sets a stack variable's type in the GUI and IDB
+    Sets the type of a stack variable, which should be a local variable.
+    Take special note of the types of first two parameters used here:
+    var_type_dict is a dictionary of the offsets and the new proposed type info for each offset.
+    This typeinfo should be gotten either by manully making a new typeinfo object or using the
+    parse_decl function. code_view is a instance of vdui_t, which should be gotten through
+    open_pseudocode() from ida_hexrays.
 
-    @param func_addr:
-    @param ida_stack_var_offset:
-    @param ida_type:
+    This function also is special since it needs to iterate all of the stack variables an unknown amount
+    of times until a fixed point of variables types not changing is met.
+
+
+    @param var_type_dict:       Dict[stack_offset, ida_typeinf_t]
+    @param code_view:           A pointer to a vdui_t screen
+    @param controller:          The BinSync controller to do operations on
     @return:
     """
 
-    # Modification to local variables in IDA must be done through ida_hexrays.modify_user_lvars
-    # which requires the use of a user_lvar_modifier_t object. The custom class must also implement
-    # the modify_lvars function which will be responsible for deciding how to modify the lvars present
-    # at the address the modifier is used on. For function addresses, this will get you the local stack
-    # variables. You will get all the stack variables, so you must search for the right one to modify.
-    class my_modifier_t(ida_hexrays.user_lvar_modifier_t):
-        def __init__(self, stack_off, new_type):
-            ida_hexrays.user_lvar_modifier_t.__init__(self)
-            self.stack_off = stack_off
-            self.new_type = new_type
+    all_success = True
+    fixed_point = False
+    while not fixed_point:
+        fixed_point = True
+        for lvar in code_view.cfunc.lvars:
+            cur_off = lvar.location.stkoff()
+            if lvar.is_stk_var() and cur_off in var_type_dict:
+                controller.inc_api_count()
+                all_success &= code_view.set_lvar_type(lvar, var_type_dict.pop(cur_off))
+                fixed_point = False
+                # make sure to break, in case the size of lvars array has now changed
+                break
 
-        def modify_lvars(self, lvars):
-            for curr_var in lvars.lvvec:
-                if curr_var.ll.is_stk_var() and curr_var.ll.get_stkoff() == self.stack_off:
-                    curr_var.type = self.new_type
-                    return True
-
-            return False
-
-    mods = my_modifier_t(ida_stack_var_offset, ida_type)
-    ida_hexrays.modify_user_lvars(func_addr, mods)
+    return all_success
 
 
 #
@@ -317,7 +299,7 @@ def refresh_pseudocode_view(ea):
 
 class IDAViewCTX:
     def __init__(self, func_addr):
-        self.view = ida_hexrays.open_pseudocode(func_addr, 1)
+        self.view = ida_hexrays.open_pseudocode(func_addr, 0)
 
     def __enter__(self):
         return self.view

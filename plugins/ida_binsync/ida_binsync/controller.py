@@ -17,7 +17,6 @@
 #
 # ----------------------------------------------------------------------------
 
-from __future__ import absolute_import
 from functools import wraps
 import re
 import threading
@@ -29,13 +28,10 @@ from collections import OrderedDict
 
 from PyQt5.QtWidgets import QMessageBox
 
-import ida_hexrays
 import idc
 import idaapi
 import idautils
 import ida_struct
-import ida_idaapi
-import ida_typeinf
 
 import binsync
 from binsync import Client, ConnectionWarnings
@@ -271,7 +267,7 @@ class BinsyncController:
         return self.client.users()
 
     #
-    #   Pullers
+    #   IDA DataBase Fillers
     #
 
     @init_checker
@@ -372,10 +368,14 @@ class BinsyncController:
 
             # change the type of all vars that need to be changed
             # NOTE: api_count is incremented inside the function
-            compat.set_stack_vars_type(stack_vars_to_set, ida_code_view, self)
+            compat.set_stack_vars_types(stack_vars_to_set, ida_code_view, self)
 
-        # ===== update the psuedocode ==== #
+        # ===== update the pseudocode ==== #
         compat.refresh_pseudocode_view(_func.addr)
+
+    #
+    #   Pullers
+    #
 
     @init_checker
     def sync_all(self, user=None, state=None):
@@ -401,8 +401,12 @@ class BinsyncController:
 
         # pull function
         try:
-            func: Function = state.get_function(ida_func.start_ea)
-            return func
+            if hasattr(ida_func, "start_ea"):
+                func: Function = state.get_function(ida_func.start_ea)
+                return func
+            else:
+                print("[BinSync]: IDA Function does not exist")
+                return None
         except KeyError:
             return None
 

@@ -71,12 +71,12 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def local_types_changed(self):
-        print("local type changed")
+        #print("local type changed")
         return 0
 
     @quite_init_checker
     def ti_changed(self, ea, type_, fname):
-        print(f"TI CHANGED: {ea}, {type_}, {fname}")
+        #print(f"TI CHANGED: {ea}, {type_}, {fname}")
         return 0
 
     #
@@ -154,7 +154,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def struc_expanded(self, sptr):
-        print("struct expanded")
+        #print("struct expanded")
         if not sptr.is_frame():
             self.ida_struct_changed(sptr.id)
 
@@ -162,7 +162,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def struc_member_created(self, sptr, mptr):
-        print("struc member created")
+        #print("struc member created")
         if not sptr.is_frame():
             self.ida_struct_changed(sptr.id)
 
@@ -170,7 +170,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def struc_member_deleted(self, sptr, off1, off2):
-        print("struc member deleted")
+        #print("struc member deleted")
         if not sptr.is_frame():
             self.ida_struct_changed(sptr.id)
 
@@ -178,7 +178,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def struc_member_renamed(self, sptr, mptr):
-        print(f"struc member renamed: {sptr.id}: {mptr.id}")
+        #print(f"struc member renamed: {sptr.id}: {mptr.id}")
         """
         Handles renaming of two things:
         1. Global Structs
@@ -215,7 +215,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def struc_member_changed(self, sptr, mptr):
-        print(f"struc member changed: {sptr.id}, {mptr.id}")
+        #print(f"struc member changed: {sptr.id}, {mptr.id}")
 
         # struct pointer is actually a stack frame
         if sptr.is_frame():
