@@ -383,6 +383,13 @@ class Client(object):
         best = max(options, key=lambda ref: ref.commit.authored_date)
         return best.commit.tree
 
+    def get_branch(self, user):
+        options = [ref for ref in self.repo.refs if ref.name.endswith(f"{BINSYNC_BRANCH_PREFIX}/{user}")]
+        if not options:
+            raise ValueError(f'No such user "{user}" found in repository')
+        best = max(options, key=lambda ref: ref.commit.authored_date)
+        return best
+
     def get_state(self, user=None, version=None):
         if user is None or user == self.master_user:
             # local state
@@ -402,6 +409,28 @@ class Client(object):
                 return state
             except MetadataNotFoundError:
                 return None
+
+    def change_active_state(self, user):
+        """
+        Changes the active state that BinSync can see in Git. Should only be used
+        with a headless client that is read-only.
+
+        @param user:
+        @return:
+        """
+        if self.state is not None and user == self.state.user:
+            return False
+
+        try:
+            target_user_tree = self.get_branch(user)
+        except ValueError:
+            return False
+
+        target_state = self.get_state(user)
+        self.repo.head.reference = target_user_tree
+        self.repo.head.reset(index=True, working_tree=True)
+        self.state = target_state
+        return target_state
 
     def get_locked_state(self, user=None, version=None):
         with self.commit_lock:
