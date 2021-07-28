@@ -47,11 +47,13 @@ class Users(Resource):
 
 class StopServer(Resource):
     def get(self):
+        global sync_client
         if not sync_client:
             return ReturnMsg.NO_SYNC_REPO
 
         del sync_client
-        return ReturnMsg.SERVER_STOPPED
+        sync_client = None
+        sys.exit(0)
 
 
 class PullRequest(Resource):

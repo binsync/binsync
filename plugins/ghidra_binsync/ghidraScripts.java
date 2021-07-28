@@ -161,6 +161,29 @@ class BinsyncController
 
     private boolean stopServer()
     {
+        HttpResponse<String> response = null;
+
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(this.REQ_URL + "/stop"))
+            .build();
+        try {
+            response = this.httpClient.send(request, HttpResponse.BodyHandlers.ofString());    
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.out.println("Failed");
+            return false;
+        }
+        
+        String out = response.body().toString().replace("\"", "").replace("\n", "");
+        switch(out)
+        {
+            case ReturnMsg.CONNECTED_NO_USER:   
+                System.out.println("NO USER CONNECTED"); 
+                return false;
+            case ReturnMsg.NO_SYNC_REPO:
+                System.out.println("NO SYNC CONNECTED"); 
+                return false;
+        }
         return true;
     }
 
@@ -205,7 +228,7 @@ public class ghidraScripts extends GhidraScript {
 
 	// defaults
 	public String tempAddr = "001011b0";
-	public String [] connectedUsers = {"zion", "tristan", "fish"};
+	public String [] connectedUsers = {"default_display"};
 	public String selectedUser = "";
 
 	BinsyncController controller = null;
@@ -216,7 +239,6 @@ public class ghidraScripts extends GhidraScript {
 		System.out.println("[+] Starting plugin...");
         this.controller = new BinsyncController(masterUser, syncRepoPath, syncServerPath);
         this.controller.connect();
-		this.controller.pull("test_13");
 		List<String> userList = this.controller.users();
 		if(userList != null)
 			this.connectedUsers = userList.toArray(new String[0]);
