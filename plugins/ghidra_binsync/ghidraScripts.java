@@ -290,17 +290,19 @@ public class ghidraScripts extends GhidraScript {
 
 			while (scan.hasNextLine()) {
 				String line = scan.nextLine();
-				println(line);
+				// println(line);
 				information += line;
 				if(line.length() > 4) {
 					if (line.substring(0, 4).contains("addr") && !waitingName) {
 						addr = toAddr(line.substring(7));
+						println("ADDRESS: " + addr);
 						waitingName = true;
 					}
 					else if (line.substring(0, 4).contains("name") && waitingName) {
 						name = line.substring(line.indexOf("\"") + 1, line.lastIndexOf("\""));
-						println(name);
+						println("NAME: " + name);
 						ret.put(addr, name);
+						println("");
 						waitingName = false;
 					}
 				}
