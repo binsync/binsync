@@ -30,6 +30,164 @@ import ghidra.program.model.symbol.*;
 import ghidra.program.model.address.*;
 import ghidra.program.flatapi.*;
 
+import java.util.*;
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.HashMap;
+
+import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+
+import java.io.*;
+import java.net.http.*;
+
+// ==================== MAHALOZ ADDED CODE ======================= //
+class ReturnMsg
+{
+    public static final String BAD_ARGS = "There were not enough args in this request";
+    public static final String NO_SYNC_REPO = "Not connected to a sync repo";
+    public static final String CONNECTED_NO_USER = "Connected, but not initialized to a user yet";
+    public static final String CONNECTED = "Connected: ";
+    public static final String PULL_SUCCESS = "Successfully pulled: ";
+    public static final String SERVER_STOPPED = "Server Stopped";
+}
+
+class BinsyncController
+{
+    final String REQ_URL = "http://127.0.0.1:5000";
+    String masterUsername;
+    String repoPath;
+	String serverPath;
+    Process client;
+    HttpClient httpClient;
+
+    public BinsyncController(String masterUsername, String repoPath, String serverPath)
+    {
+        this.masterUsername = masterUsername;
+        this.repoPath = repoPath;
+		this.serverPath = serverPath;
+        this.client = null;
+        this.httpClient = HttpClient.newHttpClient();
+    }
+
+    public void connect()
+    {
+        System.out.println("[+] Connecting to BinSync Server..."); 
+        Process exec = null;
+        try {
+            String[] args = {"python3", this.serverPath, this.masterUsername, this.repoPath};
+            this.client = Runtime.getRuntime().exec(args);
+        } catch(IOException e) {
+            e.printStackTrace();
+            this.client = exec;
+        }
+        
+        try {
+            Thread.sleep(3 * 1000);
+        } catch(InterruptedException e) {
+            System.out.println("Interrupted");
+        }
+        
+        System.out.println("[+] Connected!"); 
+    }
+
+    public List<String> users()
+    {
+        HttpResponse<String> response = null;
+        List<String> userList = null;
+
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(this.REQ_URL + "/users"))
+            .build();
+        try {
+            response = this.httpClient.send(request, HttpResponse.BodyHandlers.ofString());    
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.out.println("Failed");
+            return null; 
+        }
+        
+        String out = response.body().toString().replace("\"", "").replace("\n", "");
+        switch(out)
+        {
+            case ReturnMsg.CONNECTED_NO_USER:   
+                System.out.println("NO USER CONNECTED"); 
+                return null;
+            case ReturnMsg.NO_SYNC_REPO:
+                System.out.println("NO SYNC CONNECTED"); 
+                return null;
+        }
+
+        userList = new ArrayList<String>(Arrays.asList(out.split(",")));
+        return userList;
+    }
+
+    public boolean pull(String username)
+    {
+        HttpResponse<String> response = null;
+
+        // send the request
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(this.REQ_URL + "/pull"))
+            .POST(HttpRequest.BodyPublishers.ofString("user="+username))
+            .setHeader("User-Agent", "BinSync Bot")
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .build();
+        try {
+            response = this.httpClient.send(request, HttpResponse.BodyHandlers.ofString());    
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.out.println("Failed");
+            return false; 
+        }
+        
+        String out = response.body().toString().replace("\"", "").replace("\n", "");
+        switch(out)
+        {
+            case ReturnMsg.CONNECTED_NO_USER:   
+                System.out.println("NO USER CONNECTED"); 
+                return false;
+            case ReturnMsg.NO_SYNC_REPO:
+                System.out.println("NO SYNC CONNECTED"); 
+                return false;
+        }
+        System.out.println(out);
+        return true;
+    }
+
+    private boolean stopServer()
+    {
+        return true;
+    }
+
+    public void kill()
+    {
+        this.stopServer();
+        this.client.destroy();        
+    }
+
+    private static HttpRequest.BodyPublisher buildFormDataFromMap(Map<Object, Object> data) {
+        var builder = new StringBuilder();
+        for (Map.Entry<Object, Object> entry : data.entrySet()) {
+            if (builder.length() > 0) {
+                builder.append("&");
+            }
+            builder.append(URLEncoder.encode(entry.getKey().toString(), StandardCharsets.UTF_8));
+            builder.append("=");
+            builder.append(URLEncoder.encode(entry.getValue().toString(), StandardCharsets.UTF_8));
+        }
+        System.out.println(builder.toString());
+        return HttpRequest.BodyPublishers.ofString(builder.toString());
+    }
+}
+
+// ==================== MAHALOZ ADDED CODE END ======================= //
+
+
 public class ghidraScripts extends GhidraScript {
 
 	public JFrame frame;
@@ -40,19 +198,47 @@ public class ghidraScripts extends GhidraScript {
     private javax.swing.JLabel jLabel2;
     private javax.swing.JScrollPane jScrollPane1;
 
+	// ---- PUT CONFIG HERE ---- //
+	public String syncRepoPath = "/Users/mahaloz/binsync/sync_test";
+	public String syncServerPath = "/Users/mahaloz/github/binsync/plugins/ghidra_binsync/binsync_server.py";
+	public String masterUser = "headless_0";
+
+	// defaults
 	public String tempAddr = "001011b0";
-	public String [] connectedUsers = {"YOU", "Tristan", "Fish", "Zion", "Shellphish"};
+	public String [] connectedUsers = {"zion", "tristan", "fish"};
 	public String selectedUser = "";
+
+	BinsyncController controller = null;
 
 	@Override
 	protected void run() {
+		// connect to binsync
+		System.out.println("[+] Starting plugin...");
+        this.controller = new BinsyncController(masterUser, syncRepoPath, syncServerPath);
+        this.controller.connect();
+		this.controller.pull("test_13");
+		List<String> userList = this.controller.users();
+		if(userList != null)
+			this.connectedUsers = userList.toArray(new String[0]);
+
+
 		// new PluginWindow().setVisible(true);
 		initComponents();
+
 	}
 	
 
 	private void SyncButtonMouseClicked() {
-		get_request(selectedUser);
+		if(this.selectedUser.equals("") || this.controller == null)
+			return;
+		
+		this.controller.pull(this.selectedUser);
+
+		// TODO:
+		// 1. simply read a file from /this.repoPath/functions/<func_addr>.toml
+		// 2. get the new function name from the file
+		// 3. rename it!
+		
 		// rename_stack_var(toAddr(tempAddr), -0x10, "LOCAL_VAR");
 		// println(get_all_func_names().toString());
 		// rename_func(toAddr(tempAddr), "ENTRY_FUNCTION");
@@ -188,9 +374,11 @@ public class ghidraScripts extends GhidraScript {
 				if (api.getPostComment(address) != null && !decompiler) {
 					fullComments += "\nPOST COMMENT: " + api.getPostComment(address);
 				}
+				/*
 				if (api.getRepeatableComment(address) != null && !decompiler) {
 					fullComments += "\nREPEATABLE COMMENT: " + api.getRepeatableComment(address);
 				}
+				*/
 
 				ret.put(address, fullComments);
 			}
@@ -202,29 +390,6 @@ public class ghidraScripts extends GhidraScript {
 		}
 
 	}
-	//___________________________________________________________________________________________
-	//___________________________________________________________________________________________
-	//_______________________________HTTP REQUEST FOR PULL______________________________________
-	//___________________________________________________________________________________________
-	//___________________________________________________________________________________________
-
-	public void get_request(String username) {
-		String requestUrl = "http://127.0.0.1:7962/pull?user=" + username;
-		HttpClient client = HttpClient.newHttpClient();
-		HttpRequest request = HttpRequest.newBuilder()
-			.uri(URI.create(requestUrl))
-			.build();
-		try {
-			String response = client.send(request, HttpResponse.BodyHandlers.ofString()).body().toString();
-			if (response.indexOf("Ok") != -1) {
-				println("Got Data");
-			}
-		} catch(Exception e) {
-			e.printStackTrace();
-		}
-
-	}
-
 	//___________________________________________________________________________________________
 	//___________________________________________________________________________________________
 	// _______________________________INITIALIZING THE COMPONENTS OF THE BOX_____________________
