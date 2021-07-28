@@ -72,11 +72,22 @@ class PullRequest(Resource):
 
         return ReturnMsg.PULL_SUCCESS + chosen_user
 
+class FunctionNames(Resource):
+    def get(self):
+        if not sync_client:
+            return ReturnMsg.NO_SYNC_REPO
+        elif sync_client.state is None:
+            return ReturnMsg.CONNECTED_NO_USER
+
+        func_dict = {addr: func.name for addr, func in sync_client.state.functions.items()}
+        return func_dict
+
 
 api.add_resource(PullRequest, '/pull')
 api.add_resource(SyncStatus, '/status')
 api.add_resource(Users, '/users')
 api.add_resource(StopServer, '/stop')
+api.add_resource(FunctionNames, '/functions')
 
 #
 #   ================================= Main Code =================================
