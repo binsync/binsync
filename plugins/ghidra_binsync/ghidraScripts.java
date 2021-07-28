@@ -33,20 +33,14 @@ import ghidra.program.model.symbol.*;
 import ghidra.program.model.address.*;
 import ghidra.program.flatapi.*;
 
+import java.io.*;
 import java.util.*;
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.util.HashMap;
-
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-
-import java.io.*;
 import java.net.http.*;
+import java.util.HashMap;
+
 
 // ==================== MAHALOZ ADDED CODE ======================= //
 class ReturnMsg
@@ -258,7 +252,7 @@ public class ghidraScripts extends GhidraScript {
 			return;
 		
 		this.controller.pull(this.selectedUser);
-
+		rename_functions_from_file();
 		// TODO:
 		// 1. simply read a file from /this.repoPath/functions/<func_addr>.toml
 		// 2. get the new function name from the file
@@ -269,6 +263,53 @@ public class ghidraScripts extends GhidraScript {
 		// rename_func(toAddr(tempAddr), "ENTRY_FUNCTION");
 		// find_pointer(-0x10);
 		// get_comments(toAddr(tempAddr), false);
+	}
+
+	private void rename_functions_from_file() {
+		HashMap<Address, String> functions_map = get_functions_file();
+		Iterator it = functions_map.entrySet().iterator();
+		
+		for(Address addr : functions_map.keySet()) {
+			String name = functions_map.get(addr);
+			rename_func(addr, name);
+		}
+	}
+
+	public HashMap<Address, String> get_functions_file() {
+		HashMap<Address, String> ret = new HashMap<>();
+
+		try{
+			FileReader file = new FileReader(syncRepoPath + "/functions.toml");
+
+			int i;
+			String information = "";
+			Address addr = toAddr("");
+			String name = "";
+			Scanner scan = new Scanner(file);
+			boolean waitingName = false;
+
+			while (scan.hasNextLine()) {
+				String line = scan.nextLine();
+				println(line);
+				information += line;
+				if(line.length() > 4) {
+					if (line.substring(0, 4).contains("addr") && !waitingName) {
+						addr = toAddr(line.substring(7));
+						waitingName = true;
+					}
+					else if (line.substring(0, 4).contains("name") && waitingName) {
+						name = line.substring(line.indexOf("\"") + 1, line.lastIndexOf("\""));
+						println(name);
+						ret.put(addr, name);
+						waitingName = false;
+					}
+				}
+			}
+		} catch (Exception e) {
+			println(e.getMessage());
+			e.printStackTrace();
+		} 
+		return ret;
 	}
 
 	private void PushButtonActionPerformed() {
