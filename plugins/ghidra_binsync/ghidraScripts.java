@@ -9,6 +9,9 @@
 //@toolbar Skeleton
 
 import java.awt.event.*;
+import java.awt.event.WindowAdapter.*;
+import java.awt.event.WindowListener;
+import java.awt.event.WindowEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.HashMap;
@@ -222,9 +225,9 @@ public class ghidraScripts extends GhidraScript {
     private javax.swing.JScrollPane jScrollPane1;
 
 	// ---- PUT CONFIG HERE ---- //
-	public String syncRepoPath = "/Users/mahaloz/binsync/sync_test";
-	public String syncServerPath = "/Users/mahaloz/github/binsync/plugins/ghidra_binsync/binsync_server.py";
-	public String masterUser = "headless_0";
+	public String syncRepoPath = "/Users/tristanbrigham/GithubProjects/ASUInternship/sync_test";
+	public String syncServerPath = "/Users/tristanbrigham/GithubProjects/ASUInternship/binsync/plugins/ghidra_binsync/binsync_server.py";
+	public String masterUser = "tristan";
 
 	// defaults
 	public String tempAddr = "001011b0";
@@ -501,6 +504,18 @@ public class ghidraScripts extends GhidraScript {
                     .addComponent(PushButton))
                 .addGap(34, 34, 34))
         );
+
+		frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+		WindowListener exitListener = new WindowAdapter() {
+
+			@Override
+			public void windowClosing(WindowEvent e) {
+				controller.kill();
+			}
+		};
+
+		frame.addWindowListener(exitListener);
+
 
         frame.pack();
 
