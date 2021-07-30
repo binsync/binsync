@@ -381,14 +381,13 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     def binsync_state_change(self, *args, **kwargs):
         # issue a new command to update the binsync state
-        self.controller.api_lock.acquire()
-        if self.controller.api_count > 0:
-            kwargs['api_set'] = True
-            self.controller.make_controller_cmd(*args, **kwargs)
-            self.controller.api_count -= 1
-        else:
-            self.controller.make_controller_cmd(*args, **kwargs)
-        self.controller.api_lock.release()
+        with self.controller.api_lock:
+            if self.controller.api_count > 0:
+                kwargs['api_set'] = True
+                self.controller.make_controller_cmd(*args, **kwargs)
+                self.controller.api_count -= 1
+            else:
+                self.controller.make_controller_cmd(*args, **kwargs)
 
 
 class IDPHooks(ida_idp.IDP_Hooks):

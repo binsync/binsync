@@ -109,7 +109,7 @@ class QFuncInfoTable(QTableWidget):
                 func_change_time = sync_func.last_change
 
                 # check if we already know about it
-                if func_addr in known_funcs:
+                if func_change_time == -1 or func_addr in known_funcs:
                     # compare this users change time to the store change time
                     if func_change_time < known_funcs[func_addr][3]:
                         # don't change it if the other user is more recent

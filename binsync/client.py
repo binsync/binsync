@@ -11,7 +11,7 @@ import git
 import git.exc
 import filelock
 
-from .data import User, Function
+from .data import User, Function, Struct, Patch
 from .state import State
 from .errors import MetadataNotFoundError
 from .utils import is_py3
@@ -19,6 +19,12 @@ from .utils import is_py3
 _l = logging.getLogger(name=__name__)
 BINSYNC_BRANCH_PREFIX = 'binsync'
 BINSYNC_ROOT_BRANCH = f'{BINSYNC_BRANCH_PREFIX}/__root__'
+
+
+class ArtifactType:
+    FUNCTION = 0
+    STRUCT = 1
+    PATCH = 2
 
 
 class ConnectionWarnings:
@@ -442,26 +448,17 @@ class Client(object):
 
         self._last_commit_ts = time.time()
 
-    def set_last_push(self, func_addr: int, push_time: int, func_name: str):
+    def set_last_push(self, artifact_addr: int, push_time: int, artifact_name: str, artifact_type: int):
         """
         Setter for the push variables.
         """
         state = self.get_state(user=self.master_user)
 
         # update a users global metadata
-        state.last_push_func = func_addr
+        state.last_push_artifact = artifact_addr if artifact_addr else artifact_name
         state.last_push_time = push_time
-
-        # create a function if it does not exist in this users state
-        try:
-            changed_func = state.get_function(func_addr)
-        except KeyError:
-            changed_func = Function(func_addr)
-
-        # update a users local, function level, metadata
-        changed_func.last_change = push_time
-        changed_func.name = func_name
-        state.set_function(changed_func)
+        state.last_push_artifact_type = artifact_type
+        self._create_or_update_state_artifact(artifact_addr, push_time, artifact_name, artifact_type)
 
     def save_state(self, state=None):
 
@@ -534,6 +531,31 @@ class Client(object):
     def close(self):
         self.repo.close()
         del self.repo
+
+    def _create_or_update_state_artifact(self, artifact_addr, push_time, artifact_name, artifact_type):
+        state = self.get_state(user=self.master_user)
+        if artifact_type == ArtifactType.FUNCTION:
+            try:
+                artifact = state.get_function(artifact_addr)
+            except KeyError:
+                artifact = Function(artifact_addr)
+            artifact.name = artifact_name
+            artifact.last_change = push_time
+            state.set_function(artifact)
+        elif artifact_type == ArtifactType.STRUCT:
+            try:
+                artifact = state.get_struct(artifact_name)
+            except KeyError:
+                return
+            artifact.name = artifact_name
+            artifact.last_change = push_time
+        elif artifact_type == ArtifactType.PATCH:
+            try:
+                artifact = state.get_patch(artifact_addr)
+            except KeyError:
+                return
+            artifact.name = artifact_name
+            artifact.last_change = push_time
 
     def _get_best_refs(self):
         candidates = {}

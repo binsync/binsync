@@ -79,7 +79,8 @@ class State:
         # metadata info
         self.user = user  # type: str
         self.version = version if version is not None else 0  # type: int
-        self.last_push_func = -1
+        self.last_push_artifact = -1
+        self.last_push_artifact_type = -1
         self.last_push_time = -1
 
         # the client
@@ -109,7 +110,8 @@ class State:
         d = {
             "user": self.user,
             "version": self.version,
-            "last_push_func": self.last_push_func,
+            "last_push_artifact": self.last_push_artifact,
+            "last_push_artifact_type": self.last_push_artifact_type,
             "push_time": self.last_push_time
         }
         add_data(index, 'metadata.toml', toml.dumps(d).encode())
@@ -243,11 +245,6 @@ class State:
     #
 
     @dirty_checker
-    def update_metadata(self, last_func_push: str, last_push_time: int):
-        pass
-
-
-    @dirty_checker
     def set_function(self, func):
 
         if not isinstance(func, Function):
@@ -363,7 +360,7 @@ class State:
 
         return self.comments[func_addr]
 
-    def get_patch(self, addr):
+    def get_patch(self, addr) -> Patch:
 
         if addr not in self.patches:
             raise KeyError("There is no patch at address %#x." % addr)
@@ -385,7 +382,7 @@ class State:
             raise KeyError("No stack variables are defined for function %#x." % func_addr)
         return self.stack_variables[func_addr].items()
 
-    def get_struct(self, struct_name):
+    def get_struct(self, struct_name) -> Struct:
         if struct_name not in self.structs:
             raise KeyError(f"No struct by the name {struct_name} defined.")
         return self.structs[struct_name]

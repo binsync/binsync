@@ -1,40 +1,39 @@
 import codecs
 import toml
 
-from ..utils import is_py3
 from .base import Base
-
-
-if is_py3():
-    unicode = str
 
 
 class Patch(Base):
     """
     Describes a patch on the binary code.
     """
+    __slots__ = (
+        "obj_name",
+        "offset",
+        "new_bytes",
+        "last_change"
+    )
 
-    def __init__(self, obj_name, offset, new_bytes):
+    def __init__(self, obj_name, offset, new_bytes, last_change=-1):
         self.obj_name = obj_name
         self.offset = offset
         self.new_bytes = new_bytes
+        self.last_change = last_change
 
     def __getstate__(self):
         return {
             "obj_name": self.obj_name,
             "offset": int(self.offset),
-            # we need to use codecs to be compatible with Python2 and Python3 at the same time
             "new_bytes": codecs.encode(self.new_bytes, "hex"),
+            "last_change": self.last_change
         }
 
     def __setstate__(self, state):
-        if isinstance(state["offset"], (str, unicode)):
-            state["offset"] = int(state["offset"].rstrip("L"))
-
         self.obj_name = state["obj_name"]
         self.offset = state["offset"]
-        # we need to use codecs to be compatible with Python2 and Python3 at the same time
         self.new_bytes = codecs.decode(state["new_bytes"], "hex")
+        self.last_change = state["last_change"]
 
     def __eq__(self, other):
         return (
@@ -42,6 +41,7 @@ class Patch(Base):
             and other.obj_name == self.obj_name
             and other.offset == self.offset
             and other.new_bytes == self.new_bytes
+            and other.last_change == self.last_change
         )
 
     def dump(self):

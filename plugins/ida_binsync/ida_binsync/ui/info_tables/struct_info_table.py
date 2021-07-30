@@ -2,8 +2,10 @@ from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, Q
 from PyQt5.QtCore import Qt, QItemSelectionModel
 from typing import Dict
 
+from binsync.data import Struct
+from ...controller import BinsyncController
 
-class QUserItem(object):
+class QUserItem:
     def __init__(self, struct_name, size, user):
         self.sturct_name = struct_name
         self.size = size
@@ -34,6 +36,7 @@ class QStructInfoTable(QTableWidget):
         'Struct Name',
         'Size',
         'User',
+        'Last Push'
     ]
 
     def __init__(self, controller, parent=None):
@@ -86,5 +89,33 @@ class QStructInfoTable(QTableWidget):
         """
         Update the status of all users within the repo.
         """
-        pass
+
+        # reset the items in table
+        self.items = []
+        known_structs = {} # struct_name: (struct_name, size, user_name, push_time)
+
+        # first check if any functions are unknown to the table
+        for user in users:
+            state = self.controller.client.get_state(user=user.name)
+            user_structs: Dict[str, Struct] = state.structs
+
+            for struct_name, sync_struct in user_structs.items():
+                struct_change_time = sync_struct.last_change
+
+                # check if we already know about it
+                if struct_change_time == -1 or struct_name in known_structs:
+                    # compare this users change time to the store change time
+                    if struct_change_time < known_structs[struct_name][3]:
+                        # don't change it if the other user is more recent
+                        continue
+
+                known_structs[struct_name] = [struct_name, sync_struct.size, user.name, struct_change_time]
+
+        for row in known_structs.values():
+            # fix datetimes for the correct format
+            row[3] = BinsyncController.friendly_datetime(row[3])
+            table_row = QUserItem(*row)
+            self.items.append(table_row)
+
+        self.reload()
 

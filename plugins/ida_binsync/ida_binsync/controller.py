@@ -54,33 +54,44 @@ def init_checker(f):
     return initcheck
 
 
-def last_push(f):
+def set_last_push(f):
     """
     Once a push function has been executed, perform an update on the last push time,
     last push function, and the local function name for the master user. 
     """
     @wraps(f)
-    def set_last_push(self, *args, **kwargs):
+    def _set_last_push(self, *args, **kwargs):
         api_set = kwargs.pop('api_set', None)
         if api_set is not None:
             f(self, *args, **kwargs)
         else:
             # Get the attribute address
-            attr_addr = args[0] # First arg should be attr_addr. If not, be scared.
+            attr_addr = args[0]
 
-            # Create our last push time, last push func, and func name
-            last_push_time = int(time.time())
-            last_push_func = compat.ida_func_addr(attr_addr)
-            func_name = compat.get_func_name(last_push_func)
+            if isinstance(attr_addr, int):
+                artifact_addr = compat.ida_func_addr(attr_addr)
+                artifact_name = compat.get_func_name(artifact_addr)
+                artifact_type = binsync.ArtifactType.FUNCTION
+            elif isinstance(attr_addr, binsync.data.Struct):
+                artifact_addr = None
+                artifact_name = attr_addr.name
+                artifact_type = binsync.ArtifactType.STRUCT
+            elif isinstance(attr_addr, binsync.data.Patch):
+                artifact_addr = compat.ida_func_addr(attr_addr)
+                artifact_name = None
+                artifact_type = binsync.ArtifactType.PATCH
+            else:
+                f(self, *args, **kwargs)
+                return
 
             # Call the function first. This way any changes
             # can be set. (func changed, time finally modified, etc.)
             f(self, *args, **kwargs)
 
-            # Call the binsync proper client set_last_push
-            self.client.set_last_push(last_push_func, last_push_time, func_name)
+            last_push_time = int(time.time())
+            self.client.set_last_push(artifact_addr, last_push_time, artifact_name, artifact_type)
 
-    return set_last_push
+    return _set_last_push
         
 
 def make_state(f):
@@ -468,17 +479,20 @@ class BinsyncController:
 
     @init_checker
     @make_state
-    @last_push
+    @set_last_push
     def push_comment(self, func_addr, addr, comment, decompiled=False, user=None, state=None, api_set=False):
         # check if the function exist
         # if not; create it
         # if it does; write to the set_last_push parameter
         sync_cmt = binsync.data.Comment(func_addr, addr, comment, decompiled=decompiled)
+        if not api_set:
+            sync_cmt.last_change = int(time.time())
+
         state.set_comment(sync_cmt)
 
     def push_comments(self, func_addr, cmt_dict: Dict[int, str], decompiled=False, user=None, state=None, api_set=False):
         for addr in cmt_dict:
-            self.push_comment(func_addr, addr, cmt_dict[addr], decompiled=decompiled, user=user, state=state)
+            self.push_comment(func_addr, addr, cmt_dict[addr], decompiled=decompiled, user=user, state=state, api_set=api_set)
         
     '''
     # TODO: Just pass along the offset. Why the whole patch ??
@@ -496,16 +510,19 @@ class BinsyncController:
 
     @init_checker
     @make_state
-    @last_push
+    @set_last_push
     def push_function_name(self, attr_addr, new_name, user=None, state=None, api_set=False):
         # setup the new function for binsync
         func = binsync.data.Function(attr_addr)
         func.name = new_name
+        if not api_set:
+            func.last_change = int(time.time())
+
         state.set_function(func)
 
     @init_checker
     @make_state
-    @last_push
+    @set_last_push
     def push_stack_variable(self, attr_addr, stack_offset, name, type_str, size, user=None, state=None, api_set=False):
         # convert longs to ints
         stack_offset = int(stack_offset)
@@ -518,12 +535,19 @@ class BinsyncController:
                           type_str,
                           size,
                           func_addr)
+        if not api_set:
+            v.last_change = int(time.time())
+
         state.set_stack_variable(func_addr, stack_offset, v)
 
     @init_checker
     @make_state
+    @set_last_push
     def push_struct(self, struct, old_name, user=None, state=None, api_set=False):
         old_name = None if old_name == "" else old_name
+        if not api_set:
+            struct.last_change = int(time.time())
+
         state.set_struct(struct, old_name)
 
     #
