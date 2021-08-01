@@ -250,14 +250,17 @@ def update_struct(struct: Struct, controller):
     sid = ida_struct.get_struc_id(struct.name)
     if sid != 0xffffffffffffffff:
         sptr = ida_struct.get_struc(sid)
+        controller.inc_api_count()
         ida_struct.del_struc(sptr)
 
     # now make a struct header
+    controller.inc_api_count()
     ida_struct.add_struc(ida_idaapi.BADADDR, struct.name, False)
     sid = ida_struct.get_struc_id(struct.name)
     sptr = ida_struct.get_struc(sid)
 
     # expand the struct to the desired size
+    # XXX: do not increment API here, why? Not sure, but you cant do it here.
     ida_struct.expand_struc(sptr, 0, struct.size)
 
     # add every member of the struct
@@ -267,6 +270,7 @@ def update_struct(struct: Struct, controller):
 
         # create the new member
         # TODO: support real types for members
+        controller.inc_api_count()
         ida_struct.add_struc_member(
             sptr,
             member.member_name,

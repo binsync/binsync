@@ -54,35 +54,6 @@ def init_checker(f):
     return initcheck
 
 
-def last_push(f):
-    """
-    Once a push function has been executed, perform an update on the last push time,
-    last push function, and the local function name for the master user. 
-    """
-    @wraps(f)
-    def set_last_push(self, *args, **kwargs):
-        api_set = kwargs.pop('api_set', None)
-        if api_set is not None:
-            f(self, *args, **kwargs)
-        else:
-            # Get the attribute address
-            attr_addr = args[0] # First arg should be attr_addr. If not, be scared.
-
-            # Create our last push time, last push func, and func name
-            last_push_time = int(time.time())
-            last_push_func = compat.ida_func_addr(attr_addr)
-            func_name = compat.get_func_name(last_push_func)
-
-            # Call the function first. This way any changes
-            # can be set. (func changed, time finally modified, etc.)
-            f(self, *args, **kwargs)
-
-            # Call the binsync proper client set_last_push
-            self.client.set_last_push(last_push_func, last_push_time, func_name)
-
-    return set_last_push
-        
-
 def make_state(f):
     """
     Build a writeable State instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
@@ -304,7 +275,7 @@ class BinsyncController:
         # === function name === #
         # catch the case where a user did an update to something in a function
         # but did not change it's name. In that case, keep the local name
-        if _func.name == "":
+        if _func.name is None or _func.name == "":
             _func.name = compat.get_func_name(ida_func.start_ea)
 
         if compat.get_func_name(ida_func.start_ea) != _func.name:
@@ -452,8 +423,6 @@ class BinsyncController:
         """
         return state.get_structs()
 
-
-
     @init_checker
     @make_state
     def remove_all_comments(self, ida_func, user=None, state=None):
@@ -468,17 +437,16 @@ class BinsyncController:
 
     @init_checker
     @make_state
-    @last_push
-    def push_comment(self, func_addr, addr, comment, decompiled=False, user=None, state=None, api_set=False):
-        # check if the function exist
-        # if not; create it
-        # if it does; write to the set_last_push parameter
+    def push_comment(self, func_addr, addr, comment, decompiled=False,
+                     user=None, state: "binsync.State" = None, api_set=False):
         sync_cmt = binsync.data.Comment(func_addr, addr, comment, decompiled=decompiled)
-        state.set_comment(sync_cmt)
+        state.set_comment(sync_cmt, set_last_change=not api_set)
 
-    def push_comments(self, func_addr, cmt_dict: Dict[int, str], decompiled=False, user=None, state=None, api_set=False):
+    def push_comments(self, func_addr, cmt_dict: Dict[int, str], decompiled=False,
+                      user=None, state: "binsync.State" = None, api_set=False):
         for addr in cmt_dict:
-            self.push_comment(func_addr, addr, cmt_dict[addr], decompiled=decompiled, user=user, state=state)
+            self.push_comment(func_addr, addr, cmt_dict[addr], decompiled=decompiled,
+                              user=user, state=state, api_set=api_set)
         
     '''
     # TODO: Just pass along the offset. Why the whole patch ??
@@ -496,17 +464,17 @@ class BinsyncController:
 
     @init_checker
     @make_state
-    @last_push
-    def push_function_name(self, attr_addr, new_name, user=None, state=None, api_set=False):
+    def push_function_name(self, attr_addr, new_name,
+                           user=None, state: "binsync.State" = None, api_set=False):
         # setup the new function for binsync
         func = binsync.data.Function(attr_addr)
         func.name = new_name
-        state.set_function(func)
+        state.set_function(func, set_last_change=not api_set)
 
     @init_checker
     @make_state
-    @last_push
-    def push_stack_variable(self, attr_addr, stack_offset, name, type_str, size, user=None, state=None, api_set=False):
+    def push_stack_variable(self, attr_addr, stack_offset, name, type_str, size,
+                            user=None, state: "binsync.State" = None, api_set=False):
         # convert longs to ints
         stack_offset = int(stack_offset)
         func_addr = int(attr_addr)
@@ -518,13 +486,14 @@ class BinsyncController:
                           type_str,
                           size,
                           func_addr)
-        state.set_stack_variable(func_addr, stack_offset, v)
+        state.set_stack_variable(v, stack_offset, func_addr, set_last_change=not api_set)
 
     @init_checker
     @make_state
-    def push_struct(self, struct, old_name, user=None, state=None, api_set=False):
+    def push_struct(self, struct, old_name,
+                    user=None, state=None, api_set=False):
         old_name = None if old_name == "" else old_name
-        state.set_struct(struct, old_name)
+        state.set_struct(struct, old_name, set_last_change=not api_set)
 
     #
     # Utils

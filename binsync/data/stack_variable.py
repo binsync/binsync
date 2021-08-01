@@ -22,15 +22,17 @@ class StackVariable(Base):
         "stack_offset_type",
         "size",
         "type",
+        "last_change"
     )
 
-    def __init__(self, stack_offset, offset_type, name, type_, size, func_addr):
+    def __init__(self, stack_offset, offset_type, name, type_, size, func_addr, last_change=-1):
         self.stack_offset = stack_offset  # type: int
         self.stack_offset_type = offset_type  # type: int
         self.name = name  # type: str
         self.type = type_  # type: str
         self.size = size  # type: int
         self.func_addr = func_addr  # type: int
+        self.last_change = last_change
 
     def __getstate__(self):
         return dict(

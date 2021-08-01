@@ -49,7 +49,7 @@ class StructMember:
         return sm
 
 
-class Struct(Base):
+class Struct:
     """
     Describes a struct
     """
@@ -58,15 +58,17 @@ class Struct(Base):
         "name",
         "size",
         "struct_members",
+        "last_change"
     )
 
-    def __init__(self, name: str, size: int, struct_members: List[StructMember]):
+    def __init__(self, name: str, size: int, struct_members: List[StructMember], last_change: int = -1):
         self.name = name
         self.size = size
         self.struct_members = struct_members
+        self.last_change = last_change
 
     def __getstate__(self):
-        struct_data = {"struct_metadata": {"name": self.name, "size": self.size}}
+        struct_data = {"struct_metadata": {"name": self.name, "size": self.size, "last_change": self.last_change}}
         for member in self.struct_members:
             struct_data.update({"%x" % member.offset: member.__getstate__()})
 
@@ -78,6 +80,7 @@ class Struct(Base):
             if k == "struct_metadata":
                 self.name = state[k]["name"]
                 self.size = state[k]["size"]
+                self.last_change = state[k]["last_change"]
             else:
                 struct_members.append(StructMember.parse(toml.dumps(state[k])))
 

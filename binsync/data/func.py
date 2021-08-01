@@ -20,39 +20,39 @@ class Function(Base):
     __slots__ = (
         "addr",
         "name",
-        "last_change",
         "notes",
+        "last_change",
     )
 
-    def __init__(self, addr, name=None, last_change=-1, notes=None):
+    def __init__(self, addr, name=None, notes=None, last_change=-1):
         self.addr = addr
         self.name = name
-        self.last_change = last_change if last_change == -1 else int(time.time())
         self.notes = notes
+        self.last_change = last_change
 
     def __getstate__(self):
         return {
             "addr": self.addr,
             "name": self.name,
-            "last_change": self.last_change,
             "notes": self.notes,
+            "last_change": self.last_change,
         }
 
     def __setstate__(self, state):
         if not isinstance(state["addr"], (int, long)):
             raise TypeError("Unsupported type %s for addr." % type(state["addr"]))
         self.addr = state["addr"]
-        self.name = state["name"]
-        self.last_change = state["last_change"]
+        self.name = state.get("name", None)
         self.notes = state.get("notes", None)
+        self.last_change = state["last_change"]
 
     def __eq__(self, other):
         return (
             isinstance(other, Function)
             and other.name == self.name
             and other.addr == self.addr
-            and other.last_change == self.last_change
             and other.notes == self.notes
+            and other.last_change == self.last_change
         )
 
     def dump(self):

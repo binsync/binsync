@@ -6,6 +6,7 @@ import idaapi
 
 from .info_tables.func_info_table import QFuncInfoTable
 from .info_tables.struct_info_table import QStructInfoTable
+from .info_tables.user_info_table import QUserInfoTable
 from ..controller import BinsyncController
 
 
@@ -69,7 +70,8 @@ class InfoPanel(QWidget):
         self._dialog = dialog
 
         # info tables
-        self._func_table = None  # type: QFuncInfoTable
+        self._user_table = None  # type: QUserInfoTable
+        self._func_table = None  # type: QUserInfoTable
         self._struct_table = None  # type: QStructInfoTable
         self._active_table = None  # type: QTableWidget
 
@@ -120,16 +122,21 @@ class InfoPanel(QWidget):
         combo_box = QGroupBox(self)
         combo_layout = QHBoxLayout()
         self.combo = QComboBox()
-        self.combo.addItems(["Functions", "Structs"])
+        self.combo.addItems(["Users", "Functions", "Structs"])
         self.combo.currentTextChanged.connect(self._on_combo_change)
         combo_layout.addWidget(self.combo)
         combo_box.setLayout(combo_layout)
         info_layout.addWidget(combo_box)
 
+        # user info table
+        self._user_table = QUserInfoTable(self._controller)
+        info_layout.addWidget(self._user_table)
+        self._active_table = self._user_table
+
         # function info table
         self._func_table = QFuncInfoTable(self._controller)
+        self._func_table.hide()
         info_layout.addWidget(self._func_table)    # stretch=1 optional
-        self._active_table = self._func_table
 
         # struct info table
         self._struct_table = QStructInfoTable(self._controller)
@@ -147,7 +154,10 @@ class InfoPanel(QWidget):
 
     def _on_combo_change(self, value):
         self._hide_all_tables()
-        if value == "Functions":
+        if value == "Users":
+            self._user_table.show()
+            self._active_table = self._user_table
+        elif value == "Functions":
             self._func_table.show()
             self._active_table = self._func_table
         elif value == "Structs":
@@ -157,9 +167,14 @@ class InfoPanel(QWidget):
     def _hide_all_tables(self):
         self._func_table.hide()
         self._struct_table.hide()
+        self._user_table.hide()
 
     def _update_info_tables(self):
         if self._controller.client.has_remote:
             self._controller.client.init_remote()
 
-        self._active_table.update_users(self._controller.users())
+        users = list(self._controller.users())
+
+        self._user_table.update_users(users)
+        self._func_table.update_users(users)
+        self._struct_table.update_users(users)

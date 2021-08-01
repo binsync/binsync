@@ -11,7 +11,7 @@ import git
 import git.exc
 import filelock
 
-from .data import User, Function
+from .data import User, Function, Struct, Patch
 from .state import State
 from .errors import MetadataNotFoundError
 from .utils import is_py3
@@ -63,9 +63,7 @@ class Client(object):
         init_repo=False,
         remote_url=None,
         ssh_agent_pid=None,
-        ssh_auth_sock=None,
-        last_push_func=-1,
-        last_push_time=-1,
+        ssh_auth_sock=None
     ):
         """
         :param str master_user:     The username of the current user
@@ -153,10 +151,6 @@ class Client(object):
         self._last_push_attempt_at = None  # type: datetime.datetime
         self._last_pull_at = None  # type: datetime.datetime
         self._last_pull_attempt_at = None  # type: datetime.datetime
-
-        # User last push time/function
-        self.last_push_time = -1
-        self.last_push_function = -1
 
         # timestamps
         self._last_commit_ts = 0
@@ -441,27 +435,6 @@ class Client(object):
             self.push()
 
         self._last_commit_ts = time.time()
-
-    def set_last_push(self, func_addr: int, push_time: int, func_name: str):
-        """
-        Setter for the push variables.
-        """
-        state = self.get_state(user=self.master_user)
-
-        # update a users global metadata
-        state.last_push_func = func_addr
-        state.last_push_time = push_time
-
-        # create a function if it does not exist in this users state
-        try:
-            changed_func = state.get_function(func_addr)
-        except KeyError:
-            changed_func = Function(func_addr)
-
-        # update a users local, function level, metadata
-        changed_func.last_change = push_time
-        changed_func.name = func_name
-        state.set_function(changed_func)
 
     def save_state(self, state=None):
 

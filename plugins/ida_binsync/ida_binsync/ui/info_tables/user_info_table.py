@@ -4,27 +4,24 @@ from typing import Dict
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QMenu, QHeaderView
 from PyQt5.QtCore import Qt, QItemSelectionModel
 
+import binsync
 from ...controller import BinsyncController
 from ... import compat
 from binsync.data import Function
 
 
 class QUserItem(object):
-    def __init__(self, func_addr, local_name, user, last_push):
-        self.func_addr = func_addr
-        self.local_name = local_name
+    def __init__(self, user, last_push, last_push_type):
         self.user = user
         self.last_push = last_push
+        self.last_push_type = last_push_type
 
     def widgets(self):
 
-        u = self.user
-
         widgets = [
-            QTableWidgetItem(hex(self.func_addr)),
-            QTableWidgetItem(self.local_name),
-            QTableWidgetItem(u), #normally u.name
+            QTableWidgetItem(self.user),
             QTableWidgetItem(self.last_push),
+            QTableWidgetItem(self.last_push_type)
         ]
 
         for w in widgets:
@@ -36,17 +33,16 @@ class QUserItem(object):
         pass
 
 
-class QFuncInfoTable(QTableWidget):
+class QUserInfoTable(QTableWidget):
 
     HEADER = [
-        'Changed Func',
-        'Local Name',
         'User',
         'Last Push',
+        'Type'
     ]
 
     def __init__(self, controller, parent=None):
-        super(QFuncInfoTable, self).__init__(parent)
+        super(QUserInfoTable, self).__init__(parent)
 
         self.setColumnCount(len(self.HEADER))
         self.setHorizontalHeaderLabels(self.HEADER)
@@ -98,33 +94,31 @@ class QFuncInfoTable(QTableWidget):
 
         # reset the items in table
         self.items = []
-        known_funcs = {}  # addr: (addr, name, user_name, push_time)
+        push_type_strs = {
+            binsync.ArtifactGroupType.UNSET: "",
+            binsync.ArtifactGroupType.FUNCTION: "function",
+            binsync.ArtifactGroupType.PATCH: "patch",
+            binsync.ArtifactGroupType.STRUCT: "struct"
+        }
 
-        # first check if any functions are unknown to the table
+        rows = list()
         for user in users:
-            state = self.controller.client.get_state(user=user.name)
-            user_funcs: Dict[int, Function] = state.functions
+            row = [
+                user.name,
+                user.last_push_time,
+                push_type_strs[user.last_push_artifact_type]
+            ]
+            rows.append(row)
 
-            for func_addr, sync_func in user_funcs.items():
-                func_change_time = sync_func.last_change
+        rows.sort(key=lambda i: i[1], reverse=True)
 
-                # don't add functions that were never changed by the user
-                if sync_func.last_change == -1:
-                    continue
-
-                # check if we already know about it
-                if func_addr in known_funcs:
-                    # compare this users change time to the store change time
-                    if func_change_time < known_funcs[func_addr][3]:
-                        # don't change it if the other user is more recent
-                        continue
-
-                local_func_name = compat.get_func_name(func_addr)
-                known_funcs[func_addr] = [func_addr, local_func_name, user.name, func_change_time]
-
-        for row in known_funcs.values():
+        for row in rows:
             # fix datetimes for the correct format
-            row[3] = BinsyncController.friendly_datetime(row[3])
+            if row[1] == -1:
+                row[1] = ""
+            else:
+                row[1] = BinsyncController.friendly_datetime(row[1])
+
             table_row = QUserItem(*row)
             self.items.append(table_row)
 

@@ -16,13 +16,15 @@ class Comment(Base):
         "decompiled",
         "func_addr",
         "addr",
+        "last_change"
     )
 
-    def __init__(self, func_addr, addr, comment, decompiled=False):
+    def __init__(self, func_addr, addr, comment, decompiled=False, last_change=-1):
         self.comment = comment  # type: str
         self.decompiled = decompiled  # TODO: use this in other places!
         self.func_addr = func_addr  # type: int
         self.addr = addr  # type: int
+        self.last_change = last_change  # type: int
 
     def __getstate__(self):
         return dict(
