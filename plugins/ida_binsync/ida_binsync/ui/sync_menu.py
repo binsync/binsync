@@ -6,6 +6,7 @@ import sip
 import idaapi
 import idautils
 
+import binsync.data
 from .. import compat
 from ..controller import BinsyncController
 
@@ -18,67 +19,185 @@ class BinsyncMenuActionItem:
     SYNC_STRUCTS = "Sync All Structs"
     TOGGLE_AUTO_SYNC = "Toggle Auto Sync"
 
+
 class MenuDialog(QDialog):
-    def __init__(self, menu_table, parent=None):
+    def __init__(self, controller, selected_functions, parent=None):
         super(MenuDialog, self).__init__(parent)
 
-        self.menu_table = menu_table
+        self.controller = controller
+        self.selected_functions = selected_functions
 
+        self.select_table_widget = None
+        self.all_table_widget = None
+        self.active_table = None
+
+        self._init_widget()
+
+    def _init_widget(self):
         label = QLabel("Binsync Action")
         self.combo = QComboBox()
         self.combo.addItems([BinsyncMenuActionItem.SYNC_SELECTED_FUNCTIONS,
                              BinsyncMenuActionItem.SYNC_ALL_FUNCTIONS,
                              BinsyncMenuActionItem.SYNC_STRUCTS])
+        self.combo.currentTextChanged.connect(self._on_combo_change)
 
-        self.tableWidget = QTableWidget(len(self.menu_table), 4)
-        self.tableWidget.setHorizontalHeaderLabels(
-            "User;Last Push;Last Edited Function;Local Name".split(";")
+        # build two versions of the table
+        # TODO: eventually remove this. Its a hack to show all the users
+        # in the case that we want to pull structs directly
+        self.select_table_widget = self._build_table_widget(
+            self._build_menu_table_for_selected_funcs(self.selected_functions)
+        )
+        self.all_table_widget = self._build_table_widget(
+            self._build_menu_table_for_all_users()
         )
 
-        header = self.tableWidget.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.Stretch)
-
-        for item, row in zip(self.menu_table.items(), range(len(self.menu_table))):
-            user_item = QTableWidgetItem(item[0])
-            push_item = QTableWidgetItem(item[1][0])
-            func_item = QTableWidgetItem(item[1][1])
-            func_name_item = QTableWidgetItem(item[1][2])
-            self.tableWidget.setItem(row, 0, user_item)
-            self.tableWidget.setItem(row, 1, push_item)
-            self.tableWidget.setItem(row, 2, func_item)
-            self.tableWidget.setItem(row, 3, func_name_item)
-
-        # set more table properties
-        self.tableWidget.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.tableWidget.setSelectionMode(QAbstractItemView.SingleSelection)
+        # hide one of the tables, make the other active
+        self.all_table_widget.hide()
+        self.active_table = self.select_table_widget
 
         box = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel,
             centerButtons=True,
-        )
+            )
         box.accepted.connect(self.accept)
         box.rejected.connect(self.reject)
 
         lay = QGridLayout(self)
         lay.addWidget(label, 0, 0)
         lay.addWidget(self.combo, 0, 1)
-        lay.addWidget(self.tableWidget, 1, 0, 1, 2)
+        lay.addWidget(self.select_table_widget, 1, 0, 1, 2)
+        lay.addWidget(self.all_table_widget, 1, 0, 1, 2)
         lay.addWidget(box, 2, 0, 1, 2)
 
         self.resize(640, 240)
 
-    def getActionSelection(self):
+    #
+    #   Table Builders
+    #
+
+    def _build_table_widget(self, menu_table):
+        table_widget = QTableWidget(len(menu_table), 4)
+        table_widget.setHorizontalHeaderLabels(
+            "User;Last Push;Func Addr;Name".split(";")
+        )
+
+        header = table_widget.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.Stretch)
+
+        for item, row in zip(menu_table, range(len(menu_table))):
+            user_item = QTableWidgetItem(item[0])
+            push_item = QTableWidgetItem(item[1])
+            func_item = QTableWidgetItem(item[2])
+            func_name_item = QTableWidgetItem(item[3])
+            table_widget.setItem(row, 0, user_item)
+            table_widget.setItem(row, 1, push_item)
+            table_widget.setItem(row, 2, func_item)
+            table_widget.setItem(row, 3, func_name_item)
+
+        # set more table properties
+        table_widget.setSelectionBehavior(QAbstractItemView.SelectRows)
+        table_widget.setSelectionMode(QAbstractItemView.SingleSelection)
+
+        return table_widget
+
+    def _build_menu_table_for_all_users(self):
+        if self.controller.client.has_remote:
+            self.controller.client.init_remote()
+
+        menu_table = list()
+        for user in self.controller.users():
+            state = self.controller.client.get_state(user=user.name)
+            artifact, push_time = state.get_last_push_for_artifact_type(binsync.ArtifactGroupType.FUNCTION)
+
+            if artifact is None or push_time == -1:
+                row = [user.name, push_time, "", ""]
+            else:
+                local_name = compat.get_func_name(artifact)
+                func = hex(artifact)
+                row = [user.name, push_time, func, local_name]
+            menu_table.append(row)
+
+        menu_table.sort(key=lambda r: r[1], reverse=True)
+        for row in menu_table:
+            if row[1] == -1:
+                time_ago = ""
+            else:
+                time_ago = BinsyncController.friendly_datetime(row[1])
+            row[1] = time_ago
+
+        return menu_table
+
+    def _build_menu_table_for_selected_funcs(self, selected_funcs):
+        if self.controller.client.has_remote:
+            self.controller.client.init_remote()
+
+        # Build out the menu dictionary for the table
+        menu_table = list()     # [username, push_time, func_addr, local_name]
+        for user in self.controller.users():
+            state = self.controller.client.get_state(user=user.name)
+
+            relevant_funcs = set(state.functions.keys()).intersection(selected_funcs)
+            # only display users who worked on the selected functions
+            if not relevant_funcs:
+                continue
+
+            latest_time, latest_func = -1, -1
+            for func_addr in relevant_funcs:
+                sync_func: binsync.data.Function = state.functions[func_addr]
+                if sync_func.last_change > latest_time:
+                    latest_time, latest_func = sync_func.last_change, sync_func.addr
+
+            if latest_time == -1:
+                continue
+
+            local_name = compat.get_func_name(latest_func)
+            func = hex(latest_func)
+            row = [user.name, latest_time, func, local_name]
+
+            menu_table.append(row)
+
+        # sort
+        menu_table.sort(key=lambda r: r[1], reverse=True)
+
+        # fix each time
+        for row in menu_table:
+            time_ago = BinsyncController.friendly_datetime(row[1])
+            row[1] = time_ago
+
+        return menu_table
+
+    #
+    #   Action Selection Box Callback
+    #
+
+    def _on_combo_change(self, value):
+        self._hide_all_tables()
+        if value == BinsyncMenuActionItem.SYNC_SELECTED_FUNCTIONS:
+            self.select_table_widget.show()
+            self.active_table = self.select_table_widget
+        else:
+            self.all_table_widget.show()
+            self.active_table = self.all_table_widget
+
+    def _hide_all_tables(self):
+        self.select_table_widget.hide()
+        self.all_table_widget.hide()
+
+    #
+    #   External API
+    #
+
+    def get_selected_action(self):
         # defaults to "Sync"
         action = self.combo.currentText()
 
-        selected_rows = self.tableWidget.selectionModel().selectedRows()
+        selected_rows = self.active_table.selectionModel().selectedRows()
         if len(selected_rows) == 0:
             return action, None
 
-        selected_row = selected_rows[0].row()
-        selected_user = list(self.menu_table)[selected_row]
+        selected_user = selected_rows[0].data()
         return action, selected_user
 
 #
@@ -122,11 +241,10 @@ class SyncMenu:
         """
         Opens sync menu and gives the optinal actions
         """
-        # create a dynamic menu table for the users
-        menu_table = self._build_menu_table()
+        selected_functions = self._get_selected_funcs()
 
         # open a dialog to make sync actions
-        dialog = MenuDialog(menu_table)
+        dialog = MenuDialog(self.controller, selected_functions)
         result = dialog.exec_()
 
         # only parse the action if the user accepted the result
@@ -134,15 +252,13 @@ class SyncMenu:
             return
 
         # parse action
-        action, user = dialog.getActionSelection()
+        action, user = dialog.get_selected_action()
 
         # for every selected function perform the action!
-        for func_name in self._get_selected_funcs():
-            func_addr = idaapi.get_name_ea(idaapi.BADADDR, func_name)
+        for func_addr in selected_functions:
             ida_func = idaapi.get_func(func_addr)
-
             ret = self._do_action(action, user, ida_func)
-            if ret == False:
+            if not ret:
                 return
 
     def _do_action(self, action, user, ida_func):
@@ -172,34 +288,6 @@ class SyncMenu:
 
         return True
 
-    def _build_menu_table(self):
-        """
-        Builds a menu for use in the Dialog
-
-        In the form of {user: (last_change, last_push_func)}
-        :return:
-        """
-        # First, let's see if any new users has joined repo
-        self.controller.client.init_remote()
-
-        # Build out the menu dictionary for the table
-        menu_table = {}
-        for user in self.controller.users():
-            last_time = int(user.last_push_time)
-            last_func = int(user.last_push_func)
-
-            if last_time == -1 or last_func == -1 or last_func == 0:
-                ret_string = (" ", " ", " ")
-            else:
-                time_ago = BinsyncController.friendly_datetime(last_time)
-                local_name = compat.get_func_name(last_func)
-                func = hex(last_func)
-                ret_string = (time_ago, func, local_name)
-
-            # Set table attributes | [PUSH TIME] | [FUNC ADDR] | [LOCAL NAME]
-            menu_table[user.name] = ret_string
-
-        return menu_table
 
     def _get_selected_funcs(self):
         """
@@ -228,5 +316,5 @@ class SyncMenu:
         # scrape the selected function names from the Functions window table
         #
         selected_funcs = [str(s.data()) for s in table.selectionModel().selectedRows()]
-        return selected_funcs
-
+        selected_func_addrs = [idaapi.get_name_ea(idaapi.BADADDR, func_name) for func_name in selected_funcs]
+        return selected_func_addrs

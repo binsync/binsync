@@ -1,3 +1,5 @@
+import time
+
 try:
     FileNotFoundError
 except NameError:
@@ -15,12 +17,13 @@ import git
 from .data import Function, Comment, Patch, StackVariable
 from .data.struct import Struct
 from .errors import MetadataNotFoundError
-from .utils import is_py2, is_py3
 
-if is_py3():
-    from typing import Dict, TYPE_CHECKING, Optional
-    if TYPE_CHECKING:
-        from .client import Client
+
+class ArtifactGroupType:
+    UNSET = -1
+    FUNCTION = 0
+    STRUCT = 1
+    PATCH = 2
 
 
 def dirty_checker(f):
@@ -32,6 +35,37 @@ def dirty_checker(f):
         return r
 
     return dirtycheck
+
+
+def set_last_change(f):
+    @wraps(f)
+    def _set_last_change(self, *args, **kwargs):
+        should_set = kwargs.pop('set_last_change', None)
+        if should_set:
+            args[0].last_change = int(time.time())
+            artifact = args[0]
+
+            if hasattr(artifact, "addr"):
+                artifact_loc = artifact.addr
+                artifact_type = ArtifactGroupType.FUNCTION
+            elif hasattr(artifact, "func_addr"):
+                artifact_loc = artifact.func_addr
+                artifact_type = ArtifactGroupType.FUNCTION
+            elif hasattr(artifact, "offset"):
+                artifact_loc = artifact.offset
+                artifact_type = ArtifactGroupType.PATCH
+            else:
+                artifact_loc = artifact.name
+                artifact_type = ArtifactGroupType.STRUCT
+
+            self.last_push_artifact = artifact_loc
+            self.last_push_time = artifact.last_change
+            self.last_push_artifact_type = artifact_type
+
+        f(self, *args, **kwargs)
+
+    return _set_last_change
+
 
 def list_files_in_tree(base_tree: git.Tree):
     """
@@ -110,9 +144,9 @@ class State:
         d = {
             "user": self.user,
             "version": self.version,
+            "last_push_time": self.last_push_time,
             "last_push_artifact": self.last_push_artifact,
             "last_push_artifact_type": self.last_push_artifact_type,
-            "push_time": self.last_push_time
         }
         add_data(index, 'metadata.toml', toml.dumps(d).encode())
 
@@ -241,11 +275,12 @@ class State:
         self.client.save_state(self)
 
     #
-    # Pushers
+    # Setters
     #
 
     @dirty_checker
-    def set_function(self, func):
+    @set_last_change
+    def set_function(self, func, set_last_change=True):
 
         if not isinstance(func, Function):
             raise TypeError(
@@ -260,7 +295,8 @@ class State:
         return True
 
     @dirty_checker
-    def set_comment(self, comment: Comment):
+    @set_last_change
+    def set_comment(self, comment: Comment, set_last_change=True):
 
         if comment and \
                 comment.func_addr in self.comments and \
@@ -270,10 +306,11 @@ class State:
             return False
 
         self.comments[comment.func_addr][comment.addr] = comment
+        self._update_or_create_function(comment.func_addr, comment.last_change)
         return True
 
     @dirty_checker
-    def remove_comment(self, func_addr, addr):
+    def remove_comment(self, func_addr, addr, set_last_change=True):
         try:
             del self.comments[func_addr][addr]
             return True
@@ -281,7 +318,8 @@ class State:
             return False
 
     @dirty_checker
-    def set_patch(self, addr, patch):
+    @set_last_change
+    def set_patch(self, patch, addr, set_last_change=True):
 
         if addr in self.patches and self.patches[addr] == patch:
             # no update is required
@@ -291,7 +329,8 @@ class State:
         return True
 
     @dirty_checker
-    def set_stack_variable(self, func_addr, offset, variable):
+    @set_last_change
+    def set_stack_variable(self, variable, offset, func_addr, set_last_change=True):
         if func_addr in self.stack_variables \
                 and offset in self.stack_variables[func_addr] \
                 and self.stack_variables[func_addr][offset] == variable:
@@ -299,10 +338,12 @@ class State:
             return False
 
         self.stack_variables[func_addr][offset] = variable
+        self._update_or_create_function(func_addr, variable.last_change)
         return True
 
     @dirty_checker
-    def set_struct(self, struct: Struct, old_name: str):
+    @set_last_change
+    def set_struct(self, struct: Struct, old_name: str, set_last_change=True):
         """
         Sets a struct in the current state. If old_name is not defined (None), then
         this indicates that the struct has not changed names. In that case, simply overwrite the
@@ -313,6 +354,7 @@ class State:
 
         @param struct:
         @param old_name:
+        @param set_last_change:
         @return:
         """
         if struct.name in self.structs \
@@ -333,8 +375,17 @@ class State:
         if struct.name is not None:
             self.structs[struct.name] = struct
 
+    def _update_or_create_function(self, func_addr, last_change):
+        try:
+            func = self.get_function(func_addr)
+        except KeyError:
+            func = Function(func_addr)
+
+        func.last_change = last_change
+        self.functions[func_addr] = func
+
     #
-    # Pullers
+    # Getters
     #
 
     def get_function(self, addr):
@@ -390,3 +441,24 @@ class State:
     def get_structs(self):
         return self.structs.values()
 
+    def get_last_push_for_artifact_type(self, artifact_type):
+        last_change = -1
+        artifact = None
+
+        if artifact_type == ArtifactGroupType.FUNCTION:
+            for function in self.functions.values():
+                if function.last_change > last_change:
+                    last_change = function.last_change
+                    artifact = function.addr
+        elif artifact_type == ArtifactGroupType.STRUCT:
+            for struct in self.structs.values():
+                if struct.last_change > last_change:
+                    last_change = struct.last_change
+                    artifact = struct.name
+        elif artifact_type == ArtifactGroupType.PATCH:
+            for patch in self.patches.values():
+                if patch.last_change > last_change:
+                    last_change = patch.last_change
+                    artifact = patch.offset
+
+        return tuple((artifact, last_change))

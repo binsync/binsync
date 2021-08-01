@@ -42,7 +42,7 @@ class Function(Base):
         if not isinstance(state["addr"], (int, long)):
             raise TypeError("Unsupported type %s for addr." % type(state["addr"]))
         self.addr = state["addr"]
-        self.name = state["name"]
+        self.name = state.get("name", None)
         self.notes = state.get("notes", None)
         self.last_change = state["last_change"]
 

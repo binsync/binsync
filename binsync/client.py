@@ -21,12 +21,6 @@ BINSYNC_BRANCH_PREFIX = 'binsync'
 BINSYNC_ROOT_BRANCH = f'{BINSYNC_BRANCH_PREFIX}/__root__'
 
 
-class ArtifactType:
-    FUNCTION = 0
-    STRUCT = 1
-    PATCH = 2
-
-
 class ConnectionWarnings:
     HASH_MISMATCH = 0
 
@@ -69,9 +63,7 @@ class Client(object):
         init_repo=False,
         remote_url=None,
         ssh_agent_pid=None,
-        ssh_auth_sock=None,
-        last_push_func=-1,
-        last_push_time=-1,
+        ssh_auth_sock=None
     ):
         """
         :param str master_user:     The username of the current user
@@ -159,10 +151,6 @@ class Client(object):
         self._last_push_attempt_at = None  # type: datetime.datetime
         self._last_pull_at = None  # type: datetime.datetime
         self._last_pull_attempt_at = None  # type: datetime.datetime
-
-        # User last push time/function
-        self.last_push_time = -1
-        self.last_push_function = -1
 
         # timestamps
         self._last_commit_ts = 0
@@ -448,18 +436,6 @@ class Client(object):
 
         self._last_commit_ts = time.time()
 
-    def set_last_push(self, artifact_addr: int, push_time: int, artifact_name: str, artifact_type: int):
-        """
-        Setter for the push variables.
-        """
-        state = self.get_state(user=self.master_user)
-
-        # update a users global metadata
-        state.last_push_artifact = artifact_addr if artifact_addr else artifact_name
-        state.last_push_time = push_time
-        state.last_push_artifact_type = artifact_type
-        self._create_or_update_state_artifact(artifact_addr, push_time, artifact_name, artifact_type)
-
     def save_state(self, state=None):
 
         if state is None:
@@ -531,31 +507,6 @@ class Client(object):
     def close(self):
         self.repo.close()
         del self.repo
-
-    def _create_or_update_state_artifact(self, artifact_addr, push_time, artifact_name, artifact_type):
-        state = self.get_state(user=self.master_user)
-        if artifact_type == ArtifactType.FUNCTION:
-            try:
-                artifact = state.get_function(artifact_addr)
-            except KeyError:
-                artifact = Function(artifact_addr)
-            artifact.name = artifact_name
-            artifact.last_change = push_time
-            state.set_function(artifact)
-        elif artifact_type == ArtifactType.STRUCT:
-            try:
-                artifact = state.get_struct(artifact_name)
-            except KeyError:
-                return
-            artifact.name = artifact_name
-            artifact.last_change = push_time
-        elif artifact_type == ArtifactType.PATCH:
-            try:
-                artifact = state.get_patch(artifact_addr)
-            except KeyError:
-                return
-            artifact.name = artifact_name
-            artifact.last_change = push_time
 
     def _get_best_refs(self):
         candidates = {}
