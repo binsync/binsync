@@ -257,9 +257,16 @@ class BinsyncController:
             print(f"[BinSync]: User {user} has no structs to sync!")
             return 0
 
-        # convert each binsync struct into an ida struct and updated it
+        # convert each binsync struct into an ida struct and set it in the GUI
         for struct in pulled_structs:
-            compat.update_struct(struct, self)
+            compat.set_ida_struct(struct, self)
+
+        # set the type of each member in the structs
+        all_typed_success = True
+        for struct in pulled_structs:
+            all_typed_success &= compat.set_ida_struct_member_types(struct, self)
+
+        return all_typed_success
 
     @init_checker
     @make_ro_state

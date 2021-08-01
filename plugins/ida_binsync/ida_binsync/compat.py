@@ -11,8 +11,7 @@
 
 import functools
 import threading
-import time
-from typing import Dict
+import typing
 
 import idc
 import idaapi
@@ -101,6 +100,37 @@ def execute_ui(func):
 
 
 #
+#   Data Type Converters
+#
+
+def convert_type_str_to_ida_type(type_str) -> typing.Optional['ida_typeinf']:
+    ida_type_str = type_str + ";"
+    tif = ida_typeinf.tinfo_t()
+    valid_parse = ida_typeinf.parse_decl(tif, None, ida_type_str, 1)
+
+    return tif if valid_parse is not None else None
+
+
+def ida_to_angr_stack_offset(func_addr, angr_stack_offset):
+    frame = idaapi.get_frame(func_addr)
+    frame_size = idc.get_struc_size(frame)
+    last_member_size = idaapi.get_member_size(frame.get_member(frame.memqty - 1))
+    ida_stack_offset = angr_stack_offset - frame_size + last_member_size
+    return ida_stack_offset
+
+
+def convert_member_flag(size):
+    if size == 1:
+        return 0x400
+    elif size == 2:
+        return 0x10000400
+    elif size == 4:
+        return 0x20000400
+    elif size == 8:
+        return 0x30000400
+
+
+#
 #   IDA Function r/w
 #
 
@@ -169,7 +199,7 @@ def set_ida_comment(addr, cmt, decompiled=False):
 
 
 @execute_write
-def set_decomp_comments(func_addr, cmt_dict: Dict[int, str]):
+def set_decomp_comments(func_addr, cmt_dict: typing.Dict[int, str]):
     for addr in cmt_dict:
         ida_cmts = ida_hexrays.user_cmts_new()
 
@@ -187,7 +217,7 @@ def set_decomp_comments(func_addr, cmt_dict: Dict[int, str]):
 #   IDA Stack Var r/w
 #
 
-def get_func_stack_var_info(func_addr) -> Dict[int, IDAStackVar]:
+def get_func_stack_var_info(func_addr) -> typing.Dict[int, IDAStackVar]:
     decompilation = ida_hexrays.decompile(func_addr)
     stack_var_info = {}
 
@@ -245,7 +275,7 @@ def set_stack_vars_types(var_type_dict, code_view, controller: "BinsyncControlle
 #
 
 @execute_write
-def update_struct(struct: Struct, controller):
+def set_ida_struct(struct: Struct, controller) -> bool:
     # first, delete any struct by the same name if it exists
     sid = ida_struct.get_struc_id(struct.name)
     if sid != 0xffffffffffffffff:
@@ -269,7 +299,6 @@ def update_struct(struct: Struct, controller):
         mflag = convert_member_flag(member.size)
 
         # create the new member
-        # TODO: support real types for members
         controller.inc_api_count()
         ida_struct.add_struc_member(
             sptr,
@@ -279,6 +308,39 @@ def update_struct(struct: Struct, controller):
             None,
             member.size,
         )
+
+
+@execute_write
+def set_ida_struct_member_types(struct: Struct, controller) -> bool:
+    # find the specific struct
+    sid = ida_struct.get_struc_id(struct.name)
+    sptr = ida_struct.get_struc(sid)
+    all_typed_success = True
+
+    for idx, member in enumerate(struct.struct_members):
+        # set the new member type if it has one
+        if member.type == "":
+            continue
+
+        # assure its convertible
+        tif = convert_type_str_to_ida_type(member.type)
+        if tif is None:
+            all_typed_success = False
+            continue
+
+        # set the type
+        mptr = sptr.get_member(idx)
+        controller.inc_api_count()
+        was_set = ida_struct.set_member_tinfo(
+            sptr,
+            mptr,
+            0,
+            tif,
+            mptr.flag
+        )
+        all_typed_success &= True if was_set == 1 else False
+
+    return all_typed_success
 
 
 #
@@ -321,32 +383,3 @@ def get_screen_ea():
     return idc.get_screen_ea()
 
 
-#
-#   Data Type Converters
-#
-
-def convert_type_str_to_ida_type(type_str):
-    ida_type_str = type_str + ";"
-    tif = ida_typeinf.tinfo_t()
-    valid_parse = ida_typeinf.parse_decl(tif, None, ida_type_str, 1)
-
-    return tif if valid_parse is not None else None
-
-
-def ida_to_angr_stack_offset(func_addr, angr_stack_offset):
-    frame = idaapi.get_frame(func_addr)
-    frame_size = idc.get_struc_size(frame)
-    last_member_size = idaapi.get_member_size(frame.get_member(frame.memqty - 1))
-    ida_stack_offset = angr_stack_offset - frame_size + last_member_size
-    return ida_stack_offset
-
-
-def convert_member_flag(size):
-    if size == 1:
-        return 0x400
-    elif size == 2:
-        return 0x10000400
-    elif size == 4:
-        return 0x20000400
-    elif size == 8:
-        return 0x30000400
