@@ -10,7 +10,7 @@ except ImportError:
 
 setup(
     name='binsync',
-    version='1.0.0',
+    version='2.0.0',
     packages=packages,
     install_requires=[
         "sortedcontainers",
