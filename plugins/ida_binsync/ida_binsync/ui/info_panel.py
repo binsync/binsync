@@ -7,6 +7,7 @@ import idaapi
 from .info_tables.func_info_table import QFuncInfoTable
 from .info_tables.struct_info_table import QStructInfoTable
 from .info_tables.user_info_table import QUserInfoTable
+from .info_tables.autosync_info_table import QAutoSyncInfoTable
 from ..controller import BinsyncController
 
 
@@ -122,7 +123,7 @@ class InfoPanel(QWidget):
         combo_box = QGroupBox(self)
         combo_layout = QHBoxLayout()
         self.combo = QComboBox()
-        self.combo.addItems(["Users", "Functions", "Structs"])
+        self.combo.addItems(["Users", "Functions", "Structs", "Auto-Sync"])
         self.combo.currentTextChanged.connect(self._on_combo_change)
         combo_layout.addWidget(self.combo)
         combo_box.setLayout(combo_layout)
@@ -142,6 +143,11 @@ class InfoPanel(QWidget):
         self._struct_table = QStructInfoTable(self._controller)
         self._struct_table.hide()
         info_layout.addWidget(self._struct_table)
+
+        # auto-sync info table
+        self._autosync_table = QAutoSyncInfoTable(self._controller)
+        self._autosync_table.hide()
+        info_layout.addWidget(self._autosync_table)
 
         info_box.setLayout(info_layout)
 
@@ -163,11 +169,15 @@ class InfoPanel(QWidget):
         elif value == "Structs":
             self._struct_table.show()
             self._active_table = self._struct_table
+        elif value == "Auto-Sync":
+            self._autosync_table.show()
+            self._active_table = self._autosync_table
 
     def _hide_all_tables(self):
         self._func_table.hide()
         self._struct_table.hide()
         self._user_table.hide()
+        self._autosync_table.hide()
 
     def _update_info_tables(self):
         if self._controller.client.has_remote:
@@ -178,3 +188,4 @@ class InfoPanel(QWidget):
         self._user_table.update_users(users)
         self._func_table.update_users(users)
         self._struct_table.update_users(users)
+        self._autosync_table.update_table()

@@ -128,6 +128,13 @@ class BinsyncController:
         self.pull_thread.setDaemon(True)
         self.pull_thread.start()
 
+        # state backup
+        self._local_state = None
+
+        # autosync variables
+        self.autosync_store = {}  # type: Dict[str, list[str]]
+        self.autosync_store_lastchange = {}
+
     #
     #   Multithreaded locks and setters
     #
@@ -171,6 +178,9 @@ class BinsyncController:
                 # Pull new items
                 self.client.pull()
 
+                if self.autosync_store and time.time() - self._last_reload > 10:
+                    self.pull_autosyncs()
+
             if self.check_client():
                 # run an operation every second
                 self.eval_cmd_queue()
@@ -188,8 +198,29 @@ class BinsyncController:
             time.sleep(1)
 
     #
+    #   Auto-Sync Functions
+    #
+
+    def pull_autosyncs(self):
+            print("starting autosync..")
+
+            for user, funcs in self.autosync_store.items():
+                print(f"FROM USER: {user}")
+                for ida_func in funcs:
+                    print(f"Attempting to fill function {hex(ida_func.start_ea)}")
+                    if self.fill_function(ida_func, user=user) != -1:
+                        self.autosync_store_lastchange[user] = datetime.datetime.now()
+
+
+            print("..autosync finished!")
+
+
+    #
     #   State Interaction Functions
     #
+
+    def _store_local_state(self):
+        self._local_state = self.client.state
 
     def connect(self, user, path, init_repo=False, remote_url=None):
         binary_md5 = idc.retrieve_input_file_md5().hex()
@@ -276,7 +307,11 @@ class BinsyncController:
         # check if the function exists in the pulled state
         _func = self.pull_function(ida_func, user=user, state=state)
         if _func is None:
-            return
+            return -1
+        # grab local function
+        #_func_local = self.pull_function(ida_func, self._local_state)
+        #if _func == _func_local:
+        #    return -1
 
         # === function name === #
         # catch the case where a user did an update to something in a function
@@ -309,7 +344,7 @@ class BinsyncController:
         if frame is None or frame.memqty <= 0:
             _l.debug("Function %#x does not have an associated function frame. Skip variable name sync-up.",
                      ida_func.start_ea)
-            return
+            return -1
 
         # collect and covert the info of each stack variable
         existing_stack_vars = {}

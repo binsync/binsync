@@ -17,7 +17,7 @@ class BinsyncMenuActionItem:
     SYNC_SELECTED_FUNCTIONS = "Sync Selected Functions"
     SYNC_ALL_FUNCTIONS = "Sync All Functions"
     SYNC_STRUCTS = "Sync All Structs"
-    TOGGLE_AUTO_SYNC = "Toggle Auto Sync"
+    TOGGLE_AUTO_SYNC = "Toggle Auto-Sync"
 
 
 class MenuDialog(QDialog):
@@ -38,7 +38,8 @@ class MenuDialog(QDialog):
         self.combo = QComboBox()
         self.combo.addItems([BinsyncMenuActionItem.SYNC_SELECTED_FUNCTIONS,
                              BinsyncMenuActionItem.SYNC_ALL_FUNCTIONS,
-                             BinsyncMenuActionItem.SYNC_STRUCTS])
+                             BinsyncMenuActionItem.SYNC_STRUCTS,
+                             BinsyncMenuActionItem.TOGGLE_AUTO_SYNC])
         self.combo.currentTextChanged.connect(self._on_combo_change)
 
         # build two versions of the table
@@ -271,8 +272,20 @@ class SyncMenu:
             print(f"[Binsync]: Data has been synced from user \'{user}\' on function {hex(ida_func.start_ea)}.")
 
         elif action == BinsyncMenuActionItem.TOGGLE_AUTO_SYNC:
-            # TODO: implement auto-syncing
-            print(f"[Binsync]: Auto Sync not implemented yet.")
+            for user, funcs in self.controller.autosync_store.items():
+                if ida_func in funcs:
+                    print(f"[Binsync]: Function already synced from user \'{user}\'.")
+                    return False
+            if user in self.controller.autosync_store:
+                if ida_func not in self.controller.autosync_store[user]:
+                    self.controller.autosync_store[user] += [ida_func]
+                else:
+                    self.controller.autosync_store[user].remove(ida_func)
+            else:
+                self.controller.autosync_store[user] = [ida_func]
+            self.controller.info_panel._update_info_tables()
+            self.controller.info_panel._autosync_table.reload()
+            print(f"[Binsync]: Beginning auto-sync from user \'{user}\' in function {hex(ida_func.start_ea)}.")
 
         elif action == BinsyncMenuActionItem.SYNC_ALL_FUNCTIONS:
             self.controller.sync_all(user=user)
