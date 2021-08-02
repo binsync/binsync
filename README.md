@@ -1,14 +1,13 @@
 
-# binsync
+# BinSync
 
-## What is binsync
+## What is BinSync
 
-Binsync enables manual and automated synchronization of the following reverse engineering artifacts between IDA Pro, Binary Ninja, and angr management running on the same machine or different machines:
+BinSync enables manual and automated synchronization of the following reverse engineering artifacts between IDA Pro, Binary Ninja, and angr management running on the same machine or different machines:
 
 - Function names
 - Comments
-- Names of stack variables
-- Types of stack variables (warning!)
+- Names & types of stack variables
 - User-defined structs
 
 All data is stored in a human-friendly text format (toml) inside a Git repo.
@@ -16,35 +15,74 @@ All data is stored in a human-friendly text format (toml) inside a Git repo.
 ## Supported Platforms
 Currently we support the following decompilers:
 - angr-management: **latest release**
-- IDA Pro: **>= 7.0**
-- Binary Nina: **latest release**
+- IDA Pro: **>= 7.4**
 
+Binary Ninja is partially supported, but lacks modern UI updates. 
 Currently, we have no implementation for Ghidra, but we are looking into a solution.
 
 ## Installing
 
-First install [Binsync Core](#binsync-core); then install the plugin associated to your decompiler of choice.
+### Git Prereqs
 
-### Binsync Core
+BinSync's backbone is `git`, which means to use BinSync you must have two things:
+1. `git` must be installed on your system.
+2. You must use an ssh key to pull and push, AND **it must be password unlocked**.
 
-While in the root of this GitHub repo run:
+Number 2 is very important. Many users have complained about BinSync not auto pushing/pulling
+things with git and almost all of them did not have their ssh key unlocked. If your key requires you 
+to enter a password, you have two options:
+
+1. pull some private repo once so you need to enter your password and unlock the key
+2. generate a new key that is not password protected and add it to GitHub (or whatever host you use)
+
+
+### Install Script 
+To install just run the install script from the root of the repo and define the needed enviornment
+variable for the type of install you are doing. If you are installing for IDA Pro, you must define the variable
+`IDA_HOME`, which should be home folder of your IDA install. For me it looks like this:
+
 ```bash
-python3 -m pip install --user .
+IDA_HOME=~/ida/ida-7.6 ./scripts/install.sh
 ```
 
-Or any modifications for custom enviornments.
+## Usage  
+### Verifying your download works (IDA)
 
-### IDA Pro
-After cloning down this repo, simply copy the `ida_binsync` folder and python file into your IDA Pro plugins folder.
+~Follow this simple verification for IDA: [Here]()~
+
+TODO:
+1. make a `~/sync_repos` folder
+2. clone mahaloz repo: `git clone git@github.com:mahaloz/sync_test.git`
+3. open up ida
+4. `Ctrl+Shift+B` to open config
+5. put the folder location as `~/sync_repos/sync_test`
+6. pull something
+
+### Setting up a Sync Repo for a challenge for the first time
+
+1. Create a repo for a challenge on GitHub, and clone it down
 ```bash
-cp -r plugins/ida_binsync/* IDA_HOME/plugins/
+git clone git_repo 
+cd git_repo
 ```
-For me `IDA_HOME=~/ida/IDA-7.6/`; it may be different for you. 
+2. Create a `root` branch for BinSync, and push it
+```bash
+git checkout -b binsync/__root__
+git push --set-upstream origin binsync/__root__
+```
+3. Add the md5 hash of the binary for tracking, and push it
+```bash
+md5sum the_target_binary_you_care_about | awk '{ print $1 }' > binary_hash
+git add binary_hash
+git commit -m "added binary hash"
+git push
+```
 
-### angr management
-`binsync` is built into angr management. To use it, just activate the plugin by going to the plugins tab and
-selecting `binsync`, then configuring it. 
+Alternatively, you can use the script `setup_repo_for_binsync.sh` in the `scripts` folder that will do 
+steps 2 and 3 given the repo and the binary. Its less verbose though:
 
-## Usage
+```bash
+./scripts/setup_repo_for_binsync.sh /path/to/repo /path/to/binary
+```
 
-Follow the user story described in the [Wiki](https://github.com/angr/binsync/wiki).
+Follow the earlier story to verify you can connect in IDA [here]().
