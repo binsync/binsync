@@ -103,11 +103,15 @@ class QUserInfoTable(QTableWidget):
 
         rows = list()
         for user in users:
-            row = [
-                user.name,
-                user.last_push_time,
-                push_type_strs[user.last_push_artifact_type]
-            ]
+            try:
+                row = [
+                    user.name,
+                    user.last_push_time,
+                    push_type_strs[user.last_push_artifact_type]
+                ]
+            except Exception:
+                row = [user.name, -1, ""]
+
             rows.append(row)
 
         rows.sort(key=lambda i: i[1], reverse=True)

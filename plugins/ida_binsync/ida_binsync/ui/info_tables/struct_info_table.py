@@ -96,23 +96,26 @@ class QStructInfoTable(QTableWidget):
 
         # first check if any functions are unknown to the table
         for user in users:
-            state = self.controller.client.get_state(user=user.name)
-            user_structs: Dict[str, Struct] = state.structs
+            try:
+                state = self.controller.client.get_state(user=user.name)
+                user_structs: Dict[str, Struct] = state.structs
 
-            for struct_name, sync_struct in user_structs.items():
-                struct_change_time = sync_struct.last_change
+                for struct_name, sync_struct in user_structs.items():
+                    struct_change_time = sync_struct.last_change
 
-                if struct_change_time == -1:
-                    continue
-
-                # check if we already know about it
-                if struct_name in known_structs:
-                    # compare this users change time to the store change time
-                    if struct_change_time < known_structs[struct_name][3]:
-                        # don't change it if the other user is more recent
+                    if struct_change_time == -1:
                         continue
 
-                known_structs[struct_name] = [struct_name, sync_struct.size, user.name, struct_change_time]
+                    # check if we already know about it
+                    if struct_name in known_structs:
+                        # compare this users change time to the store change time
+                        if struct_change_time < known_structs[struct_name][3]:
+                            # don't change it if the other user is more recent
+                            continue
+
+                    known_structs[struct_name] = [struct_name, sync_struct.size, user.name, struct_change_time]
+            except Exception:
+                continue
 
         for row in known_structs.values():
             # fix datetimes for the correct format

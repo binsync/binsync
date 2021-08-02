@@ -102,25 +102,28 @@ class QFuncInfoTable(QTableWidget):
 
         # first check if any functions are unknown to the table
         for user in users:
-            state = self.controller.client.get_state(user=user.name)
-            user_funcs: Dict[int, Function] = state.functions
+            try:
+                state = self.controller.client.get_state(user=user.name)
+                user_funcs: Dict[int, Function] = state.functions
 
-            for func_addr, sync_func in user_funcs.items():
-                func_change_time = sync_func.last_change
+                for func_addr, sync_func in user_funcs.items():
+                    func_change_time = sync_func.last_change
 
-                # don't add functions that were never changed by the user
-                if sync_func.last_change == -1:
-                    continue
-
-                # check if we already know about it
-                if func_addr in known_funcs:
-                    # compare this users change time to the store change time
-                    if func_change_time < known_funcs[func_addr][3]:
-                        # don't change it if the other user is more recent
+                    # don't add functions that were never changed by the user
+                    if sync_func.last_change == -1:
                         continue
 
-                local_func_name = compat.get_func_name(func_addr)
-                known_funcs[func_addr] = [func_addr, local_func_name, user.name, func_change_time]
+                    # check if we already know about it
+                    if func_addr in known_funcs:
+                        # compare this users change time to the store change time
+                        if func_change_time < known_funcs[func_addr][3]:
+                            # don't change it if the other user is more recent
+                            continue
+
+                    local_func_name = compat.get_func_name(func_addr)
+                    known_funcs[func_addr] = [func_addr, local_func_name, user.name, func_change_time]
+            except Exception:
+                continue
 
         for row in known_funcs.values():
             # fix datetimes for the correct format
