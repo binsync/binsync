@@ -47,13 +47,11 @@ class Function(Base):
         self.last_change = state["last_change"]
 
     def __eq__(self, other):
-        return (
-            isinstance(other, Function)
-            and other.name == self.name
-            and other.addr == self.addr
-            and other.notes == self.notes
-            and other.last_change == self.last_change
-        )
+        if isinstance(other, Function):
+            return other.name == self.name \
+                   and other.addr == self.addr \
+                   and other.notes == self.notes
+        return False
 
     def dump(self):
         return toml.dumps(self.__getstate__())
