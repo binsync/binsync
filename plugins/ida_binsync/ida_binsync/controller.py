@@ -202,25 +202,23 @@ class BinsyncController:
     #
 
     def pull_autosyncs(self):
-            print("starting autosync..")
-
-            for user, funcs in self.autosync_store.items():
-                print(f"FROM USER: {user}")
-                for ida_func in funcs:
-                    print(f"Attempting to fill function {hex(ida_func.start_ea)}")
-                    if self.fill_function(ida_func, user=user) != -1:
-                        self.autosync_store_lastchange[user] = datetime.datetime.now()
-
-
-            print("..autosync finished!")
+        print("starting autosync..")
+        for user, funcs in self.autosync_store.items():
+            print(f"FROM USER: {user}")
+            for ida_func in funcs:
+                print(f"Attempting to fill function {hex(ida_func.start_ea)}")
+                if self.fill_function(ida_func, user=user) != -1:
+                    print("SYNC HAPPENED!")
+                    self.autosync_store_lastchange[compat.get_func_name(ida_func.start_ea)] = datetime.datetime.now()
+                else:
+                    print("SYNC DID NOT HAPPEN")
+        print("..autosync finished!")
+        self.info_panel._autosync_table.update_table()
 
 
     #
     #   State Interaction Functions
     #
-
-    def _store_local_state(self):
-        self._local_state = self.client.state
 
     def connect(self, user, path, init_repo=False, remote_url=None):
         binary_md5 = idc.retrieve_input_file_md5().hex()
@@ -309,9 +307,9 @@ class BinsyncController:
         if _func is None:
             return -1
         # grab local function
-        #_func_local = self.pull_function(ida_func, self._local_state)
-        #if _func == _func_local:
-        #    return -1
+
+        if self.client.get_state(user=self.client.master_user).compare_function(ida_func.start_ea, self.client.get_state(user=user)):
+            return -1
 
         # === function name === #
         # catch the case where a user did an update to something in a function
@@ -340,7 +338,7 @@ class BinsyncController:
 
         # === stack variables === #
         # sanity check that this function has a stack frame
-        frame = idaapi.get_frame(ida_func.start_ea)
+        frame = compat.ida_get_frame(ida_func.start_ea)
         if frame is None or frame.memqty <= 0:
             _l.debug("Function %#x does not have an associated function frame. Skip variable name sync-up.",
                      ida_func.start_ea)
@@ -359,7 +357,7 @@ class BinsyncController:
                     # change the variable's name
                     if stack_var.name != existing_stack_vars[offset].name:
                         self.inc_api_count()
-                        ida_struct.set_member_name(frame, existing_stack_vars[offset].offset, stack_var.name)
+                        compat.set_struct_member_name(frame, existing_stack_vars[offset].offset, stack_var.name)
 
                     # check if the variables type should be changed
                     if ida_code_view and stack_var.type != existing_stack_vars[offset].type_str:
