@@ -191,12 +191,11 @@ class BinsyncController:
     #   State Interaction Functions
     #
 
-    def connect(self, user, path, init_repo, ssh_agent_pid=None, ssh_auth_sock=None):
+    def connect(self, user, path, init_repo=False, remote_url=None):
         binary_md5 = idc.retrieve_input_file_md5().hex()
         self.client = Client(user, path, binary_md5,
                              init_repo=init_repo,
-                             ssh_agent_pid=ssh_agent_pid,
-                             ssh_auth_sock=ssh_auth_sock
+                             remote_url=remote_url,
                              )
         BinsyncController._parse_and_display_connection_warnings(self.client.connection_warnings)
         print(f"[BinSync]: Client has connected to sync repo with user: {user}.")
