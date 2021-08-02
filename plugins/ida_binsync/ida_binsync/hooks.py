@@ -20,7 +20,7 @@
 # allowing us to send the new comment to be queued in the Controller actions.
 #
 # ----------------------------------------------------------------------------
-
+import time
 from functools import wraps
 
 import ida_auto
@@ -283,10 +283,11 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def cmt_changed(self, ea, repeatable_cmt):
-        #print("cmt changed")
-        cmt = ida_bytes.get_cmt(ea, repeatable_cmt)
-        if cmt:
-            self.ida_comment_changed(cmt, ea, "cmt")
+        #print(f"cmt changed for {hex(ea)} being {'repetable' if repeatable_cmt else 'non-repeatable'}")
+        if repeatable_cmt:
+            cmt = ida_bytes.get_cmt(ea, repeatable_cmt)
+            if cmt:
+                self.ida_comment_changed(cmt, ea, "cmt")
         return 0
 
     @quite_init_checker
@@ -382,7 +383,9 @@ class IDBHooks(ida_idp.IDB_Hooks):
     def binsync_state_change(self, *args, **kwargs):
         # issue a new command to update the binsync state
         with self.controller.api_lock:
-            if self.controller.api_count > 0:
+            if self.controller.api_count < 0:
+                self.controller.api_count = 0
+            elif self.controller.api_count > 0:
                 kwargs['api_set'] = True
                 self.controller.make_controller_cmd(*args, **kwargs)
                 self.controller.api_count -= 1
@@ -424,13 +427,17 @@ class HexRaysHooks:
             self._installed = False
 
     @quite_init_checker
-    def _hxe_callback(self, event, *_):
+    def _hxe_callback(self, event, *args):
         if not self._installed:
             return 0
 
+        # this event gets triggered each time that a user changes the view to
+        # a different decompilation view. It will also get triggered when staying on the
+        # same view but having it refreshed
         if event == ida_hexrays.hxe_func_printed:
-            ea = ida_kernwin.get_screen_ea()
-            func = ida_funcs.get_func(ea)
+            ida_cfunc = args[0]
+            func_addr = ida_cfunc.entry_ea
+            func = ida_funcs.get_func(func_addr)
 
             if func is None:
                 return 0
@@ -477,59 +484,6 @@ class HexRaysHooks:
             self._cached_funcs[ea]["cmts"] = cmts
 
     @staticmethod
-    def _get_user_lvar_settings(ea):
-        dct = {}
-        lvinf = ida_hexrays.lvar_uservec_t()
-        ret = ida_hexrays.restore_user_lvar_settings(lvinf, ea)
-        # #print("_get_user_lvar_settings: ret = %x" % ret)
-        if ret:
-            dct["lvvec"] = []
-            for lv in lvinf.lvvec:
-                dct["lvvec"].append(HexRaysHooks._get_lvar_saved_info(lv))
-            if hasattr(lvinf, "sizes"):
-                dct["sizes"] = list(lvinf.sizes)
-            dct["lmaps"] = []
-            it = ida_hexrays.lvar_mapping_begin(lvinf.lmaps)
-            while it != ida_hexrays.lvar_mapping_end(lvinf.lmaps):
-                key = ida_hexrays.lvar_mapping_first(it)
-                key = HexRaysHooks._get_lvar_locator(key)
-                val = ida_hexrays.lvar_mapping_second(it)
-                val = HexRaysHooks._get_lvar_locator(val)
-                dct["lmaps"].append((key, val))
-                it = ida_hexrays.lvar_mapping_next(it)
-            dct["stkoff_delta"] = lvinf.stkoff_delta
-            dct["ulv_flags"] = lvinf.ulv_flags
-        return dct
-
-    @staticmethod
-    def _get_lvar_saved_info(lv):
-        return
-
-    @staticmethod
-    def _get_tinfo(type):
-        if type.empty():
-            return None, None, None, None
-
-        type, fields, fldcmts = type.serialize()
-
-    @staticmethod
-    def _get_lvar_locator(ll):
-        return {
-            "location": HexRaysHooks._get_vdloc(ll.location),
-            "defea": ll.defea,
-        }
-
-    @staticmethod
-    def _get_vdloc(location):
-        return {
-            "atype": location.atype(),
-            "reg1": location.reg1(),
-            "reg2": location.reg2(),
-            "stkoff": location.stkoff(),
-            "ea": location.get_ea(),
-        }
-
-    @staticmethod
     def refresh_pseudocode_view(ea):
         """Refreshes the pseudocode view in IDA."""
         names = ["Pseudocode-%c" % chr(ord("A") + i) for i in range(5)]
@@ -546,14 +500,15 @@ class HexRaysHooks:
 
     def binsync_state_change(self, *args, **kwargs):
         # issue a new command to update the binsync state
-        self.controller.api_lock.acquire()
-        if self.controller.api_count > 0:
-            kwargs['api_set'] = True
-            self.controller.make_controller_cmd(*args, **kwargs)
-            self.controller.api_count -= 1
-        else:
-            self.controller.make_controller_cmd(*args, **kwargs)
-        self.controller.api_lock.release()
+        with self.controller.api_lock:
+            if self.controller.api_count < 0:
+                self.controller.api_count = 0
+            elif self.controller.api_count > 0:
+                kwargs['api_set'] = True
+                self.controller.make_controller_cmd(*args, **kwargs)
+                self.controller.api_count -= 1
+            else:
+                self.controller.make_controller_cmd(*args, **kwargs)
 
 
 class MasterHook:

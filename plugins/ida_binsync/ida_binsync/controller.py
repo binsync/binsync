@@ -288,10 +288,13 @@ class BinsyncController:
         if compat.get_func_name(ida_func.start_ea) != _func.name:
             self.inc_api_count()
             compat.set_ida_func_name(ida_func.start_ea, _func.name)
+        else:
+            # always set the function in the masters state as to adjust update times
+            self.push_function_name(_func.addr, _func.name, user=self.client.master_user, api_set=True)
 
         # === comments === #
         # set disassembly and decompiled comments
-        sync_cmts = self.pull_comments(ida_func.start_ea)
+        sync_cmts = self.pull_comments(ida_func.start_ea, user=user, state=state)
         for addr, cmt in sync_cmts.items():
             self.inc_api_count()
             res = compat.set_ida_comment(addr, cmt.comment, decompiled=cmt.decompiled)
