@@ -431,6 +431,9 @@ class HexRaysHooks:
         if not self._installed:
             return 0
 
+        # this event gets triggered each time that a user changes the view to
+        # a different decompilation view. It will also get triggered when staying on the
+        # same view but having it refreshed
         if event == ida_hexrays.hxe_func_printed:
             ida_cfunc = args[0]
             func_addr = ida_cfunc.entry_ea
@@ -438,8 +441,6 @@ class HexRaysHooks:
 
             if func is None:
                 return 0
-
-            print(f"In function: {ida_funcs.get_func_name(func_addr)}")
 
             if func.start_ea not in self._cached_funcs.keys():
                 self._cached_funcs[func.start_ea] = {"cmts": []}
