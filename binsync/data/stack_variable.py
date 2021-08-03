@@ -44,11 +44,13 @@ class StackVariable(Base):
             setattr(self, k, state[k])
 
     def __eq__(self, other):
+        # ignore time and offset type
         if isinstance(other, StackVariable):
-            for k in self.__slots__:
-                if getattr(self, k) != getattr(other, k):
-                    return False
-            return True
+            return other.stack_offset == self.stack_offset \
+                   and other.name == self.name \
+                   and other.type == self.type \
+                   and other.size == self.size \
+                   and other.func_addr == self.func_addr
         return False
 
     def get_offset(self, offset_type):

@@ -102,7 +102,7 @@ def execute_ui(func):
 #
 #   Data Type Converters
 #
-
+@execute_read
 def convert_type_str_to_ida_type(type_str) -> typing.Optional['ida_typeinf']:
     ida_type_str = type_str + ";"
     tif = ida_typeinf.tinfo_t()
@@ -110,7 +110,7 @@ def convert_type_str_to_ida_type(type_str) -> typing.Optional['ida_typeinf']:
 
     return tif if valid_parse is not None else None
 
-
+@execute_read
 def ida_to_angr_stack_offset(func_addr, angr_stack_offset):
     frame = idaapi.get_frame(func_addr)
     frame_size = idc.get_struc_size(frame)
@@ -217,6 +217,7 @@ def set_decomp_comments(func_addr, cmt_dict: typing.Dict[int, str]):
 #   IDA Stack Var r/w
 #
 
+@execute_read
 def get_func_stack_var_info(func_addr) -> typing.Dict[int, IDAStackVar]:
     decompilation = ida_hexrays.decompile(func_addr)
     stack_var_info = {}
@@ -269,10 +270,17 @@ def set_stack_vars_types(var_type_dict, code_view, controller: "BinsyncControlle
 
     return all_success
 
+@execute_read
+def ida_get_frame(func_addr):
+    return idaapi.get_frame(func_addr)
+
 
 #
 #   IDA Struct r/w
 #
+@execute_write
+def set_struct_member_name(ida_struct, frame, offset, name):
+    ida_struct.set_member_name(frame, offset, name)
 
 @execute_write
 def set_ida_struct(struct: Struct, controller) -> bool:
@@ -364,12 +372,14 @@ def refresh_pseudocode_view(ea):
 
 
 class IDAViewCTX:
+    @execute_ui
     def __init__(self, func_addr):
         self.view = ida_hexrays.open_pseudocode(func_addr, 0)
 
     def __enter__(self):
         return self.view
 
+    @execute_ui
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close_pseudocode_view(self.view)
 
@@ -382,4 +392,11 @@ class IDAViewCTX:
 def get_screen_ea():
     return idc.get_screen_ea()
 
+
+def get_function_cursor_at():
+    curr_addr = get_screen_ea()
+    if curr_addr is None:
+        return None
+
+    return ida_func_addr(curr_addr)
 

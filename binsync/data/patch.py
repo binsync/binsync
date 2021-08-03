@@ -36,13 +36,11 @@ class Patch(Base):
         self.last_change = state["last_change"]
 
     def __eq__(self, other):
-        return (
-            isinstance(other, Patch)
-            and other.obj_name == self.obj_name
-            and other.offset == self.offset
-            and other.new_bytes == self.new_bytes
-            and other.last_change == self.last_change
-        )
+        if isinstance(other, Patch):
+            return other.obj_name == self.obj_name \
+                   and other.offset == self.offset \
+                   and other.new_bytes == self.new_bytes
+        return False
 
     def dump(self):
         return toml.dumps(self.__getstate__())

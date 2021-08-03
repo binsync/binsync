@@ -130,6 +130,49 @@ class State:
         self.structs = defaultdict()  # type: Dict[str, Struct]
         self.patches = SortedDict()
 
+    def __eq__(self, other):
+        if isinstance(other, State):
+            return other.functions == self.functions \
+                   and other.comments == self.comments \
+                   and other.stack_variables == self.stack_variables \
+                   and other.structs == self.structs \
+                   and other.patches == self.patches
+        return False
+
+    def compare_function(self, func_addr: int, other: "State"):
+        """
+        Compares this state with another states function, and all the artifcats within that function.
+
+        @param func_addr:   func address of interest
+        @param other:       other state
+        @return:            True if eq.
+        """
+
+        if not isinstance(other, State):
+            return False
+
+        are_eq = True
+
+        # function headers
+        try:
+            are_eq &= self.functions[func_addr] == other.functions[func_addr]
+        except KeyError:
+            return False
+
+        # comments
+        try:
+            are_eq &= self.comments[func_addr] == other.comments[func_addr]
+        except KeyError:
+            return False
+
+        # stack vars
+        try:
+            are_eq &= self.stack_variables[func_addr] == other.stack_variables[func_addr]
+        except KeyError:
+            return False
+
+        return are_eq
+
     @property
     def dirty(self):
         return self._dirty

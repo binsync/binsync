@@ -88,10 +88,9 @@ class Struct:
 
     def __eq__(self, other):
         if isinstance(other, Struct):
-            for k in self.__slots__:
-                if getattr(self, k) != getattr(other, k):
-                    return False
-            return True
+            return other.name == self.name \
+                   and other.size == self.size \
+                   and other.struct_members == self.struct_members
         return False
 
     def add_struct_member(self, mname, moff, mtype, size):

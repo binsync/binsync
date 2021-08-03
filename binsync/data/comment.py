@@ -37,10 +37,11 @@ class Comment(Base):
 
     def __eq__(self, other):
         if isinstance(other, Comment):
-            for k in self.__slots__:
-                if getattr(self, k) != getattr(other, k):
-                    return False
-            return True
+            return other.comment == self.comment \
+                   and other.decompiled == self.decompiled \
+                   and other.func_addr == self.func_addr \
+                   and other.addr == self.addr
+
         return False
 
     def dump(self):
