@@ -58,7 +58,7 @@ class QAutoSyncInfoTable(QTableWidget):
 
         self.items = [ ]
 
-        self.controller = controller
+        self.controller: "BinsyncController" = controller
 
     def reload(self):
         self.setRowCount(len(self.items))
@@ -94,14 +94,15 @@ class QAutoSyncInfoTable(QTableWidget):
         """
         # reset the items in table
         self.items = []
-        known_funcs = {}  # addr: (addr, name, user_name, push_time)
-        for user,funcs in self.controller.autosync_store.items():
-            for func in funcs:
-                fname = compat.get_func_name(func.start_ea)
-                if fname in self.controller.autosync_store_lastchange.keys():
-                    time_delta = self.controller.friendly_datetime(self.controller.autosync_store_lastchange[fname])
-                else:
-                    time_delta = "None"
-                table_row = QUserItem(fname, user, time_delta)
-                self.items.append(table_row)
+
+        for func_addr, update_state in self.controller.update_states.items():
+            for update_task, auto_sync_enabled in update_state.update_tasks.items():
+                if auto_sync_enabled:
+                    func_name = compat.get_func_name(func_addr)
+                    user_name = update_task.kwargs.get("user", "")
+                    # TODO: fix this time
+                    time_delta = ""
+                    row = QUserItem(func_name, user_name, time_delta)
+                    self.items.append(row)
+
         self.reload()
