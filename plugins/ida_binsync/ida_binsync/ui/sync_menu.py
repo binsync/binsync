@@ -178,7 +178,7 @@ class MenuDialog(QDialog):
 
     def _on_combo_change(self, value):
         self._hide_all_tables()
-        if value == BinsyncMenuActionItem.SYNC_SELECTED_FUNCTIONS:
+        if value == BinsyncMenuActionItem.SYNC_SELECTED_FUNCTIONS or value == BinsyncMenuActionItem.TOGGLE_AUTO_SYNC:
             self.select_table_widget.show()
             self.active_table = self.select_table_widget
         else:

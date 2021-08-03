@@ -39,7 +39,7 @@ class QAutoSyncInfoTable(QTableWidget):
     HEADER = [
         'Function',
         'User',
-        'Last Push',
+        'Last Sync',
     ]
 
     def __init__(self, controller, parent=None):
@@ -92,37 +92,16 @@ class QAutoSyncInfoTable(QTableWidget):
         """
         Update the status of all users within the repo.
         """
-        return
         # reset the items in table
         self.items = []
         known_funcs = {}  # addr: (addr, name, user_name, push_time)
-        #for user,funcs in self.controller.autosync_store.items():
-
-
-
-
-        # first check if any functions are unknown to the table
-        for user in users:
-            state = self.controller.client.get_state(user=user.name)
-            user_funcs: Dict[int, Function] = state.functions
-
-            for func_addr, sync_func in user_funcs.items():
-                func_change_time = sync_func.last_change
-
-                # check if we already know about it
-                if func_addr in known_funcs:
-                    # compare this users change time to the store change time
-                    if func_change_time < known_funcs[func_addr][3]:
-                        # don't change it if the other user is more recent
-                        continue
-
-                local_func_name = compat.get_func_name(func_addr)
-                known_funcs[func_addr] = [local_func_name, user.name, func_change_time]
-
-        for row in known_funcs.values():
-            # fix datetimes for the correct format
-            row[3] = BinsyncController.friendly_datetime(row[3])
-            table_row = QUserItem(*row)
-            self.items.append(table_row)
-
+        for user,funcs in self.controller.autosync_store.items():
+            for func in funcs:
+                fname = compat.get_func_name(func.start_ea)
+                if fname in self.controller.autosync_store_lastchange.keys():
+                    time_delta = self.controller.friendly_datetime(self.controller.autosync_store_lastchange[fname])
+                else:
+                    time_delta = "None"
+                table_row = QUserItem(fname, user, time_delta)
+                self.items.append(table_row)
         self.reload()
