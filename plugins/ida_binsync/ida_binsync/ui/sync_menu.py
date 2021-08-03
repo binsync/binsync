@@ -9,10 +9,13 @@ import idautils
 import binsync.data
 from .. import compat
 from ..controller import BinsyncController
+from ..controller import UpdateTask
+
 
 #
 #   MenuDialog Box for Binsync Actions
 #
+
 class BinsyncMenuActionItem:
     SYNC_SELECTED_FUNCTIONS = "Sync Selected Functions"
     SYNC_ALL_FUNCTIONS = "Sync All Functions"
@@ -264,43 +267,46 @@ class SyncMenu:
 
     def _do_action(self, action, user, ida_func):
         if user is None:
-            print(f"[Binsync]: Error! No user selected for syncing.")
+            print(f"[BinSync]: Error! No user selected for syncing.")
             return False
 
         if action == BinsyncMenuActionItem.SYNC_SELECTED_FUNCTIONS:
-            self.controller.fill_function(ida_func, user=user)
-            print(f"[Binsync]: Data has been synced from user \'{user}\' on function {hex(ida_func.start_ea)}.")
+            cursor_at_func = compat.get_function_cursor_at()
+
+            # if currently looking at a function, do a fill now
+            if cursor_at_func == ida_func.start_ea:
+                self.controller.fill_function(ida_func.start_ea, user=user)
+
+            # otherwise, do it later
+            else:
+                update_task = UpdateTask(
+                    self.controller.fill_function,
+                    ida_func.start_ea, user=user
+                )
+                print(f"[BinSync]: Caching sync for \'{user}\' on function {hex(ida_func.start_ea)}.")
+                self.controller.update_states[ida_func.start_ea].add_update_task(update_task)
 
         elif action == BinsyncMenuActionItem.TOGGLE_AUTO_SYNC:
-            for user, funcs in self.controller.autosync_store.items():
-                if ida_func in funcs:
-                    print(f"[Binsync]: Function already synced from user \'{user}\'.")
-                    return False
-            if user in self.controller.autosync_store:
-                if ida_func not in self.controller.autosync_store[user]:
-                    self.controller.autosync_store[user] += [ida_func]
-                else:
-                    self.controller.autosync_store[user].remove(ida_func)
-            else:
-                self.controller.autosync_store[user] = [ida_func]
-            self.controller.info_panel._update_info_tables()
-            self.controller.info_panel._autosync_table.reload()
-            print(f"[Binsync]: Beginning auto-sync from user \'{user}\' in function {hex(ida_func.start_ea)}.")
+            update_task = UpdateTask(
+                self.controller.fill_function,
+                ida_func.start_ea, user=user
+            )
+            print(f"[BinSync]: Toggling auto-sync for user \'{user}\' in function {hex(ida_func.start_ea)}.")
+            self.controller.update_states[ida_func.start_ea].toggle_auto_sync_task(update_task)
 
         elif action == BinsyncMenuActionItem.SYNC_ALL_FUNCTIONS:
             self.controller.sync_all(user=user)
-            print(f"[Binsync]: All data has been synced from user: {user}.")
+            print(f"[BinSync]: All data has been synced from user: {user}.")
 
         elif action == BinsyncMenuActionItem.SYNC_STRUCTS:
             self.controller.fill_structs(user=user)
-            print(f"[Binsync]: All structs have been synced from user: {user}")
+            print(f"[BinSync]: All structs have been synced from user: {user}")
 
         else:
-            print(f"[Binsync]: Error parsing sync action!")
+            print(f"[BinSync]: Error parsing sync action!")
             return False
 
         return True
-
 
     def _get_selected_funcs(self):
         """

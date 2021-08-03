@@ -404,16 +404,16 @@ class IDPHooks(ida_idp.IDP_Hooks):
 
 class HexRaysHooks:
     def __init__(self, controller):
-        self.controller = controller
+        self.controller: BinsyncController = controller
         super(HexRaysHooks, self).__init__()
         self._available = None
         self._installed = False
         self._cached_funcs = {}
+        self.controller_update_working = False
 
     def hook(self):
         if self._available is None:
             if not ida_hexrays.init_hexrays_plugin():
-                self._plugin.logger.info("Hex-Rays SDK is not available")
                 self._available = False
             else:
                 ida_hexrays.install_hexrays_callback(self._hxe_callback)
@@ -439,12 +439,20 @@ class HexRaysHooks:
             func_addr = ida_cfunc.entry_ea
             func = ida_funcs.get_func(func_addr)
 
+            # sanity check
             if func is None:
                 return 0
 
+            # run update tasks needed for this function
+            if not self.controller_update_working:
+                self.controller_update_working = True
+                # recursion can happen here
+                self.controller.update_states[func_addr].do_needed_updates()
+                self.controller_update_working = False
+
+            # do decompilation comment updates
             if func.start_ea not in self._cached_funcs.keys():
                 self._cached_funcs[func.start_ea] = {"cmts": []}
-
             self._update_user_cmts(func.start_ea)
         return 0
 
