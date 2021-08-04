@@ -85,7 +85,7 @@ def make_ro_state(f):
         state = kwargs.pop('state', None)
         user = kwargs.pop('user', None)
         if state is None:
-            state = self.client.get_state(user=user)
+            state = self._client.get_state(user=user)
         return f(self, *args, **kwargs, state=state)
     return state_check
 
@@ -128,8 +128,12 @@ class BinsyncController:
 
             time.sleep(1)
 
-    def connect(self, user, path, init_repo, ssh_agent_pid=None, ssh_auth_sock=None):
-        self._client = binsync.Client(user, path, init_repo=init_repo, ssh_agent_pid=ssh_agent_pid,
+    def connect(self, user, path, init_repo, binary_hash, ssh_agent_pid=None, ssh_auth_sock=None):
+        self._client = binsync.Client(user,
+                                      path,
+                                      binary_hash,
+                                      init_repo=init_repo,
+                                      ssh_agent_pid=ssh_agent_pid,
                                       ssh_auth_sock=ssh_auth_sock)
         if self.control_panel is not None:
             self.control_panel.reload()
@@ -145,6 +149,9 @@ class BinsyncController:
                 )
             return False
         return True
+    
+    def set_curr_bv(self, bv):
+        self.curr_bv = bv
 
     def mark_as_current_function(self, bv, bn_func):
         self.curr_bv = bv
@@ -228,7 +235,7 @@ class BinsyncController:
                           type_str,
                           size,
                           bn_func.start)
-        state.set_stack_variable(bn_func.start, stack_var.storage, v)
+        state.set_stack_variable(v, bn_func.start, stack_var.storage)
 
     @init_checker
     @make_state
@@ -387,7 +394,6 @@ class CurrentFunctionNotification(BinaryDataNotification):
 
 
 def launch_binsync_configure(context):
-
     if context.binaryView is None:
         show_message_box(
             "No binary is loaded",
@@ -396,6 +402,8 @@ def launch_binsync_configure(context):
             MessageBoxIcon.ErrorIcon,
         )
         return
+
+    controller.set_curr_bv(context.binaryView)
 
     d = ConfigDialog(controller)
     d.exec_()
