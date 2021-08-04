@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QHBoxLayout, QLabel
     QMessageBox, QCheckBox, QWidget, QFileDialog, QApplication, QComboBox, QTableWidget, QTableWidgetItem, \
     QDialogButtonBox, QGridLayout, QHeaderView, QTableView, QAbstractItemView
 import sip
+import threading
 
 import idaapi
 import idautils
@@ -295,7 +296,8 @@ class SyncMenu:
             self.controller.update_states[ida_func.start_ea].toggle_auto_sync_task(update_task)
 
         elif action == BinsyncMenuActionItem.SYNC_ALL_FUNCTIONS:
-            self.controller.sync_all(user=user)
+            threading.Thread(target=self.controller.sync_all, kwargs={"user": user}).start()
+            #self.controller.sync_all(user=user)
             print(f"[BinSync]: All data has been synced from user: {user}.")
 
         elif action == BinsyncMenuActionItem.SYNC_STRUCTS:

@@ -46,17 +46,74 @@ IDA_HOME=~/ida/ida-7.6 ./scripts/install.sh
 ```
 
 ## Usage  
-### Verifying your download works (IDA)
+### Verifying your download works
+1. Make a place for sync repos to live
+```bash
+mkdir ~/sync_repos
+cd ~/sync_repos
+```
+2. Download the testing repo and get the binary out (fauxware)
+```bash
+git clone git@github.com:mahaloz/binsync_example_repo.git
+cp binsync_example_repo/fauxware .
+```
+3. Launch IDA on fauxware
+4. Verify your IDAPython terminal says:
+```bash
+[Binsync] v1.0.0 loaded!
+```
+5. Open the BinSync Config Pane 
+    1. You can hit `Ctrl+Shift+B` to open it
+    2. OR You can use click `Edit -> Plugins -> Binsync: settings`
+6. Give a username and find the example_repo from earlier, click ok
+   ![](./assets/images/binsync_1.png)
+7. Verify your IDAPython terminal says (with your username):
+```bash
+[BinSync]: Client has connected to sync repo with user: mahaloz.
+```
 
-~Follow this simple verification for IDA: [Here]()~
+8. You should have a few users now in the new Info Panel that has poped up
+   ![](./assets/images/binsync_2.png)
 
-TODO:
-1. make a `~/sync_repos` folder
-2. clone mahaloz repo: `git clone git@github.com:mahaloz/sync_test.git`
-3. open up ida
-4. `Ctrl+Shift+B` to open config
-5. put the folder location as `~/sync_repos/sync_test`
-6. pull something
+Congrats, your BinSync seems to connect to a repo, and recognize you as a user. 
+Let's test pulling.
+
+1. Left Click then Right click on the `main` function in the function table
+   ![](./assets/images/binsync_3.png)
+2. Click `Binsync action...`
+3. Select `mahaloz` as a user and hit OK
+   ![](./assets/images/binsync_4.png)
+4. Get your view back to the decompilation view for that function 
+5. Verify your main now looks like this:
+```c
+// ***
+// This is mahaloz big ole function comment.
+// Thanks for using BinSync. <3
+// 
+// ***
+int __cdecl mahaloz_main(int argc, const char **argv, const char **envp)
+{
+  int ret_val; // [rsp+1Ch] [rbp-24h] BYREF
+  mahaloz_struct some_struct; // [rsp+20h] [rbp-20h] BYREF
+  char some_char_arr[16]; // [rsp+30h] [rbp-10h] BYREF
+
+  some_char_arr[8] = 0;
+  LOBYTE(some_struct.field_8) = 0;
+  puts("Username: ");                           // <--- username
+  read(0, some_char_arr, 8uLL);
+  read(0, &ret_val, 1uLL);
+  puts("Password: ");                           // <---- password
+  read(0, &some_struct, 8uLL);
+  read(0, &ret_val, 1uLL);
+  ret_val = authenticate(some_char_arr, &some_struct);
+  if ( !ret_val )
+    rejected(some_char_arr);
+  return accepted(some_char_arr);
+}
+```
+
+In BinSync, you right-click on the function table to select functions you want to sync.
+You can select multiple functions before right-clicking. Play around with other users.
 
 ### Setting up a Sync Repo for a challenge for the first time
 
@@ -85,4 +142,16 @@ steps 2 and 3 given the repo and the binary. Its less verbose though:
 ./scripts/setup_repo_for_binsync.sh /path/to/repo /path/to/binary
 ```
 
-Follow the earlier story to verify you can connect in IDA [here]().
+## Known Bugs
+Fixing any bug will require an IDA restart usually.
+
+### Git Error 1
+You get a python crash that looks something like this:
+```python
+# [truncated]
+    self.tree = Tree(self.repo, hex_to_bin(readline().split()[1]), Tree.tree_id << 12, '')
+binascii.Error: Non-hexadecimal digit found
+```
+
+#### FIX:
+Restart IDA and reconnect to that same user.

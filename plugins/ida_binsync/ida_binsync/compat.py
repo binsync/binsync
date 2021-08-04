@@ -219,7 +219,12 @@ def set_decomp_comments(func_addr, cmt_dict: typing.Dict[int, str]):
 
 @execute_read
 def get_func_stack_var_info(func_addr) -> typing.Dict[int, IDAStackVar]:
-    decompilation = ida_hexrays.decompile(func_addr)
+    try:
+        decompilation = ida_hexrays.decompile(func_addr)
+    except ida_hexrays.DecompilationFailure:
+        print("[BinSync]: Decompiling too many functions too fast! Slow down and try that operation again.")
+        return {}
+
     stack_var_info = {}
 
     for var in decompilation.lvars:
@@ -228,7 +233,7 @@ def get_func_stack_var_info(func_addr) -> typing.Dict[int, IDAStackVar]:
 
         size = var.width
         name = var.name
-        offset = var.location.stkoff()
+        offset = var.location.stkoff() - decompilation.get_stkoff_delta()
         type_str = str(var.type())
         stack_var_info[offset] = IDAStackVar(func_addr, offset, name, type_str, size)
 
@@ -260,13 +265,14 @@ def set_stack_vars_types(var_type_dict, code_view, controller: "BinsyncControlle
     while not fixed_point:
         fixed_point = True
         for lvar in code_view.cfunc.lvars:
-            cur_off = lvar.location.stkoff()
+            cur_off = lvar.location.stkoff() - code_view.cfunc.get_stkoff_delta()
             if lvar.is_stk_var() and cur_off in var_type_dict:
-                controller.inc_api_count()
-                all_success &= code_view.set_lvar_type(lvar, var_type_dict.pop(cur_off))
-                fixed_point = False
-                # make sure to break, in case the size of lvars array has now changed
-                break
+                if str(lvar.type()) != str(var_type_dict[cur_off]):
+                    controller.inc_api_count()
+                    all_success &= code_view.set_lvar_type(lvar, var_type_dict.pop(cur_off))
+                    fixed_point = False
+                    # make sure to break, in case the size of lvars array has now changed
+                    break
 
     return all_success
 
