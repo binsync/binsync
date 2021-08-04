@@ -235,7 +235,7 @@ class BinsyncController:
                           type_str,
                           size,
                           bn_func.start)
-        state.set_stack_variable(v, bn_func.start, stack_var.storage)
+        state.set_stack_variable(v, stack_var.storage, bn_func.start)
 
     @init_checker
     @make_state
