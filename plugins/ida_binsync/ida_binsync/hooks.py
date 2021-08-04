@@ -128,14 +128,16 @@ class IDBHooks(ida_idp.IDB_Hooks):
     @quite_init_checker
     def struc_created(self, tid):
         #print("struct created")
-        self.ida_struct_changed(tid, old_name="")
+        sptr = ida_struct.get_struc(tid)
+        if not sptr.is_frame():
+            self.ida_struct_changed(tid, old_name="")
         return 0
 
     # XXX - use struc_deleted(self, struc_id) instead?
     @quite_init_checker
     def deleting_struc(self, sptr):
-        #print("struct deleted")
-        self.ida_struct_changed(sptr.id, deleted=True)
+        if not sptr.is_frame():
+            self.ida_struct_changed(sptr.id, deleted=True)
         return 0
 
     @quite_init_checker
@@ -148,8 +150,9 @@ class IDBHooks(ida_idp.IDB_Hooks):
     # XXX - use struc_renamed(self, sptr) instead?
     @quite_init_checker
     def renaming_struc(self, id, oldname, newname):
-        #print(f"rename struc: {id} | {oldname} | {newname}")
-        self.ida_struct_changed(id, old_name=oldname, new_name=newname)
+        sptr = ida_struct.get_struc(id)
+        if not sptr.is_frame():
+            self.ida_struct_changed(id, old_name=oldname, new_name=newname)
         return 0
 
     @quite_init_checker
@@ -221,14 +224,17 @@ class IDBHooks(ida_idp.IDB_Hooks):
         if sptr.is_frame():
             stack_frame = sptr
             func_addr = idaapi.get_func_by_frame(stack_frame.id)
-            stack_var_info = compat.get_func_stack_var_info(func_addr)[mptr.soff]
+            try:
+                stack_var_info = compat.get_func_stack_var_info(func_addr)[mptr.soff]
+            except KeyError:
+                print("[BinSync]: Failed to track an internal changing stack var to IDA.")
+                return 0
 
             # find the properties of the changed stack var
             angr_offset = compat.ida_to_angr_stack_offset(func_addr, stack_var_info.offset)
             size = stack_var_info.size
             type_str = stack_var_info.type_str
 
-            # TODO: correct this fix in the get_func_stack_var_info
             new_name = stack_var_info.name #ida_struct.get_member_name(mptr.id)
 
             # do the change on a new thread
@@ -260,15 +266,11 @@ class IDBHooks(ida_idp.IDB_Hooks):
     def renamed(self, ea, new_name, local_name):
         # #print("renamed(ea = %x, new_name = %s, local_name = %d)" % (ea, new_name, local_name))
         if ida_struct.is_member_id(ea) or ida_struct.get_struc(ea) or ida_enum.get_enum_name(ea):
-            # Drop hook to avoid duplicate since already handled by the following hooks:
-            # - renaming_struc_member() -> sends 'StrucMemberRenamedEvent'
-            # - renaming_struc() -> sends 'StrucRenamedEvent'
-            # - renaming_enum() -> sends 'EnumRenamedEvent'
             return 0
 
         # confirm we are renaming a function
         ida_func = idaapi.get_func(ea)
-        if ida_func is None:
+        if ida_func is None or ida_func.start_ea != ea:
             return 0
 
         # grab the name instead from ida
@@ -357,6 +359,11 @@ class IDBHooks(ida_idp.IDB_Hooks):
         """
         # parse the info of the current struct
         s_name = new_name if new_name else ida_struct.get_struc_name(sid)
+
+        # back out if a stack variable snuck in
+        if s_name.startswith("$"):
+            return 0
+
         sptr = ida_struct.get_struc(sid)
         s_size = ida_struct.get_struc_size(sptr)
 

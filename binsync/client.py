@@ -458,7 +458,12 @@ class Client(object):
 
         if self.repo.index.diff("HEAD"):
             # commit if there is any difference
-            commit = index.commit("Save state")
+            try:
+                commit = index.commit("Save state")
+            except Exception:
+                print("[BinSync]: Internal Git Commit Error!")
+                return
+
             branch.commit = commit
             self.push()
 
