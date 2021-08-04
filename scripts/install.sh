@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+BINSYNC_DIR="$( realpath "$SCRIPT_DIR/..")"
+
 
 install() {
   # install the core
@@ -13,7 +16,8 @@ install() {
   else
     echo "[!] Installing BinSync IDA Plugin to $IDA_HOME..."
     if test -f "$IDA_HOME"/ida.key; then
-      cp -r plugins/ida_binsync/* "$IDA_HOME"/plugins/
+      ln -s "$BINSYNC_DIR/plugins/ida_binsync/ida_binsync/" "$IDA_HOME"/plugins/
+      ln -s "$BINSYNC_DIR/plugins/ida_binsync/ida_binsync.py" "$IDA_HOME"/plugins/
       echo "[!] Done!"
     else
       echo "[X] Error, IDA_HOME appears to not be the home of an ida install."
