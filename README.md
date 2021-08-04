@@ -36,7 +36,7 @@ to enter a password, you have two options:
 2. generate a new key that is not password protected and add it to GitHub (or whatever host you use)
 
 
-### Install Script 
+### Install Script (IDA, Binja)
 To install just run the install script from the root of the repo and define the needed enviornment
 variable for the type of install you are doing. If you are installing for IDA Pro, you must define the variable
 `IDA_HOME`, which should be home folder of your IDA install. For me it looks like this:
@@ -44,6 +44,26 @@ variable for the type of install you are doing. If you are installing for IDA Pr
 ```bash
 IDA_HOME=~/ida/ida-7.6 ./scripts/install.sh
 ```
+
+for Binja it looks like:
+
+```bash
+BINJA_HOME=~/Library/Application\ Support/Binary\ Ninja/ ./scripts/install.sh
+```
+
+### Binja Extra Steps
+Since Binja may be running a custom Python interpreter, please manually set or verify that your Python
+for Binja is set to the same python as `python3` in your terminal. To do that:
+1. Open Binja
+2. Click `Settings->Python`
+3. Select the correct Python interpreter for `Python Interpreter`
+4. Restart Binja
+
+### Manual Install Without Scripts (Windows)
+If you are unable to use Bash for whatever reason, the install script only does two things for
+every decompiler:
+1. Copy the entire folder in `plugins/decoilername_binsync/` to the decompiler plugin folder
+2. Install BinSync to the same python the decompiler uses `python3 -m pip install --user -e .`
 
 ## Usage  
 ### Verifying your download works
