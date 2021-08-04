@@ -74,8 +74,12 @@ def make_state(f):
             kwargs['state'] = state
             r = f(self, *args, **kwargs)
 
-        if isinstance(args[0], int):
-            self._update_function_name_if_none(args[0], user=user, state=state)
+        try:
+            if isinstance(args[0], int):
+                self._update_function_name_if_none(args[0], user=user, state=state)
+        except Exception:
+            pass
+
         return r
 
     return state_check
@@ -153,7 +157,10 @@ class UpdateTaskState:
                 auto_sync = self.update_tasks[update_task]
 
                 # doing task
-                f(*args, **kwargs)
+                try:
+                    f(*args, **kwargs)
+                except Exception:
+                    print(f"[BinSync]: failed to execute cache of {f} with {args}")
 
                 # remove the task if its not an auto_sync task
                 if not auto_sync:
@@ -434,13 +441,19 @@ class BinsyncController:
 
     @init_checker
     def sync_all(self, user=None, state=None):
+        # copy the actual state from the other user
         self.client.sync_states(user=user)
-        func_addrs = self.client.state.functions.keys()
-        print("[BinSync]: Target Addrs for sync:", [hex(x) for x in func_addrs])
+        new_state = self.client.get_state(user=self.client.master_user)
+        func_addrs = new_state.functions.keys()
+        print("[BinSync]: Target Addrs for sync being cached:", [hex(x) for x in func_addrs])
 
-        for addr in func_addrs:
-            ida_func = idaapi.get_func(addr)
-            self.fill_function(ida_func, user=self.client.master_user)
+        # set the new stuff in the UI
+        for func_addr in func_addrs:
+            update_task = UpdateTask(
+                self.fill_function,
+                func_addr, user=self.client.master_user
+            )
+            self.update_states[func_addr].add_update_task(update_task)
 
     @init_checker
     @make_ro_state
