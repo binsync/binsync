@@ -471,7 +471,7 @@ class Client(object):
         my_state = self.get_state(self.master_user)
 
         my_state.copy_state(target_state)
-        self.save_state()    
+        self.save_state()
 
     @staticmethod
     def discover_ssh_agent(ssh_agent_cmd):
@@ -494,13 +494,28 @@ class Client(object):
         # parse output
         m = re.search(r"Found ssh-agent at (\d+)", stdout)
         if m is None:
-            return None, None
-        ssh_agent_pid = int(m.group(1))
-
-        m = re.search(r"Found ssh-agent socket at ([^\s]+)", stdout)
-        if m is None:
-            return None, None
-        ssh_agent_sock = m.group(1)
+            print("Failed to find 'Found ssh-agent at'")
+            m = re.search(r"SSH_AGENT_PID=(\d+);", stdout)
+            if m is None:
+                print("Failed to find SSH_AGENT_PID")
+                return None, None
+            print("Found SSH_AGENT_PID")
+            ssh_agent_pid = int(m.group(1))
+            m = re.search("SSH_AUTH_SOCK=(.*?);", stdout)
+            if m is None:
+                print("Failed to find SSH_AUTH_SOCK")
+                return None, None
+            print("Found SSH_AGENT_SOCK")
+            ssh_agent_sock = m.group(1)
+        else :
+            print("Found ssh-agent at")
+            ssh_agent_pid = int(m.group(1))
+            m = re.search(r"Found ssh-agent socket at ([^\s]+)", stdout)
+            if m is None:
+                print("Failed to find 'Found ssh-agent socket at'")
+                return None, None
+            print("Found ssh-agent socket at")
+            ssh_agent_sock = m.group(1)
 
         return ssh_agent_pid, ssh_agent_sock
 
