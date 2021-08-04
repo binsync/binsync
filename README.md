@@ -142,8 +142,6 @@ steps 2 and 3 given the repo and the binary. Its less verbose though:
 ./scripts/setup_repo_for_binsync.sh /path/to/repo /path/to/binary
 ```
 
-Follow the earlier story to verify you can connect in IDA [here]().
-
 ## Known Bugs
 Fixing any bug will require an IDA restart usually.
 
