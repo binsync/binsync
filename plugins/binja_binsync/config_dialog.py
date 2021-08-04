@@ -1,3 +1,4 @@
+import hashlib
 import os
 import sys
 
@@ -181,7 +182,14 @@ class ConfigWidget(BinjaWidget):
         if not ssh_auth_sock:
             ssh_auth_sock = None
 
-        self._controller.connect(user, path, init_repo, ssh_agent_pid=ssh_agent_pid, ssh_auth_sock=ssh_auth_sock)
+        bv = self._controller.curr_bv
+        binary_hash = hashlib.md5(bv.file.raw.read(bv.file.raw.start, bv.file.raw.end)).hexdigest()
+        self._controller.connect(user,
+                                 path,
+                                 init_repo,
+                                 binary_hash,
+                                 ssh_agent_pid=ssh_agent_pid,
+                                 ssh_auth_sock=ssh_auth_sock)
 
         if self._dialog is not None:
             self._dialog.close()
