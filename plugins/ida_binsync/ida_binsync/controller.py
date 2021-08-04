@@ -74,11 +74,12 @@ def make_state(f):
             kwargs['state'] = state
             r = f(self, *args, **kwargs)
 
-        try:
-            if isinstance(args[0], int):
-                self._update_function_name_if_none(args[0], user=user, state=state)
-        except Exception:
-            pass
+        #try:
+        #    if isinstance(args[0], int):
+        #        self._update_function_name_if_none(args[0], user=user, state=state)
+        #except Exception:
+        #    print(f"[BinSync]: failed to auto set function name for {hex(args[0])}.")
+        #    pass
 
         return r
 
