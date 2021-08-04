@@ -448,11 +448,12 @@ def start_function_monitor(view):
     view.register_notification(notification)
 
 
-UIAction.registerAction("Configure BinSync...")
+configure_binsync_id = "BinSync: Configure"
+UIAction.registerAction(configure_binsync_id)
 UIActionHandler.globalActions().bindAction(
-    "Configure BinSync...", UIAction(launch_binsync_configure)
+    configure_binsync_id, UIAction(launch_binsync_configure)
 )
-Menu.mainMenu("Tools").addAction("Configure BinSync...", "BinSync")
+Menu.mainMenu("Tools").addAction(configure_binsync_id, "BinSync")
 
 open_control_panel_id = "BinSync: Open control panel"
 UIAction.registerAction(open_control_panel_id)
