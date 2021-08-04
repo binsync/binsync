@@ -86,3 +86,17 @@ steps 2 and 3 given the repo and the binary. Its less verbose though:
 ```
 
 Follow the earlier story to verify you can connect in IDA [here]().
+
+## Known Bugs
+Fixing any bug will require an IDA restart usually.
+
+### Git Error 1
+You get a python crash that looks something like this:
+```python
+# [truncated]
+    self.tree = Tree(self.repo, hex_to_bin(readline().split()[1]), Tree.tree_id << 12, '')
+binascii.Error: Non-hexadecimal digit found
+```
+
+#### FIX:
+Restart IDA and reconnect to that same user.
