@@ -64,8 +64,6 @@ class ConfigWidget(QWidget):
         user_label.setText("User name")
 
         self._user_edit = QLineEdit(self)
-        self._user_edit.setText("user0_ida")
-
         row = 0
         upper_layout.addWidget(user_label, row, 0)
         upper_layout.addWidget(self._user_edit, row, 1)
@@ -129,6 +127,20 @@ class ConfigWidget(QWidget):
         # main layout
         self._main_layout.addLayout(upper_layout)
         self._main_layout.addLayout(buttons_layout)
+
+        if self._controller.client is None:
+            user = 'user0_ida'
+            repo_path = ''
+            remote_url = None
+        else:
+            user = self._controller.client.master_user
+            repo_path = self._controller.client.repo_root
+            remote_url = self._controller.client.remote_url
+
+        self._user_edit.setText(user)
+        self._repo_edit.setText(repo_path)
+        if remote_url is not None:
+            self._remote_edit.setText(remote_url)
 
     #
     # Event handlers

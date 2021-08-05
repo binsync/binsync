@@ -267,12 +267,20 @@ class BinsyncController:
 
     def connect(self, user, path, init_repo=False, remote_url=None):
         binary_md5 = idc.retrieve_input_file_md5().hex()
+        if self.client is not None:
+            self.disconnect()
+
         self.client = Client(user, path, binary_md5,
                              init_repo=init_repo,
                              remote_url=remote_url,
                              )
         BinsyncController._parse_and_display_connection_warnings(self.client.connection_warnings)
         print(f"[BinSync]: Client has connected to sync repo with user: {user}.")
+
+    def disconnect(self):
+        if self.client is not None:
+            self.client.close()
+            self.client = None
 
     def check_client(self, message_box=False):
         if self.client is None:

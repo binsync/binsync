@@ -187,6 +187,10 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         self._init_hooks()
         self._init_action_sync_menu()
 
+        # if the configuration was loaded from the persistent state we need to open the view
+        if controller.client is not None and controller.check_client():
+            self.open_control_panel()
+
         return idaapi.PLUGIN_KEEP
 
     def run(self, arg):

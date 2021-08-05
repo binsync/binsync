@@ -20,6 +20,7 @@
 # allowing us to send the new comment to be queued in the Controller actions.
 #
 # ----------------------------------------------------------------------------
+import os
 import time
 from functools import wraps
 
@@ -39,6 +40,7 @@ import ida_struct
 import ida_typeinf
 import idaapi
 import idc
+import toml
 
 from . import compat
 from .controller import BinsyncController
@@ -61,6 +63,13 @@ def quite_init_checker(f):
 #
 #   IDA Change Hooks
 #
+IDAAPI_EVENT_CODE_NAMES = {
+    ida_idaapi.NW_OPENIDB:  "NW_OPENIDB",
+    ida_idaapi.NW_CLOSEIDB: "NW_CLOSEIDB",
+    ida_idaapi.NW_INITIDA:  "NW_INITIDA",
+    ida_idaapi.NW_REMOVE:   "NW_REMOVE",
+    ida_idaapi.NW_TERMIDA:  "NW_TERMIDA",
+}
 
 
 class IDBHooks(ida_idp.IDB_Hooks):
@@ -68,6 +77,65 @@ class IDBHooks(ida_idp.IDB_Hooks):
         ida_idp.IDB_Hooks.__init__(self)
         self.controller: BinsyncController = controller
         self.last_local_type = None
+
+    def hook(self):
+        super().hook()
+
+        ida_idaapi.notify_when(ida_idaapi.NW_OPENIDB, self._openbase)
+
+        # this is a reaaaaaaaaally shitty hack ... unfortunately plugins load after the IDB so we don't get a
+        # NW_OPENIDB event if IDA is opened directly with the IDB. This is so dumb, but ¯\_(ツ)_/¯
+        print(f"hook: {idc.get_idb_path()!r}")
+        if idc.get_idb_path():
+            self.openbase(1)  # is_old_database=True
+
+    def _openbase(self, code, *args, **kwargs):
+        assert code == ida_idaapi.NW_OPENIDB
+        print(f"_openbase called, idb_path={idc.get_idb_path()}")
+        return self.openbase(*args, **kwargs)
+
+    def get_config_path(self):
+        idb_path = idc.get_idb_path()
+        if not idb_path:
+            return None
+        assert idb_path and os.path.isfile(idb_path)
+        assert idb_path[-4:] in {'.idb', '.i64'}
+        binsync_config_path = idb_path[:-4] + '.binsync.toml'
+        return binsync_config_path
+
+    def load_config(self):
+        config = {
+            'user': 'user0_ida',
+            'repo_path': '',
+            'remote_url': None,
+        }
+        config_path = self.get_config_path()
+        if config_path is not None and os.path.isfile(config_path):
+            with open(config_path, 'r') as f:
+                config.update(toml.load(f))
+        return config
+
+    def openbase(self, is_old_database):
+        assert self.controller.client is None
+        print("Open IDB hook")
+        config = self.load_config()
+        print(f"Loaded config: {config}")
+        self.controller.connect(user=config['user'], path=config['repo_path'], remote_url=config['remote_url'])
+
+    def savebase(self):
+        if self.controller.client is None or not self.controller.client.has_remote:
+            return
+        config_path = self.get_config_path()
+        cur_config = {
+            'remote_url': self.controller.client.remote_url,
+            'user': self.controller.client.master_user,
+            'repo_path': self.controller.client.repo_root,
+        }
+        with open(config_path, 'w') as f:
+            toml.dump(cur_config, f)
+
+    def closebase(self):
+        self.controller.disconnect()
 
     @quite_init_checker
     def local_types_changed(self):

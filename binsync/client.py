@@ -80,6 +80,7 @@ class Client(object):
         self.repo_root = repo_root
         self.binary_hash = binary_hash
         self.remote = remote
+        self.remote_url = remote_url
         self.repo = None
         self.repo_lock = None
 
