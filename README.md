@@ -80,7 +80,7 @@ cp binsync_example_repo/fauxware .
 3. Launch IDA on fauxware
 4. Verify your IDAPython terminal says:
 ```bash
-[Binsync] v1.0.0 loaded!
+[Binsync] v2.1.0 loaded!
 ```
 5. Open the BinSync Config Pane 
     1. You can hit `Ctrl+Shift+B` to open it
