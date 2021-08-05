@@ -1,22 +1,27 @@
+from collections import defaultdict
+from typing import Dict
 
 from PySide2.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QMenu, QHeaderView
 from PySide2.QtCore import Qt, QItemSelectionModel
 
+from ...controller import BinsyncController
+from binsync.data import Function
 
-class QUserItem:
-    def __init__(self, user):
-        super().__init__()
 
+class QUserItem(object):
+    def __init__(self, local_name, user, last_pull):
+        self.local_name = local_name
         self.user = user
+        self.last_pull = last_pull
 
     def widgets(self):
 
         u = self.user
 
         widgets = [
-            QTableWidgetItem(u.name),
-            QTableWidgetItem(),
-            QTableWidgetItem(),
+            QTableWidgetItem(self.local_name),
+            QTableWidgetItem(u), #normally u.name
+            QTableWidgetItem(self.last_pull),
         ]
 
         for w in widgets:
@@ -24,20 +29,24 @@ class QUserItem:
 
         return widgets
 
+    def _build_table(self):
+        pass
 
-class QTeamTable(QTableWidget):
+
+class QAutoSyncInfoTable(QTableWidget):
 
     HEADER = [
+        'Function',
         'User',
-        'Last update',
-        'Auto pull',
+        'Last Sync',
     ]
 
     def __init__(self, controller, parent=None):
-        super().__init__(parent)
+        super(QAutoSyncInfoTable, self).__init__(parent)
 
         self.setColumnCount(len(self.HEADER))
         self.setHorizontalHeaderLabels(self.HEADER)
+        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch) # so text does not get cut off
         self.setHorizontalScrollMode(self.ScrollPerPixel)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -47,6 +56,8 @@ class QTeamTable(QTableWidget):
         self.verticalHeader().setDefaultSectionSize(24)
 
         self.items = [ ]
+
+        self.controller: "BinsyncController" = controller
 
     def reload(self):
         self.setRowCount(len(self.items))
@@ -58,7 +69,6 @@ class QTeamTable(QTableWidget):
         self.viewport().update()
 
     def selected_user(self):
-
         try:
             idx = next(iter(self.selectedIndexes()))
         except StopIteration:
@@ -72,22 +82,27 @@ class QTeamTable(QTableWidget):
         return user_name
 
     def select_user(self, user_name):
-
         for i, item in enumerate(self.items):
             if item.user.name == user_name:
                 self.selectRow(i)
                 break
 
-    def update_users(self, users):
+    def update_table(self):
+        """
+        TODO: support auto_syncing
 
-        selected_user = self.selected_user()
+        # reset the items in table
+        self.items = []
 
-        self.items.clear()
-
-        for u in users:
-            self.items.append(QUserItem(u))
+        for func_addr, update_state in self.controller.update_states.items():
+            for update_task, auto_sync_enabled in update_state.update_tasks.items():
+                if auto_sync_enabled:
+                    func_name = ""
+                    user_name = update_task.kwargs.get("user", "")
+                    # TODO: fix this time
+                    time_delta = ""
+                    row = QUserItem(func_name, user_name, time_delta)
+                    self.items.append(row)
 
         self.reload()
-
-        if selected_user is not None:
-            self.select_user(selected_user)
+        """
