@@ -85,13 +85,11 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
         # this is a reaaaaaaaaally shitty hack ... unfortunately plugins load after the IDB so we don't get a
         # NW_OPENIDB event if IDA is opened directly with the IDB. This is so dumb, but ¯\_(ツ)_/¯
-        print(f"hook: {idc.get_idb_path()!r}")
         if idc.get_idb_path():
             self.openbase(1)  # is_old_database=True
 
     def _openbase(self, code, *args, **kwargs):
         assert code == ida_idaapi.NW_OPENIDB
-        print(f"_openbase called, idb_path={idc.get_idb_path()}")
         return self.openbase(*args, **kwargs)
 
     def get_config_path(self):
@@ -117,9 +115,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     def openbase(self, is_old_database):
         assert self.controller.client is None
-        print("Open IDB hook")
         config = self.load_config()
-        print(f"Loaded config: {config}")
         self.controller.connect(user=config['user'], path=config['repo_path'], remote_url=config['remote_url'])
 
     def savebase(self):
