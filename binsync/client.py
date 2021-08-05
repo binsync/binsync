@@ -241,12 +241,24 @@ class Client(object):
 
         return repo
 
+    def ensure_checkout(self, print_error=False):
+        """
+        Ensure the repo is in the proper branch for current user.
+
+        :return: bool
+        """
+        name = self.user_branch_name
+        
+        self.repo.git.checkout(name)
+
     def pull(self, print_error=False):
         """
         Pull changes from the remote side.
 
         :return:    None
         """
+
+        self.ensure_checkout()
 
         self._last_pull_attempt_at = datetime.datetime.now()
 
@@ -271,6 +283,8 @@ class Client(object):
 
         :return:    None
         """
+
+        self.ensure_checkout()
 
         self._last_push_attempt_at = datetime.datetime.now()
 
@@ -437,6 +451,9 @@ class Client(object):
         self._last_commit_ts = time.time()
 
     def save_state(self, state=None):
+
+        # Ensure we are in the correct branch
+        self.ensure_checkout()
 
         if state is None:
             state = self.state
