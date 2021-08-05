@@ -225,9 +225,10 @@ class IDBHooks(ida_idp.IDB_Hooks):
             stack_frame = sptr
             func_addr = idaapi.get_func_by_frame(stack_frame.id)
             try:
-                stack_var_info = compat.get_func_stack_var_info(func_addr)[mptr.soff]
+                all_var_info = compat.get_func_stack_var_info(func_addr)
+                stack_var_info = all_var_info[mptr.soff]
             except KeyError:
-                print("[BinSync]: Failed to track an internal changing stack var to IDA.")
+                print("[BinSync]: Failed to track an internal changing stack var to IDA. That or it was deleted.")
                 return 0
 
             # find the properties of the changed stack var
