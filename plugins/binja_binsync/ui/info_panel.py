@@ -84,7 +84,6 @@ class InfoPanel(QWidget):
 
     def reload(self):
         # check if connected
-        print(self._controller)
         if self._active_table and self._controller and self._controller.check_client():
 
             # update the tables
@@ -92,6 +91,10 @@ class InfoPanel(QWidget):
 
         # update status
         self._status_label.setText(self._controller.status_string())
+
+    def reload_curr(self, users):
+        self._cur_func_table.update_users(users)
+
 
     def closeEvent(self, event):
         if self._controller is not None:
@@ -121,7 +124,7 @@ class InfoPanel(QWidget):
         combo_box = QGroupBox(self)
         combo_layout = QHBoxLayout()
         self.combo = QComboBox()
-        self.combo.addItems(["Users", "Curr Function", "Functions", "Structs", "Auto-Sync"])
+        self.combo.addItems(["Users", "Current Function", "Functions", "Structs", "Auto-Sync"])
         self.combo.currentTextChanged.connect(self._on_combo_change)
         combo_layout.addWidget(self.combo)
         combo_box.setLayout(combo_layout)
@@ -206,7 +209,7 @@ class InfoPanel(QWidget):
         if value == "Users":
             self._user_table.show()
             self._active_table = self._user_table
-        elif value == "Curr Function":
+        elif value == "Current Function":
             self._cur_func_table.show()
             self._active_table = self._cur_func_table
         elif value == "Functions":
@@ -233,7 +236,7 @@ class InfoPanel(QWidget):
 
             # comments
             self._controller.remove_all_comments(func, state=state)
-            self._controller.push_comments(func.comments, state=state)
+            self._controller.push_comments(func, func.comments, state=state)
 
             # stack variables
             self._controller.push_stack_variables(func, state=state)
@@ -274,8 +277,8 @@ class InfoPanel(QWidget):
 
         users = list(self._controller.users())
 
-        self._user_table.update_users(users)
         self._cur_func_table.update_users(users)
+        self._user_table.update_users(users)
         self._func_table.update_users(users)
         self._struct_table.update_users(users)
         self._autosync_table.update_table()

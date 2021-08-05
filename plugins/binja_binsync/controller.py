@@ -159,8 +159,15 @@ class BinsyncController:
                 self.client.pull()
 
             if self.check_client():
+                # reload curr window fast
+                #if self.client.has_remote:
+                #    self.client.init_remote()
+                #users = list(self.users())
+                #if self.info_panel:
+                #    self.info_panel.reload_curr(users)
+
                 # reload info panel every 10 seconds
-                if self.info_panel is not None and time.time() - self._last_reload > 10:
+                if self.info_panel is not None and time.time() - self._last_reload > 5:
                     try:
                         self._last_reload = time.time()
                         self.info_panel.reload()
@@ -275,7 +282,6 @@ class BinsyncController:
     def mark_as_current_function(self, bv, bn_func):
         self.curr_bv = bv
         self.curr_func = bn_func
-        self.control_panel.reload()
 
     def current_function(self, message_box=False):
         all_contexts = UIContext.allContexts()
@@ -330,9 +336,9 @@ class BinsyncController:
 
         # comments
         for _, ins_addr in bn_func.instructions:
-            _comment = self.pull_comment(ins_addr, user=user, state=state)
+            _comment = self.pull_comment(bn_func.start, ins_addr, user=user, state=state)
             if _comment is not None:
-                bn_func.set_comment_at(ins_addr, _comment)
+                bn_func.set_comment_at(ins_addr, _comment.comment)
 
         # stack variables
         existing_stack_vars: Dict[int, Any] = dict((v.storage, v) for v in bn_func.stack_layout
@@ -345,7 +351,19 @@ class BinsyncController:
                     and existing_stack_vars[bn_offset].name == stack_var.name \
                     and existing_stack_vars[bn_offset].type == type_:
                 continue
-            bn_func.create_user_stack_var(bn_offset, type_, stack_var.name)
+
+            existing_stack_vars[bn_offset].name = stack_var.name
+            last_type = existing_stack_vars[bn_offset].type
+            #print(f"LAST TYPE: {last_type}")
+
+            try:
+                bn_func.create_user_stack_var(bn_offset, last_type, stack_var.name)
+                bn_func.create_auto_stack_var(bn_offset, last_type, stack_var.name)
+            except Exception as e:
+                print(f"[BinSync]: Could not sync stack variable {bn_offset}: {e}")
+
+        bn_func.reanalyze()
+        print(f"[Binsync]: New data synced for \'{user}\' on function {hex(bn_func.start)}.")
 
     #
     #   Pushers
@@ -407,11 +425,11 @@ class BinsyncController:
 
     @init_checker
     @make_state
-    def push_comments(self, comments: Dict[int,str], user=None, state=None) -> None:
+    def push_comments(self, func, comments: Dict[int,str], user=None, state=None) -> None:
         # Push comments
         for addr, comment in comments.items():
-            comm_addr = int(addr)
-            state.set_comment(comm_addr, comment)
+            cmt = binsync.data.Comment(func.start, int(addr), comment, decompiled=True)
+            state.set_comment(cmt)
 
     #
     #   Pullers

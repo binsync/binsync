@@ -60,7 +60,7 @@ class QFuncInfoTable(QTableWidget):
 
         self.items = [ ]
 
-        self.controller = controller
+        self.controller: BinsyncController = controller
 
     def reload(self):
         self.setRowCount(len(self.items))
@@ -119,7 +119,11 @@ class QFuncInfoTable(QTableWidget):
                             # don't change it if the other user is more recent
                             continue
 
-                    local_func_name = "" #compat.get_func_name(func_addr)
+                    binja_func = None
+                    if self.controller.curr_bv:
+                        binja_func = self.controller.curr_bv.get_function_at(func_addr)
+
+                    local_func_name = binja_func.name if binja_func else ""
                     known_funcs[func_addr] = [func_addr, local_func_name, user.name, func_change_time]
             except Exception:
                 continue
