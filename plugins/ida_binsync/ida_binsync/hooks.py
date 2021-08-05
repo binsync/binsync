@@ -324,16 +324,18 @@ class IDBHooks(ida_idp.IDB_Hooks):
         @param cmt_type:
         @return:
         """
+        # find the location this comment is
+        ida_func = idaapi.get_func(address)
+        # TODO: support global data: global comments (comments without a function)
+        func_addr = ida_func.start_ea if ida_func else -1
+
         # disass comment changed
         if cmt_type == "cmt":
-            # find the location this comment exists
-            func_addr = idaapi.get_func(address).start_ea
             self.binsync_state_change(self.controller.push_comment, func_addr, address, comment)
 
         # function comment changed
         elif cmt_type == "range":
             # overwrite the entire function comment
-            func_addr = idaapi.get_func(address).start_ea
             self.binsync_state_change(self.controller.push_comment, func_addr, address, comment)
 
         # XXX: other?
