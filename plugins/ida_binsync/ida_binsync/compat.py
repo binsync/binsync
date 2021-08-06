@@ -137,6 +137,9 @@ def convert_member_flag(size):
 @execute_read
 def ida_func_addr(addr):
     ida_func = ida_funcs.get_func(addr)
+    if ida_func is None:
+        return None
+
     func_addr = ida_func.start_ea
     return func_addr
 

@@ -275,7 +275,7 @@ class SyncMenu:
             cursor_at_func = compat.get_function_cursor_at()
 
             # if currently looking at a function, do a fill now
-            if cursor_at_func == ida_func.start_ea:
+            if ida_func and cursor_at_func == ida_func.start_ea:
                 self.controller.fill_function(ida_func.start_ea, user=user)
 
             # otherwise, do it later
