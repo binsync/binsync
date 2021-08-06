@@ -132,50 +132,14 @@ def start_function_monitor(view):
     notification = EditFunctionNotification(view, controller)
     view.register_notification(notification)
 
-def default_config():
-    return {
-        'user': 'user0_binja',
-        'repo_path': '',
-        'remote_url': '',
-    }
 
-def load_config(bv):
-    try:
-        config = bv.query_metadata('binsync_config')
-        return config
-    except KeyError as ex:
-        return None
-
-def store_config(bv, config):
-    bv.store_metadata('binsync_config', config)
-
-def closebase(self):
-    self.controller.disconnect()
-
-def bv_initialized(bv):
+def bv_loaded(bv):
     controller = binsync_controller_by_bv[bv]
     assert controller.client is None
-    config = load_config(bv)
-    if config is not None:
-        controller.connect(user=config['user'], path=config['repo_path'], remote_url=config['remote_url'])
+    controller.set_curr_bv(bv)
+    controller.maybe_connect_from_stored_config()
 
-def bv_finalized(bv):
-    controller = binsync_controller_by_bv[bv]
-    if controller.client is None:
-        return
-
-    cur_config = {
-        'remote_url': controller.client.remote_url,
-        'user': controller.client.master_user,
-        'repo_path': controller.client.repo_root,
-    }
-    store_config(bv, cur_config)
-    controller.disconnect()
-    binsync_controller_by_bv.pop(bv)
-
-BinaryViewType.add_binaryview_finalized_event(bv_finalized)
-BinaryViewType.add_binaryview_initial_analysis_completion_event(bv_initialized)
-
+BinaryViewType.add_binaryview_initial_analysis_completion_event(bv_loaded)
 
 configure_binsync_id = "BinSync: Configure"
 UIAction.registerAction(configure_binsync_id)

@@ -181,9 +181,22 @@ class BinsyncController:
     #
     #   State Interaction Functions
     #
+    def maybe_connect_from_stored_config(self):
+        try:
+            config = self.curr_bv.query_metadata('binsync_config')
+            print(config)
+            self.connect(user=config['user'], path=config['repo_path'], remote_url=config['remote_url'])
+        except KeyError as ex:
+            print("no config found")
+            return None
 
     def connect(self, user, path, init_repo=False, remote_url=None):
         bv = self.curr_bv
+        bv.store_metadata("binsync_config", {
+            'user': user,
+            'repo_path': path,
+            'remote_url': remote_url or ''
+        })
         binary_md5 = hashlib.md5(bv.file.raw.read(bv.file.raw.start, bv.file.raw.end)).hexdigest()
         if self.client is not None:
             self.disconnect()
