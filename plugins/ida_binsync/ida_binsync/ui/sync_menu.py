@@ -104,8 +104,14 @@ class MenuDialog(QDialog):
         # set more table properties
         table_widget.setSelectionBehavior(QAbstractItemView.SelectRows)
         table_widget.setSelectionMode(QAbstractItemView.SingleSelection)
-
+        table_widget.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        table_widget.doubleClicked.connect(self._on_click)
+        
         return table_widget
+
+    def _on_click(self, index):
+        self.active_table.selectRow(index.row())
+        self.accept()
 
     def _build_menu_table_for_all_users(self):
         if self.controller.client.has_remote:
