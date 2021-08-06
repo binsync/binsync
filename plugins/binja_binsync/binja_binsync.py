@@ -141,7 +141,7 @@ def load_config(bv):
         'remote_url': '',
     }
     try:
-        real_config = bv.get_metadata('binsync_config')
+        real_config = bv.query_metadata('binsync_config')
         config.update(real_config)
     except KeyError as ex:
         pass
