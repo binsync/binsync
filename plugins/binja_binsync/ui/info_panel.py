@@ -235,7 +235,7 @@ class InfoPanel(QWidget):
             self._controller.push_function(func, state=state)
 
             # comments
-            self._controller.remove_all_comments(func, state=state)
+            #self._controller.remove_all_comments(func, state=state)
             self._controller.push_comments(func, func.comments, state=state)
 
             # stack variables
