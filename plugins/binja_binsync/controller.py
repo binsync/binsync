@@ -16,7 +16,7 @@
 # Causing a "git push" on every change.
 #
 # ----------------------------------------------------------------------------
-
+import hashlib
 from functools import wraps
 import re
 import threading
@@ -183,13 +183,21 @@ class BinsyncController:
     #
 
     def connect(self, user, path, init_repo=False, remote_url=None):
-        binary_md5 = "" #TODO: how to get the md5 in Binja
+        bv = self.curr_bv
+        binary_md5 = hashlib.md5(bv.file.raw.read(bv.file.raw.start, bv.file.raw.end)).hexdigest()
+        if self.client is not None:
+            self.disconnect()
         self.client = Client(user, path, binary_md5,
                              init_repo=init_repo,
                              remote_url=remote_url,
                              )
         BinsyncController._parse_and_display_connection_warnings(self.client.connection_warnings)
         print(f"[BinSync]: Client has connected to sync repo with user: {user}.")
+
+    def disconnect(self):
+        if self.client is not None:
+            self.client.close()
+            self.client = None
 
     def check_client(self, message_box=False):
         if self.client is None:

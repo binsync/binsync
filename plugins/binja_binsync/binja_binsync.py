@@ -20,8 +20,8 @@ import binaryninja
 from binaryninja import PluginCommand, BinaryView
 from binaryninja.interaction import show_message_box
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourceType
-from binaryninja.binaryview import BinaryDataNotification
-
+from binaryninja.binaryview import BinaryDataNotification, BinaryViewType
+from collections import defaultdict
 import binsync
 from binsync import State, StateContext
 from binsync.data import Patch, Function, Comment, StackVariable, StackOffsetType
@@ -31,7 +31,7 @@ from .ui.ui_tools import find_main_window, BinjaDockWidget, create_widget
 from .ui.config_dialog import SyncConfig
 from .ui.info_panel import InfoPanelDialog, InfoPanelDockWidget
 
-binsync_controller = BinsyncController()
+binsync_controller_by_bv = defaultdict(BinsyncController)
 
 
 def instance():
@@ -76,9 +76,10 @@ def launch_binsync_configure(context):
         )
         return
 
-    binsync_controller.set_curr_bv(context.binaryView)
+    controller = binsync_controller_by_bv[context.binaryView]
+    controller.set_curr_bv(context.binaryView)
 
-    d = SyncConfig(binsync_controller)
+    d = SyncConfig(controller)
     d.exec_()
 
     # register a notification to get current functions
@@ -87,8 +88,9 @@ def launch_binsync_configure(context):
     # context.binaryView.register_notification(notification)
 
 
-def open_info_panel(*args):
-    d = InfoPanelDialog(binsync_controller)
+def open_info_panel(context):
+    controller = binsync_controller_by_bv[context.binaryView]
+    d = InfoPanelDialog(controller)
     d.show()
 
 
@@ -120,13 +122,60 @@ class EditFunctionNotification(BinaryDataNotification):
 
 
 def start_patch_monitor(view):
-    notification = PatchDataNotification(view, binsync_controller)
+    controller = binsync_controller_by_bv[view]
+    notification = PatchDataNotification(view, controller)
     view.register_notification(notification)
 
 
 def start_function_monitor(view):
-    notification = EditFunctionNotification(view, binsync_controller)
+    controller = binsync_controller_by_bv[view]
+    notification = EditFunctionNotification(view, controller)
     view.register_notification(notification)
+
+
+
+def load_config(bv):
+    config = {
+        'user': 'user0_binja',
+        'repo_path': '',
+        'remote_url': '',
+    }
+    try:
+        real_config = bv.get_metadata('binsync_config')
+        config.update(real_config)
+    except KeyError as ex:
+        pass
+
+    return config
+
+def store_config(bv, config):
+    bv.store_metadata('binsync_config', config)
+
+def closebase(self):
+    self.controller.disconnect()
+
+def bv_initialized(bv):
+    controller = binsync_controller_by_bv[bv]
+    assert controller.client is None
+    config = load_config(bv)
+    controller.connect(user=config['user'], path=config['repo_path'], remote_url=config['remote_url'])
+
+def bv_finalized(bv):
+    controller = binsync_controller_by_bv[bv]
+    if controller.client is None:
+        return
+
+    cur_config = {
+        'remote_url': controller.client.remote_url,
+        'user': controller.client.master_user,
+        'repo_path': controller.client.repo_root,
+    }
+    store_config(bv, cur_config)
+    controller.disconnect()
+    binsync_controller_by_bv.pop(bv)
+
+BinaryViewType.add_binaryview_finalized_event(bv_finalized)
+BinaryViewType.add_binaryview_initial_analysis_completion_event(bv_initialized)
 
 
 configure_binsync_id = "BinSync: Configure"
@@ -147,7 +196,7 @@ Menu.mainMenu("Tools").addAction(open_control_panel_id, "BinSync")
 dock_handler = DockHandler.getActiveDockHandler()
 dock_handler.addDockWidget(
     "BinSync: Info Panel",
-    lambda n, p, d: create_widget(InfoPanelDockWidget, n, p, d, binsync_controller),
+    lambda n, p, d: create_widget(InfoPanelDockWidget, n, p, d, binsync_controller_by_bv[d]),
     Qt.RightDockWidgetArea,
     Qt.Vertical,
     True

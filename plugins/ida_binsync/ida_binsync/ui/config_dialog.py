@@ -172,8 +172,10 @@ class ConfigWidget(QWidget):
 
         try:
             self._controller.connect(user, path, init_repo=init_repo, remote_url=remote_url)
+        # pylint:disable=broad-except
         except Exception as e:
             QMessageBox(self).critical(None, "Error connecting to repository", str(e))
+            traceback.print_exc()
             return
 
         if self._dialog is not None:
