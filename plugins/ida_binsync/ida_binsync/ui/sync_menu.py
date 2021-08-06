@@ -83,7 +83,7 @@ class MenuDialog(QDialog):
     def _build_table_widget(self, menu_table):
         table_widget = QTableWidget(len(menu_table), 4)
         table_widget.setHorizontalHeaderLabels(
-            "User;Last Push;Func Addr;Name".split(";")
+            "User;Last Push;Func Addr;Remote Name".split(";")
         )
 
         header = table_widget.horizontalHeader()
@@ -154,18 +154,18 @@ class MenuDialog(QDialog):
             if not relevant_funcs:
                 continue
 
-            latest_time, latest_func = -1, -1
+            latest_time, latest_func, remote_name = -1, -1, ""
             for func_addr in relevant_funcs:
                 sync_func: binsync.data.Function = state.functions[func_addr]
                 if sync_func.last_change > latest_time:
-                    latest_time, latest_func = sync_func.last_change, sync_func.addr
+                    latest_time, latest_func, remote_name = sync_func.last_change, sync_func.addr, sync_func.name if sync_func.name else ""
 
             if latest_time == -1:
                 continue
 
-            local_name = compat.get_func_name(latest_func)
+            #local_name = compat.get_func_name(latest_func)
             func = hex(latest_func)
-            row = [user.name, latest_time, func, local_name]
+            row = [user.name, latest_time, func, remote_name]
 
             menu_table.append(row)
 
@@ -286,6 +286,17 @@ class SyncMenu:
 
             # otherwise, do it later
             else:
+                if ida_func and ida_func.start_ea:
+                    try:
+                        target_user_state = self.controller.client.get_state(user=user)
+                        target_func = target_user_state.get_function(ida_func.start_ea)
+                        remote_name = target_func.name
+
+                        if remote_name != "" and remote_name:
+                            compat.set_ida_func_name(ida_func.start_ea, remote_name)
+                    except Exception:
+                        pass
+
                 update_task = UpdateTask(
                     self.controller.fill_function,
                     ida_func.start_ea, user=user

@@ -450,6 +450,16 @@ class BinsyncController:
 
         # set the new stuff in the UI
         for func_addr in func_addrs:
+            if func_addr:
+                try:
+                    target_func = new_state.get_function(func_addr)
+                    remote_name = target_func.name
+
+                    if remote_name != "" and remote_name:
+                        compat.set_ida_func_name(func_addr, remote_name)
+                except Exception:
+                    pass
+
             update_task = UpdateTask(
                 self.fill_function,
                 func_addr, user=self.client.master_user
