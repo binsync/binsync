@@ -10,9 +10,9 @@ from binsync.data import Function
 
 
 class QUserItem(object):
-    def __init__(self, func_addr, local_name, user, last_push):
+    def __init__(self, func_addr, remote_name, user, last_push):
         self.func_addr = func_addr
-        self.local_name = local_name
+        self.remote_name = remote_name
         self.user = user
         self.last_push = last_push
 
@@ -22,7 +22,7 @@ class QUserItem(object):
 
         widgets = [
             QTableWidgetItem(hex(self.func_addr)),
-            QTableWidgetItem(self.local_name),
+            QTableWidgetItem(self.remote_name),
             QTableWidgetItem(u), #normally u.name
             QTableWidgetItem(self.last_push),
         ]
@@ -40,7 +40,7 @@ class QFuncInfoTable(QTableWidget):
 
     HEADER = [
         'Changed Func',
-        'Local Name',
+        'Remote Name',
         'User',
         'Last Push',
     ]
@@ -120,8 +120,9 @@ class QFuncInfoTable(QTableWidget):
                             # don't change it if the other user is more recent
                             continue
 
-                    local_func_name = compat.get_func_name(func_addr)
-                    known_funcs[func_addr] = [func_addr, local_func_name, user.name, func_change_time]
+                    #local_func_name = compat.get_func_name(func_addr)
+                    remote_func_name = sync_func.name if sync_func.name else ""
+                    known_funcs[func_addr] = [func_addr, remote_func_name, user.name, func_change_time]
             except Exception:
                 continue
 
