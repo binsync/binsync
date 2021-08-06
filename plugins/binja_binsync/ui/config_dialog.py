@@ -121,7 +121,7 @@ class SyncConfig(QDialog):
         self._main_layout.addLayout(buttons_layout)
 
         if self._controller.client is None:
-            user = 'user0_ida'
+            user = 'user0_binja'
             repo_path = ''
             remote_url = None
         else:

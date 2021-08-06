@@ -132,21 +132,19 @@ def start_function_monitor(view):
     notification = EditFunctionNotification(view, controller)
     view.register_notification(notification)
 
-
-
-def load_config(bv):
-    config = {
+def default_config():
+    return {
         'user': 'user0_binja',
         'repo_path': '',
         'remote_url': '',
     }
-    try:
-        real_config = bv.query_metadata('binsync_config')
-        config.update(real_config)
-    except KeyError as ex:
-        pass
 
-    return config
+def load_config(bv):
+    try:
+        config = bv.query_metadata('binsync_config')
+        return config
+    except KeyError as ex:
+        return None
 
 def store_config(bv, config):
     bv.store_metadata('binsync_config', config)
@@ -158,7 +156,8 @@ def bv_initialized(bv):
     controller = binsync_controller_by_bv[bv]
     assert controller.client is None
     config = load_config(bv)
-    controller.connect(user=config['user'], path=config['repo_path'], remote_url=config['remote_url'])
+    if config is not None:
+        controller.connect(user=config['user'], path=config['repo_path'], remote_url=config['remote_url'])
 
 def bv_finalized(bv):
     controller = binsync_controller_by_bv[bv]
