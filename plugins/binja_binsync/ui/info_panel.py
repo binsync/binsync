@@ -22,7 +22,7 @@ class InfoPanelDialog(QDialog):
         self._w = None
         self._controller = controller
 
-        self.setWindowTitle("BinSync Control Panel")
+        self.setWindowTitle("BinSync Info Panel")
         self._init_widgets()
 
         # always on top

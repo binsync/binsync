@@ -87,7 +87,7 @@ def launch_binsync_configure(context):
     # context.binaryView.register_notification(notification)
 
 
-def open_control_panel(*args):
+def open_info_panel(*args):
     d = InfoPanelDialog(binsync_controller)
     d.show()
 
@@ -139,7 +139,7 @@ Menu.mainMenu("Tools").addAction(configure_binsync_id, "BinSync")
 open_control_panel_id = "BinSync: Open info panel"
 UIAction.registerAction(open_control_panel_id)
 UIActionHandler.globalActions().bindAction(
-    open_control_panel_id, UIAction(open_control_panel)
+    open_control_panel_id, UIAction(open_info_panel)
 )
 Menu.mainMenu("Tools").addAction(open_control_panel_id, "BinSync")
 
