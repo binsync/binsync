@@ -14,8 +14,9 @@ All data is stored in a human-friendly text format (toml) inside a Git repo.
 
 ## Supported Platforms
 Currently we support the following decompilers:
-- angr-management: **latest release**
-- IDA Pro: **>= 7.4**
+- angr-management: **>= 9.0**
+- IDA Pro: **>= 7.3**
+- Binary Ninja: **>= 2.4***
 
 Binary Ninja is partially supported, but lacks modern UI updates. 
 Currently, we have no implementation for Ghidra, but we are looking into a solution.
