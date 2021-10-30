@@ -6,14 +6,25 @@ import unittest
 
 from PySide2.QtTest import QTest
 from PySide2.QtCore import Qt
+from PySide2.QtWidgets import QApplication
 
 import angr
-import common
 from angrmanagement.ui.dialogs.rename_node import RenameNode
 from angrmanagement.ui.main_window import MainWindow
 from angrmanagement.plugins.binsync.binsync_plugin import BinsyncPlugin
 from angrmanagement.plugins.binsync.ui.config_dialog import SyncConfig
 from angrmanagement.plugins.binsync.ui.sync_menu import SyncMenu
+from angrmanagement.config import Conf
+
+app = None
+test_location = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'binaries')
+
+
+def am_setUp():
+    global app
+    if app is None:
+        app = QApplication([])
+        Conf.init_font_config()
 
 
 class TestBinsyncPlugin(unittest.TestCase):
@@ -22,10 +33,10 @@ class TestBinsyncPlugin(unittest.TestCase):
     """
 
     def setUp(self):
-        common.setUp()
+        am_setUp()
 
     def test_function_rename(self):
-        binpath = os.path.join(common.test_location, "x86_64", "fauxware")
+        binpath = os.path.join(test_location, "fauxware")
         new_function_name = "leet_main"
         user_1 = "user_1"
         user_2 = "user_2"
@@ -122,10 +133,10 @@ class TestBinsyncPlugin(unittest.TestCase):
             self.assertEqual(func_code.cfunc.name, new_function_name)
             self.assertEqual(func.name, new_function_name)
 
-            common.app.exit(0)
+            app.exit(0)
 
     def test_stack_variable_rename(self):
-        binpath = os.path.join(common.test_location, "x86_64", "fauxware")
+        binpath = os.path.join(test_location, "fauxware")
         var_offset = -0x18
         new_var_name = "leet_buff"
         user_1 = "user_1"
