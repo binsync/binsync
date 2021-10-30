@@ -1,16 +1,17 @@
 from .. import ui_version
 if ui_version == "PySide2":
-    from PySide2.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QMenu, QHeaderView, \
-        QStyledItemDelegate, QSpinBox
+    from PySide2.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView, QMenu
     from PySide2.QtCore import Qt
-    from PySide2.QtGui import QFont
 elif ui_version == "PySide6":
-    pass
+    from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView, QMenu
+    from PySide6.QtCore import Qt
 else:
-    pass
+    from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView, QMenu
+    from PyQt5.QtCore import Qt
 
+from . import QNumericItem
 
-class QFunctionItem(object):
+class QFunctionItem:
     def __init__(self, addr, name, user, last_push):
         self.addr = addr
         self.name = name
@@ -18,13 +19,16 @@ class QFunctionItem(object):
         self.last_push = last_push
 
     def widgets(self):
-        addr = QTableWidgetItem(self.addr)
-        addr.setData(Qt.DisplayRole, hex(self.addr))
+        # sort by int value
+        addr = QNumericItem(hex(self.addr))
+        addr.setData(Qt.UserRole, self.addr)
 
         name = QTableWidgetItem(self.name)
         user = QTableWidgetItem(self.user)
-        last_push = QTableWidgetItem(self.last_push)
-        last_push.setText(str(self.last_push))
+
+        # sort by unix value
+        last_push = QNumericItem(str(self.last_push))
+        last_push.setData(Qt.UserRole, self.last_push)
 
         widgets = [
             addr,
@@ -37,9 +41,6 @@ class QFunctionItem(object):
             w.setFlags(w.flags() & ~Qt.ItemIsEditable)
 
         return widgets
-
-    def _build_table(self):
-        pass
 
 
 class QFunctionTable(QTableWidget):
@@ -79,7 +80,6 @@ class QFunctionTable(QTableWidget):
         ]
         self.reload()
 
-
     def reload(self):
         self.setRowCount(len(self.items))
 
@@ -88,6 +88,20 @@ class QFunctionTable(QTableWidget):
                 self.setItem(idx, i, it)
 
         self.viewport().update()
+
+    def contextMenuEvent(self, event):
+        menu = QMenu(self)
+        showAction = menu.addAction("Show")
+
+        if ui_version == "PyQt5":
+            action = menu.exec(self.mapToGlobal(event.pos()))
+        else:
+            action = menu.exec_(self.mapToGlobal(event.pos()))
+
+        if action == showAction:
+            row = self.columnAt(event.pos().y())
+            addr, username = self.item(row, 0), self.item(row, 2)
+            print(addr.text(), username.text())
 
     def selected_user(self):
         try:
