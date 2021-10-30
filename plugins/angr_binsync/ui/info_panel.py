@@ -32,7 +32,7 @@ class InfoView(BaseView):
         self.width_hint = 250
 
         # subscribe
-        # self.workspace.instance.sync.users_container.am_subscribe(self._update_info_tables)
+        # self.workspace.instance.sync.users_container.am_subscribe(self._update_tables)
 
     def reload(self):
         # reload the status

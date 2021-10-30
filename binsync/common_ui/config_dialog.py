@@ -47,7 +47,6 @@ class SyncConfig(QDialog):
         user_label.setText("User name")
 
         self._user_edit = QLineEdit(self)
-        self._user_edit.setText("username")
 
         row = 0
         upper_layout.addWidget(user_label, row, 0)
@@ -141,9 +140,8 @@ class SyncConfig(QDialog):
         else:
             remote_url = None
 
-        binary_hash = self.controller.get_program_hash()
         try:
-            self.controller.connect(user, path, binary_hash, init_repo=init_repo, remote_url=remote_url)
+            self.controller.connect(user, path, init_repo=init_repo, remote_url=remote_url)
         except Exception as e:
             QMessageBox(self).critical(None, "Error connecting to repository", str(e))
             traceback.print_exc()
