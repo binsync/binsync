@@ -1,3 +1,5 @@
+import datetime
+
 from . import ui_version
 if ui_version == "PySide2":
     from PySide2.QtWidgets import QVBoxLayout, QGroupBox, QWidget, QLabel, QTabWidget, QTableWidget
@@ -8,27 +10,20 @@ else:
 
 from .tables.functions_table import QFunctionTable
 
+
 class ControlPanel(QWidget):
     def __init__(self, controller, parent=None):
         super(ControlPanel, self).__init__(parent)
         self.controller = controller
 
-        # info tables
-        self._user_table = None  # type: QUserInfoTable
-        self._func_table = None  # type: QUserInfoTable
-        self._struct_table = None  # type: QStructInfoTable
-        self._active_table = None  # type: QTableWidget
-
         self._init_widgets()
 
         # register callback
-        # self.controller.info_panel = self
-
-        self.reload()
+        self.controller.control_panel = self
 
     def reload(self):
         # check if connected
-        if self._active_table and self.controller and self.controller.check_client():
+        if self.controller and self.controller.check_client():
             self._update_tables()
 
         # update status
@@ -59,7 +54,7 @@ class ControlPanel(QWidget):
 
         # add tables to tabs
         self._user_table = QTableWidget()
-        self._func_table = QFunctionTable(None)
+        self._func_table = QFunctionTable(self.controller)
         self._struct_table = QTableWidget()
         self._autosync_table = QTableWidget()
 
@@ -82,9 +77,5 @@ class ControlPanel(QWidget):
         if self.controller.client.has_remote:
             self.controller.client.init_remote()
 
-        users = list(self.controller.users())
+        self._func_table.update_table()
 
-        self._user_table.update_users(users)
-        self._func_table.update_users(users)
-        self._struct_table.update_users(users)
-        self._autosync_table.update_table()

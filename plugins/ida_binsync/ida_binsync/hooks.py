@@ -15,7 +15,7 @@
 #
 # This program describes each hook in IDA that we want to overwrite on the
 # startup of IDA. Each hook function/class describes a different scenario
-# that we try to track when a user makes a change. For instance, the function
+# that we try to track when a user makes a change. For _instance, the function
 # `cmt_changed` is activated every time a user changes a disassembly comment,
 # allowing us to send the new comment to be queued in the Controller actions.
 #

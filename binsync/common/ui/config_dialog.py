@@ -1,14 +1,21 @@
 import traceback
 import os
 
-from PySide2.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QMessageBox,
-                               QFileDialog, QCheckBox, QGridLayout)
-from PySide2.QtCore import QDir
+from . import ui_version
+if ui_version == "PySide2":
+    from PySide2.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QMessageBox, \
+        QFileDialog, QCheckBox, QGridLayout
+    from PySide2.QtCore import QDir
+elif ui_version == "PySide6":
+    from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QMessageBox, \
+        QFileDialog, QCheckBox, QGridLayout
+    from PySide6.QtCore import QDir
+else:
+    from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QMessageBox, \
+        QFileDialog, QCheckBox, QGridLayout
+    from PyQt5.QtCore import QDir
 
-try:
-    import binsync
-except ImportError:
-    binsync = None
+from ...client import ConnectionWarnings
 
 
 class SyncConfig(QDialog):
@@ -18,19 +25,11 @@ class SyncConfig(QDialog):
     - cloning a remote
     - using a locally pulled remote repo
     """
-    def __init__(self, instance, controller, parent=None):
+    def __init__(self, controller, parent=None):
         super().__init__(parent)
+        self.controller = controller
 
         self.setWindowTitle("Configure BinSync")
-
-        if binsync is None:
-            QMessageBox(self).critical(None, 'Dependency error',
-                                       "binsync is not installed. Please install binsync first.")
-            self.close()
-
-        # initialization
-        self._instance = instance
-        self._controller = controller
 
         self._main_layout = QVBoxLayout()
         self._user_edit = None  # type:QLineEdit
@@ -39,17 +38,10 @@ class SyncConfig(QDialog):
         self._initrepo_checkbox = None  # type:QCheckBox
 
         self._init_widgets()
-
         self.setLayout(self._main_layout)
-
         self.show()
 
-    #
-    # Private methods
-    #
-
     def _init_widgets(self):
-
         upper_layout = QGridLayout()
 
         # user label
@@ -57,7 +49,6 @@ class SyncConfig(QDialog):
         user_label.setText("User name")
 
         self._user_edit = QLineEdit(self)
-        self._user_edit.setText("user0_angrm")
 
         row = 0
         upper_layout.addWidget(user_label, row, 0)
@@ -145,24 +136,21 @@ class SyncConfig(QDialog):
                                        )
             return
 
-        # TODO: Add a user ID to angr management
+        # convert to remote repo if no local is provided
         if not self.is_git_repo(path):
             remote_url = self._remote_edit.text()
         else:
             remote_url = None
 
         try:
-            md5 = self._instance.project.loader.main_object.md5.hex()
-            self._controller.connect(user, path, md5, init_repo=init_repo, remote_url=remote_url)
-        # pylint:disable=broad-except
+            connection_warnings = self.controller.connect(user, path, init_repo=init_repo, remote_url=remote_url)
         except Exception as e:
             QMessageBox(self).critical(None, "Error connecting to repository", str(e))
             traceback.print_exc()
             return
 
-        view = self._instance.workspace.view_manager.first_view_in_category('sync')
-        if view is not None:
-            view.reload()
+        self._parse_and_display_connection_warnings(connection_warnings)
+        print(f"[BinSync]: Client has connected to sync repo with user: {user}.")
         self.close()
 
     def _on_repo_clicked(self):
@@ -193,3 +181,21 @@ class SyncConfig(QDialog):
     @staticmethod
     def is_git_repo(path):
         return os.path.isdir(os.path.join(path, ".git"))
+
+    @staticmethod
+    def _parse_and_display_connection_warnings(warnings):
+        warning_text = ""
+
+        for warning in warnings:
+            if warning == ConnectionWarnings.HASH_MISMATCH:
+                warning_text += "Warning: the hash stored for this BinSync project does not match"
+                warning_text += " the hash of the binary you are attempting to analyze. It's possible"
+                warning_text += " you are working on a different binary.\n"
+
+        if len(warning_text) > 0:
+            QMessageBox.warning(
+                None,
+                "BinSync: Connection Warnings",
+                warning_text,
+                QMessageBox.Ok,
+            )

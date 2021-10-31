@@ -152,5 +152,5 @@ class BinjaDockWidget(QWidget, DockContextHandler):
 class BinjaWidget(QWidget):
     def __init__(self, tabname):
         super(BinjaWidget, self).__init__()
-        # self._core = instance()
+        # self._core = _instance()
         # self._core.addTabWidget(self, tabname)

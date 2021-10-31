@@ -64,7 +64,7 @@ def init_checker(f):
 
 def make_state(f):
     """
-    Build a writeable State instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
+    Build a writeable State _instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
     Function `f` should have have at least two kwargs, `user` and `state`.
     """
 
@@ -95,7 +95,7 @@ def make_state(f):
 
 def make_ro_state(f):
     """
-    Build a read-only State instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
+    Build a read-only State _instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
     Function `f` should have have at least two kwargs, `user` and `state`.
     """
 
@@ -163,8 +163,8 @@ class BinsyncController:
                 #if self.client.has_remote:
                 #    self.client.init_remote()
                 #users = list(self.users())
-                #if self.info_panel:
-                #    self.info_panel.reload_curr(users)
+                #if self.control_panel:
+                #    self.control_panel.reload_curr(users)
 
                 # reload info panel every 10 seconds
                 if self.info_panel is not None and time.time() - self._last_reload > 5:
