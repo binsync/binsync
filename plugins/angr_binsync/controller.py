@@ -14,6 +14,7 @@ from angr import knowledge_plugins
 import angr
 
 from binsync.common.controller import *
+from binsync.data import StackOffsetType
 import binsync
 
 
@@ -27,7 +28,7 @@ class AngrBinSyncController(BinSyncController):
     def __init__(self, workspace):
         super(AngrBinSyncController, self).__init__()
         self._workspace = workspace
-        self._instance = workspace._instance
+        self._instance = workspace.instance
 
     def get_binary_hash(self) -> str:
         return self._instance.project.loader.main_object.md5.hex()
@@ -36,14 +37,18 @@ class AngrBinSyncController(BinSyncController):
     # Display Fillers
     #
 
-    def fill_function(self, func: knowledge_plugins.functions.Function, user):
+    @init_checker
+    @make_ro_state
+    def fill_function(self, func_addr, user=None, state=None):
+        func = self._instance.kb.functions[func_addr]
+
         # re-decompile a function if needed
         decompilation = self.decompile_function(func)
 
-        _func: binsync.data.Function = self.client.pull_function(func.addr, user=user)
+        _func: binsync.data.Function = self.pull_function(func.addr, user=user)
         if _func is None:
             # the function does not exist for that user's state
-            return
+            return False
 
         # ==== Function Name ==== #
         func.name = _func.name
@@ -51,8 +56,8 @@ class AngrBinSyncController(BinSyncController):
         decompilation.cfunc.demangled_name = _func.name
 
         # ==== Comments ==== #
-        sync_cmts = self.client.pull_comments(func.addr, user=user)
-        for addr, cmt in sync_cmts:
+        sync_cmts = self.pull_comments(func.addr, user=user)
+        for addr, cmt in sync_cmts.items():
             if cmt.comment:
                 if cmt.decompiled:
                     pos = decompilation.map_addr_to_pos.get_nearest_pos(addr)
@@ -62,9 +67,9 @@ class AngrBinSyncController(BinSyncController):
                     self._instance.kb.comments[cmt.addr] = cmt.comment
 
         # ==== Stack Vars ==== #
-        sync_vars = self.client.pull_stack_variables(func.addr, user=user)
-        for offset, sync_var in sync_vars:
-            code_var = BinsyncController.find_stack_var_in_codegen(decompilation, offset)
+        sync_vars = self.pull_stack_variables(func.addr, user=user)
+        for offset, sync_var in sync_vars.items():
+            code_var = AngrBinSyncController.find_stack_var_in_codegen(decompilation, offset)
             if code_var:
                 code_var.name = sync_var.name
                 code_var.renamed = True
@@ -76,14 +81,24 @@ class AngrBinSyncController(BinSyncController):
     #   Pusher Alias
     #
 
-    def push_stack_variable(self, func_addr, offset, name, type_, size_):
-        return self.client.push_stack_variable(func_addr, offset, name, type_, size_)
+    @init_checker
+    @make_state
+    def push_stack_variable(self, func_addr, offset, name, type_, size_, user=None, state=None):
+        sync_var = binsync.data.StackVariable(offset, StackOffsetType.ANGR, name, type_, size_, func_addr)
+        return state.set_stack_variable(sync_var, offset, func_addr)
 
-    def push_comment(self, addr, cmt, decompiled):
-        return self.client.push_comment(addr, cmt, decompiled=decompiled)
+    @init_checker
+    @make_state
+    def push_comment(self, addr, cmt, decompiled, user=None, state=None):
+        func_addr = self._get_func_addr_from_addr(addr)
+        sync_cmt = binsync.data.Comment(func_addr, addr, comment, decompiled=decompiled)
+        return state.set_comment(sync_cmt)
 
-    def push_func(self, func: knowledge_plugins.functions.Function):
-        return self.client.push_function(func)
+    @init_checker
+    @make_state
+    def push_func(self, func: knowledge_plugins.functions.Function, user=None, state=None):
+        _func = binsync.data.Function(func.addr, name=func.name)
+        return state.set_function(_func)
 
     #
     #   Utils
@@ -131,18 +146,10 @@ class AngrBinSyncController(BinSyncController):
 
         return None
 
-    def get_local_func_name(self, addr):
-        """
-        Returns the name of the function in your local decompilation given any addr. Will return an
-        empty string if no function is found.
+    def _get_func_addr_from_addr(self, addr):
+        try:
+            func_addr = self._kb.cfgs.get_most_accurate().get_any_node(addr, anyaddr=True).function_address
+        except AttributeError:
+            func_addr = -1
 
-        @param addr:
-        @return:
-        """
-        sync_ctrl = self._instance.kb.sync
-        func_addr = sync_ctrl.get_func_addr_from_addr(addr)
-
-        if func_addr:
-            return self._workspace._instance.kb.functions[func_addr].name
-        else:
-            return ""
+        return func_addr

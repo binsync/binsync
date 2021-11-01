@@ -3,11 +3,11 @@ import threading
 import time
 import datetime
 import logging
-from typing import Optional, Iterable
+from typing import Optional, Iterable, Dict, List
 from collections import OrderedDict
 
 from ..client import Client
-from ..data import User
+from ..data import User, Function, StackVariable, Comment, Struct
 
 _l = logging.getLogger(name=__name__)
 
@@ -84,21 +84,21 @@ class SyncControlStatus:
 #
 
 class BinSyncController:
-    def __init__(self):
-        # base binsync client
+    def __init__(self, headless=False):
+        # client created on connection
         self.client = None  # type: Optional[Client]
 
-        self.control_panel = None  # type: ControlPanel
+        # ui callback created on UI init
+        self.headless = headless
+        self.ui_callback = None
         self._last_reload = datetime.datetime.now()
 
         # command locks
         self.queue_lock = threading.Lock()
         self.cmd_queue = OrderedDict()
 
-        # start the pull routine
+        # create a pulling thread, but start on connection
         self.pull_thread = threading.Thread(target=self.pull_routine)
-        self.pull_thread.setDaemon(True)
-        self.pull_thread.start()
 
     #
     #   Multithreading locks and setters
@@ -141,13 +141,19 @@ class BinSyncController:
             self.eval_cmd_queue()
 
             # update the control panel with new info every 10 seconds
-            if self.control_panel and (datetime.datetime.now() - self._last_reload).seconds > 10:
+            if not self.headless and (datetime.datetime.now() - self._last_reload).seconds > 10:
                 self._last_reload = datetime.datetime.now()
+                self.update_ui()
 
-                try:
-                    self.control_panel.reload()
-                except RuntimeError:
-                    self.control_panel = None
+    def update_ui(self):
+        if not self.ui_callback:
+            return
+
+        self.ui_callback()
+
+    def start_pull_routine(self):
+        self.pull_thread.setDaemon(True)
+        self.pull_thread.start()
 
     #
     # Client Interaction Functions
@@ -159,6 +165,7 @@ class BinSyncController:
             user, path, binary_hash, init_repo=init_repo, remote_url=remote_url
         )
 
+        self.start_pull_routine()
         return self.client.connection_warnings
 
     def check_client(self):
@@ -184,12 +191,14 @@ class BinSyncController:
     def users(self) -> Iterable[User]:
         return self.client.users()
 
+
     #
     # Override Mandatory Functions
     #
 
     def get_binary_hash(self) -> str:
         raise NotImplementedError
+
 
     #
     # Fillers
@@ -221,7 +230,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def pull_function(self, func_addr, user=None, state=None):
+    def pull_function(self, func_addr, user=None, state=None) -> Function:
         if not func_addr:
             return None
 
@@ -234,7 +243,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def pull_stack_variables(self, func_addr, user=None, state=None):
+    def pull_stack_variables(self, func_addr, user=None, state=None) -> Dict[int, StackVariable]:
         try:
             return dict(state.get_stack_variables(func_addr))
         except KeyError:
@@ -242,12 +251,12 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def pull_stack_variable(self, func_addr, offset, user=None, state=None):
+    def pull_stack_variable(self, func_addr, offset, user=None, state=None) -> StackVariable:
         return state.get_stack_variable(func_addr, offset)
 
     @init_checker
     @make_ro_state
-    def pull_comments(self, func_addr, user=None, state=None):
+    def pull_comments(self, func_addr, user=None, state=None) -> Dict[int, Comment]:
         try:
             return state.get_comments(func_addr)
         except KeyError:
@@ -255,7 +264,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def pull_comment(self, func_addr, addr, user=None, state=None):
+    def pull_comment(self, func_addr, addr, user=None, state=None) -> Comment:
         try:
             return state.get_comment(func_addr, addr)
         except KeyError:
@@ -263,7 +272,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def pull_structs(self, user=None, state=None):
+    def pull_structs(self, user=None, state=None) -> List[Struct]:
         """
         Pull structs downwards.
 

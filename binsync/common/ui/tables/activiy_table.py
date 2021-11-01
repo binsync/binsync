@@ -17,29 +17,34 @@ from .... import State
 from ....data import Function
 
 
-class QFunctionItem:
-    def __init__(self, addr, name, user, last_push):
-        self.addr = addr
-        self.name = name
+class QActivityItem:
+    def __init__(self, user, activity, last_push):
         self.user = user
+        self.activity = activity
         self.last_push = last_push
 
     def widgets(self):
-        # sort by int value
-        addr = QNumericItem(hex(self.addr))
-        addr.setData(Qt.UserRole, self.addr)
+        if isinstance(self.activity, int):
+            activity = QNumericItem(hex(self.activity))
+            activity.setData(Qt.UserRole, self.activity)
+        else:
+            activity = QNumericItem(self.activity)
+            # set to max number so its last
+            activity.setData(Qt.UserRole, -1)
 
-        name = QTableWidgetItem(self.name)
         user = QTableWidgetItem(self.user)
 
         # sort by unix value
-        last_push = QNumericItem(friendly_datetime(self.last_push))
-        last_push.setData(Qt.UserRole, self.last_push)
+        if self.last_push == -1:
+            last_push = QNumericItem("")
+            last_push.setData(Qt.UserRole, -1)
+        else:
+            last_push = QNumericItem(friendly_datetime(self.last_push))
+            last_push.setData(Qt.UserRole, self.last_push)
 
         widgets = [
-            addr,
-            name,
             user,
+            activity,
             last_push
         ]
 
@@ -49,17 +54,16 @@ class QFunctionItem:
         return widgets
 
 
-class QFunctionTable(QTableWidget):
+class QActivityTable(QTableWidget):
 
     HEADER = [
-        'Addr',
-        'Remote Name',
         'User',
+        'Activity',
         'Last Push'
     ]
 
     def __init__(self, controller: BinSyncController, parent=None):
-        super(QFunctionTable, self).__init__(parent)
+        super(QActivityTable, self).__init__(parent)
         self.controller = controller
         self.items = []
 
@@ -93,28 +97,30 @@ class QFunctionTable(QTableWidget):
 
         # create a nested menu
         selected_row = self.columnAt(event.pos().y())
-        func_addr = self.item(selected_row, 0).data(Qt.UserRole)
-        from_menu = menu.addMenu("Sync from...")
-        for username in self._get_valid_users_for_func(func_addr):
-            from_menu.addAction(username)
+        username = self.item(selected_row, 0).text()
+        for_menu = menu.addMenu("Sync for...")
+        for func_addr_str in self._get_valid_funcs_for_user(username):
+            for_menu.addAction(func_addr_str)
 
         # execute the event
         action = menu.exec_(self.mapToGlobal(event.pos()))
 
         if action == sync_action:
-            username = self.item(selected_row, 2).text()
-        elif action in from_menu.actions():
-            username = action.text()
+            activity_item = self.item(selected_row, 1).data(Qt.UserRole)
+        elif action in for_menu.actions():
+            activity_item = int(action.text(), 16)
         else:
             return
 
-        self.controller.fill_function(func_addr, user=username)
+        # TODO: in the future we need to support structs as well
+        self.controller.fill_function(activity_item, user=username)
 
     def update_table(self):
-        known_funcs = {}  # addr: (addr, name, user_name, push_time)
+        self.items = []
 
         # first check if any functions are unknown to the table
         for user in self.controller.users():
+            changed_funcs = {}
             state = self.controller.client.get_state(user=user.name)
             user_funcs: Dict[int, Function] = state.functions
 
@@ -126,27 +132,32 @@ class QFunctionTable(QTableWidget):
                     continue
 
                 # check if we already know about it
-                if func_addr in known_funcs:
+                if func_addr in changed_funcs:
                     # compare this users change time to the store change time
-                    if func_change_time < known_funcs[func_addr][3]:
+                    if func_change_time < changed_funcs[func_addr]:
                         continue
 
-                remote_func_name = sync_func.name if sync_func.name else ""
-                known_funcs[func_addr] = [func_addr, remote_func_name, user.name, func_change_time]
+                changed_funcs[func_addr] = func_change_time
 
-        self.items = [QFunctionItem(*row) for row in known_funcs.values()]
+            if len(changed_funcs) > 0:
+                most_recent_func = list(changed_funcs)[0]
+                last_state_change = state.last_push_time \
+                    if state.last_push_time != -1 \
+                    else list(changed_funcs.values())[0]
+            else:
+                most_recent_func = ""
+                last_state_change = state.last_push_time
+
+            self.items.append(
+                QActivityItem(user.name, most_recent_func, last_state_change)
+            )
+
         self.reload()
 
-    def _get_valid_users_for_func(self, func_addr):
-        for user in self.controller.users():
-            user_state: State = self.controller.client.get_state(user=user.name)
-            try:
-                user_func = user_state.get_function(func_addr)
-            except KeyError:
-                continue
+    def _get_valid_funcs_for_user(self, username):
+        user_state: State = self.controller.client.get_state(user=username)
+        func_addrs = [addr for addr in user_state.functions]
 
-            # function must be changed by this user
-            if user_func.last_change == -1:
-                continue
-
-            yield user.name
+        func_addrs.sort()
+        for func_addr in func_addrs:
+            yield hex(func_addr)
