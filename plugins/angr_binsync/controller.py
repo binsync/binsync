@@ -1,15 +1,7 @@
-from typing import Optional
-from collections import OrderedDict
-import threading
-import datetime
-import time
 import os
-
-from PySide2.QtWidgets import QMessageBox
 
 from angrmanagement.ui.views import CodeView
 from angr.analyses.decompiler.structured_codegen import DummyStructuredCodeGenerator
-from angr.knowledge_plugins.sync.sync_controller import SyncController
 from angr import knowledge_plugins
 import angr
 
@@ -30,12 +22,30 @@ class AngrBinSyncController(BinSyncController):
         self._workspace = workspace
         self._instance = workspace.instance
 
-    def get_binary_hash(self) -> str:
+    def binary_hash(self) -> str:
         return self._instance.project.loader.main_object.md5.hex()
+
+    def active_context(self):
+        curr_view = self._workspace.view_manager.current_tab
+        if not curr_view:
+            return None
+
+        try:
+            func = curr_view.function
+        except NotImplementedError:
+            return None
+
+        if func is None:
+            return None
+
+        return func.addr
 
     #
     # Display Fillers
     #
+
+    def fill_struct(self, struct_name, user=None, state=None):
+        pass
 
     @init_checker
     @make_ro_state
@@ -78,7 +88,7 @@ class AngrBinSyncController(BinSyncController):
         self.decompile_function(func, refresh_gui=True)
 
     #
-    #   Pusher Alias
+    #   Pushers
     #
 
     @init_checker
@@ -148,7 +158,9 @@ class AngrBinSyncController(BinSyncController):
 
     def _get_func_addr_from_addr(self, addr):
         try:
-            func_addr = self._kb.cfgs.get_most_accurate().get_any_node(addr, anyaddr=True).function_address
+            func_addr = self._workspace.instance.kb.cfgs.get_most_accurate()\
+                .get_any_node(addr, anyaddr=True)\
+                .function_address
         except AttributeError:
             func_addr = -1
 

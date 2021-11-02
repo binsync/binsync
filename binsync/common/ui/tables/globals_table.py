@@ -14,24 +14,20 @@ else:
 from ..utils import QNumericItem, friendly_datetime
 from ...controller import BinSyncController
 from .... import State
-from ....data import Function
+from ....data import Struct
 
 
-class QActivityItem:
-    def __init__(self, user, activity, last_push):
+class QGlobalItem:
+    def __init__(self, name, type_, user, last_push):
+        self.name = name
+        self.type = type_
         self.user = user
-        self.activity = activity
         self.last_push = last_push
 
     def widgets(self):
-        if isinstance(self.activity, int):
-            activity = QNumericItem(hex(self.activity))
-            activity.setData(Qt.UserRole, self.activity)
-        else:
-            activity = QNumericItem(self.activity)
-            # set to max number so its last
-            activity.setData(Qt.UserRole, -1)
-
+        # sort by int value
+        name = QTableWidgetItem(self.name)
+        type_ = QTableWidgetItem(self.type)
         user = QTableWidgetItem(self.user)
 
         # sort by unix value
@@ -39,8 +35,9 @@ class QActivityItem:
         last_push.setData(Qt.UserRole, self.last_push)
 
         widgets = [
+            name,
+            type_,
             user,
-            activity,
             last_push
         ]
 
@@ -50,24 +47,17 @@ class QActivityItem:
         return widgets
 
 
-class QActivityTable(QTableWidget):
-    """
-    The activity table shown in the Control Panel. This table is responsible for showing users information
-    that is relevant to other users activity. The main user wants to know what others are doing, and how
-    often they are doing it. This table should also allow users to sync from a user if they see them as
-    being very active.
-
-    TODO: refactor the below code to allow activity view to show any item, not just a function!
-    """
+class QGlobalsTable(QTableWidget):
 
     HEADER = [
+        'Name',
+        'Type',
         'User',
-        'Activity',
         'Last Push'
     ]
 
     def __init__(self, controller: BinSyncController, parent=None):
-        super(QActivityTable, self).__init__(parent)
+        super(QGlobalsTable, self).__init__(parent)
         self.controller = controller
         self.items = []
 
@@ -75,6 +65,7 @@ class QActivityTable(QTableWidget):
         self.setHorizontalHeaderLabels(self.HEADER)
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.horizontalHeader().setHorizontalScrollMode(self.ScrollPerPixel)
+
         self.setHorizontalScrollMode(self.ScrollPerPixel)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -101,66 +92,61 @@ class QActivityTable(QTableWidget):
 
         # create a nested menu
         selected_row = self.columnAt(event.pos().y())
-        username = self.item(selected_row, 0).text()
-        for_menu = menu.addMenu("Sync for...")
-        for func_addr_str in self._get_valid_funcs_for_user(username):
-            for_menu.addAction(func_addr_str)
+        global_name = self.item(selected_row, 0).text()
+        from_menu = menu.addMenu("Sync from...")
+        for username in self._get_valid_users_for_global(global_name):
+            from_menu.addAction(username)
 
         # execute the event
         action = menu.exec_(self.mapToGlobal(event.pos()))
 
         if action == sync_action:
-            activity_item = self.item(selected_row, 1).data(Qt.UserRole)
-        elif action in for_menu.actions():
-            activity_item = int(action.text(), 16)
+            username = self.item(selected_row, 2).text()
+        elif action in from_menu.actions():
+            username = action.text()
         else:
             return
 
-        self.controller.fill_function(activity_item, user=username)
+        #TODO: update for any global, not just struct
+        self.controller.fill_struct(global_name, user=username)
 
     def update_table(self):
-        self.items = []
+        known_structs = {}  # struct_name: (struct_name, name, user_name, push_time)
 
         # first check if any functions are unknown to the table
         for user in self.controller.users():
-            changed_funcs = {}
             state = self.controller.client.get_state(user=user.name)
-            user_funcs: Dict[int, Function] = state.functions
+            user_structs: Dict[str, Struct] = state.structs
 
-            for func_addr, sync_func in user_funcs.items():
-                func_change_time = sync_func.last_change
+            for struct_name, sync_struct in user_structs.items():
+                struct_change_time = sync_struct.last_change
 
                 # don't add functions that were never changed by the user
-                if sync_func.last_change == -1:
+                if sync_struct.last_change == -1:
                     continue
 
                 # check if we already know about it
-                if func_addr in changed_funcs:
+                if struct_name in known_structs:
                     # compare this users change time to the store change time
-                    if func_change_time < changed_funcs[func_addr]:
+                    if struct_change_time < known_structs[struct_name][3]:
                         continue
 
-                changed_funcs[func_addr] = func_change_time
+                known_structs[struct_name] = [struct_name, "Struct", user.name, struct_change_time]
 
-            if len(changed_funcs) > 0:
-                most_recent_func = list(changed_funcs)[0]
-                last_state_change = state.last_push_time \
-                    if state.last_push_time != -1 \
-                    else list(changed_funcs.values())[0]
-            else:
-                most_recent_func = ""
-                last_state_change = state.last_push_time
-
-            self.items.append(
-                QActivityItem(user.name, most_recent_func, last_state_change)
-            )
-
+        self.items = [QGlobalItem(*row) for row in known_structs.values()]
         self.reload()
 
-    def _get_valid_funcs_for_user(self, username):
-        user_state: State = self.controller.client.get_state(user=username)
-        func_addrs = [addr for addr in user_state.functions]
+    def _get_valid_users_for_global(self, global_name):
+        for user in self.controller.users():
+            user_state: State = self.controller.client.get_state(user=user.name)
 
-        func_addrs.sort()
-        for func_addr in func_addrs:
-            yield hex(func_addr)
+            try:
+                user_global = user_state.get_struct(global_name)
+            except KeyError:
+                continue
+
+            # function must be changed by this user
+            if user_global.last_change == -1:
+                continue
+
+            yield user.name

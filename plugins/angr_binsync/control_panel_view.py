@@ -23,22 +23,9 @@ class ControlPanelView(BaseView):
         self.control_panel = ControlPanel(self.controller)
         self._init_widgets()
 
-        self.width_hint = 250
+        self.width_hint = 300
 
     def reload(self):
-        # reload the status
-        #status = self.controller.status
-        #if status == SyncControlStatus.CONNECTED:
-        #    self._status_label.setStyleSheet("color: green")
-        #elif SyncControlStatus.CONNECTED_NO_REMOTE:
-        #    self._status_label.setStyleSheet("color: yellow")
-        #else:
-        #    self._status_label.setStyleSheet("color: red")
-        #self._status_label.setText(self.controller.status_string)
-
-        ## reload the info tables
-        #if self.controller.check_client():
-        #    self._update_info_tables()
         pass
 
     #

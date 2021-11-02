@@ -13,10 +13,13 @@ else:
 
 from .tables.functions_table import QFunctionTable
 from .tables.activiy_table import QActivityTable
+from .tables.ctx_table import QCTXTable
+from .tables.globals_table import QGlobalsTable
 
 
 class ControlPanel(QWidget):
     update_ready = Signal()
+    ctx_change = Signal()
 
     def __init__(self, controller, parent=None):
         super(ControlPanel, self).__init__(parent)
@@ -29,6 +32,10 @@ class ControlPanel(QWidget):
         self.update_ready.connect(self.reload)
         self.update_callback = self.update_ready.emit
         self.controller.ui_callback = self.update_callback
+
+        self.ctx_change.connect(self._update_ctx)
+        self.ctx_change_callback = self.ctx_change.emit
+        self.controller.ctx_change_callback = self.ctx_change_callback
 
     def reload(self):
         # check if connected
@@ -62,9 +69,9 @@ class ControlPanel(QWidget):
         self.tabView = QTabWidget()
 
         # add tables to tabs
-        self._ctx_table = QTableWidget()
+        self._ctx_table = QCTXTable(self.controller)
         self._func_table = QFunctionTable(self.controller)
-        self._global_table = QTableWidget()
+        self._global_table = QGlobalsTable(self.controller)
         self._activity_table = QActivityTable(self.controller)
 
         self.tabView.addTab(self._ctx_table, "Context")
@@ -87,15 +94,13 @@ class ControlPanel(QWidget):
         main_layout.addWidget(control_box)
 
         self.setLayout(main_layout)
-        # self.setFixedWidth(500)
+
+    def _update_ctx(self):
+        self._ctx_table.update_table(new_ctx=self.controller.last_ctx)
 
     def _update_tables(self):
         if self.controller.client.has_remote:
             self.controller.client.init_remote()
 
-        #for _, table in self.tables.items():
-        #    table.update_table()
-        self._func_table.update_table()
-        self._activity_table.update_table()
-
-
+        for _, table in self.tables.items():
+            table.update_table()

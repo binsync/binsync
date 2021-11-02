@@ -84,14 +84,26 @@ class SyncControlStatus:
 #
 
 class BinSyncController:
+    """
+    The BinSync Controller is the main interface for syncing with the BinSync Client which preforms git tasks
+    such as pull and push. In the Controller higher-level tasks are done such as updating UI with changes
+    and preforming syncs and pushes on data users need/change.
+
+    All class properties that have a "= None" means they must be set during runtime by an outside process.
+    The client will be set on connection. The ctx_change_callback will be set by an outside UI
+
+    """
     def __init__(self, headless=False):
+        self.headless = headless
+
         # client created on connection
         self.client = None  # type: Optional[Client]
 
         # ui callback created on UI init
-        self.headless = headless
-        self.ui_callback = None
+        self.ui_callback = None  # func()
+        self.ctx_change_callback = None  # func()
         self._last_reload = datetime.datetime.now()
+        self.last_ctx = None
 
         # command locks
         self.queue_lock = threading.Lock()
@@ -137,13 +149,18 @@ class BinSyncController:
             ):
                 self.client.pull()
 
+            if not self.headless:
+                # update context knowledge every 1 second
+                if self.ctx_change_callback:
+                    self._check_and_notify_ctx()
+
+                # update the control panel with new info every 10 seconds
+                if (datetime.datetime.now() - self._last_reload).seconds > 10:
+                    self._last_reload = datetime.datetime.now()
+                    self.update_ui()
+
             # evaluate commands started by the user
             self.eval_cmd_queue()
-
-            # update the control panel with new info every 10 seconds
-            if not self.headless and (datetime.datetime.now() - self._last_reload).seconds > 10:
-                self._last_reload = datetime.datetime.now()
-                self.update_ui()
 
     def update_ui(self):
         if not self.ui_callback:
@@ -155,12 +172,20 @@ class BinSyncController:
         self.pull_thread.setDaemon(True)
         self.pull_thread.start()
 
+    def _check_and_notify_ctx(self):
+        active_ctx = self.active_context()
+        if active_ctx is None or self.last_ctx == active_ctx:
+            return
+
+        self.last_ctx = active_ctx
+        self.ctx_change_callback()
+
     #
     # Client Interaction Functions
     #
 
     def connect(self, user, path, init_repo=False, remote_url=None):
-        binary_hash = self.get_binary_hash()
+        binary_hash = self.binary_hash()
         self.client = Client(
             user, path, binary_hash, init_repo=init_repo, remote_url=remote_url
         )
@@ -191,18 +216,47 @@ class BinSyncController:
     def users(self) -> Iterable[User]:
         return self.client.users()
 
-
     #
     # Override Mandatory Functions
     #
 
-    def get_binary_hash(self) -> str:
+    def binary_hash(self) -> str:
+        """
+        Should return a hex string of the currently loaded binary in the decompiler. For most cases,
+        this will simply be a md5hash of the binary.
+
+        @rtype: hex string
+        """
+        raise NotImplementedError
+
+    def active_context(self) -> int:
+        """
+        Should return an address (int). Currently only functions are supported as current contexts.
+        This function will be called very frequently, so its important that its implementation is fast
+        and can be done many times in the decompiler.
+
+        @return: int
+        """
+
         raise NotImplementedError
 
 
     #
     # Fillers
     #
+
+    @init_checker
+    @make_ro_state
+    def fill_struct(self, struct_name, user=None, state=None):
+        """
+        Fill a single specific struct from the user
+
+        @param struct_name:
+        @param user:
+        @param state:
+        @return:
+        """
+        raise NotImplementedError
 
     @init_checker
     @make_ro_state

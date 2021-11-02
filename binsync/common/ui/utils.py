@@ -20,6 +20,8 @@ class QNumericItem(QTableWidgetItem):
 def friendly_datetime(time_before):
     # convert fro unix
     if isinstance(time_before, int):
+        if time_before == -1:
+            return ""
         dt = datetime.datetime.fromtimestamp(time_before)
     elif isinstance(time_before, datetime.datetime):
         dt = time_before
