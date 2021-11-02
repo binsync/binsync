@@ -104,6 +104,7 @@ class BinSyncController:
         self.ctx_change_callback = None  # func()
         self._last_reload = datetime.datetime.now()
         self.last_ctx = None
+        self.last_ctx_name = None
 
         # command locks
         self.queue_lock = threading.Lock()
@@ -173,10 +174,10 @@ class BinSyncController:
         self.pull_thread.start()
 
     def _check_and_notify_ctx(self):
-        active_ctx = self.active_context()
+        active_ctx_name, active_ctx = self.active_context()
         if active_ctx is None or self.last_ctx == active_ctx:
             return
-
+        self.last_ctx_name = active_ctx_name
         self.last_ctx = active_ctx
         self.ctx_change_callback()
 
@@ -206,11 +207,11 @@ class BinSyncController:
     def status_string(self):
         stat = self.status()
         if stat == SyncControlStatus.CONNECTED:
-            return f"[+] Connected to a remote sync repo: {self.client.master_user}"
+            return f"<font color=#1eba06>Connected (remote): {self.client.master_user}</font>"
         elif stat == SyncControlStatus.CONNECTED_NO_REMOTE:
-            return f"[+] Connected to a local sync repo: {self.client.master_user}"
+            return f"<font color=#e7b416>Connected (local): {self.client.master_user}</font>"
         else:
-            return "[!] Not connected to a sync repo"
+            return "<font color=#cc3232>Disconnected</font>"
 
     @init_checker
     def users(self) -> Iterable[User]:
