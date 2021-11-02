@@ -1,4 +1,5 @@
 import time
+from typing import List, Dict, Iterable
 
 try:
     FileNotFoundError
@@ -431,14 +432,14 @@ class State:
     # Getters
     #
 
-    def get_function(self, addr):
+    def get_function(self, addr) -> Function:
 
         if addr not in self.functions:
             raise KeyError("Function %x is not found in the db." % addr)
 
         return self.functions[addr]
 
-    def get_comment(self, func_addr, addr):
+    def get_comment(self, func_addr, addr) -> Comment:
         if func_addr not in self.comments:
             raise KeyError("There is no comment at address %#x." % addr)
 
@@ -448,7 +449,7 @@ class State:
         cmt = self.comments[func_addr][addr]
         return cmt
 
-    def get_comments(self, func_addr):
+    def get_comments(self, func_addr) -> Dict[int, Comment]:
         if func_addr not in self.comments:
             raise KeyError("There is no comment at address %#x." % func_addr)
 
@@ -461,10 +462,10 @@ class State:
 
         return self.patches[addr]
 
-    def get_patches(self):
+    def get_patches(self) -> Iterable[Patch]:
         return self.patches.values()
 
-    def get_stack_variable(self, func_addr, offset):
+    def get_stack_variable(self, func_addr, offset) -> StackVariable:
         if func_addr not in self.stack_variables:
             raise KeyError("No stack variables are defined for function %#x." % func_addr)
         if offset not in self.stack_variables[func_addr]:
@@ -481,7 +482,7 @@ class State:
             raise KeyError(f"No struct by the name {struct_name} defined.")
         return self.structs[struct_name]
 
-    def get_structs(self):
+    def get_structs(self) -> Iterable[Struct]:
         return self.structs.values()
 
     def get_last_push_for_artifact_type(self, artifact_type):

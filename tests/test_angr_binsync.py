@@ -82,7 +82,7 @@ class TestBinsyncPlugin(unittest.TestCase):
                     func_node = item.obj
                     break
             else:
-                self.fail("The CFunction instance is not found.")
+                self.fail("The CFunction _instance is not found.")
             rnode = RenameNode(code_view=pseudocode_view, node=func_node)
             rnode._name_box.setText("")
             QTest.keyClicks(rnode._name_box, new_function_name)
@@ -185,7 +185,7 @@ class TestBinsyncPlugin(unittest.TestCase):
                     var_node = item.obj
                     break
             else:
-                self.fail("The CVariable instance is not found.")
+                self.fail("The CVariable _instance is not found.")
             rnode = RenameNode(code_view=pseudocode_view, node=var_node)
             rnode._name_box.setText("")
             QTest.keyClicks(rnode._name_box, new_var_name)

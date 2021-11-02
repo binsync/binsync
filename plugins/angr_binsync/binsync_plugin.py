@@ -1,17 +1,12 @@
 from angrmanagement.plugins import BasePlugin
 from angrmanagement.ui.workspace import Workspace
 
-from .ui.config_dialog import SyncConfig
-from .ui.info_panel import InfoView
-from .ui.sync_menu import SyncMenu
-from .controller import BinsyncController
+from .control_panel_view import ControlPanelView
+from .controller import AngrBinSyncController
 
-# check to see if BinSync is installed
-try:
-    import binsync
-except ImportError:
-    binsync = None
-
+from binsync.common.ui import set_ui_version
+set_ui_version("PySide2")
+from binsync.common.ui.config_dialog import SyncConfig
 
 class BinsyncPlugin(BasePlugin):
     def __init__(self, workspace: Workspace):
@@ -20,15 +15,16 @@ class BinsyncPlugin(BasePlugin):
         deiniting it as well. The BinSync plugin also starts the BinsyncController, which is a threaded class
         that pushes and pulls changes every so many seconds.
 
-        @param workspace:   an AM workspace (usually found in instance)
+        @param workspace:   an AM _workspace (usually found in _instance)
         """
         super().__init__(workspace)
 
         # init the Sync View on load
-        self.controller = BinsyncController(self.workspace)
-        self.info_view = InfoView(workspace, 'right', self.controller)
-        self.workspace.add_view(self.info_view)
-        self.controller.info_panel = self.info_view
+        self.controller = AngrBinSyncController(self.workspace)
+        self.control_panel_view = ControlPanelView(workspace, 'right', self.controller)
+
+        self.workspace.add_view(self.control_panel_view)
+        self.controller.info_panel = self.control_panel_view
 
         self.sync_menu = None
         self.selected_funcs = []
@@ -39,7 +35,7 @@ class BinsyncPlugin(BasePlugin):
 
     def teardown(self):
         # destroy the sync view on deinit
-        self.workspace.remove_view(self.info_view)
+        self.workspace.remove_view(self.control_panel_view)
 
     #
     # BinSync GUI Hooks
@@ -68,14 +64,8 @@ class BinsyncPlugin(BasePlugin):
             # project does not exist yet
             return
 
-        sync_config = SyncConfig(self.workspace.instance, self.controller)
+        sync_config = SyncConfig(self.controller)
         sync_config.exec_()
-
-    def build_context_menu_functions(self, funcs): # pylint: disable=unused-argument
-        # if not connected to a repo, give no options
-        if self.workspace.instance.kb.sync.connected:
-            self.sync_menu = SyncMenu(self.controller, funcs)
-            yield ("Binsync Action", self.sync_menu.open_sync_menu)
 
     #
     #   BinSync Decompiler Hooks
@@ -94,8 +84,3 @@ class BinsyncPlugin(BasePlugin):
     def handle_comment_changed(self, addr: int, cmt: str, new: bool, decomp: bool):
         self.controller.make_controller_cmd(self.controller.push_comment, addr, cmt, decomp)
         return False
-
-
-# Don't allow BinSync to init if it's not installed
-if binsync is None:
-    del BinsyncPlugin

@@ -250,7 +250,7 @@ def set_stack_vars_types(var_type_dict, code_view, controller: "BinsyncControlle
     Take special note of the types of first two parameters used here:
     var_type_dict is a dictionary of the offsets and the new proposed type info for each offset.
     This typeinfo should be gotten either by manully making a new typeinfo object or using the
-    parse_decl function. code_view is a instance of vdui_t, which should be gotten through
+    parse_decl function. code_view is a _instance of vdui_t, which should be gotten through
     open_pseudocode() from ida_hexrays.
 
     This function also is special since it needs to iterate all of the stack variables an unknown amount

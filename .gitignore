@@ -1,3 +1,4 @@
 *.pyc
 .idea/
 *.egg-info/
+testing/

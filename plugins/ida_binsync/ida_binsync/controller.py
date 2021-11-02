@@ -58,7 +58,7 @@ def init_checker(f):
 
 def make_state(f):
     """
-    Build a writeable State instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
+    Build a writeable State _instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
     Function `f` should have have at least two kwargs, `user` and `state`.
     """
     @wraps(f)
@@ -88,7 +88,7 @@ def make_state(f):
 
 def make_ro_state(f):
     """
-    Build a read-only State instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
+    Build a read-only State _instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
     Function `f` should have have at least two kwargs, `user` and `state`.
     """
     @wraps(f)
@@ -345,7 +345,7 @@ class BinsyncController:
     @make_ro_state
     def fill_function(self, func_addr, user=None, state=None):
         """
-        Grab all relevant information from the specified user and fill the @ida_func.
+        Grab all relevant information from the specified user and fill the @func_adrr.
         """
 
         # === sanity and cache checks === #
