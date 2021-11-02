@@ -146,7 +146,7 @@ class Client(object):
         branch.checkout()
 
         self._commit_interval = commit_interval
-        self._worker_thread = None
+        self._updater_thread = None
         self._last_push_at = None  # type: datetime.datetime
         self._last_push_attempt_at = None  # type: datetime.datetime
         self._last_pull_at = None  # type: datetime.datetime
@@ -415,16 +415,16 @@ class Client(object):
         with self.commit_lock:
             yield self.get_state(user=user, version=version)
 
-    def start_auto(self):
-        if self._worker_thread is None:
-            self._worker_thread = threading.Thread(target=self._worker_routine)
-            self._worker_thread.start()
+    def start_updater_thread(self):
+        if self._updater_thread is None:
+            self._updater_thread = threading.Thread(target=self._updater_routine)
+            self._updater_thread.start()
         else:
             raise Exception(
-                "start_auto() should not be called twice. There is already a worker thread running."
+                "start_updater_thread() should not be called twice. There is already a worker thread running."
             )
 
-    def _worker_routine(self):
+    def _updater_routine(self):
         while True:
             time.sleep(self._commit_interval)
             self.update()
@@ -440,9 +440,9 @@ class Client(object):
             self.pull()
 
         #print("IS DIRTY??", self.get_state().dirty)
-        if self.get_state().dirty:
-            # do a save!
-            self.save_state()
+        #if self.get_state().dirty:
+        #    # do a save!
+        #    self.save_state()
 
         if self.has_remote:
             # do a push... if there is a remote
@@ -466,12 +466,13 @@ class Client(object):
         index = self.repo.index
 
         self.commit_lock.acquire()
-        # dump the state
-        state.dump(index)
 
-        # commit changes
-        self.repo.index.add([os.path.join(state.user, "*")])
-        self.commit_lock.release()
+        with self.commit_lock:
+            # dump the state
+            state.dump(index)
+
+            # commit changes
+            self.repo.index.add([os.path.join(state.user, "*")])
 
         if self.repo.index.diff("HEAD"):
             # commit if there is any difference
@@ -482,7 +483,7 @@ class Client(object):
                 return
 
             branch.commit = commit
-            self.push()
+            #self.push()
 
     def sync_states(self, user=None):
         target_state = self.get_state(user)

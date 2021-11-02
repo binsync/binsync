@@ -72,7 +72,7 @@ class IDAActionHandler(idaapi.action_handler_t):
 
         print("IN ACTIVATE")
         if self.typ == "func":
-            controller.client.start_auto()
+            controller.client.start_updater_thread()
 
         elif self.typ == "patch":
             pass

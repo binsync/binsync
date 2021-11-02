@@ -29,7 +29,7 @@ def init_checker(f):
 
 def make_state(f):
     """
-    Build a writeable State _instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
+    Build a writeable State instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
     Function `f` should have have at least two kwargs, `user` and `state`.
     """
 
@@ -147,7 +147,8 @@ class BinSyncController:
                     (self.client._last_pull_attempt_at is None) or
                     (datetime.datetime.now() - self.client._last_pull_attempt_at).seconds > 10
             ):
-                self.client.pull()
+                print(f"runnning update {self.client._last_pull_attempt_at}")
+                self.client.update()
 
             if not self.headless:
                 # update context knowledge every 1 second
