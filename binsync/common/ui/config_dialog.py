@@ -129,6 +129,12 @@ class SyncConfig(QDialog):
                                        )
             return
 
+        if user.lower() == "__root__":
+            QMessageBox(self).critical(None, "Invalid user name",
+                                       "User name cannot (and should not) be \'__root__\'."
+                                       )
+            return
+
         if not os.path.isdir(path) and not init_repo:
             QMessageBox(self).critical(None, "Repo does not exist",
                                        "The specified sync directory does not exist. "
@@ -154,8 +160,12 @@ class SyncConfig(QDialog):
         self.close()
 
     def _on_repo_clicked(self):
-        directory = QFileDialog.getExistingDirectory(self, "Select sync repo", "",
-                                                    QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks)
+        if 'SNAP' in os.environ:
+            directory = QFileDialog.getExistingDirectory(self, "Select sync repo", "",
+                                                    QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks | QFileDialog.DontUseNativeDialog)
+        else:
+            directory = QFileDialog.getExistingDirectory(self, "Select sync repo", "",
+                                                         QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks)
         self._repo_edit.setText(QDir.toNativeSeparators(directory))
 
     def _on_repo_textchanged(self, new_text):
