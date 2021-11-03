@@ -77,8 +77,9 @@ class BinsyncPlugin(BasePlugin):
         return False
 
     def handle_function_rename(self, func, old_name: str, new_name: str):
-        self.controller.make_controller_cmd(self.controller.push_func,
-                                            func)
+        func_addr = func.addr
+        self.controller.make_controller_cmd(self.controller.push_function_name,
+                                            func_addr, new_name)
         return False
 
     def handle_comment_changed(self, addr: int, cmt: str, new: bool, decomp: bool):

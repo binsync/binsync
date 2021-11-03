@@ -41,7 +41,8 @@ def make_state(f):
             state = self.client.get_state(user=user)
             kwargs['state'] = state
             r = f(self, *args, **kwargs)
-            state.save()
+            self.client.commit_state(msg=self._generate_commit_message(f, *args, **kwargs))
+            #state.save()
         else:
             kwargs['state'] = state
             r = f(self, *args, **kwargs)
@@ -144,10 +145,9 @@ class BinSyncController:
 
             # update client every 10 seconds if it has a remote connection
             if self.client.has_remote and (
-                    (self.client._last_pull_attempt_at is None) or
-                    (datetime.datetime.now() - self.client._last_pull_attempt_at).seconds > 10
+                    (self.client.last_pull_attempt_at is None) or
+                    (datetime.datetime.now() - self.client.last_pull_attempt_at).seconds > 10
             ):
-                print(f"runnning update {self.client._last_pull_attempt_at}")
                 self.client.update()
 
             if not self.headless:
@@ -280,6 +280,30 @@ class BinSyncController:
         raise NotImplementedError
 
     #
+    # Pushers
+    #
+
+    @init_checker
+    @make_state
+    def push_comment(self, *args, user=None, state=None, **kwargs):
+        raise NotImplementedError
+
+    @init_checker
+    @make_state
+    def push_function_name(self, *args, user=None, state=None, **kwargs):
+        raise NotImplementedError
+
+    @init_checker
+    @make_state
+    def push_stack_variable(self, *args, user=None, state=None, **kwargs):
+        raise NotImplementedError
+
+    @init_checker
+    @make_state
+    def push_struct(self, *args, user=None, state=None, **kwargs):
+        raise NotImplementedError
+
+    #
     # Pullers
     #
 
@@ -354,3 +378,33 @@ class BinSyncController:
         else:
             raise Exception("Unable to decide default type string!")
 
+    def _generate_commit_message(self, pusher, *args, **kwargs):
+        from_user = kwargs.get("user", None)
+        msg = "Synced " if from_user else "Updated "
+
+        if pusher.__qualname__ == self.push_function_name.__qualname__:
+            addr = args[0]
+            sync_type = "function"
+            sync_data = hex(addr)
+        elif pusher.__qualname__ == self.push_comment.__qualname__:
+            addr = args[0]
+            sync_type = "comment"
+            sync_data = hex(addr)
+        elif pusher.__qualname__ == self.push_stack_variable.__qualname__:
+            func_addr = args[0]
+            offset = args[1]
+            sync_type = "stack_var"
+            sync_data = f"{hex(offset)}@{hex(func_addr)}"
+        elif pusher.__qualname__ == self.push_struct.__qualname__:
+            struct_name = args[0].name
+            sync_type = "struct"
+            sync_data = struct_name
+        else:
+            sync_type = ""
+            sync_data = ""
+
+        msg += f"{sync_type}:{sync_data}"
+        msg += f"from {from_user}" if from_user else ""
+        if not sync_data:
+            msg = "Generic Update"
+        return msg

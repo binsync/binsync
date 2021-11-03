@@ -13,7 +13,7 @@ import filelock
 
 from .data import User, Function, Struct, Patch
 from .state import State
-from .errors import MetadataNotFoundError
+from .errors import MetadataNotFoundError, ExternalUserCommitError
 from .utils import is_py3
 
 _l = logging.getLogger(name=__name__)
@@ -39,7 +39,7 @@ class StateContext(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.locked:
             self.client.commit_lock.release()
-        self.client.save_state(state=self.state)
+        self.client.commit_state(state=self.state)
 
 
 class Client(object):
@@ -148,9 +148,9 @@ class Client(object):
         self._commit_interval = commit_interval
         self._updater_thread = None
         self._last_push_at = None  # type: datetime.datetime
-        self._last_push_attempt_at = None  # type: datetime.datetime
+        self.last_push_attempt_at = None  # type: datetime.datetime
         self._last_pull_at = None  # type: datetime.datetime
-        self._last_pull_attempt_at = None  # type: datetime.datetime
+        self.last_pull_attempt_at = None  # type: datetime.datetime
 
         # timestamps
         self._last_commit_ts = 0
@@ -160,22 +160,19 @@ class Client(object):
 
     def init_remote(self):
         """
-        Init PyGits view of remote references in a repo. If the remote can not be found,
-        exit early.
-
+        Init PyGits view of remote references in a repo.
         """
-        # Get all branches
+        # get all remote branches
         try:
             branches = self.repo.remote().refs
         except ValueError:
             return
 
-        # Iterate over all branches, track commits
+        # track any remote we are not already tracking
         for branch in branches:
-            # Yeet head
             if "HEAD" in branch.name:
                 continue
-            # Checkout and track
+
             try:
                 self.repo.git.checkout('--track', branch.name)
             except git.GitCommandError as e:
@@ -241,15 +238,13 @@ class Client(object):
 
         return repo
 
-    def ensure_checkout(self, print_error=False):
+    def checkout_to_master_user(self):
         """
         Ensure the repo is in the proper branch for current user.
 
         :return: bool
         """
-        name = self.user_branch_name
-        
-        self.repo.git.checkout(name)
+        self.repo.git.checkout(self.user_branch_name)
 
     def pull(self, print_error=False):
         """
@@ -258,10 +253,9 @@ class Client(object):
         :return:    None
         """
 
-        self.ensure_checkout()
+        self.last_pull_attempt_at = datetime.datetime.now()
 
-        self._last_pull_attempt_at = datetime.datetime.now()
-
+        self.checkout_to_master_user()
         if self.has_remote:
             try:
                 env = self.ssh_agent_env()
@@ -283,11 +277,9 @@ class Client(object):
 
         :return:    None
         """
+        self.last_push_attempt_at = datetime.datetime.now()
 
-        self.ensure_checkout()
-
-        self._last_push_attempt_at = datetime.datetime.now()
-
+        self.checkout_to_master_user()
         if self.has_remote:
             try:
                 env = self.ssh_agent_env()
@@ -374,9 +366,9 @@ class Client(object):
                 d['remote_url'] = "<does not exist>"
 
             d['last_change'] = self._last_push_at if self._last_push_at is not None else "never"
-            d['last_push_attempt'] = self._last_push_attempt_at if self._last_push_attempt_at is not None else "never"
+            d['last_push_attempt'] = self.last_push_attempt_at if self.last_push_attempt_at is not None else "never"
             d['last_pull'] = self._last_pull_at if self._last_pull_at is not None else "never"
-            d['last_pull_attempt'] = self._last_pull_attempt_at if self._last_pull_attempt_at is not None else "never"
+            d['last_pull_attempt'] = self.last_pull_attempt_at if self.last_pull_attempt_at is not None else "never"
 
         return d
 
@@ -442,7 +434,7 @@ class Client(object):
         #print("IS DIRTY??", self.get_state().dirty)
         #if self.get_state().dirty:
         #    # do a save!
-        #    self.save_state()
+        #    self.commit_state()
 
         if self.has_remote:
             # do a push... if there is a remote
@@ -450,22 +442,19 @@ class Client(object):
 
         self._last_commit_ts = time.time()
 
-    def save_state(self, state=None):
+    def commit_state(self, state=None, msg="Generic Change"):
 
-        # Ensure we are in the correct branch
-        self.ensure_checkout()
-
+        self.checkout_to_master_user()
         if state is None:
             state = self.state
 
-        # you don't want to save as another user... unless you want to mess things up for your collaborators, in which
-        # case, please comment out the following assertion.
+        if self.master_user != state.user:
+            raise ExternalUserCommitError(f"User {self.master_user} is not allowed to commit to user {state.user}")
+
         assert self.master_user == state.user
 
-        branch = next(o for o in self.repo.branches if o.name == self.user_branch_name)
+        master_user_branch = next(o for o in self.repo.branches if o.name == self.user_branch_name)
         index = self.repo.index
-
-        self.commit_lock.acquire()
 
         with self.commit_lock:
             # dump the state
@@ -477,13 +466,12 @@ class Client(object):
         if self.repo.index.diff("HEAD"):
             # commit if there is any difference
             try:
-                commit = index.commit("Save state")
+                commit = index.commit(msg)
             except Exception:
                 print("[BinSync]: Internal Git Commit Error!")
                 return
 
-            branch.commit = commit
-            #self.push()
+            master_user_branch.commit = commit
 
     def sync_states(self, user=None):
         target_state = self.get_state(user)
@@ -494,7 +482,7 @@ class Client(object):
         my_state = self.get_state(self.master_user)
 
         my_state.copy_state(target_state)
-        self.save_state()
+        self.commit_state()
 
     @staticmethod
     def discover_ssh_agent(ssh_agent_cmd):

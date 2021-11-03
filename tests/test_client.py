@@ -28,7 +28,7 @@ def test_client_state():
     state.set_function(func)
     # it should be dirty now
     nose.tools.assert_true(state._dirty)
-    client.save_state()
+    client.commit_state()
 
     client.state = None
     state = client.get_state()

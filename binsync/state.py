@@ -316,7 +316,7 @@ class State:
     def save(self):
         if self.client is None:
             raise RuntimeError("save(): State.client is None.")
-        self.client.save_state(self)
+        self.client.commit_state(self)
 
     #
     # Setters

@@ -4,3 +4,7 @@ class BaseError(Exception):
 
 class MetadataNotFoundError(BaseError):
     pass
+
+
+class ExternalUserCommitError(BaseError):
+    pass
