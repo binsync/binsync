@@ -207,9 +207,9 @@ class BinSyncController:
     def status_string(self):
         stat = self.status()
         if stat == SyncControlStatus.CONNECTED:
-            return f"<font color=#1eba06>Connected (remote): {self.client.master_user}</font>"
+            return f"<font color=#1eba06>{self.client.master_user}</font>"
         elif stat == SyncControlStatus.CONNECTED_NO_REMOTE:
-            return f"<font color=#e7b416>Connected (local): {self.client.master_user}</font>"
+            return f"<font color=#e7b416>{self.client.master_user}</font>"
         else:
             return "<font color=#cc3232>Disconnected</font>"
 
