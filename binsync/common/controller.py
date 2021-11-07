@@ -105,7 +105,6 @@ class BinSyncController:
         self.ctx_change_callback = None  # func()
         self._last_reload = datetime.datetime.now()
         self.last_ctx = None
-        self.last_ctx_name = None
 
         # command locks
         self.queue_lock = threading.Lock()
@@ -178,6 +177,7 @@ class BinSyncController:
         active_ctx = self.active_context()
         if active_ctx is None or self.last_ctx == active_ctx:
             return
+
         self.last_ctx = active_ctx
         self.ctx_change_callback()
 
