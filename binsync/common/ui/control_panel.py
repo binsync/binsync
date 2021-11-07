@@ -1,5 +1,7 @@
 import datetime
 
+import binsync.data
+
 from . import ui_version
 if ui_version == "PySide2":
     from PySide2.QtWidgets import QVBoxLayout, QGroupBox, QWidget, QLabel, QTabWidget, QTableWidget, QStatusBar
@@ -89,9 +91,12 @@ class ControlPanel(QWidget):
 
 
     def _update_ctx(self):
-        self._ctx_table.update_table(new_ctx=self.controller.last_ctx)
-        func_name = (self.controller.last_ctx_name[:12]+"..") if len(self.controller.last_ctx_name) > 12 else self.controller.last_ctx_name
-        self._status_bar.showMessage(f"{func_name}@{hex(self.controller.last_ctx)}")
+        if isinstance(self.controller.last_ctx, binsync.data.Function):
+            self._ctx_table.update_table(new_ctx=self.controller.last_ctx.addr)
+            symbol = (self.controller.last_ctx_name[:12]+"..") if len(self.controller.last_ctx.name) > 12 else self.controller.last_ctx.name
+            self._status_bar.showMessage(f"{symbol}@{hex(self.controller.last_ctx.addr)}")
+        else:
+            return
 
     def _update_tables(self):
         if self.controller.client.has_remote:

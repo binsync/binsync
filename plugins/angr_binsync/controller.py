@@ -38,7 +38,7 @@ class AngrBinSyncController(BinSyncController):
         if func is None or func.am_obj is None:
             return None
 
-        return func.name, func.addr
+        return binsync.data.Function(func.addr, name=func.name)
 
     #
     # Display Fillers

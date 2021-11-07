@@ -175,10 +175,9 @@ class BinSyncController:
         self.pull_thread.start()
 
     def _check_and_notify_ctx(self):
-        active_ctx_name, active_ctx = self.active_context()
+        active_ctx = self.active_context()
         if active_ctx is None or self.last_ctx == active_ctx:
             return
-        self.last_ctx_name = active_ctx_name
         self.last_ctx = active_ctx
         self.ctx_change_callback()
 
