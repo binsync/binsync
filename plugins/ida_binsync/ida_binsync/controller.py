@@ -243,7 +243,7 @@ class BinsyncController:
                     or (datetime.datetime.now() - self.client.last_pull_attempt_at).seconds > 10
                          ):
                 # Pull new items
-                self.client.pull()
+                self.client.update()
 
             if self.check_client():
                 # run an operation every second
