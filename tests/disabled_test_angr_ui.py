@@ -11,9 +11,6 @@ from PySide2.QtWidgets import QApplication
 import angr
 from angrmanagement.ui.dialogs.rename_node import RenameNode
 from angrmanagement.ui.main_window import MainWindow
-from angrmanagement.plugins.binsync.binsync_plugin import BinsyncPlugin
-from angrmanagement.plugins.binsync.ui.config_dialog import SyncConfig
-from angrmanagement.plugins.binsync.ui.sync_menu import SyncMenu
 from angrmanagement.config import Conf
 
 app = None
