@@ -175,4 +175,4 @@ binascii.Error: Non-hexadecimal digit found
 ```
 
 #### FIX:
-Restart IDA and reconnect to that same user.
+Restart IDA and reconnect to that same user, hopefully.
