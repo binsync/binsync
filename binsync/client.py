@@ -472,6 +472,7 @@ class Client(object):
                 return
 
             master_user_branch.commit = commit
+            state._dirty = False
 
     def sync_states(self, user=None):
         target_state = self.get_state(user)

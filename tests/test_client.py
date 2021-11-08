@@ -1,44 +1,45 @@
-
-import tempfile
 import os
+import sys
+import tempfile
 
-import nose.tools
+import unittest
 
 import binsync
 
 
-def test_client_creation():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        client = binsync.Client("user0", tmpdir)
+class TestClient(unittest.TestCase):
+    def test_client_creation(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = binsync.Client("user0", tmpdir, "fake_hash", init_repo=True)
+            self.assertTrue(os.path.isdir(os.path.join(tmpdir, ".git")))
 
-        nose.tools.assert_true(os.path.isdir(os.path.join(tmpdir, ".git")))
+    def test_client_state(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = binsync.Client("user0", tmpdir, "fake_hash", init_repo=True)
 
+            state = client.get_state()
+            self.assertEqual(state.user, "user0")
+            # after create, state is not dirty
+            self.assertFalse(state.dirty)
 
-def test_client_state():
-    # with tempfile.TemporaryDirectory() as tmpdir:
-    tmpdir = tempfile.mkdtemp()
-    client = binsync.Client("user0", tmpdir)
+            func = binsync.data.Function(0x400080, name="some_name")
+            state.set_function(func)
+            # it should be dirty now
+            self.assertTrue(state.dirty)
 
-    state = client.get_state()
-    nose.tools.assert_equal(state.user, "user0")
+            # commit changes so we clean it!
+            client.commit_state()
+            self.assertFalse(state.dirty)
 
-    func = binsync.data.Function(0x400080, name="some_name", notes="some comment!")
-    # the state should be clean
-    nose.tools.assert_false(state._dirty)
-    state.set_function(func)
-    # it should be dirty now
-    nose.tools.assert_true(state._dirty)
-    client.commit_state()
+            # destroy the old state to see if data persits
+            client.state = None
+            state = client.get_state()
+            self.assertTrue(len(state.functions), 1)
+            self.assertTrue(state.functions[0x400080], func)
 
-    client.state = None
-    state = client.get_state()
-
-    nose.tools.assert_equal(len(state.functions), 1)
-    nose.tools.assert_equal(state.functions[0x400080], func)
-
-    client.close()  # git is still running at least on windows
+            # git is still running at least on windows
+            client.close()
 
 
 if __name__ == "__main__":
-    test_client_creation()
-    test_client_state()
+    unittest.main(argv=sys.argv)
