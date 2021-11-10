@@ -100,7 +100,7 @@ class QActivityTable(QTableWidget):
         sync_action = menu.addAction("Sync")
 
         # create a nested menu
-        selected_row = self.columnAt(event.pos().y())
+        selected_row = self.rowAt(event.pos().y())
         username = self.item(selected_row, 0).text()
         for_menu = menu.addMenu("Sync for...")
         for func_addr_str in self._get_valid_funcs_for_user(username):
