@@ -24,7 +24,7 @@ import ida_idaapi
 import ida_typeinf
 
 from binsync.data import Struct
-from .controller import BinsyncController
+from .controller import IDABinSyncController
 
 
 #
@@ -244,7 +244,7 @@ def get_func_stack_var_info(func_addr) -> typing.Dict[int, IDAStackVar]:
 
 
 @execute_write
-def set_stack_vars_types(var_type_dict, code_view, controller: "BinsyncController") -> bool:
+def set_stack_vars_types(var_type_dict, code_view, controller: "IDABinSyncController") -> bool:
     """
     Sets the type of a stack variable, which should be a local variable.
     Take special note of the types of first two parameters used here:
@@ -401,7 +401,7 @@ class IDAViewCTX:
 def get_screen_ea():
     return idc.get_screen_ea()
 
-
+@execute_ui
 def get_function_cursor_at():
     curr_addr = get_screen_ea()
     if curr_addr is None:

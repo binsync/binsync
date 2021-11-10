@@ -41,7 +41,7 @@ import idaapi
 import idc
 
 from . import compat
-from .controller import BinsyncController
+from .controller import IDABinSyncController
 from binsync.data.struct import Struct
 
 
@@ -66,7 +66,7 @@ def quite_init_checker(f):
 class IDBHooks(ida_idp.IDB_Hooks):
     def __init__(self, controller):
         ida_idp.IDB_Hooks.__init__(self)
-        self.controller: BinsyncController = controller
+        self.controller: IDABinSyncController = controller
         self.last_local_type = None
 
     @quite_init_checker
@@ -414,7 +414,7 @@ class IDPHooks(ida_idp.IDP_Hooks):
 
 class HexRaysHooks:
     def __init__(self, controller):
-        self.controller: BinsyncController = controller
+        self.controller: IDABinSyncController = controller
         super(HexRaysHooks, self).__init__()
         self._available = None
         self._installed = False

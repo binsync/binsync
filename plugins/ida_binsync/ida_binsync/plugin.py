@@ -7,23 +7,28 @@
 
 import os
 
+from PyQt5 import sip
 from PyQt5.QtCore import QObject
 
 import idaapi
 import idc
 import ida_idp
+from PyQt5.QtWidgets import QWidget, QVBoxLayout
+
+from binsync.common.ui import set_ui_version
+set_ui_version("PyQt5")
+from binsync.common.ui.config_dialog import SyncConfig
+from binsync.common.ui.control_panel import ControlPanel
 
 from .hooks import MasterHook
 from . import IDA_DIR, VERSION
-from .controller import BinsyncController
-from .ui.config_dialog import ConfigDialog
-from .ui.info_panel import InfoPanelViewWrapper
-from .ui.sync_menu import SyncMenu
+from .controller import IDABinSyncController
 
-controller = BinsyncController()
+controller = IDABinSyncController()
 
 # disable the annoying "Running Python script" wait box that freezes IDA at times
 idaapi.set_script_timeout(0)
+
 
 #
 #   UI Hook, placed here for convenience of reading UI implementation
@@ -80,6 +85,33 @@ class IDAActionHandler(idaapi.action_handler_t):
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
 
+
+
+#
+# Control Panel
+#
+
+class ControlPanelViewWrapper(object):
+    NAME = "BinSync: Info Panel"
+
+    def __init__(self, controller):
+        # create a dockable view
+        self.twidget = idaapi.create_empty_widget(ControlPanelViewWrapper.NAME)
+        self.widget = sip.wrapinstance(int(self.twidget), QWidget)
+        self.widget.name = ControlPanelViewWrapper.NAME
+        self.width_hint = 250
+
+        self._controller = controller
+        self._w = None
+
+        self._init_widgets()
+
+    def _init_widgets(self):
+        self._w = ControlPanel(self._controller)
+        layout = QVBoxLayout()
+        layout.addWidget(self._w)
+        self.widget.setLayout(layout)
+
 #
 #   Base Plugin
 #
@@ -101,29 +133,8 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         QObject.__init__(self, *args, **kwargs)
         idaapi.plugin_t.__init__(self)
 
-    def _init_action_sync_menu(self):
-        """
-        Register the sync_menu action with IDA.
-        """
-        menu = SyncMenu(controller)
-
-        # describe the action
-        self._binsync_icon_id = idaapi.load_custom_icon(plugin_resource("ui/binsync.png"))
-
-        action_desc = idaapi.action_desc_t(
-            "binsync:sync_menu",                        # The action name.
-            "Binsync action...",             # The action text.
-            menu.ctx_menu,                          # The action handler.
-            None,                                    # Optional: action shortcut
-            "Select actions to sync in Binsync", # Optional: tooltip
-            self._binsync_icon_id
-        )
-
-        # register the action with IDA
-        assert idaapi.register_action(action_desc), "Action registration failed"
-
     def open_config_dialog(self):
-        dialog = ConfigDialog(controller)
+        dialog = SyncConfig(controller)
         dialog.exec_()
 
         if controller.check_client():
@@ -134,7 +145,7 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         Open the control panel view and attach it to IDA View-A or Pseudocode-A.
         """
 
-        wrapper = InfoPanelViewWrapper(controller)
+        wrapper = ControlPanelViewWrapper(controller)
         if not wrapper.twidget:
             raise RuntimeError("Unexpected: twidget does not exist.")
 
@@ -146,7 +157,7 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         for target in ["IDA View-A", "Pseudocode-A"]:
             dwidget = idaapi.find_widget(target)
             if dwidget:
-                idaapi.set_dock_pos(InfoPanelViewWrapper.NAME, target, idaapi.DP_RIGHT)
+                idaapi.set_dock_pos(ControlPanelViewWrapper.NAME, target, idaapi.DP_RIGHT)
                 break
 
     def install_actions(self):
@@ -185,7 +196,6 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
 
     def init(self):
         self._init_hooks()
-        self._init_action_sync_menu()
 
         return idaapi.PLUGIN_KEEP
 
@@ -253,59 +263,6 @@ def get_cursor_func_ref():
 
     # fail
     return idaapi.BADADDR
-
-
-def inject_binsync_actions(form, popup, form_type):
-    """
-    Inject binsync actions to popup menu(s) based on context.
-    """
-
-    #
-    # disassembly window
-    #
-
-    if form_type == idaapi.BWN_DISASMS:
-        if get_cursor_func_ref() == idaapi.BADADDR:
-            return
-
-        #
-        # the user cursor is hovering over a valid target for a recursive
-        # function prefix. insert the prefix action entry into the menu
-        #
-
-        idaapi.attach_action_to_popup(
-            form,
-            popup,
-            "binsync:sync_menu",
-            "Rename",
-            idaapi.SETMENU_APP
-        )
-
-    #
-    # functions window
-    #
-
-    elif form_type == idaapi.BWN_FUNCS:
-
-        idaapi.attach_action_to_popup(
-            form,
-            popup,
-            "binsync:sync_menu",
-            "Delete function(s)...",
-            idaapi.SETMENU_INS
-        )
-
-        # inject a menu separator
-        idaapi.attach_action_to_popup(
-            form,
-            popup,
-            None,
-            "Delete function(s)...",
-            idaapi.SETMENU_INS
-        )
-
-    # done
-    return 0
 
 
 def plugin_resource(resource_name):
