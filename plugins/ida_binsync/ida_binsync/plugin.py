@@ -70,18 +70,6 @@ class IDAActionHandler(idaapi.action_handler_t):
         self.plugin = plugin
         self.typ = typ
 
-    def activate(self, ctx):
-        if self.action is not None:
-            self.action()
-            return 1
-
-        print("IN ACTIVATE")
-        if self.typ == "func":
-            controller.client.start_auto()
-
-        elif self.typ == "patch":
-            pass
-
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
 
