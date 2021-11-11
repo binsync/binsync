@@ -93,8 +93,9 @@ class ControlPanel(QWidget):
     def _update_ctx(self):
         if isinstance(self.controller.last_ctx, binsync.data.Function):
             self._ctx_table.update_table(new_ctx=self.controller.last_ctx.addr)
-            symbol = (self.controller.last_ctx.name[:12]+"..") if len(self.controller.last_ctx.name) > 12 else self.controller.last_ctx.name
-            self._status_bar.showMessage(f"{symbol}@{hex(self.controller.last_ctx.addr)}")
+            ctx_name = self.controller.last_ctx.name or ""
+            ctx_name = ctx_name[:12] + "..." if len(ctx_name) > 12 else ctx_name
+            self._status_bar.showMessage(f"{ctx_name}@{hex(self.controller.last_ctx.addr)}")
         else:
             return
 
