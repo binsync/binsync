@@ -101,13 +101,13 @@ class AngrBinSyncController(BinSyncController):
     @make_state
     def push_comment(self, addr, cmt, decompiled, user=None, state=None):
         func_addr = self._get_func_addr_from_addr(addr)
-        sync_cmt = binsync.data.Comment(func_addr, addr, comment, decompiled=decompiled)
+        sync_cmt = binsync.data.Comment(func_addr, addr, cmt, decompiled=decompiled)
         return state.set_comment(sync_cmt)
 
     @init_checker
     @make_state
-    def push_func(self, func: knowledge_plugins.functions.Function, user=None, state=None):
-        _func = binsync.data.Function(func.addr, name=func.name)
+    def push_function_name(self, func_addr, new_name, user=None, state=None):
+        _func = binsync.data.Function(func_addr, name=new_name)
         return state.set_function(_func)
 
     #

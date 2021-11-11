@@ -1,5 +1,6 @@
 import time
-from typing import List, Dict, Iterable
+from typing import List, Dict, Iterable, Union, Optional
+import inspect
 
 try:
     FileNotFoundError
@@ -38,10 +39,12 @@ def dirty_checker(f):
     return dirtycheck
 
 
-def set_last_change(f):
+def update_last_change(f):
     @wraps(f)
-    def _set_last_change(self, *args, **kwargs):
-        should_set = kwargs.pop('set_last_change', None)
+    def _update_last_change(self, *args, **kwargs):
+        should_set_arg = kwargs.pop('set_last_change', None)
+        should_set = True if should_set_arg is None else should_set_arg
+
         if should_set:
             args[0].last_change = int(time.time())
             artifact = args[0]
@@ -63,9 +66,9 @@ def set_last_change(f):
             self.last_push_time = artifact.last_change
             self.last_push_artifact_type = artifact_type
 
-        f(self, *args, **kwargs)
+        return f(self, *args, **kwargs)
 
-    return _set_last_change
+    return _update_last_change
 
 
 def list_files_in_tree(base_tree: git.Tree):
@@ -122,7 +125,7 @@ class State:
         self.client = client  # type: Optional[Client]
 
         # dirty bit
-        self._dirty = True  # type: bool
+        self._dirty = False  # type: bool
 
         # data
         self.functions = {}  # type: Dict[int, Function]
@@ -316,14 +319,14 @@ class State:
     def save(self):
         if self.client is None:
             raise RuntimeError("save(): State.client is None.")
-        self.client.save_state(self)
+        self.client.commit_state(self)
 
     #
     # Setters
     #
 
     @dirty_checker
-    @set_last_change
+    @update_last_change
     def set_function(self, func, set_last_change=True):
 
         if not isinstance(func, Function):
@@ -339,7 +342,7 @@ class State:
         return True
 
     @dirty_checker
-    @set_last_change
+    @update_last_change
     def set_comment(self, comment: Comment, set_last_change=True):
 
         if comment and \
@@ -362,7 +365,7 @@ class State:
             return False
 
     @dirty_checker
-    @set_last_change
+    @update_last_change
     def set_patch(self, patch, addr, set_last_change=True):
 
         if addr in self.patches and self.patches[addr] == patch:
@@ -373,7 +376,7 @@ class State:
         return True
 
     @dirty_checker
-    @set_last_change
+    @update_last_change
     def set_stack_variable(self, variable, offset, func_addr, set_last_change=True):
         if func_addr in self.stack_variables \
                 and offset in self.stack_variables[func_addr] \
@@ -386,8 +389,8 @@ class State:
         return True
 
     @dirty_checker
-    @set_last_change
-    def set_struct(self, struct: Struct, old_name: str, set_last_change=True):
+    @update_last_change
+    def set_struct(self, struct: Struct, old_name: Optional[str], set_last_change=True):
         """
         Sets a struct in the current state. If old_name is not defined (None), then
         this indicates that the struct has not changed names. In that case, simply overwrite the

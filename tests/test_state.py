@@ -1,47 +1,75 @@
-
 import tempfile
 import os
+import sys
 
-import nose.tools
+import unittest
 
 import binsync
 
 
-def test_state_creation():
-    state = binsync.State("user0")
-    nose.tools.assert_equal(state.user, "user0")
+class TestState(unittest.TestCase):
 
+    def test_state_creation(self):
+        state = binsync.State("user0")
+        self.assertEqual(state.user, "user0")
 
-def test_state_dumping():
-    state = binsync.State("user0")
+    def test_state_dumping(self):
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        state.dump(tmpdir)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # create a client only for accurate git usage
+            client = binsync.Client("user0", tmpdir, "fake_hash", init_repo=True)
+            state = binsync.State("user0")
+            client.state = state
 
-        metadata_path = os.path.join(tmpdir, "metadata.toml")
-        nose.tools.assert_true(os.path.isfile(metadata_path))
+            # dump to the current repo, current branch
+            state.dump(client.repo.index)
+            metadata_path = os.path.join(tmpdir, "metadata.toml")
+            self.assertTrue(os.path.isfile(metadata_path))
 
+    def test_state_loading(self):
+        # create a state for dumping
+        state = binsync.State("user0")
+        state.version = 1
+        func = binsync.data.Function(0x400080, name="some_name")
+        state.set_function(func)
 
-def test_state_loading():
-    state = binsync.State("user0")
-    state.version = 1
-    func = binsync.data.Function(0x400080, "some_name", "some comment")
-    state.functions[func.addr] = func
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # create a client only for accurate git usage
+            client = binsync.Client("user0", tmpdir, "fake_hash", init_repo=True)
+            client.state = state
 
-    # dump the state
-    with tempfile.TemporaryDirectory() as tmpdir:
-        state.dump(tmpdir)
+            # dump and commit state to tree
+            client.commit_state(state)
 
-        # load the state
-        new_state = binsync.State.parse(tmpdir)
+            # load the state
+            state_tree = client.get_tree(state.user)
+            new_state = binsync.State.parse(state_tree)
 
-        nose.tools.assert_equal(new_state.user, "user0")
-        nose.tools.assert_equal(new_state.version, 1)
-        nose.tools.assert_equal(len(new_state.functions), 1)
-        nose.tools.assert_equal(new_state.functions[0x400080], func)
+            self.assertEqual(new_state.user, "user0")
+            self.assertEqual(new_state.version, 1)
+            self.assertEqual(len(new_state.functions), 1)
+            self.assertEqual(new_state.functions[0x400080], func)
+
+    def test_state_last_push(self):
+        state = binsync.State("user0")
+
+        func1 = binsync.data.Function(0x400080, name="some_name")
+        func2 = binsync.data.Function(0x400090, name="some_other_name")
+        struct = binsync.data.Struct("some_struct", 8, [])
+
+        state.set_function(func1, set_last_change=True)
+        state.set_struct(struct, None)
+        # simulate pulling from another user
+        state.set_function(func2, set_last_change=False)
+
+        self.assertEqual(state.functions[0x400090].last_change, -1)
+        self.assertNotEqual(state.functions[0x400080].last_change, -1)
+        self.assertNotEqual(state.structs["some_struct"].last_change, -1)
+
+        self.assertNotEqual(state.last_push_time, -1)
+        self.assertEqual(state.last_push_artifact, "some_struct")
+        self.assertEqual(state.last_push_artifact_type, binsync.state.ArtifactGroupType.STRUCT)
 
 
 if __name__ == "__main__":
-    test_state_creation()
-    test_state_dumping()
-    test_state_loading()
+    unittest.main(argv=sys.argv)

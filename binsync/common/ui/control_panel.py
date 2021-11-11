@@ -97,6 +97,7 @@ class ControlPanel(QWidget):
 
         self.setLayout(main_layout)
 
+
     def _update_ctx(self):
         if isinstance(self.controller.last_ctx, binsync.data.Function):
             self._ctx_table.update_table(new_ctx=self.controller.last_ctx.addr)
