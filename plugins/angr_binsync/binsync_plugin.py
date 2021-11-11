@@ -23,8 +23,7 @@ class BinsyncPlugin(BasePlugin):
         self.controller = AngrBinSyncController(self.workspace)
         self.control_panel_view = ControlPanelView(workspace, 'right', self.controller)
 
-        self.workspace.add_view(self.control_panel_view)
-        self.controller.info_panel = self.control_panel_view
+        self.controller.control_panel = self.control_panel_view
 
         self.sync_menu = None
         self.selected_funcs = []
@@ -66,6 +65,9 @@ class BinsyncPlugin(BasePlugin):
 
         sync_config = SyncConfig(self.controller)
         sync_config.exec_()
+
+        if self.controller.check_client() and self.control_panel_view not in self.workspace.view_manager.views:
+            self.workspace.add_view(self.control_panel_view)
 
     #
     #   BinSync Decompiler Hooks

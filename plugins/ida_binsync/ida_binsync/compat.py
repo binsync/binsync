@@ -401,7 +401,7 @@ class IDAViewCTX:
 def get_screen_ea():
     return idc.get_screen_ea()
 
-@execute_ui
+@execute_read
 def get_function_cursor_at():
     curr_addr = get_screen_ea()
     if curr_addr is None:

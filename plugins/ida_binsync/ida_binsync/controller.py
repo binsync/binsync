@@ -26,8 +26,6 @@ import logging
 from typing import Dict, List, Tuple
 from collections import OrderedDict, defaultdict
 
-from PyQt5.QtWidgets import QMessageBox
-
 import idc
 import idaapi
 import idautils
@@ -110,12 +108,6 @@ class UpdateTaskState:
                     del self.update_tasks[update_task]
 
 
-class SyncControlStatus:
-    CONNECTED = 0
-    CONNECTED_NO_REMOTE = 1
-    DISCONNECTED = 2
-
-
 #
 #   Controller
 #
@@ -151,12 +143,19 @@ class IDABinSyncController(BinSyncController):
     def binary_hash(self) -> str:
         return idc.retrieve_input_file_md5().hex()
 
-    def active_context(self):
-        cursor_func_addr = compat.get_function_cursor_at()
-        if cursor_func_addr is None:
-            return None
+    def _check_and_notify_ctx(self):
+        """
+        Removed in favor of a callback for clicking.
+        """
+        pass
 
-        return binsync.data.Function(cursor_func_addr)
+    def update_active_context(self, addr):
+        func_addr = compat.ida_func_addr(addr)
+        if func_addr is None:
+            return
+
+        self.last_ctx = binsync.data.Function(func_addr, name=compat.get_func_name(func_addr))
+        self.ctx_change_callback()
 
     #
     # IDA DataBase Fillers
@@ -211,7 +210,7 @@ class IDABinSyncController(BinSyncController):
             return 0
 
         # check if the function exists in the pulled state
-        _func = self.pull_function(ida_func, user=user, state=state)
+        _func = self.pull_function(func_addr, user=user, state=state)
         if _func is None:
             return -1
 
@@ -222,7 +221,7 @@ class IDABinSyncController(BinSyncController):
 
         # === comments === #
         # set disassembly and decompiled comments
-        sync_cmts = self.pull_comments(ida_func.start_ea, user=user, state=state)
+        sync_cmts = self.pull_comments(func_addr, user=user, state=state)
         for addr, cmt in sync_cmts.items():
             self.inc_api_count()
             res = compat.set_ida_comment(addr, cmt.comment, decompiled=cmt.decompiled)
@@ -248,7 +247,7 @@ class IDABinSyncController(BinSyncController):
         stack_vars_to_set = {}
         ida_code_view = ida_hexrays.open_pseudocode(ida_func.start_ea, 0)
         # only try to set stack vars that actually exist
-        for offset, stack_var in self.pull_stack_variables(ida_func, user=user, state=state).items():
+        for offset, stack_var in self.pull_stack_variables(func_addr, user=user, state=state).items():
             if offset in existing_stack_vars:
                 # change the variable's name
                 if stack_var.name != existing_stack_vars[offset].name:
@@ -313,70 +312,6 @@ class IDABinSyncController(BinSyncController):
                 func_addr, user=self.client.master_user
             )
             self.update_states[func_addr].add_update_task(update_task)
-
-    @init_checker
-    @make_ro_state
-    def pull_function(self, ida_func, user=None, state=None):
-        """
-        Pull a function downwards.
-
-        :param bv:
-        :param bn_func:
-        :param user:
-        :return:
-        """
-
-        # pull function
-        try:
-            if hasattr(ida_func, "start_ea"):
-                func: Function = state.get_function(ida_func.start_ea)
-                return func
-            else:
-                print("[BinSync]: IDA Function does not exist")
-                return None
-        except KeyError:
-            return None
-
-    @init_checker
-    @make_ro_state
-    def pull_stack_variables(self, ida_func, user=None, state=None):
-        try:
-            return dict(state.get_stack_variables(ida_func.start_ea))
-        except KeyError:
-            return { }
-
-    @init_checker
-    @make_ro_state
-    def pull_stack_variable(self, ida_func, offset, user=None, state=None):
-        return state.get_stack_variable(ida_func.start_ea, offset)
-
-    @init_checker
-    @make_ro_state
-    def pull_comments(self, func_addr, user=None, state=None) -> Dict[int, List['Comment']]:
-        try:
-            return state.get_comments(func_addr)
-        except KeyError:
-            return {}
-
-    @init_checker
-    @make_ro_state
-    def pull_comment(self, func_addr, addr, user=None, state=None):
-        try:
-            return state.get_comment(func_addr, addr)
-        except KeyError:
-            return None
-
-    @init_checker
-    @make_ro_state
-    def pull_structs(self, user=None, state=None):
-        """
-        Pull structs downwards.
-
-        @param user:
-        @param state:
-        @return:
-        """
-        return state.get_structs()
 
     @init_checker
     @make_state

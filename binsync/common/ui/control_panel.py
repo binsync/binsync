@@ -32,13 +32,9 @@ class ControlPanel(QWidget):
 
         # register controller callback
         self.update_ready.connect(self.reload)
-        #self.update_callback = self.update_ready.emit
-        #self.controller.ui_callback = self.update_callback
         self.controller.ui_callback = self.update_callback
 
         self.ctx_change.connect(self._update_ctx)
-        #self.ctx_change_callback = self.ctx_change.emit
-        #self.controller.ctx_change_callback = self.ctx_change_callback
         self.controller.ctx_change_callback = self.ctx_callback
 
     def update_callback(self):
@@ -97,15 +93,14 @@ class ControlPanel(QWidget):
 
         self.setLayout(main_layout)
 
-
     def _update_ctx(self):
-        if isinstance(self.controller.last_ctx, binsync.data.Function):
-            self._ctx_table.update_table(new_ctx=self.controller.last_ctx.addr)
-            ctx_name = self.controller.last_ctx.name or ""
-            ctx_name = ctx_name[:12] + "..." if len(ctx_name) > 12 else ctx_name
-            self._status_bar.showMessage(f"{ctx_name}@{hex(self.controller.last_ctx.addr)}")
-        else:
+        if not isinstance(self.controller.last_ctx, binsync.data.Function):
             return
+
+        self._ctx_table.update_table(new_ctx=self.controller.last_ctx.addr)
+        ctx_name = self.controller.last_ctx.name or ""
+        ctx_name = ctx_name[:12] + "..." if len(ctx_name) > 12 else ctx_name
+        self._status_bar.showMessage(f"{ctx_name}@{hex(self.controller.last_ctx.addr)}")
 
     def _update_tables(self):
         if self.controller.client.has_remote:

@@ -11,6 +11,7 @@ from PyQt5 import sip
 from PyQt5.QtCore import QObject
 
 import idaapi
+import ida_kernwin
 import idc
 import ida_idp
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
@@ -34,34 +35,20 @@ idaapi.set_script_timeout(0)
 #   UI Hook, placed here for convenience of reading UI implementation
 #
 
-
-class UiHooks(idaapi.UI_Hooks):
-    """
-    UI hooks. Currently only used to display a warning when
-    switching font settings in IDA.
-    """
-
+class ScreenHook(ida_kernwin.View_Hooks):
     def __init__(self):
-        super(UiHooks, self).__init__()
-        self._last_event = None
+        super(ScreenHook, self).__init__()
+        self.hooked = False
 
-    def finish_populating_widget_popup(self, form, popup):
-        # We'll add our action to all "IDA View-*"s.
-        # If we wanted to add it only to "IDA View-A", we could
-        # also discriminate on the widget's title:
-        #
-        #  if idaapi.get_tform_title(form) == "IDA View-A":
-        #      ...
-        #
-        # if idaapi.get_tform_type(form) == idaapi.BWN_DISASM:
-        idaapi.attach_action_to_popup(form, popup, "binsync:test", None)
-        inject_binsync_actions(form, popup, idaapi.get_widget_type(form))
+    def view_activated(self, view):
+        ea = idc.get_screen_ea()
+        if not ea:
+            return
 
-
+        controller.update_active_context(ea)
 #
 #   Action Handlers
 #
-
 
 class IDAActionHandler(idaapi.action_handler_t):
     def __init__(self, action, plugin, typ):
@@ -120,12 +107,17 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
 
         QObject.__init__(self, *args, **kwargs)
         idaapi.plugin_t.__init__(self)
+        self.hooks_started = False
 
     def open_config_dialog(self):
         dialog = SyncConfig(controller)
         dialog.exec_()
 
         if controller.check_client():
+            if not self.hooks_started:
+                self.action_hooks.hook()
+                self.view_hook.hook()
+
             self.open_control_panel()
 
     def open_control_panel(self):
@@ -175,12 +167,11 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
     def _init_hooks(self):
         # Hook UI Startup in IDA
         self.install_actions()
-        self.ui_hook = UiHooks()
-        self.ui_hook.hook()
 
+        # init later
+        self.view_hook = ScreenHook()
         # Hook IDB & Decomp Actions in IDA
         self.action_hooks = MasterHook(controller)
-        self.action_hooks.hook()
 
     def init(self):
         self._init_hooks()
@@ -196,61 +187,6 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
 #
 #   Utils
 #
-
-
-def get_cursor_func_ref():
-    """
-    Get the function reference under the user cursor.
-
-    Returns BADADDR or a valid function address.
-    """
-    current_widget = idaapi.get_current_widget()
-    form_type = idaapi.get_widget_type(current_widget)
-    vu = idaapi.get_widget_vdui(current_widget)
-
-    #
-    # hexrays view is active
-    #
-
-    if vu:
-        cursor_addr = vu.item.get_ea()
-
-    #
-    # disassembly view is active
-    #
-
-    elif form_type == idaapi.BWN_DISASM:
-        cursor_addr = idaapi.get_screen_ea()
-        opnum = idaapi.get_opnum()
-
-        if opnum != -1:
-
-            #
-            # if the cursor is over an operand value that has a function ref,
-            # use that as a valid rename target
-            #
-
-            op_addr = idc.get_operand_value(cursor_addr, opnum)
-            op_func = idaapi.get_func(op_addr)
-
-            if op_func and op_func.start_ea == op_addr:
-                return op_addr
-
-    # unsupported/unknown view is active
-    else:
-        return idaapi.BADADDR
-
-    #
-    # if the cursor is over a function definition or other reference, use that
-    # as a valid rename target
-    #
-
-    cursor_func = idaapi.get_func(cursor_addr)
-    if cursor_func and cursor_func.start_ea == cursor_addr:
-        return cursor_addr
-
-    # fail
-    return idaapi.BADADDR
 
 
 def plugin_resource(resource_name):
