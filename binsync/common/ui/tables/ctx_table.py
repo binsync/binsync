@@ -100,7 +100,7 @@ class QCTXTable(QTableWidget):
         sync_action = menu.addAction("Sync")
 
         # create a nested menu
-        selected_row = self.columnAt(event.pos().y())
+        selected_row = self.rowAt(event.pos().y())
         username = self.item(selected_row, 0).text()
 
         # execute the event
@@ -108,7 +108,6 @@ class QCTXTable(QTableWidget):
 
         if action != sync_action or not self.ctx:
             return
-
         func_addr = self.ctx
         self.controller.fill_function(func_addr, user=username)
 

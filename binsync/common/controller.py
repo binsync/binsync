@@ -207,11 +207,11 @@ class BinSyncController:
     def status_string(self):
         stat = self.status()
         if stat == SyncControlStatus.CONNECTED:
-            return f"[+] Connected to a remote sync repo: {self.client.master_user}"
+            return f"<font color=#1eba06>{self.client.master_user}</font>"
         elif stat == SyncControlStatus.CONNECTED_NO_REMOTE:
-            return f"[+] Connected to a local sync repo: {self.client.master_user}"
+            return f"<font color=#e7b416>{self.client.master_user}</font>"
         else:
-            return "[!] Not connected to a sync repo"
+            return "<font color=#cc3232>Disconnected</font>"
 
     @init_checker
     def users(self) -> Iterable[User]:

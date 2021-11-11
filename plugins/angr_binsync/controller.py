@@ -35,10 +35,10 @@ class AngrBinSyncController(BinSyncController):
         except NotImplementedError:
             return None
 
-        if func is None:
+        if func is None or func.am_obj is None:
             return None
 
-        return func.addr
+        return binsync.data.Function(func.addr, name=func.name)
 
     #
     # Display Fillers

@@ -92,7 +92,7 @@ class QFunctionTable(QTableWidget):
         sync_action = menu.addAction("Sync")
 
         # create a nested menu
-        selected_row = self.columnAt(event.pos().y())
+        selected_row = self.rowAt(event.pos().y())
         func_addr = self.item(selected_row, 0).data(Qt.UserRole)
         from_menu = menu.addMenu("Sync from...")
         for username in self._get_valid_users_for_func(func_addr):

@@ -1,14 +1,16 @@
 import datetime
 
+import binsync.data
+
 from . import ui_version
 if ui_version == "PySide2":
-    from PySide2.QtWidgets import QVBoxLayout, QGroupBox, QWidget, QLabel, QTabWidget, QTableWidget
+    from PySide2.QtWidgets import QVBoxLayout, QGroupBox, QWidget, QLabel, QTabWidget, QTableWidget, QStatusBar
     from PySide2.QtCore import Signal
 elif ui_version == "PySide6":
-    from PySide6.QtWidgets import QVBoxLayout, QGroupBox, QWidget, QLabel, QTabWidget, QTableWidget
+    from PySide6.QtWidgets import QVBoxLayout, QGroupBox, QWidget, QLabel, QTabWidget, QTableWidget, QStatusBar
     from PySide2.QtCore import Signal
 else:
-    from PyQt5.QtWidgets import QVBoxLayout, QGroupBox, QWidget, QLabel, QTabWidget, QTableWidget
+    from PyQt5.QtWidgets import QVBoxLayout, QGroupBox, QWidget, QLabel, QTabWidget, QTableWidget, QStatusBar
     from PyQt5.QtCore import pyqtSignal as Signal
 
 from .tables.functions_table import QFunctionTable
@@ -51,18 +53,13 @@ class ControlPanel(QWidget):
             self.controller.client_init_callback = None
 
     def _init_widgets(self):
-        # status box
-        status_box = QGroupBox(self)
-        status_box.setTitle("Status")
+        # status bar
         self._status_label = QLabel(self)
-        self._status_label.setText("Not Connected")
-        status_layout = QVBoxLayout()
-        status_layout.addWidget(self._status_label)
-        status_box.setLayout(status_layout)
+        self._status_label.setText(self.controller.status_string())
+        self._status_bar = QStatusBar(self)
+        self._status_bar.addPermanentWidget(self._status_label)
 
         # control box
-        control_box = QGroupBox(self)
-        control_box.setTitle("Control Panel")
         control_layout = QVBoxLayout()
 
         # tabs for tables
@@ -86,17 +83,21 @@ class ControlPanel(QWidget):
             "activity": self._activity_table
         })
 
-        control_layout.addWidget(self.tabView)
-        control_box.setLayout(control_layout)
-
         main_layout = QVBoxLayout()
-        main_layout.addWidget(status_box)
-        main_layout.addWidget(control_box)
+        main_layout.addWidget(self.tabView)
+        main_layout.addWidget(self._status_bar)
 
         self.setLayout(main_layout)
 
+
     def _update_ctx(self):
-        self._ctx_table.update_table(new_ctx=self.controller.last_ctx)
+        if isinstance(self.controller.last_ctx, binsync.data.Function):
+            self._ctx_table.update_table(new_ctx=self.controller.last_ctx.addr)
+            ctx_name = self.controller.last_ctx.name or ""
+            ctx_name = ctx_name[:12] + "..." if len(ctx_name) > 12 else ctx_name
+            self._status_bar.showMessage(f"{ctx_name}@{hex(self.controller.last_ctx.addr)}")
+        else:
+            return
 
     def _update_tables(self):
         if self.controller.client.has_remote:
