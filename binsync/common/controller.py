@@ -213,6 +213,9 @@ class BinSyncController:
         else:
             return "<font color=#cc3232>Disconnected</font>"
 
+    def toggle_headless(self):
+        self.headless = not self.headless
+
     @init_checker
     def users(self) -> Iterable[User]:
         return self.client.users()
