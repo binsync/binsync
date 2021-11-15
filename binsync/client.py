@@ -380,8 +380,13 @@ class Client(object):
         options = [ref for ref in self.repo.refs if ref.name.endswith(f"{BINSYNC_BRANCH_PREFIX}/{user}")]
         if not options:
             raise ValueError(f'No such user "{user}" found in repository')
-        best = max(options, key=lambda ref: ref.commit.authored_date)
-        return best.commit.tree
+
+        with self.commit_lock:
+            # find the latest commit for the specified user!
+            best = max(options, key=lambda ref: ref.commit.authored_date)
+            bct = best.commit.tree
+
+        return bct
 
     def get_state(self, user=None, version=None):
         if user is None or user == self.master_user:
@@ -423,21 +428,19 @@ class Client(object):
 
     def update(self):
         """
-
-        :return:
+        Update both the local and remote repo knowledge of files through pushes/pulls and commits
+        in the case of dirty files.
         """
 
-        # do a pull... if there is a remote
+        # do a pull if there is a remote repo connected
         if self.has_remote:
             self.pull()
 
-        #print("IS DIRTY??", self.get_state().dirty)
-        #if self.get_state().dirty:
-        #    # do a save!
-        #    self.commit_state()
+        # attempt to commit dirty files in a update phase
+        if self.get_state().dirty:
+            self.commit_state()
 
         if self.has_remote:
-            # do a push... if there is a remote
             self.push()
 
         self._last_commit_ts = time.time()
@@ -463,7 +466,9 @@ class Client(object):
             # commit changes
             self.repo.index.add([os.path.join(state.user, "*")])
 
-        if self.repo.index.diff("HEAD"):
+            if not self.repo.index.diff("HEAD"):
+                return
+
             # commit if there is any difference
             try:
                 commit = index.commit(msg)
@@ -474,9 +479,11 @@ class Client(object):
             master_user_branch.commit = commit
             state._dirty = False
 
+        self.push()
+
     def sync_states(self, user=None):
         target_state = self.get_state(user)
-        if target_state == None:
+        if target_state is None:
             print("Unable to find state for user", user)
             return
 

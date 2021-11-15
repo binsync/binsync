@@ -8,13 +8,13 @@ if ui_version == "PySide2":
     from PySide2.QtCore import Signal
 elif ui_version == "PySide6":
     from PySide6.QtWidgets import QVBoxLayout, QGroupBox, QWidget, QLabel, QTabWidget, QTableWidget, QStatusBar
-    from PySide2.QtCore import Signal
+    from PySide6.QtCore import Signal
 else:
     from PyQt5.QtWidgets import QVBoxLayout, QGroupBox, QWidget, QLabel, QTabWidget, QTableWidget, QStatusBar
     from PyQt5.QtCore import pyqtSignal as Signal
 
 from .tables.functions_table import QFunctionTable
-from .tables.activiy_table import QActivityTable
+from .tables.activity_table import QActivityTable
 from .tables.ctx_table import QCTXTable
 from .tables.globals_table import QGlobalsTable
 

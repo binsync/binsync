@@ -115,6 +115,10 @@ class UpdateTaskState:
 class IDABinSyncController(BinSyncController):
     def __init__(self):
         super(IDABinSyncController, self).__init__()
+
+        # view change callback
+        self.last_ctx_addr = None
+
         # update state for only updating when needed
         # api locks
         self.api_lock = threading.Lock()
@@ -147,15 +151,22 @@ class IDABinSyncController(BinSyncController):
         """
         Removed in favor of a callback for clicking.
         """
-        pass
+        if not self.last_ctx_addr or self.last_ctx_addr == idaapi.BADADDR:
+            return
 
-    def update_active_context(self, addr):
-        func_addr = compat.ida_func_addr(addr)
+        func_addr = compat.ida_func_addr(self.last_ctx_addr)
         if func_addr is None:
             return
 
-        self.last_ctx = binsync.data.Function(func_addr, name=compat.get_func_name(func_addr))
+        new_ctx = binsync.data.Function(func_addr, name=compat.get_func_name(func_addr))
+        if self.last_ctx == new_ctx:
+            return
+
+        self.last_ctx = new_ctx
         self.ctx_change_callback()
+
+    def update_active_context(self, addr):
+        self.last_ctx_addr = addr
 
     #
     # IDA DataBase Fillers

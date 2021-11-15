@@ -126,6 +126,9 @@ class QCTXTable(QTableWidget):
             except KeyError:
                 continue
 
+            if func.last_change == -1:
+                continue
+
             # changes is not currently supported
             self.items.append(
                 QCTXItem(user.name, func.name, func.last_change, 0)

@@ -41,6 +41,15 @@ class ScreenHook(ida_kernwin.View_Hooks):
         self.hooked = False
 
     def view_activated(self, view):
+        form_type = idaapi.get_widget_type(view)
+        decomp_view = idaapi.get_widget_vdui(view)
+        if not form_type:
+            return
+
+        # check if view is decomp or disassembly before doing expensive ea lookup
+        if not decomp_view and not form_type == idaapi.BWN_DISASM:
+            return
+
         ea = idc.get_screen_ea()
         if not ea:
             return
