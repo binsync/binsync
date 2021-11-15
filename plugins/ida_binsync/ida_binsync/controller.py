@@ -26,16 +26,16 @@ import logging
 from typing import Dict, List, Tuple
 from collections import OrderedDict, defaultdict
 
-from PyQt5.QtWidgets import QMessageBox
-
 import idc
 import idaapi
 import idautils
 import ida_struct
 import ida_hexrays
 import ida_funcs
+import ida_kernwin
 
 import binsync
+from binsync.common.controller import BinSyncController, make_state, make_ro_state, init_checker
 from binsync import Client, ConnectionWarnings
 from binsync.data import StackVariable, StackOffsetType, Function, Struct, Comment
 from . import compat
@@ -43,69 +43,9 @@ from . import compat
 _l = logging.getLogger(name=__name__)
 
 #
-# Decorators
-#
-
-
-def init_checker(f):
-    @wraps(f)
-    def initcheck(self, *args, **kwargs):
-        if not self.check_client():
-            raise RuntimeError("Please connect to a repo first.")
-        return f(self, *args, **kwargs)
-    return initcheck
-
-
-def make_state(f):
-    """
-    Build a writeable State _instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
-    Function `f` should have have at least two kwargs, `user` and `state`.
-    """
-    @wraps(f)
-    def state_check(self, *args, **kwargs):
-        state = kwargs.pop('state', None)
-        user = kwargs.pop('user', None)
-        if state is None:
-            state = self.client.get_state(user=user)
-            kwargs['state'] = state
-            r = f(self, *args, **kwargs)
-            state.save()
-        else:
-            kwargs['state'] = state
-            r = f(self, *args, **kwargs)
-
-        #try:
-        #    if isinstance(args[0], int):
-        #        self._update_function_name_if_none(args[0], user=user, state=state)
-        #except Exception:
-        #    print(f"[BinSync]: failed to auto set function name for {hex(args[0])}.")
-        #    pass
-
-        return r
-
-    return state_check
-
-
-def make_ro_state(f):
-    """
-    Build a read-only State _instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
-    Function `f` should have have at least two kwargs, `user` and `state`.
-    """
-    @wraps(f)
-    def state_check(self, *args, **kwargs):
-        state = kwargs.pop('state', None)
-        user = kwargs.pop('user', None)
-        if state is None:
-            state = self.client.get_state(user=user)
-        kwargs['state'] = state
-        kwargs['user'] = user
-        return f(self, *args, **kwargs)
-    return state_check
-
-
-#
 #   Wrapper Classes
 #
+
 
 class UpdateTask:
     def __init__(self, func, *args, **kwargs):
@@ -168,38 +108,21 @@ class UpdateTaskState:
                     del self.update_tasks[update_task]
 
 
-class SyncControlStatus:
-    CONNECTED = 0
-    CONNECTED_NO_REMOTE = 1
-    DISCONNECTED = 2
-
-
 #
 #   Controller
 #
 
-class BinsyncController:
+class IDABinSyncController(BinSyncController):
     def __init__(self):
-        self.client = None  # type: binsync.Client
+        super(IDABinSyncController, self).__init__()
 
-        # === UI update things ===
-        self.info_panel = None
-        self._last_reload = time.time()
+        # view change callback
+        self._updated_ctx = None
 
-        # === locks needed for hooking threads ===
-        # command queue locks
-        self.queue_lock = threading.Lock()
-        self.cmd_queue = OrderedDict()
+        # update state for only updating when needed
         # api locks
         self.api_lock = threading.Lock()
         self.api_count = 0
-
-        # start the pull routine
-        self.pull_thread = threading.Thread(target=self.pull_routine)
-        self.pull_thread.setDaemon(True)
-        self.pull_thread.start()
-
-        # update state for only updating when needed
         self.update_states = defaultdict(UpdateTaskState)
 
     #
@@ -217,101 +140,28 @@ class BinsyncController:
             else:
                 self.cmd_queue[time.time()] = (cmd_func, args, kwargs)
 
-    def eval_cmd_queue(self):
-        self.queue_lock.acquire()
-        if len(self.cmd_queue) > 0:
-            # pop the first command from the queue
-            cmd = self.cmd_queue.popitem(last=False)[1]
-            self.queue_lock.release()
-
-            # parse the command
-            func = cmd[0]
-            f_args = cmd[1]
-            f_kargs = cmd[2]
-
-            # call it!
-            func(*f_args, **f_kargs)
-            return 0
-        self.queue_lock.release()
-
-    def pull_routine(self):
-        while True:
-            # pull the repo every 10 seconds
-            if self.check_client() and self.client.has_remote \
-                    and (
-                    self.client.last_pull_attempt_at is None
-                    or (datetime.datetime.now() - self.client.last_pull_attempt_at).seconds > 10
-                         ):
-                # Pull new items
-                self.client.update()
-
-            if self.check_client():
-                # run an operation every second
-                self.eval_cmd_queue()
-
-                # reload info panel every 10 seconds
-                if self.info_panel is not None and time.time() - self._last_reload > 10:
-                    try:
-                        self._last_reload = time.time()
-                        self.info_panel.reload()
-                    except RuntimeError:
-                        # the panel has been closed
-                        self.info_panel = None
-
-            # Snooze
-            time.sleep(1)
-
     #
-    #   State Interaction Functions
+    # Controller Interaction
     #
 
-    def connect(self, user, path, init_repo=False, remote_url=None):
-        binary_md5 = idc.retrieve_input_file_md5().hex()
-        self.client = Client(user, path, binary_md5,
-                             init_repo=init_repo,
-                             remote_url=remote_url,
-                             )
-        BinsyncController._parse_and_display_connection_warnings(self.client.connection_warnings)
-        print(f"[BinSync]: Client has connected to sync repo with user: {user}.")
+    def binary_hash(self) -> str:
+        return idc.retrieve_input_file_md5().hex()
 
-    def check_client(self, message_box=False):
-        if self.client is None:
-            if message_box:
-                QMessageBox.critical(
-                    None,
-                    "BinSync: Error",
-                    "BinSync client does not exist.\n"
-                    "You haven't connected to a binsync repo. Please connect to a binsync repo first.",
-                    QMessageBox.Ok,
-                )
-            return False
-        return True
+    def active_context(self):
+        return self._updated_ctx
 
-    def state_ctx(self, user=None, version=None, locked=False):
-        return self.client.state_ctx(user=user, version=version, locked=locked)
+    def update_active_context(self, addr):
+        if not addr or addr == idaapi.BADADDR:
+            return
 
-    def status(self):
-        if self.check_client():
-            if self.client.has_remote:
-                return SyncControlStatus.CONNECTED
-            return SyncControlStatus.CONNECTED_NO_REMOTE
-        return SyncControlStatus.DISCONNECTED
+        func_addr = compat.ida_func_addr(addr)
+        if func_addr is None:
+            return
 
-    def status_string(self):
-        stat = self.status()
-        if stat == SyncControlStatus.CONNECTED:
-            return f"Connected to a sync repo: {self.client.master_user}"
-        elif stat == SyncControlStatus.CONNECTED_NO_REMOTE:
-            return f"Connected to a sync repo (no remote): {self.client.master_user}"
-        else:
-            return "Not connected to a sync repo"
-
-    @init_checker
-    def users(self):
-        return self.client.users()
+        self._updated_ctx = binsync.data.Function(func_addr, name=compat.get_func_name(func_addr))
 
     #
-    #   IDA DataBase Fillers
+    # IDA DataBase Fillers
     #
 
     @init_checker
@@ -363,7 +213,7 @@ class BinsyncController:
             return 0
 
         # check if the function exists in the pulled state
-        _func = self.pull_function(ida_func, user=user, state=state)
+        _func = self.pull_function(func_addr, user=user, state=state)
         if _func is None:
             return -1
 
@@ -374,7 +224,7 @@ class BinsyncController:
 
         # === comments === #
         # set disassembly and decompiled comments
-        sync_cmts = self.pull_comments(ida_func.start_ea, user=user, state=state)
+        sync_cmts = self.pull_comments(func_addr, user=user, state=state)
         for addr, cmt in sync_cmts.items():
             self.inc_api_count()
             res = compat.set_ida_comment(addr, cmt.comment, decompiled=cmt.decompiled)
@@ -400,7 +250,7 @@ class BinsyncController:
         stack_vars_to_set = {}
         ida_code_view = ida_hexrays.open_pseudocode(ida_func.start_ea, 0)
         # only try to set stack vars that actually exist
-        for offset, stack_var in self.pull_stack_variables(ida_func, user=user, state=state).items():
+        for offset, stack_var in self.pull_stack_variables(func_addr, user=user, state=state).items():
             if offset in existing_stack_vars:
                 # change the variable's name
                 if stack_var.name != existing_stack_vars[offset].name:
@@ -465,70 +315,6 @@ class BinsyncController:
                 func_addr, user=self.client.master_user
             )
             self.update_states[func_addr].add_update_task(update_task)
-
-    @init_checker
-    @make_ro_state
-    def pull_function(self, ida_func, user=None, state=None):
-        """
-        Pull a function downwards.
-
-        :param bv:
-        :param bn_func:
-        :param user:
-        :return:
-        """
-
-        # pull function
-        try:
-            if hasattr(ida_func, "start_ea"):
-                func: Function = state.get_function(ida_func.start_ea)
-                return func
-            else:
-                print("[BinSync]: IDA Function does not exist")
-                return None
-        except KeyError:
-            return None
-
-    @init_checker
-    @make_ro_state
-    def pull_stack_variables(self, ida_func, user=None, state=None):
-        try:
-            return dict(state.get_stack_variables(ida_func.start_ea))
-        except KeyError:
-            return { }
-
-    @init_checker
-    @make_ro_state
-    def pull_stack_variable(self, ida_func, offset, user=None, state=None):
-        return state.get_stack_variable(ida_func.start_ea, offset)
-
-    @init_checker
-    @make_ro_state
-    def pull_comments(self, func_addr, user=None, state=None) -> Dict[int, List['Comment']]:
-        try:
-            return state.get_comments(func_addr)
-        except KeyError:
-            return {}
-
-    @init_checker
-    @make_ro_state
-    def pull_comment(self, func_addr, addr, user=None, state=None):
-        try:
-            return state.get_comment(func_addr, addr)
-        except KeyError:
-            return None
-
-    @init_checker
-    @make_ro_state
-    def pull_structs(self, user=None, state=None):
-        """
-        Pull structs downwards.
-
-        @param user:
-        @param state:
-        @return:
-        """
-        return state.get_structs()
 
     @init_checker
     @make_state
@@ -620,67 +406,3 @@ class BinsyncController:
                 return True
 
         return False
-
-
-    @staticmethod
-    def _parse_and_display_connection_warnings(warnings):
-        warning_text = ""
-
-        for warning in warnings:
-            if warning == ConnectionWarnings.HASH_MISMATCH:
-                warning_text += "Warning: the hash stored for this BinSync project does not match"
-                warning_text += " the hash of the binary you are attempting to analyze. It's possible"
-                warning_text += " you are working on a different binary.\n"
-
-        if len(warning_text) > 0:
-            QMessageBox.warning(
-                None,
-                "BinSync: Connection Warnings",
-                warning_text,
-                QMessageBox.Ok,
-            )
-
-    @staticmethod
-    def get_default_type_str(flag):
-        if idc.is_byte(flag):
-            return "unsigned char"
-        elif idc.is_word(flag):
-            return "unsigned short"
-        elif idc.is_dword(flag):
-            return "unsigned int"
-        elif idc.is_qword(flag):
-            return "unsigned long long"
-        else:
-            return "unknown"
-
-    @staticmethod
-    def friendly_datetime(time_before):
-        # convert
-        if isinstance(time_before, int):
-            dt = datetime.datetime.fromtimestamp(time_before)
-        elif isinstance(time_before, datetime.datetime):
-            dt = time_before
-        else:
-            return ""
-
-        now = datetime.datetime.now()
-        if dt <= now:
-            diff = now - dt
-            ago = True
-        else:
-            diff = dt - now
-            ago = False
-        diff_days = diff.days
-        diff_sec = diff.seconds
-
-        if diff_days >= 1:
-            s = "%d days" % diff_days
-        elif diff_sec >= 60 * 60:
-            s = "%d hours" % int(diff_sec / 60 / 60)
-        elif diff_sec >= 60:
-            s = "%d minutes" % int(diff_sec / 60)
-        else:
-            s = "%d seconds" % diff_sec
-
-        s += " ago" if ago else " in the future"
-        return s

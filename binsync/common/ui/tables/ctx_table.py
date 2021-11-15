@@ -74,7 +74,7 @@ class QCTXTable(QTableWidget):
         self.setHorizontalHeaderLabels(self.HEADER)
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.horizontalHeader().setHorizontalScrollMode(self.ScrollPerPixel)
-        self.horizontalHeader().setDefaultAlignment(Qt.AlignCenter | Qt.Alignment(Qt.TextWordWrap))
+        self.horizontalHeader().setDefaultAlignment(Qt.AlignHCenter | Qt.Alignment(Qt.TextWordWrap))
         self.horizontalHeader().setMinimumWidth(160)
         self.setHorizontalScrollMode(self.ScrollPerPixel)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -127,9 +127,10 @@ class QCTXTable(QTableWidget):
             except KeyError:
                 continue
 
+            if func.last_change == -1:
+                continue
+
             # changes is not currently supported
             self.items.append(
                 QCTXItem(user.name, func.name, func.last_change, 0)
             )
-
-        self.reload()

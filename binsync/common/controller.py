@@ -6,6 +6,7 @@ import logging
 from typing import Optional, Iterable, Dict, List
 from collections import OrderedDict
 
+import binsync.data
 from ..client import Client
 from ..data import User, Function, StackVariable, Comment, Struct
 
@@ -70,6 +71,7 @@ def make_ro_state(f):
 
     return state_check
 
+
 #
 # Description Classes
 #
@@ -111,17 +113,17 @@ class BinSyncController:
         self.cmd_queue = OrderedDict()
 
         # create a pulling thread, but start on connection
-        self.pull_thread = threading.Thread(target=self.pull_routine)
+        self.updater_thread = threading.Thread(target=self.updater_routine)
 
     #
-    #   Multithreading locks and setters
+    #   Multithreading updaters, locks, and evaluators
     #
 
     def make_controller_cmd(self, cmd_func, *args, **kwargs):
         with self.queue_lock:
             self.cmd_queue[time.time()] = (cmd_func, args, kwargs)
 
-    def eval_cmd_queue(self):
+    def _eval_cmd_queue(self):
         cmd = None
         with self.queue_lock:
             if len(self.cmd_queue) > 0:
@@ -135,7 +137,7 @@ class BinSyncController:
         func, f_args, f_kargs = cmd[:]
         func(*f_args, **f_kargs)
 
-    def pull_routine(self):
+    def updater_routine(self):
         while True:
             time.sleep(1)
 
@@ -158,20 +160,20 @@ class BinSyncController:
                 # update the control panel with new info every 10 seconds
                 if (datetime.datetime.now() - self._last_reload).seconds > 10:
                     self._last_reload = datetime.datetime.now()
-                    self.update_ui()
+                    self._update_ui()
 
             # evaluate commands started by the user
-            self.eval_cmd_queue()
+            self._eval_cmd_queue()
 
-    def update_ui(self):
+    def _update_ui(self):
         if not self.ui_callback:
             return
 
         self.ui_callback()
 
-    def start_pull_routine(self):
-        self.pull_thread.setDaemon(True)
-        self.pull_thread.start()
+    def start_updater_routine(self):
+        self.updater_thread.setDaemon(True)
+        self.updater_thread.start()
 
     def _check_and_notify_ctx(self):
         active_ctx = self.active_context()
@@ -191,7 +193,7 @@ class BinSyncController:
             user, path, binary_hash, init_repo=init_repo, remote_url=remote_url
         )
 
-        self.start_pull_routine()
+        self.start_updater_routine()
         return self.client.connection_warnings
 
     def check_client(self):
@@ -233,13 +235,11 @@ class BinSyncController:
         """
         raise NotImplementedError
 
-    def active_context(self) -> int:
+    def active_context(self) -> binsync.data.Function:
         """
-        Should return an address (int). Currently only functions are supported as current contexts.
+        Should return an binsync Function. Currently only functions are supported as current contexts.
         This function will be called very frequently, so its important that its implementation is fast
         and can be done many times in the decompiler.
-
-        @return: int
         """
 
         raise NotImplementedError

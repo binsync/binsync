@@ -67,7 +67,7 @@ class QFunctionTable(QTableWidget):
         self.setHorizontalHeaderLabels(self.HEADER)
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.horizontalHeader().setHorizontalScrollMode(self.ScrollPerPixel)
-        self.horizontalHeader().setDefaultAlignment(Qt.AlignCenter | Qt.Alignment(Qt.TextWordWrap))
+        self.horizontalHeader().setDefaultAlignment(Qt.AlignHCenter | Qt.Alignment(Qt.TextWordWrap))
         self.horizontalHeader().setMinimumWidth(160)
         self.setHorizontalScrollMode(self.ScrollPerPixel)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -137,7 +137,6 @@ class QFunctionTable(QTableWidget):
                 known_funcs[func_addr] = [func_addr, remote_func_name, user.name, func_change_time]
 
         self.items = [QFunctionItem(*row) for row in known_funcs.values()]
-        self.reload()
 
     def _get_valid_users_for_func(self, func_addr):
         for user in self.controller.users():

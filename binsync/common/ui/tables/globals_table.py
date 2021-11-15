@@ -65,7 +65,7 @@ class QGlobalsTable(QTableWidget):
         self.setHorizontalHeaderLabels(self.HEADER)
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.horizontalHeader().setHorizontalScrollMode(self.ScrollPerPixel)
-        self.horizontalHeader().setDefaultAlignment(Qt.AlignCenter | Qt.Alignment(Qt.TextWordWrap))
+        self.horizontalHeader().setDefaultAlignment(Qt.AlignHCenter | Qt.Alignment(Qt.TextWordWrap))
         self.horizontalHeader().setMinimumWidth(160)
         self.setHorizontalScrollMode(self.ScrollPerPixel)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -135,7 +135,6 @@ class QGlobalsTable(QTableWidget):
                 known_structs[struct_name] = [struct_name, "Struct", user.name, struct_change_time]
 
         self.items = [QGlobalItem(*row) for row in known_structs.values()]
-        self.reload()
 
     def _get_valid_users_for_global(self, global_name):
         for user in self.controller.users():
