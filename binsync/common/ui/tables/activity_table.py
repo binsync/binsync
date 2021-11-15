@@ -75,7 +75,7 @@ class QActivityTable(QTableWidget):
         self.setHorizontalHeaderLabels(self.HEADER)
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.horizontalHeader().setHorizontalScrollMode(self.ScrollPerPixel)
-        self.horizontalHeader().setDefaultAlignment(Qt.AlignCenter | Qt.Alignment(Qt.TextWordWrap))
+        self.horizontalHeader().setDefaultAlignment(Qt.AlignHCenter | Qt.Alignment(Qt.TextWordWrap))
         self.horizontalHeader().setMinimumWidth(160)
         self.setHorizontalScrollMode(self.ScrollPerPixel)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -156,8 +156,6 @@ class QActivityTable(QTableWidget):
             self.items.append(
                 QActivityItem(user.name, most_recent_func, last_state_change)
             )
-
-        self.reload()
 
     def _get_valid_funcs_for_user(self, username):
         user_state: State = self.controller.client.get_state(user=username)

@@ -117,7 +117,7 @@ class IDABinSyncController(BinSyncController):
         super(IDABinSyncController, self).__init__()
 
         # view change callback
-        self.last_ctx_addr = None
+        self._updated_ctx = None
 
         # update state for only updating when needed
         # api locks
@@ -147,26 +147,18 @@ class IDABinSyncController(BinSyncController):
     def binary_hash(self) -> str:
         return idc.retrieve_input_file_md5().hex()
 
-    def _check_and_notify_ctx(self):
-        """
-        Removed in favor of a callback for clicking.
-        """
-        if not self.last_ctx_addr or self.last_ctx_addr == idaapi.BADADDR:
+    def active_context(self):
+        return self._updated_ctx
+
+    def update_active_context(self, addr):
+        if not addr or addr == idaapi.BADADDR:
             return
 
-        func_addr = compat.ida_func_addr(self.last_ctx_addr)
+        func_addr = compat.ida_func_addr(addr)
         if func_addr is None:
             return
 
-        new_ctx = binsync.data.Function(func_addr, name=compat.get_func_name(func_addr))
-        if self.last_ctx == new_ctx:
-            return
-
-        self.last_ctx = new_ctx
-        self.ctx_change_callback()
-
-    def update_active_context(self, addr):
-        self.last_ctx_addr = addr
+        self._updated_ctx = binsync.data.Function(func_addr, name=compat.get_func_name(func_addr))
 
     #
     # IDA DataBase Fillers

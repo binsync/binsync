@@ -377,11 +377,11 @@ class Client(object):
         return StateContext(self, state, locked=locked)
 
     def get_tree(self, user):
-        options = [ref for ref in self.repo.refs if ref.name.endswith(f"{BINSYNC_BRANCH_PREFIX}/{user}")]
-        if not options:
-            raise ValueError(f'No such user "{user}" found in repository')
-
         with self.commit_lock:
+            options = [ref for ref in self.repo.refs if ref.name.endswith(f"{BINSYNC_BRANCH_PREFIX}/{user}")]
+            if not options:
+                raise ValueError(f'No such user "{user}" found in repository')
+
             # find the latest commit for the specified user!
             best = max(options, key=lambda ref: ref.commit.authored_date)
             bct = best.commit.tree
@@ -446,20 +446,19 @@ class Client(object):
         self._last_commit_ts = time.time()
 
     def commit_state(self, state=None, msg="Generic Change"):
-
-        self.checkout_to_master_user()
-        if state is None:
-            state = self.state
-
-        if self.master_user != state.user:
-            raise ExternalUserCommitError(f"User {self.master_user} is not allowed to commit to user {state.user}")
-
-        assert self.master_user == state.user
-
-        master_user_branch = next(o for o in self.repo.branches if o.name == self.user_branch_name)
-        index = self.repo.index
-
         with self.commit_lock:
+            self.checkout_to_master_user()
+            if state is None:
+                state = self.state
+
+            if self.master_user != state.user:
+                raise ExternalUserCommitError(f"User {self.master_user} is not allowed to commit to user {state.user}")
+
+            assert self.master_user == state.user
+
+            master_user_branch = next(o for o in self.repo.branches if o.name == self.user_branch_name)
+            index = self.repo.index
+
             # dump the state
             state.dump(index)
 
