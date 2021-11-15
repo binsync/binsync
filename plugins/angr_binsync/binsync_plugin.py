@@ -41,8 +41,9 @@ class BinsyncPlugin(BasePlugin):
     # BinSync GUI Hooks
     #
 
-    MENU_BUTTONS = ('Configure Binsync...',)
+    MENU_BUTTONS = ('Configure Binsync...', 'Toggle Binsync Panel')
     MENU_CONFIG_ID = 0
+    MENU_TOGGLE_PANEL_ID = 1
 
     def handle_click_menu(self, idx):
         # sanity check on menu selection
@@ -53,11 +54,13 @@ class BinsyncPlugin(BasePlugin):
             return
 
         mapping = {
-            self.MENU_CONFIG_ID: self.open_sync_config_dialog
+            self.MENU_CONFIG_ID: self.open_sync_config_dialog,
+            self.MENU_TOGGLE_PANEL_ID: self.toggle_sync_panel
         }
 
         # call option mapped to each menu pos
         mapping.get(idx)()
+
 
     def open_sync_config_dialog(self):
         if self.workspace.instance.project.am_none:
@@ -66,6 +69,15 @@ class BinsyncPlugin(BasePlugin):
 
         sync_config = SyncConfig(self.controller)
         sync_config.exec_()
+
+    def toggle_sync_panel(self):
+        self.controller.toggle_headless()
+
+        if self.control_panel_view.isVisible():
+            self.control_panel_view.close()
+            return
+
+        self.workspace.add_view(self.control_panel_view)
 
     #
     #   BinSync Decompiler Hooks
