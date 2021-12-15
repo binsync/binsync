@@ -21,10 +21,12 @@ from PySide2.QtWidgets import (
 )
 from PySide2.QtCore import Qt
 from binaryninjaui import DockContextHandler
+import binaryninja
 
 
 # Some code is derived from https://github.com/NOPDev/BinjaDock/tree/master/defunct
 # Thanks @NOPDev
+import binsync.common.controller
 
 
 def find_main_window():
@@ -53,7 +55,12 @@ def create_widget(widget_class, name, parent, data, *args):
     # If we return nothing (or throw) there will be a null pointer deref (and we won't even get to see why)
     # So in the event of an error or a nothing, return an empty widget that at least stops the crash
     try:
-        widget = widget_class(*args, parent=parent, name=name, data=data)
+        # binsync specific code
+        if not isinstance(data, binaryninja.BinaryView):
+            raise Exception('expected an binary view')
+        bv_controller = args[0][data]
+        # uses only a bv_controller
+        widget = widget_class(bv_controller, parent=parent, name=name, data=data)
         if not widget:
             raise Exception('expected widget, got None')
 
