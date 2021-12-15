@@ -17,17 +17,9 @@
 #
 # ----------------------------------------------------------------------------
 
-from functools import wraps
 import re
-import threading
-import time
-import datetime
-import logging
 from typing import Dict, List, Tuple, Optional, Iterable, Any
-from collections import OrderedDict, defaultdict
-
-from PySide2.QtWidgets import QDialog, QMessageBox
-
+import hashlib
 from binaryninjaui import (
     UIContext,
     DockHandler,
@@ -37,7 +29,6 @@ from binaryninjaui import (
     Menu,
 )
 import binaryninja
-from binaryninja.interaction import show_message_box
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourceType
 
 
@@ -52,23 +43,12 @@ import binsync
 class BinjaBinSyncController(BinSyncController):
     def __init__(self):
         super(BinjaBinSyncController, self).__init__()
-        self.curr_bv = None
-        self.curr_func = None
+        self.bv = None
 
     def binary_hash(self) -> str:
-        return ""
+        return hashlib.md5(self.bv.file.raw[:]).hexdigest()
 
     def active_context(self):
-        return None
-
-    def set_curr_bv(self, bv):
-        self.curr_bv = bv
-
-    def mark_as_current_function(self, bv, bn_func):
-        self.curr_bv = bv
-        self.curr_func = bn_func
-
-    def current_function(self):
         all_contexts = UIContext.allContexts()
         if not all_contexts:
             return None
@@ -83,22 +63,21 @@ class BinjaBinSyncController(BinSyncController):
         if func is None:
             return None
 
-        return func
-
+        return binsync.data.Function(func.start, name=func.name)
 
     @init_checker
     @make_ro_state
-    def fill_function(self, bn_func: binaryninja.function.Function, user=None, state=None) -> None:
+    def fill_function(self, func_addr, user=None, state=None):
         """
         Grab all relevant information from the specified user and fill the @bn_func.
         """
-
-        _func = self.pull_function(bn_func, user=user, state=state)
-        if _func is None:
+        bn_func = self.bv.get_function_at(func_addr)
+        sync_func = self.pull_function(func_addr, user=user, state=state)
+        if sync_func is None:
             return
 
         # name
-        bn_func.name = _func.name
+        bn_func.name = sync_func.name
 
         # comments
         for _, ins_addr in bn_func.instructions:
@@ -109,7 +88,7 @@ class BinjaBinSyncController(BinSyncController):
         # stack variables
         existing_stack_vars: Dict[int, Any] = dict((v.storage, v) for v in bn_func.stack_layout
                                                   if v.source_type == VariableSourceType.StackVariableSourceType)
-        for offset, stack_var in self.pull_stack_variables(bn_func, user=user, state=state).items():
+        for offset, stack_var in self.pull_stack_variables(bn_func.start, user=user, state=state).items():
             bn_offset = stack_var.get_offset(StackOffsetType.BINJA)
             # skip if this variable already exists
             type_, _ = bn_func.view.parse_type_string(stack_var.type)
@@ -120,7 +99,6 @@ class BinjaBinSyncController(BinSyncController):
 
             existing_stack_vars[bn_offset].name = stack_var.name
             last_type = existing_stack_vars[bn_offset].type
-            #print(f"LAST TYPE: {last_type}")
 
             try:
                 bn_func.create_user_stack_var(bn_offset, last_type, stack_var.name)
@@ -184,133 +162,8 @@ class BinjaBinSyncController(BinSyncController):
 
     @init_checker
     @make_state
-    def remove_all_comments(self, bn_func: binaryninja.function.Function, user=None, state=None) -> None:
-        for _, ins_addr in bn_func.instructions:
-            if ins_addr in state.comments:
-                state.remove_comment(ins_addr)
-
-    @init_checker
-    @make_state
     def push_comments(self, func, comments: Dict[int,str], user=None, state=None) -> None:
         # Push comments
         for addr, comment in comments.items():
             cmt = binsync.data.Comment(func.start, int(addr), comment, decompiled=True)
             state.set_comment(cmt)
-
-    #
-    #   Pullers
-    #
-
-    @init_checker
-    @make_ro_state
-    def pull_stack_variables(self, bn_func, user=None, state=None) -> Dict[int,StackVariable]:
-        try:
-            return {k: v for k, v in state.get_stack_variables(bn_func.start)}
-        except KeyError:
-            return { }
-
-    @init_checker
-    @make_ro_state
-    def pull_stack_variable(self, bn_func, offset: int, user=None, state=None) -> StackVariable:
-        return state.get_stack_variable(bn_func.start, offset)
-
-    @init_checker
-    @make_ro_state
-    def pull_function(self, bn_func, user=None, state=None) -> Optional[Function]:
-        """
-        Pull a function downwards.
-
-        :param bv:
-        :param bn_func:
-        :param user:
-        :return:
-        """
-
-        # pull function
-        try:
-            func = state.get_function(int(bn_func.start))
-            return func
-        except KeyError:
-            return None
-
-
-    @init_checker
-    @make_ro_state
-    def pull_comment(self, func_addr, addr, user=None, state=None) -> Optional[str]:
-        """
-        Pull comments downwards.
-
-        :param bv:
-        :param start_addr:
-        :param end_addr:
-        :param user:
-        :return:
-        """
-        try:
-            return state.get_comment(func_addr, addr)
-        except KeyError:
-            return None
-
-    @init_checker
-    @make_ro_state
-    def pull_comments(self, func_addr, user=None, state=None) -> Optional[Iterable[str]]:
-        """
-        Pull comments downwards.
-
-        :param bv:
-        :param start_addr:
-        :param end_addr:
-        :param user:
-        :return:
-        """
-        return state.get_comments(func_addr)
-
-    @staticmethod
-    def _parse_and_display_connection_warnings(warnings):
-        warning_text = ""
-
-        for warning in warnings:
-            if warning == ConnectionWarnings.HASH_MISMATCH:
-                warning_text += "Warning: the hash stored for this BinSync project does not match"
-                warning_text += " the hash of the binary you are attempting to analyze. It's possible"
-                warning_text += " you are working on a different binary.\n"
-
-        if len(warning_text) > 0:
-            QMessageBox.warning(
-                None,
-                "BinSync: Connection Warnings",
-                warning_text,
-                QMessageBox.Ok,
-            )
-
-    @staticmethod
-    def friendly_datetime(time_before):
-        # convert
-        if isinstance(time_before, int):
-            dt = datetime.datetime.fromtimestamp(time_before)
-        elif isinstance(time_before, datetime.datetime):
-            dt = time_before
-        else:
-            return ""
-
-        now = datetime.datetime.now()
-        if dt <= now:
-            diff = now - dt
-            ago = True
-        else:
-            diff = dt - now
-            ago = False
-        diff_days = diff.days
-        diff_sec = diff.seconds
-
-        if diff_days >= 1:
-            s = "%d days" % diff_days
-        elif diff_sec >= 60 * 60:
-            s = "%d hours" % int(diff_sec / 60 / 60)
-        elif diff_sec >= 60:
-            s = "%d minutes" % int(diff_sec / 60)
-        else:
-            s = "%d seconds" % diff_sec
-
-        s += " ago" if ago else " in the future"
-        return s

@@ -35,13 +35,11 @@ from binsync.common.ui.config_dialog import SyncConfig
 from binsync.common.ui.control_panel import ControlPanel
 from .ui_tools import find_main_window, BinjaDockWidget, create_widget
 from .controller import BinjaBinSyncController
-from .ui.info_panel import InfoPanelDialog, InfoPanelDockWidget
 
 
 #
 # Binja UI
 #
-
 
 class ControlPanelDockWidget(BinjaDockWidget):
     def __init__(self, controller, parent=None, name=None, data=None):
@@ -186,25 +184,14 @@ class BinjaPlugin:
         )
 
     def _launch_config(self, bn_context):
-        self.controller.set_curr_bv(bn_context.binaryView)
+        self.controller.bv = bn_context.binaryView
         dialog = SyncConfig(self.controller)
         dialog.exec_()
 
         # if the config was successful
-        if self.controller.check_client():
-            print("WORKED")
-            #self._open_control_panel()
-
-    def _open_control_panel(self):
-        # register the control panel dock widget
-        dock_handler = DockHandler.getActiveDockHandler()
-        dock_handler.addDockWidget(
-            "BinSync: Control Panel",
-            lambda n, p, d: create_widget(ControlPanelDockWidget, n, p, d, self.controller),
-            Qt.RightDockWidgetArea,
-            Qt.Vertical,
-            True
-        )
+        # if self.controller.check_client():
+        #    print("WORKED")
+        #    #self._open_control_panel()
 
 BinjaPlugin()
 
