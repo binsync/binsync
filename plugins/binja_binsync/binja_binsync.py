@@ -14,6 +14,8 @@ from binaryninja.interaction import show_message_box
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourceType
 from binaryninja.binaryview import BinaryDataNotification
 
+from collections import defaultdict
+
 from binsync.common.ui import set_ui_version
 set_ui_version("PySide2")
 from binsync.common.ui.config_dialog import SyncConfig
@@ -143,10 +145,11 @@ def start_function_monitor(view):
     view.register_notification(notification)
 """
 
+
 class BinjaPlugin:
     def __init__(self):
-        #self.controllers = {}
-        self.controller = BinjaBinSyncController()
+        # controller stored by a binary view
+        self.controllers = defaultdict(BinjaBinSyncController)
         self._init_ui()
 
     def _init_ui(self):
@@ -162,21 +165,33 @@ class BinjaPlugin:
         dock_handler = DockHandler.getActiveDockHandler()
         dock_handler.addDockWidget(
             "BinSync: Control Panel",
-            lambda n, p, d: create_widget(ControlPanelDockWidget, n, p, d, self.controller),
+            lambda n, p, d: create_widget(ControlPanelDockWidget, n, p, d, self.controllers),
             Qt.RightDockWidgetArea,
             Qt.Vertical,
             True
         )
 
+    def _init_bv_dependencies(self, bv):
+        # do stuff
+        pass
+
     def _launch_config(self, bn_context):
-        self.controller.bv = bn_context.binaryView
-        dialog = SyncConfig(self.controller)
+        bv = bn_context.binaryView
+        controller_bv = self.controllers[bv]
+
+        # exit early if we already configed
+        if controller_bv.bv is not None:
+            return
+        controller_bv.bv = bv
+
+        # configure
+        dialog = SyncConfig(controller_bv)
         dialog.exec_()
 
-        # if the config was successful
-        # if self.controller.check_client():
-        #    print("WORKED")
-        #    #self._open_control_panel()
+        # if the config was successful init a full client
+        if controller_bv.check_client():
+            self._init_bv_dependencies(bv)
+
 
 BinjaPlugin()
 
