@@ -1,12 +1,4 @@
-import os
-import re
-import time
-import threading
-import datetime
-from functools import wraps
-from typing import Optional, Iterable, Dict, Any
-import logging
-
+from PySide2.QtWidgets import QVBoxLayout
 from PySide2.QtCore import Qt
 from binaryninjaui import (
     UIContext,
@@ -22,17 +14,39 @@ from binaryninja.interaction import show_message_box
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourceType
 from binaryninja.binaryview import BinaryDataNotification
 
-import binsync
-from binsync import State, StateContext
-from binsync.data import Patch, Function, Comment, StackVariable, StackOffsetType
+from binsync.common.ui import set_ui_version
+set_ui_version("PySide2")
+from binsync.common.ui.config_dialog import SyncConfig
+from binsync.common.ui.control_panel import ControlPanel
+from .ui_tools import find_main_window, BinjaDockWidget, create_widget
+from .controller import BinjaBinSyncController
 
-from .controller import BinsyncController
-from .ui.ui_tools import find_main_window, BinjaDockWidget, create_widget
-from .ui.config_dialog import SyncConfig
-from .ui.info_panel import InfoPanelDialog, InfoPanelDockWidget
 
-binsync_controller = BinsyncController()
+#
+# Binja UI
+#
 
+class ControlPanelDockWidget(BinjaDockWidget):
+    def __init__(self, controller, parent=None, name=None, data=None):
+        super().__init__(name, parent=parent)
+        self.data = data
+        print(data)
+        self._widget = None
+        self.controller = controller
+
+        self._init_widgets()
+
+    def _init_widgets(self):
+        self._widget = ControlPanel(self.controller)
+
+        layout = QVBoxLayout()
+        layout.addWidget(self._widget)
+        self.setLayout(layout)
+
+
+#
+# Other
+#
 
 def instance():
     main_window = find_main_window()
@@ -42,7 +56,7 @@ def instance():
         dock = BinjaDockWidget("dummy")
     return dock
 
-
+"""
 class CurrentFunctionNotification(BinaryDataNotification):
     def __init__(self, controller):
         super().__init__()
@@ -127,35 +141,50 @@ def start_patch_monitor(view):
 def start_function_monitor(view):
     notification = EditFunctionNotification(view, binsync_controller)
     view.register_notification(notification)
+"""
 
+class BinjaPlugin:
+    def __init__(self):
+        #self.controllers = {}
+        self.controller = BinjaBinSyncController()
+        self._init_ui()
 
-configure_binsync_id = "BinSync: Configure"
-UIAction.registerAction(configure_binsync_id)
-UIActionHandler.globalActions().bindAction(
-    configure_binsync_id, UIAction(launch_binsync_configure)
+    def _init_ui(self):
+        # config dialog
+        configure_binsync_id = "BinSync: Configure"
+        UIAction.registerAction(configure_binsync_id)
+        UIActionHandler.globalActions().bindAction(
+            configure_binsync_id, UIAction(self._launch_config)
+        )
+        Menu.mainMenu("Tools").addAction(configure_binsync_id, "BinSync")
+
+        # control panel (per BV)
+        dock_handler = DockHandler.getActiveDockHandler()
+        dock_handler.addDockWidget(
+            "BinSync: Control Panel",
+            lambda n, p, d: create_widget(ControlPanelDockWidget, n, p, d, self.controller),
+            Qt.RightDockWidgetArea,
+            Qt.Vertical,
+            True
+        )
+
+    def _launch_config(self, bn_context):
+        self.controller.bv = bn_context.binaryView
+        dialog = SyncConfig(self.controller)
+        dialog.exec_()
+
+        # if the config was successful
+        # if self.controller.check_client():
+        #    print("WORKED")
+        #    #self._open_control_panel()
+
+BinjaPlugin()
+
+"""
+PluginCommand.register(
+    "Start Sharing Patches", "Start Sharing Patches", start_patch_monitor
 )
-Menu.mainMenu("Tools").addAction(configure_binsync_id, "BinSync")
-
-open_control_panel_id = "BinSync: Open info panel"
-UIAction.registerAction(open_control_panel_id)
-UIActionHandler.globalActions().bindAction(
-    open_control_panel_id, UIAction(open_info_panel)
+PluginCommand.register(
+    "Start Sharing Functions", "Start Sharing Functions", start_function_monitor
 )
-Menu.mainMenu("Tools").addAction(open_control_panel_id, "BinSync")
-
-# register the control panel dock widget
-dock_handler = DockHandler.getActiveDockHandler()
-dock_handler.addDockWidget(
-    "BinSync: Info Panel",
-    lambda n, p, d: create_widget(InfoPanelDockWidget, n, p, d, binsync_controller),
-    Qt.RightDockWidgetArea,
-    Qt.Vertical,
-    True
-)
-
-#PluginCommand.register(
-#    "Start Sharing Patches", "Start Sharing Patches", start_patch_monitor
-#)
-#PluginCommand.register(
-#    "Start Sharing Functions", "Start Sharing Functions", start_function_monitor
-#)
+"""

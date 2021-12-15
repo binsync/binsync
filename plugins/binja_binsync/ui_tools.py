@@ -54,7 +54,6 @@ def create_widget(widget_class, name, parent, data, *args):
     # So in the event of an error or a nothing, return an empty widget that at least stops the crash
     try:
         widget = widget_class(*args, parent=parent, name=name, data=data)
-
         if not widget:
             raise Exception('expected widget, got None')
 
@@ -134,7 +133,7 @@ class BinjaDockWidget(QWidget, DockContextHandler):
 
         self.base = BinjaWidgetBase()
 
-        # self._main_window.addDockWidget(Qt.RightDockWidgetArea, self)
+        #self._main_window.addDockWidget(Qt.RightDockWidgetArea, self)
         #self._tabs = QTabWidget()
         #self._tabs.setTabPosition(QTabWidget.East)
         #self.setWidget(self._tabs)
