@@ -1,12 +1,3 @@
-import os
-import re
-import time
-import threading
-import datetime
-from functools import wraps
-from typing import Optional, Iterable, Dict, Any
-import logging
-
 from PySide2.QtWidgets import QVBoxLayout
 from PySide2.QtCore import Qt
 from binaryninjaui import (
@@ -22,12 +13,6 @@ from binaryninja import PluginCommand, BinaryView
 from binaryninja.interaction import show_message_box
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourceType
 from binaryninja.binaryview import BinaryDataNotification
-
-from binsync import State, StateContext
-from binsync.data import Patch, Function, Comment, StackVariable, StackOffsetType
-
-import binsync
-
 
 from binsync.common.ui import set_ui_version
 set_ui_version("PySide2")
