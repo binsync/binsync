@@ -4,7 +4,7 @@ from typing import Dict
 from PySide2.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QMenu, QHeaderView
 from PySide2.QtCore import Qt, QItemSelectionModel
 
-from ...controller import BinsyncController
+from ...controller import BinjaBinSyncController
 from binsync.data import Function
 
 
@@ -60,7 +60,7 @@ class QFuncInfoTable(QTableWidget):
 
         self.items = [ ]
 
-        self.controller: BinsyncController = controller
+        self.controller: BinjaBinSyncController = controller
 
     def reload(self):
         self.setRowCount(len(self.items))
@@ -130,7 +130,7 @@ class QFuncInfoTable(QTableWidget):
 
         for row in known_funcs.values():
             # fix datetimes for the correct format
-            row[3] = BinsyncController.friendly_datetime(row[3])
+            row[3] = BinjaBinSyncController.friendly_datetime(row[3])
             table_row = QUserItem(*row)
             self.items.append(table_row)
 

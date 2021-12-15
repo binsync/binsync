@@ -6,13 +6,13 @@ from .info_tables.struct_info_table import QStructInfoTable
 from .info_tables.user_info_table import QUserInfoTable
 from .info_tables.autosync_info_table import QAutoSyncInfoTable
 from .info_tables.cur_func_info_table import QCurFuncInfoTable
-from ..controller import BinsyncController
+from ..controller import BinjaBinSyncController
 
 
 from PySide2.QtWidgets import QVBoxLayout, QHBoxLayout, QGroupBox, QPushButton, QMessageBox, QDialog
 from PySide2.QtCore import Qt
 
-from .ui_tools import BinjaWidget, BinjaDockWidget
+from ..ui_tools import BinjaWidget, BinjaDockWidget
 
 
 class InfoPanelDialog(QDialog):
@@ -63,7 +63,7 @@ class InfoPanel(QWidget):
         #self.setMaximumHeight(400)
         #self.setMaximumWidth(300)
 
-        self._controller: BinsyncController = controller
+        self._controller: BinjaBinSyncController = controller
         self._dialog = dialog
 
         # info tables

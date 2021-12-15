@@ -35,7 +35,7 @@ from binsync.common.ui.config_dialog import SyncConfig
 from binsync.common.ui.control_panel import ControlPanel
 from .ui_tools import find_main_window, BinjaDockWidget, create_widget
 from .controller import BinjaBinSyncController
-#from .ui.info_panel import InfoPanelDialog, InfoPanelDockWidget
+from .ui.info_panel import InfoPanelDialog, InfoPanelDockWidget
 
 
 #
@@ -45,8 +45,9 @@ from .controller import BinjaBinSyncController
 
 class ControlPanelDockWidget(BinjaDockWidget):
     def __init__(self, controller, parent=None, name=None, data=None):
-        super(BinjaDockWidget, self).__init__(name, parent=parent)
+        super().__init__(name, parent=parent)
         self.data = data
+        print(data)
         self._widget = None
         self.controller = controller
 
@@ -161,17 +162,28 @@ def start_function_monitor(view):
 
 class BinjaPlugin:
     def __init__(self):
+        #self.controllers = {}
         self.controller = BinjaBinSyncController()
         self._init_ui()
 
     def _init_ui(self):
-        # config panel
+        # config dialog
         configure_binsync_id = "BinSync: Configure"
         UIAction.registerAction(configure_binsync_id)
         UIActionHandler.globalActions().bindAction(
             configure_binsync_id, UIAction(self._launch_config)
         )
         Menu.mainMenu("Tools").addAction(configure_binsync_id, "BinSync")
+
+        # control panel (per BV)
+        dock_handler = DockHandler.getActiveDockHandler()
+        dock_handler.addDockWidget(
+            "BinSync: Control Panel",
+            lambda n, p, d: create_widget(ControlPanelDockWidget, n, p, d, self.controller),
+            Qt.RightDockWidgetArea,
+            Qt.Vertical,
+            True
+        )
 
     def _launch_config(self, bn_context):
         self.controller.set_curr_bv(bn_context.binaryView)
@@ -181,12 +193,11 @@ class BinjaPlugin:
         # if the config was successful
         if self.controller.check_client():
             print("WORKED")
-            self._open_control_panel()
+            #self._open_control_panel()
 
     def _open_control_panel(self):
         # register the control panel dock widget
         dock_handler = DockHandler.getActiveDockHandler()
-        print("ADDING")
         dock_handler.addDockWidget(
             "BinSync: Control Panel",
             lambda n, p, d: create_widget(ControlPanelDockWidget, n, p, d, self.controller),

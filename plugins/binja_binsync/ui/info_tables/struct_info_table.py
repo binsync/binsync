@@ -3,7 +3,7 @@ from PySide2.QtCore import Qt, QItemSelectionModel
 from typing import Dict
 
 from binsync.data import Struct
-from ...controller import BinsyncController
+from ...controller import BinjaBinSyncController
 
 class QUserItem:
     def __init__(self, struct_name, size, user, last_push):
@@ -119,7 +119,7 @@ class QStructInfoTable(QTableWidget):
 
         for row in known_structs.values():
             # fix datetimes for the correct format
-            row[3] = BinsyncController.friendly_datetime(row[3])
+            row[3] = BinjaBinSyncController.friendly_datetime(row[3])
             table_row = QUserItem(*row)
             self.items.append(table_row)
 

@@ -5,7 +5,7 @@ from PySide2.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView,
 from PySide2.QtCore import Qt, QItemSelectionModel
 
 import binsync
-from ...controller import BinsyncController
+from ...controller import BinjaBinSyncController
 from binsync.data import Function
 
 
@@ -120,7 +120,7 @@ class QUserInfoTable(QTableWidget):
             if row[1] == -1:
                 row[1] = ""
             else:
-                row[1] = BinsyncController.friendly_datetime(row[1])
+                row[1] = BinjaBinSyncController.friendly_datetime(row[1])
 
             table_row = QUserItem(*row)
             self.items.append(table_row)

@@ -4,7 +4,7 @@ from typing import Dict
 from PySide2.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QMenu, QHeaderView
 from PySide2.QtCore import Qt, QItemSelectionModel
 
-from ...controller import BinsyncController
+from ...controller import BinjaBinSyncController
 from binsync.data import Function
 
 
@@ -57,7 +57,7 @@ class QAutoSyncInfoTable(QTableWidget):
 
         self.items = [ ]
 
-        self.controller: "BinsyncController" = controller
+        self.controller: "BinjaBinSyncController" = controller
 
     def reload(self):
         self.setRowCount(len(self.items))
