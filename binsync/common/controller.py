@@ -105,7 +105,7 @@ class BinSyncController:
         # ui callback created on UI init
         self.ui_callback = None  # func()
         self.ctx_change_callback = None  # func()
-        self._last_reload = datetime.datetime.now()
+        self._last_reload = None
         self.last_ctx = None
 
         # command locks
@@ -145,22 +145,22 @@ class BinSyncController:
             if not self.check_client():
                 continue
 
-            # update client every 10 seconds if it has a remote connection
-            if self.client.has_remote and (
-                    (self.client.last_pull_attempt_at is None) or
-                    (datetime.datetime.now() - self.client.last_pull_attempt_at).seconds > 10
-            ):
-                self.client.update()
-
             if not self.headless:
                 # update context knowledge every 1 second
                 if self.ctx_change_callback:
                     self._check_and_notify_ctx()
 
                 # update the control panel with new info every 10 seconds
-                if (datetime.datetime.now() - self._last_reload).seconds > 10:
+                if self._last_reload is None or (datetime.datetime.now() - self._last_reload).seconds > 10:
                     self._last_reload = datetime.datetime.now()
                     self._update_ui()
+
+            # update client every 10 seconds if it has a remote connection
+            if self.client.has_remote and (
+                    (self.client.last_pull_attempt_at is None) or
+                    (datetime.datetime.now() - self.client.last_pull_attempt_at).seconds > 10
+            ):
+                self.client.update()
 
             # evaluate commands started by the user
             self._eval_cmd_queue()
