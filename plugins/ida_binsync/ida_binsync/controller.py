@@ -158,7 +158,8 @@ class IDABinSyncController(BinSyncController):
         if func_addr is None:
             return
 
-        self._updated_ctx = binsync.data.Function(func_addr, name=compat.get_func_name(func_addr))
+        func = binsync.data.Function(func_addr, header=FunctionHeader(compat.get_func_name(func_addr), func_addr))
+        self._updated_ctx = func
 
     #
     # IDA DataBase Fillers

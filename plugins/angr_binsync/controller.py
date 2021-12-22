@@ -6,7 +6,7 @@ from angr import knowledge_plugins
 import angr
 
 from binsync.common.controller import *
-from binsync.data import StackOffsetType
+from binsync.data import StackOffsetType, Function, FunctionHeader
 import binsync
 
 
@@ -38,7 +38,7 @@ class AngrBinSyncController(BinSyncController):
         if func is None or func.am_obj is None:
             return None
 
-        return binsync.data.Function(func.addr, name=func.name)
+        return binsync.data.Function(func.addr, header=FunctionHeader(func.name, func.addr))
 
     #
     # Display Fillers

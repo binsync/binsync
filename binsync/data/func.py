@@ -68,6 +68,10 @@ class FunctionHeader(Artifact):
 
     @classmethod
     def parse(cls, s):
+        loaded_s = toml.loads(s)
+        if len(loaded_s) <= 0:
+            return None
+
         fh = FunctionHeader(None, None)
         fh.__setstate__(toml.loads(s))
         return fh
@@ -109,7 +113,7 @@ class Function(Artifact):
                 "last_change": self.last_change
             },
 
-            "header": self.header.__getstate__(),
+            "header": self.header.__getstate__() if self.header else None,
 
             "stack_vars": {
                 "%x" % offset: stack_var.__getstate__() for offset, stack_var in self.stack_vars.items()
@@ -120,7 +124,7 @@ class Function(Artifact):
         if not isinstance(state["metadata"]["addr"], int):
             raise TypeError("Unsupported type %s for addr." % type(state["metadata"]["addr"]))
 
-        metadata, header, stack_vars = state["metadata"], state["header"], state["stack_vars"]
+        metadata, header, stack_vars = state["metadata"], state.get("header", None), state["stack_vars"]
 
         self.addr = metadata["addr"]
         self.last_change = metadata.get("last_change", None)
@@ -130,6 +134,10 @@ class Function(Artifact):
         self.stack_vars = {
             int(off, 16): StackVariable.parse(toml.dumps(stack_var)) for off, stack_var in stack_vars.items()
         }
+
+    @property
+    def name(self):
+        return self.header.name if self.header else None
 
     def set_stack_var(self, name, off: int, off_type: int, size: int, type_str, last_change):
         self.stack_vars[off] = StackVariable(off, off_type, name, type_str, size, self.addr, last_change=last_change)

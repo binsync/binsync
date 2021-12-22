@@ -33,7 +33,7 @@ from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourc
 
 
 from binsync.common.controller import *
-from binsync.data import StackOffsetType
+from binsync.data import StackOffsetType, FunctionHeader
 import binsync
 
 #
@@ -63,7 +63,7 @@ class BinjaBinSyncController(BinSyncController):
         if func is None:
             return None
 
-        return binsync.data.Function(func.start, name=func.name)
+        return binsync.data.Function(func.start, header=FunctionHeader(func.name, func.start))
 
     @init_checker
     @make_ro_state

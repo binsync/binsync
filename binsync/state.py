@@ -349,7 +349,7 @@ class State:
             return True
 
         # comment located elsewhere in memory
-        elif comment.addr not in self.comments and self.comments[comment.addr] != comment:
+        elif comment.addr not in self.comments or self.comments[comment.addr] != comment:
             self.comments[comment.addr] = comment
             return True
 
