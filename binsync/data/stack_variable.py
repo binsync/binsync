@@ -1,6 +1,6 @@
 import toml
 
-from .base import Base
+from .artifact import Artifact
 
 
 class StackOffsetType:
@@ -10,22 +10,23 @@ class StackOffsetType:
     ANGR = 3
 
 
-class StackVariable(Base):
+class StackVariable(Artifact):
     """
     Describes a stack variable for a given function.
     """
 
     __slots__ = (
+        "last_change",
         "func_addr",
         "name",
         "stack_offset",
         "stack_offset_type",
         "size",
         "type",
-        "last_change"
     )
 
-    def __init__(self, stack_offset, offset_type, name, type_, size, func_addr, last_change=-1):
+    def __init__(self, stack_offset, offset_type, name, type_, size, func_addr, last_change=None):
+        super(StackVariable, self).__init__(last_change=last_change)
         self.stack_offset = stack_offset  # type: int
         self.stack_offset_type = offset_type  # type: int
         self.name = name  # type: str
@@ -33,15 +34,6 @@ class StackVariable(Base):
         self.size = size  # type: int
         self.func_addr = func_addr  # type: int
         self.last_change = last_change
-
-    def __getstate__(self):
-        return dict(
-            (k, getattr(self, k)) for k in self.__slots__
-        )
-
-    def __setstate__(self, state):
-        for k in self.__slots__:
-            setattr(self, k, state[k])
 
     def __eq__(self, other):
         # ignore time and offset type
@@ -65,9 +57,6 @@ class StackVariable(Base):
             return off
         else:
             raise NotImplementedError()
-
-    def dump(self):
-        return toml.dumps(self.__getstate__())
 
     @classmethod
     def parse(cls, s):

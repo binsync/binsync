@@ -124,13 +124,13 @@ class QFunctionTable(QTableWidget):
                 func_change_time = sync_func.last_change
 
                 # don't add functions that were never changed by the user
-                if sync_func.last_change == -1:
+                if not sync_func.last_change:
                     continue
 
                 # check if we already know about it
                 if func_addr in known_funcs:
                     # compare this users change time to the store change time
-                    if func_change_time < known_funcs[func_addr][3]:
+                    if not func_change_time or func_change_time < known_funcs[func_addr][3]:
                         continue
 
                 remote_func_name = sync_func.name if sync_func.name else ""
@@ -147,7 +147,7 @@ class QFunctionTable(QTableWidget):
                 continue
 
             # function must be changed by this user
-            if user_func.last_change == -1:
+            if not user_func.last_change:
                 continue
 
             yield user.name

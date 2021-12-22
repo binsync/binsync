@@ -37,7 +37,7 @@ import ida_kernwin
 import binsync
 from binsync.common.controller import BinSyncController, make_state, make_ro_state, init_checker
 from binsync import Client, ConnectionWarnings
-from binsync.data import StackVariable, StackOffsetType, Function, Struct, Comment
+from binsync.data import StackVariable, StackOffsetType, Function, FunctionHeader, Struct, Comment
 from . import compat
 
 _l = logging.getLogger(name=__name__)
@@ -332,8 +332,8 @@ class IDABinSyncController(BinSyncController):
     @make_state
     def push_comment(self, func_addr, addr, comment, decompiled=False,
                      user=None, state: "binsync.State" = None, api_set=False):
-        sync_cmt = binsync.data.Comment(func_addr, addr, comment, decompiled=decompiled)
-        state.set_comment(sync_cmt, set_last_change=not api_set)
+        sync_cmt = binsync.data.Comment(addr, comment, decompiled=decompiled)
+        state.set_comment(sync_cmt, func_cmt=func_addr == addr, set_last_change=not api_set)
 
     def push_comments(self, func_addr, cmt_dict: Dict[int, str], decompiled=False,
                       user=None, state: "binsync.State" = None, api_set=False):
@@ -357,12 +357,11 @@ class IDABinSyncController(BinSyncController):
 
     @init_checker
     @make_state
-    def push_function_name(self, attr_addr, new_name,
-                           user=None, state: "binsync.State" = None, api_set=False):
-        # setup the new function for binsync
-        func = binsync.data.Function(attr_addr)
-        func.name = new_name
-        state.set_function(func, set_last_change=not api_set)
+    def push_function_header(self, attr_addr, new_name,
+                             user=None, state: "binsync.State" = None, api_set=False):
+
+        func_header = FunctionHeader(new_name, attr_addr)
+        state.set_function_header(func_header, set_last_change=not api_set)
 
     @init_checker
     @make_state

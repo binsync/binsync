@@ -14,6 +14,11 @@ import datetime
 
 class QNumericItem(QTableWidgetItem):
     def __lt__(self, other):
+        if self.data(Qt.UserRole) is None:
+            return True
+        elif other.data(Qt.UserRole) is None:
+            return False
+
         return self.data(Qt.UserRole) < other.data(Qt.UserRole)
 
 

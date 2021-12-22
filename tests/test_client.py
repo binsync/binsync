@@ -22,8 +22,8 @@ class TestClient(unittest.TestCase):
             # after create, state is not dirty
             self.assertFalse(state.dirty)
 
-            func = binsync.data.Function(0x400080, name="some_name")
-            state.set_function(func)
+            func_header = binsync.data.FunctionHeader("some_name", 0x400080)
+            state.set_function_header(func_header)
             # it should be dirty now
             self.assertTrue(state.dirty)
 
@@ -35,7 +35,7 @@ class TestClient(unittest.TestCase):
             client.state = None
             state = client.get_state()
             self.assertTrue(len(state.functions), 1)
-            self.assertTrue(state.functions[0x400080], func)
+            self.assertTrue(state.functions[0x400080].header, func_header)
 
             # git is still running at least on windows
             client.close()

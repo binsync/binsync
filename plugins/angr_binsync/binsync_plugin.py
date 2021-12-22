@@ -92,7 +92,7 @@ class BinsyncPlugin(BasePlugin):
 
     def handle_function_rename(self, func, old_name: str, new_name: str):
         func_addr = func.addr
-        self.controller.make_controller_cmd(self.controller.push_function_name,
+        self.controller.make_controller_cmd(self.controller.push_function_header,
                                             func_addr, new_name)
         return False
 

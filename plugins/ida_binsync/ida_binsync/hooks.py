@@ -276,7 +276,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
         # grab the name instead from ida
         name = idc.get_func_name(ida_func.start_ea)
-        self.binsync_state_change(self.controller.push_function_name, ida_func.start_ea, name)
+        self.binsync_state_change(self.controller.push_function_header, ida_func.start_ea, name)
 
         return 0
 

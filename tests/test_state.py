@@ -30,8 +30,8 @@ class TestState(unittest.TestCase):
         # create a state for dumping
         state = binsync.State("user0")
         state.version = 1
-        func = binsync.data.Function(0x400080, name="some_name")
-        state.set_function(func)
+        func_header = binsync.data.FunctionHeader("some_name", 0x400080)
+        state.set_function_header(func_header)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # create a client only for accurate git usage
@@ -48,25 +48,25 @@ class TestState(unittest.TestCase):
             self.assertEqual(new_state.user, "user0")
             self.assertEqual(new_state.version, 1)
             self.assertEqual(len(new_state.functions), 1)
-            self.assertEqual(new_state.functions[0x400080], func)
+            self.assertEqual(new_state.functions[0x400080].header, func_header)
 
     def test_state_last_push(self):
         state = binsync.State("user0")
 
-        func1 = binsync.data.Function(0x400080, name="some_name")
-        func2 = binsync.data.Function(0x400090, name="some_other_name")
+        func1 = binsync.data.FunctionHeader("some_name", 0x400080)
+        func2 = binsync.data.FunctionHeader("some_other_name", 0x400090)
         struct = binsync.data.Struct("some_struct", 8, [])
 
-        state.set_function(func1, set_last_change=True)
+        state.set_function_header(func1, set_last_change=True)
         state.set_struct(struct, None)
         # simulate pulling from another user
-        state.set_function(func2, set_last_change=False)
+        state.set_function_header(func2, set_last_change=False)
 
-        self.assertEqual(state.functions[0x400090].last_change, -1)
-        self.assertNotEqual(state.functions[0x400080].last_change, -1)
-        self.assertNotEqual(state.structs["some_struct"].last_change, -1)
+        self.assertEqual(state.functions[0x400090].last_change, None)
+        self.assertNotEqual(state.functions[0x400080].last_change, None)
+        self.assertNotEqual(state.structs["some_struct"].last_change, None)
 
-        self.assertNotEqual(state.last_push_time, -1)
+        self.assertNotEqual(state.last_push_time, None)
         self.assertEqual(state.last_push_artifact, "some_struct")
         self.assertEqual(state.last_push_artifact_type, binsync.state.ArtifactGroupType.STRUCT)
 

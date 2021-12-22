@@ -1,51 +1,23 @@
 import toml
+from .artifact import Artifact
 
-from .base import Base
 
-
-class Comment(Base):
-    """
-    :ivar int func_addr:    Address of the comments Function.
-    :ivar int addr:         Address of the comment.
-    :ivar str comment:      Content.
-    :ivar bool decompiled:  True if the comment is in decompilation
-    """
-
+class Comment(Artifact):
     __slots__ = (
+        "last_change",
+        "addr",
+        "func_addr",
         "comment",
         "decompiled",
-        "func_addr",
-        "addr",
-        "last_change"
+
     )
 
-    def __init__(self, func_addr, addr, comment, decompiled=False, last_change=-1):
+    def __init__(self, addr, comment,  decompiled=False, func_addr=None, last_change=None):
+        super(Comment, self).__init__(last_change=last_change)
         self.comment = comment  # type: str
         self.decompiled = decompiled  # TODO: use this in other places!
-        self.func_addr = func_addr  # type: int
         self.addr = addr  # type: int
-        self.last_change = last_change  # type: int
-
-    def __getstate__(self):
-        return dict(
-            (k, getattr(self, k)) for k in self.__slots__
-        )
-
-    def __setstate__(self, state):
-        for k in self.__slots__:
-            setattr(self, k, state[k])
-
-    def __eq__(self, other):
-        if isinstance(other, Comment):
-            return other.comment == self.comment \
-                   and other.decompiled == self.decompiled \
-                   and other.func_addr == self.func_addr \
-                   and other.addr == self.addr
-
-        return False
-
-    def dump(self):
-        return toml.dumps(self.__getstate__())
+        self.func_addr = func_addr
 
     @classmethod
     def parse(cls, s):
