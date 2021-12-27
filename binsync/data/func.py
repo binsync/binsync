@@ -57,6 +57,7 @@ class FunctionHeader(Artifact):
 
     def __getstate__(self):
         return {
+            "last_change": self.last_change,
             "name": self.name,
             "addr": self.addr,
             "comment": self.comment,

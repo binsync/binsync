@@ -327,7 +327,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         # find the location this comment is
         ida_func = idaapi.get_func(address)
         # TODO: support global data: global comments (comments without a function)
-        func_addr = ida_func.start_ea if ida_func else -1
+        func_addr = ida_func.start_ea if ida_func else None
 
         # disass comment changed
         if cmt_type == "cmt":
