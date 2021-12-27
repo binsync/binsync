@@ -133,13 +133,13 @@ class QActivityTable(QTableWidget):
                 func_change_time = sync_func.last_change
 
                 # don't add functions that were never changed by the user
-                if sync_func.last_change == -1:
+                if not sync_func.last_change:
                     continue
 
                 # check if we already know about it
                 if func_addr in changed_funcs:
                     # compare this users change time to the store change time
-                    if func_change_time < changed_funcs[func_addr]:
+                    if not func_change_time or func_change_time < changed_funcs[func_addr]:
                         continue
 
                 changed_funcs[func_addr] = func_change_time
@@ -147,7 +147,7 @@ class QActivityTable(QTableWidget):
             if len(changed_funcs) > 0:
                 most_recent_func = list(changed_funcs)[0]
                 last_state_change = state.last_push_time \
-                    if state.last_push_time != -1 \
+                    if not state.last_push_time \
                     else list(changed_funcs.values())[0]
             else:
                 most_recent_func = ""

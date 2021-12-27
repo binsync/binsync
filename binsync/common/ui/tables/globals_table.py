@@ -123,13 +123,13 @@ class QGlobalsTable(QTableWidget):
                 struct_change_time = sync_struct.last_change
 
                 # don't add functions that were never changed by the user
-                if sync_struct.last_change == -1:
+                if not sync_struct.last_change:
                     continue
 
                 # check if we already know about it
                 if struct_name in known_structs:
                     # compare this users change time to the store change time
-                    if struct_change_time < known_structs[struct_name][3]:
+                    if not struct_change_time or struct_change_time < known_structs[struct_name][3]:
                         continue
 
                 known_structs[struct_name] = [struct_name, "Struct", user.name, struct_change_time]

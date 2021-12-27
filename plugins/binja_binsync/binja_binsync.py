@@ -132,7 +132,7 @@ class EditFunctionNotification(BinaryDataNotification):
         self._controller = controller
 
     def function_updated(self, view, func):
-        self._controller.push_function(func)
+        self._controller.push_function_header(func)
 
 
 def start_patch_monitor(view):

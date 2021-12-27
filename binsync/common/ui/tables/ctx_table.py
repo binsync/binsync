@@ -127,7 +127,7 @@ class QCTXTable(QTableWidget):
             except KeyError:
                 continue
 
-            if func.last_change == -1:
+            if not func.last_change:
                 continue
 
             # changes is not currently supported

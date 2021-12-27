@@ -293,7 +293,7 @@ class BinSyncController:
 
     @init_checker
     @make_state
-    def push_function_name(self, *args, user=None, state=None, **kwargs):
+    def push_function_header(self, *args, user=None, state=None, **kwargs):
         raise NotImplementedError
 
     @init_checker
@@ -339,16 +339,13 @@ class BinSyncController:
     @init_checker
     @make_ro_state
     def pull_comments(self, func_addr, user=None, state=None) -> Dict[int, Comment]:
-        try:
-            return state.get_comments(func_addr)
-        except KeyError:
-            return {}
+        return state.get_comments_in_function(func_addr)
 
     @init_checker
     @make_ro_state
-    def pull_comment(self, func_addr, addr, user=None, state=None) -> Comment:
+    def pull_comment(self, addr, user=None, state=None) -> Comment:
         try:
-            return state.get_comment(func_addr, addr)
+            return state.get_comment(addr)
         except KeyError:
             return None
 
@@ -385,7 +382,7 @@ class BinSyncController:
         from_user = kwargs.get("user", None)
         msg = "Synced " if from_user else "Updated "
 
-        if pusher.__qualname__ == self.push_function_name.__qualname__:
+        if pusher.__qualname__ == self.push_function_header.__qualname__:
             addr = args[0]
             sync_type = "function"
             sync_data = hex(addr)

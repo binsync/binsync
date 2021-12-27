@@ -14,7 +14,6 @@ import filelock
 from .data import User, Function, Struct, Patch
 from .state import State
 from .errors import MetadataNotFoundError, ExternalUserCommitError
-from .utils import is_py3
 
 _l = logging.getLogger(name=__name__)
 BINSYNC_BRANCH_PREFIX = 'binsync'
@@ -496,9 +495,8 @@ class Client(object):
         proc = subprocess.Popen(ssh_agent_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = proc.communicate()
 
-        if is_py3:
-            stdout = stdout.decode("utf-8")
-            stderr = stderr.decode("utf-8")
+        stdout = stdout.decode("utf-8")
+        stderr = stderr.decode("utf-8")
 
         if proc.returncode != 0 or stderr:
             raise RuntimeError("Failed to discover SSH agent by running command %s.\n"

@@ -6,7 +6,7 @@ from angr import knowledge_plugins
 import angr
 
 from binsync.common.controller import *
-from binsync.data import StackOffsetType
+from binsync.data import StackOffsetType, Function, FunctionHeader
 import binsync
 
 
@@ -38,7 +38,7 @@ class AngrBinSyncController(BinSyncController):
         if func is None or func.am_obj is None:
             return None
 
-        return binsync.data.Function(func.addr, name=func.name)
+        return binsync.data.Function(func.addr, header=FunctionHeader(func.name, func.addr))
 
     #
     # Display Fillers
@@ -66,15 +66,16 @@ class AngrBinSyncController(BinSyncController):
         decompilation.cfunc.demangled_name = _func.name
 
         # ==== Comments ==== #
-        sync_cmts = self.pull_comments(func.addr, user=user)
-        for addr, cmt in sync_cmts.items():
-            if cmt.comment:
-                if cmt.decompiled:
-                    pos = decompilation.map_addr_to_pos.get_nearest_pos(addr)
-                    corrected_addr = decompilation.map_pos_to_addr.get_node(pos).tags['ins_addr']
-                    decompilation.stmt_comments[corrected_addr] = cmt.comment
-                else:
-                    self._instance.kb.comments[cmt.addr] = cmt.comment
+        for addr, cmt in self.pull_comments(func_addr).items():
+            if not cmt or not cmt.comment:
+                continue
+
+            if cmt.decompiled:
+                pos = decompilation.map_addr_to_pos.get_nearest_pos(addr)
+                corrected_addr = decompilation.map_pos_to_addr.get_node(pos).tags['ins_addr']
+                decompilation.stmt_comments[corrected_addr] = cmt.comment
+            else:
+                self._instance.kb.comments[cmt.addr] = cmt.comment
 
         # ==== Stack Vars ==== #
         sync_vars = self.pull_stack_variables(func.addr, user=user)
@@ -101,14 +102,14 @@ class AngrBinSyncController(BinSyncController):
     @make_state
     def push_comment(self, addr, cmt, decompiled, user=None, state=None):
         func_addr = self._get_func_addr_from_addr(addr)
-        sync_cmt = binsync.data.Comment(func_addr, addr, cmt, decompiled=decompiled)
+        sync_cmt = binsync.data.Comment(addr, cmt, func_addr=func_addr, decompiled=decompiled)
         return state.set_comment(sync_cmt)
 
     @init_checker
     @make_state
-    def push_function_name(self, func_addr, new_name, user=None, state=None):
-        _func = binsync.data.Function(func_addr, name=new_name)
-        return state.set_function(_func)
+    def push_function_header(self, func_addr, new_name, user=None, state=None):
+        func_header = binsync.data.FunctionHeader(new_name, func_addr)
+        return state.set_function_header(func_header)
 
     #
     #   Utils
@@ -156,12 +157,20 @@ class AngrBinSyncController(BinSyncController):
 
         return None
 
+    @staticmethod
+    def func_insn_addrs(func: angr.knowledge_plugins.Function):
+        insn_addrs = set()
+        for block in func.blocks:
+            insn_addrs.update(block.instruction_addrs)
+
+        return insn_addrs
+
     def _get_func_addr_from_addr(self, addr):
         try:
             func_addr = self._workspace.instance.kb.cfgs.get_most_accurate()\
                 .get_any_node(addr, anyaddr=True)\
                 .function_address
         except AttributeError:
-            func_addr = -1
+            func_addr = None
 
         return func_addr

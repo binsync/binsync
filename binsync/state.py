@@ -2,11 +2,6 @@ import time
 from typing import List, Dict, Iterable, Union, Optional
 import inspect
 
-try:
-    FileNotFoundError
-except NameError:
-    FileNotFoundError = IOError
-
 import os
 from functools import wraps
 from collections import defaultdict
@@ -16,7 +11,7 @@ from sortedcontainers import SortedDict
 import toml
 import git
 
-from .data import Function, Comment, Patch, StackVariable
+from .data import Function, FunctionHeader, Comment, Patch, StackVariable
 from .data.struct import Struct
 from .errors import MetadataNotFoundError
 
@@ -26,6 +21,7 @@ class ArtifactGroupType:
     FUNCTION = 0
     STRUCT = 1
     PATCH = 2
+    COMMENT = 3
 
 
 def dirty_checker(f):
@@ -42,29 +38,56 @@ def dirty_checker(f):
 def update_last_change(f):
     @wraps(f)
     def _update_last_change(self, *args, **kwargs):
-        should_set_arg = kwargs.pop('set_last_change', None)
-        should_set = True if should_set_arg is None else should_set_arg
+        should_set = kwargs.pop('set_last_change', True)
+        artifact = args[0]
 
-        if should_set:
-            args[0].last_change = int(time.time())
-            artifact = args[0]
+        # make a function if one does not exist
+        if (isinstance(artifact, Comment) and artifact.func_addr) or isinstance(artifact, StackVariable):
+            func = self.get_or_make_function(artifact.func_addr)
+        elif isinstance(artifact, FunctionHeader):
+            func = self.get_or_make_function(artifact.addr)
 
-            if hasattr(artifact, "addr"):
-                artifact_loc = artifact.addr
+        if not should_set:
+            return f(self, *args, **kwargs)
+        artifact.last_change = int(time.time())
+
+        # Comment
+        if isinstance(artifact, Comment):
+            artifact_loc = artifact.addr
+            if artifact.func_addr:
                 artifact_type = ArtifactGroupType.FUNCTION
-            elif hasattr(artifact, "func_addr"):
-                artifact_loc = artifact.func_addr
-                artifact_type = ArtifactGroupType.FUNCTION
-            elif hasattr(artifact, "offset"):
-                artifact_loc = artifact.offset
-                artifact_type = ArtifactGroupType.PATCH
+                func.last_change = artifact.last_change
             else:
-                artifact_loc = artifact.name
-                artifact_type = ArtifactGroupType.STRUCT
+                artifact_type = ArtifactGroupType.COMMENT
 
-            self.last_push_artifact = artifact_loc
-            self.last_push_time = artifact.last_change
-            self.last_push_artifact_type = artifact_type
+        # Stack Var
+        elif isinstance(artifact, StackVariable):
+            artifact_loc = artifact.func_addr
+            artifact_type = ArtifactGroupType.FUNCTION
+            func.last_change = artifact.last_change
+
+        # Function Header
+        elif isinstance(artifact, FunctionHeader):
+            artifact_loc = artifact.addr
+            artifact_type = ArtifactGroupType.FUNCTION
+            func.last_change = artifact.last_change
+
+        # Patch
+        elif isinstance(artifact, Patch):
+            artifact_loc = artifact.offset
+            artifact_type = ArtifactGroupType.PATCH
+
+        # Struct
+        elif isinstance(artifact, Struct):
+            artifact_loc = artifact.name
+            artifact_type = ArtifactGroupType.STRUCT
+
+        else:
+            raise Exception("Undefined Artifact Type!")
+
+        self.last_push_artifact = artifact_loc
+        self.last_push_time = artifact.last_change
+        self.last_push_artifact_type = artifact_type
 
         return f(self, *args, **kwargs)
 
@@ -129,16 +152,14 @@ class State:
 
         # data
         self.functions = {}  # type: Dict[int, Function]
-        self.comments = defaultdict(dict)  # type: Dict[int, Dict[int, Comment]]
-        self.stack_variables = defaultdict(dict)  # type: Dict[int, Dict[int, StackVariable]]
-        self.structs = defaultdict()  # type: Dict[str, Struct]
+        self.comments = {}  # type: Dict[int, Comment]
+        self.structs = {}  # type: Dict[str, Struct]
         self.patches = SortedDict()
 
     def __eq__(self, other):
         if isinstance(other, State):
             return other.functions == self.functions \
                    and other.comments == self.comments \
-                   and other.stack_variables == self.stack_variables \
                    and other.structs == self.structs \
                    and other.patches == self.patches
         return False
@@ -201,26 +222,22 @@ class State:
         # dump metadata
         self.dump_metadata(index)
 
-        # dump function
-        add_data(index, 'functions.toml', toml.dumps(Function.dump_many(self.functions)).encode())
+        # dump functions, one file per function in ./functions/
+        for addr, func in self.functions.items():
+            path = os.path.join('functions', "%08x.toml" % addr)
+            add_data(index, path, func.dump().encode())
+
+        # dump structs, one file per struct in ./structs/
+        for s_name, struct in self.structs.items():
+            path = os.path.join('structs', f"{s_name}.toml")
+            add_data(index, path, struct.dump().encode())
+
+        # dump comments
+        add_data(index, 'comments.toml', toml.dumps(Comment.dump_many(self.comments)).encode())
 
         # dump patches
         add_data(index, 'patches.toml', toml.dumps(Patch.dump_many(self.patches)).encode())
 
-        # dump comments, one file per function
-        for func_addr, cmts in self.comments.items():
-            path = os.path.join('comments', "%08x.toml" % func_addr)
-            add_data(index, path, toml.dumps(Comment.dump_many(cmts)).encode())
-
-        # dump stack variables, one file per function
-        for func_addr, stack_vars in self.stack_variables.items():
-            path = os.path.join('stack_vars', "%08x.toml" % func_addr)
-            add_data(index, path, toml.dumps(StackVariable.dump_many(stack_vars)).encode())
-
-        # dump structs, one file per struct
-        for s_name, struct in self.structs.items():
-            path = os.path.join('structs', f"{s_name}.toml")
-            add_data(index, path, toml.dumps(struct.dump()).encode())
 
     @staticmethod
     def load_metadata(tree):
@@ -240,29 +257,28 @@ class State:
 
         s.version = version if version is not None else metadata["version"]
 
-        # load function
-        try:
-            funcs_toml = toml.loads(tree['functions.toml'].data_stream.read().decode())
-        except:
-            pass
-        else:
-            functions = {}
-            for func in Function.load_many(funcs_toml):
-                functions[func.addr] = func
-            s.functions = functions
-
-        # load comments
-        for func_addr in s.functions:
+        # load functions
+        tree_files = list_files_in_tree(tree)
+        function_files = [name for name in tree_files if name.startswith("functions")]
+        for func_file in function_files:
             try:
-                # TODO use unrebased address for more durability
-                cmts_toml = toml.loads(tree[os.path.join('comments', '%08x.toml' % func_addr)].data_stream.read().decode())
+                func_toml = toml.loads(tree[func_file].data_stream.read().decode())
             except:
                 pass
             else:
-                cmts = list(Comment.load_many(cmts_toml))
-                d = dict((c.addr, c) for c in cmts)
-                if cmts:
-                    s.comments[cmts[0].func_addr] = d
+                func = Function.load(func_toml)
+                s.functions[func.addr] = func
+
+        # load comments
+        try:
+            comments_toml = toml.loads(tree['comments.toml'].data_stream.read().decode())
+        except:
+            pass
+        else:
+            comments = {}
+            for comment in Comment.load_many(comments_toml):
+                comments[comment.addr] = comment
+            s.comments = comments
 
         # load patches
         try:
@@ -274,19 +290,6 @@ class State:
             for patch in Patch.load_many(patches_toml):
                 patches[patch.offset] = patch
             s.patches = SortedDict(patches)
-
-        # load stack variables
-        for func_addr in s.functions:
-            try:
-                # TODO use unrebased address for more durability
-                svs_toml = toml.loads(tree[os.path.join('stack_vars', '%08x.toml' % func_addr)].data_stream.read().decode())
-            except:
-                pass
-            else:
-                svs = list(StackVariable.load_many(svs_toml))
-                d = dict((v.stack_offset, v) for v in svs)
-                if svs:
-                    s.stack_variables[svs[0].func_addr] = d
 
         # load structs
         tree_files = list_files_in_tree(tree)
@@ -312,7 +315,6 @@ class State:
 
         self.functions = target_state.functions.copy()
         self.comments = target_state.comments.copy()
-        self.stack_variables = target_state.stack_variables.copy()
         self.patches = target_state.patches.copy()
         self.structs = target_state.structs.copy()
         
@@ -327,42 +329,31 @@ class State:
 
     @dirty_checker
     @update_last_change
-    def set_function(self, func, set_last_change=True):
-
-        if not isinstance(func, Function):
-            raise TypeError(
-                "Unsupported type %s. Expecting type %s." % (type(func), Function)
-            )
-
-        if func.addr in self.functions and self.functions[func.addr] == func:
-            # no update is required
+    def set_function_header(self, func_header: FunctionHeader, set_last_change=True):
+        if self.functions[func_header.addr] == func_header:
             return False
 
-        self.functions[func.addr] = func
+        self.functions[func_header.addr].header = func_header
         return True
 
     @dirty_checker
     @update_last_change
     def set_comment(self, comment: Comment, set_last_change=True):
-
-        if comment and \
-                comment.func_addr in self.comments and \
-                comment.addr in self.comments[comment.func_addr] and \
-                self.comments[comment.func_addr][comment.addr] == comment:
-            # no update is required
+        if not comment:
             return False
 
-        self.comments[comment.func_addr][comment.addr] = comment
-        self._update_or_create_function(comment.func_addr, comment.last_change)
-        return True
-
-    @dirty_checker
-    def remove_comment(self, func_addr, addr, set_last_change=True):
-        try:
-            del self.comments[func_addr][addr]
+        # comment in the function header
+        is_func_cmt = comment.addr == comment.func_addr
+        if is_func_cmt and self.functions[comment.addr].header.comment != comment.comment:
+            self.functions[comment.addr].header.comment = comment.comment
             return True
-        except KeyError:
-            return False
+
+        # comment located elsewhere in memory
+        elif comment.addr not in self.comments or self.comments[comment.addr] != comment:
+            self.comments[comment.addr] = comment
+            return True
+
+        return False
 
     @dirty_checker
     @update_last_change
@@ -378,14 +369,10 @@ class State:
     @dirty_checker
     @update_last_change
     def set_stack_variable(self, variable, offset, func_addr, set_last_change=True):
-        if func_addr in self.stack_variables \
-                and offset in self.stack_variables[func_addr] \
-                and self.stack_variables[func_addr][offset] == variable:
-            # no update is required
+        if offset in self.functions[func_addr].stack_vars and variable == self.functions[func_addr].stack_vars[offset]:
             return False
 
-        self.stack_variables[func_addr][offset] = variable
-        self._update_or_create_function(func_addr, variable.last_change)
+        self.functions[func_addr].stack_vars[offset] = variable
         return True
 
     @dirty_checker
@@ -422,41 +409,48 @@ class State:
         if struct.name is not None:
             self.structs[struct.name] = struct
 
-    def _update_or_create_function(self, func_addr, last_change):
-        try:
-            func = self.get_function(func_addr)
-        except KeyError:
-            func = Function(func_addr)
-
-        func.last_change = last_change
-        self.functions[func_addr] = func
-
     #
     # Getters
     #
 
-    def get_function(self, addr) -> Function:
+    def get_or_make_function(self, addr) -> Function:
+        try:
+            func = self.functions[addr]
+        except KeyError:
+            self.functions[addr] = Function(addr)
+            func = self.functions[addr]
 
+        return func
+
+    def get_function(self, addr) -> Function:
         if addr not in self.functions:
             raise KeyError("Function %x is not found in the db." % addr)
 
         return self.functions[addr]
 
-    def get_comment(self, func_addr, addr) -> Comment:
-        if func_addr not in self.comments:
+    def get_comment(self, addr) -> Comment:
+        if addr in self.comments:
+            return self.comments[addr]
+
+        elif addr in self.functions and self.functions[addr].header.comment is not None:
+            return Comment(addr, self.functions[addr].header.comment)
+
+        else:
             raise KeyError("There is no comment at address %#x." % addr)
 
-        if addr not in self.comments[func_addr]:
-            raise KeyError("There is no comment at address %#x." % addr)
+    def get_comments_in_function(self, func_addr):
+        if func_addr not in self.functions:
+            return {}
 
-        cmt = self.comments[func_addr][addr]
-        return cmt
+        # include the function comment
+        cmts = {func_addr: Comment(func_addr, self.functions[func_addr].header.comment)}
+        for addr, comment in self.comments.items():
+            if comment.func_addr != func_addr:
+                continue
 
-    def get_comments(self, func_addr) -> Dict[int, Comment]:
-        if func_addr not in self.comments:
-            raise KeyError("There is no comment at address %#x." % func_addr)
+            cmts[comment.addr] = comment
 
-        return self.comments[func_addr]
+        return cmts
 
     def get_patch(self, addr) -> Patch:
 
@@ -469,16 +463,15 @@ class State:
         return self.patches.values()
 
     def get_stack_variable(self, func_addr, offset) -> StackVariable:
-        if func_addr not in self.stack_variables:
-            raise KeyError("No stack variables are defined for function %#x." % func_addr)
-        if offset not in self.stack_variables[func_addr]:
+        if func_addr in self.functions and offset in self.functions[func_addr].stack_vars:
+            return self.functions[func_addr].stack_vars[offset]
+        else:
             raise KeyError("No stack variable exists at offset %d in function %#x." % (offset, func_addr))
-        return self.stack_variables[func_addr][offset]
 
     def get_stack_variables(self, func_addr):
-        if func_addr not in self.stack_variables:
+        if func_addr not in self.functions:
             raise KeyError("No stack variables are defined for function %#x." % func_addr)
-        return self.stack_variables[func_addr].items()
+        return self.functions[func_addr].stack_vars.items()
 
     def get_struct(self, struct_name) -> Struct:
         if struct_name not in self.structs:
