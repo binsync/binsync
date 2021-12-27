@@ -56,15 +56,15 @@ class FunctionHeader(Artifact):
         self.args = args or {}
 
     def __getstate__(self):
+        args = {str(idx): arg.__getstate__() for idx, arg in self.args.items()}
+
         return {
             "last_change": self.last_change,
             "name": self.name,
             "addr": self.addr,
             "comment": self.comment,
             "ret_type_str": self.ret_type,
-            "args": {
-                str(idx): arg.__getstate__() for idx, arg in self.args.items()
-            }
+            "args": args if len(args) > 0 else None,
         }
 
     @classmethod
@@ -108,24 +108,23 @@ class Function(Artifact):
         self.stack_vars: typing.Dict[int, StackVariable] = stack_vars or {}
 
     def __getstate__(self):
+        header = self.header.__getstate__() if self.header else None
+        stack_vars = {"%x" % offset: stack_var.__getstate__() for offset, stack_var in self.stack_vars.items()}
+
         return {
             "metadata": {
                 "addr": self.addr,
                 "last_change": self.last_change
             },
-
-            "header": self.header.__getstate__() if self.header else None,
-
-            "stack_vars": {
-                "%x" % offset: stack_var.__getstate__() for offset, stack_var in self.stack_vars.items()
-            }
+            "header": header,
+            "stack_vars": stack_vars if len(stack_vars) > 0 else None
         }
 
     def __setstate__(self, state):
         if not isinstance(state["metadata"]["addr"], int):
             raise TypeError("Unsupported type %s for addr." % type(state["metadata"]["addr"]))
 
-        metadata, header, stack_vars = state["metadata"], state.get("header", None), state["stack_vars"]
+        metadata, header, stack_vars = state["metadata"], state.get("header", None), state.get("stack_vars", None)
 
         self.addr = metadata["addr"]
         self.last_change = metadata.get("last_change", None)
@@ -134,7 +133,7 @@ class Function(Artifact):
 
         self.stack_vars = {
             int(off, 16): StackVariable.parse(toml.dumps(stack_var)) for off, stack_var in stack_vars.items()
-        }
+        } if stack_vars else {}
 
     @property
     def name(self):

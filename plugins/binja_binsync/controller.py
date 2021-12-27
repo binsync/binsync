@@ -80,10 +80,8 @@ class BinjaBinSyncController(BinSyncController):
         bn_func.name = sync_func.name
 
         # comments
-        for _, ins_addr in bn_func.instructions:
-            _comment = self.pull_comment(bn_func.start, ins_addr, user=user, state=state)
-            if _comment is not None:
-                bn_func.set_comment_at(ins_addr, _comment.comment)
+        for addr, comment in self.pull_comments(bn_func.start, user=user, state=state).items():
+            bn_func.set_comment_at(addr, comment.comment)
 
         # stack variables
         existing_stack_vars: Dict[int, Any] = dict((v.storage, v) for v in bn_func.stack_layout
@@ -162,5 +160,7 @@ class BinjaBinSyncController(BinSyncController):
     def push_comments(self, func, comments: Dict[int,str], user=None, state=None) -> None:
         # Push comments
         for addr, comment in comments.items():
-            cmt = binsync.data.Comment(func.start, int(addr), comment, decompiled=True)
+            func = self.bv.get_function_at(addr)
+            func_addr = func.start if func else None
+            cmt = binsync.data.Comment(func.start, addr, comment, decompiled=True, func_addr=func_addr)
             state.set_comment(cmt)
