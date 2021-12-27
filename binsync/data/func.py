@@ -53,10 +53,10 @@ class FunctionHeader(Artifact):
         self.addr = addr
         self.comment = comment
         self.ret_type = ret_type
-        self.args = args or {}
+        self.args = args
 
     def __getstate__(self):
-        args = {str(idx): arg.__getstate__() for idx, arg in self.args.items()}
+        args = {str(idx): arg.__getstate__() for idx, arg in self.args.items()} if self.args else {}
 
         return {
             "last_change": self.last_change,
@@ -105,11 +105,12 @@ class Function(Artifact):
 
         self.addr = addr
         self.header = header
-        self.stack_vars: typing.Dict[int, StackVariable] = stack_vars or {}
+        self.stack_vars: typing.Dict[int, StackVariable] = stack_vars
 
     def __getstate__(self):
         header = self.header.__getstate__() if self.header else None
-        stack_vars = {"%x" % offset: stack_var.__getstate__() for offset, stack_var in self.stack_vars.items()}
+        stack_vars = {"%x" % offset: stack_var.__getstate__() for offset, stack_var in self.stack_vars.items()} if \
+            self.stack_vars else None
 
         return {
             "metadata": {
@@ -117,7 +118,7 @@ class Function(Artifact):
                 "last_change": self.last_change
             },
             "header": header,
-            "stack_vars": stack_vars if len(stack_vars) > 0 else None
+            "stack_vars": stack_vars
         }
 
     def __setstate__(self, state):
