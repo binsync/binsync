@@ -46,10 +46,15 @@ variable for the type of install you are doing. If you are installing for IDA Pr
 IDA_HOME=~/ida/ida-7.6 ./scripts/install.sh
 ```
 
-for Binja it looks like:
+for Binja on macOS it looks like:
 
 ```bash
 BINJA_HOME=~/Library/Application\ Support/Binary\ Ninja/ ./scripts/install.sh
+```
+
+for Binja on Ubuntu is looks like:
+```bash
+BINJA_HOME=~/.binaryninja/ ./scripts/install.sh
 ```
 
 ### Binja Extra Steps

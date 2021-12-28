@@ -313,12 +313,16 @@ class BinSyncController:
     @init_checker
     @make_ro_state
     def pull_function(self, func_addr, user=None, state=None) -> Function:
+        # netcat to this shell for pdb shell like python gdb
+        from remote_pdb import RemotePdb
+        RemotePdb('127.0.0.1', 4444).set_trace()
         if not func_addr:
             return None
 
         try:
             func = state.get_function(func_addr)
         except KeyError:
+            print(f"[BinSync] Key Error getting function address {hex(func_addr)} with type {type(func_addr)}")
             return None
 
         return func

@@ -74,6 +74,7 @@ class BinjaBinSyncController(BinSyncController):
         bn_func = self.bv.get_function_at(func_addr)
         sync_func = self.pull_function(func_addr, user=user, state=state)
         if sync_func is None:
+            print(f"[BinSync] Error {hex(func_addr)} unable to be pulled")
             return
 
         # name
