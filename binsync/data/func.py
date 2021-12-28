@@ -63,9 +63,18 @@ class FunctionHeader(Artifact):
             "name": self.name,
             "addr": self.addr,
             "comment": self.comment,
-            "ret_type_str": self.ret_type,
+            "ret_type": self.ret_type,
             "args": args if len(args) > 0 else None,
         }
+
+    def __setstate__(self, state):
+        self.last_change = state.get("last_change", None)
+        self.name = state.get("name", None)
+        self.addr = state["addr"]
+        self.comment = state.get("comment", None)
+        self.ret_type = state.get("ret_type", None)
+        args = state.get("args", {})
+        self.args = {int(idx, 16): StackVariable.parse(toml.dumps(arg)) for idx, arg in args.items()}
 
     @classmethod
     def parse(cls, s):
