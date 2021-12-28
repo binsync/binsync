@@ -144,6 +144,36 @@ def start_function_monitor(view):
     notification = EditFunctionNotification(view, binsync_controller)
     view.register_notification(notification)
 """
+class EditFunctionNotification(BinaryDataNotification):
+    def __init__(self, view, controller):
+        super().__init__()
+        self._view = view
+        self._controller = controller
+        self._function_requested = None
+
+    def function_updated(self, view, func):
+        # g_function_requested == func.start
+        # if so push this func
+        # else exit earlier
+        # g_function_requested = None
+        # use push function header
+        sync_func = self._controller.pull_function(func.start, user="master")
+        if not sync_func:
+            self._controller.push_function(func)
+        if sync_func.name != func.name:
+            print(f"[BinSync] Function {hex(func.start)} name changed names from {sync_func.name} to {func.name}")
+        else:
+            print(f"[BinSync] Function {hex(func.start)} changed unknown update")
+        self._controller.push_function(func)
+
+    def function_update_requested(self, view, func):
+        # Only get one notification but promised to happen
+        # g_function_requested = func.start
+
+
+def start_function_monitor(view, controller):
+    notification = EditFunctionNotification(view, controller)
+    view.register_notification(notification)
 
 
 class BinjaPlugin:
@@ -172,8 +202,8 @@ class BinjaPlugin:
         )
 
     def _init_bv_dependencies(self, bv):
-        # do stuff
-        pass
+        print(f"[BinSync] Starting hooks")
+        start_function_monitor(bv, self.controllers[bv])
 
     def _launch_config(self, bn_context):
         bv = bn_context.binaryView
