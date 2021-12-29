@@ -228,7 +228,7 @@ class BinSyncController:
 
     def binary_hash(self) -> str:
         """
-        Should return a hex string of the currently loaded binary in the decompiler. For most cases,
+        Returns a hex string of the currently loaded binary in the decompiler. For most cases,
         this will simply be a md5hash of the binary.
 
         @rtype: hex string
@@ -237,13 +237,20 @@ class BinSyncController:
 
     def active_context(self) -> binsync.data.Function:
         """
-        Should return an binsync Function. Currently only functions are supported as current contexts.
+        Returns an binsync Function. Currently only functions are supported as current contexts.
         This function will be called very frequently, so its important that its implementation is fast
         and can be done many times in the decompiler.
         """
-
         raise NotImplementedError
 
+    def binary_path(self) -> Optional[str]:
+        """
+        Returns a string that is the path of the currently loaded binary. If there is no binary loaded
+        then None should be returned.
+
+        @rtype: path-like string (/path/to/binary)
+        """
+        raise NotImplementedError
 
     #
     # Fillers

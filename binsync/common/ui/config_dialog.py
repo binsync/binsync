@@ -1,5 +1,8 @@
 import traceback
 import os
+from typing import Optional, Dict
+import toml
+import time
 
 from . import ui_version
 if ui_version == "PySide2":
@@ -114,6 +117,9 @@ class SyncConfig(QDialog):
         self._main_layout.addLayout(upper_layout)
         self._main_layout.addLayout(buttons_layout)
 
+        # change the text if config exists
+        self.load_saved_config()
+
     #
     # Event handlers
     #
@@ -156,7 +162,12 @@ class SyncConfig(QDialog):
             return
 
         self._parse_and_display_connection_warnings(connection_warnings)
-        print(f"[BinSync]: Client has connected to sync repo with user: {user}.")
+        print(f"[BinSync] Client has connected to sync repo with user: {user}.")
+
+        saved_config = self.save_config()
+        if saved_config:
+            print(f"[BinSync] Configuration config was saved to {saved_config}.")
+
         self.close()
 
     def _on_repo_clicked(self):
@@ -183,6 +194,52 @@ class SyncConfig(QDialog):
 
     def _on_cancel_clicked(self):
         self.close()
+
+    #
+    # Utils
+    #
+
+    def _get_config_path(self):
+        binary_path = self.controller.binary_path()
+        if not binary_path:
+            return None
+
+        # example config: /path/to/fauxware_files/.fauxware.conf.toml
+        config_name = "." + os.path.basename(self.controller.binary_path()) + ".conf.toml"
+        config_path = os.path.join(os.path.dirname(self.controller.binary_path()), config_name)
+        return config_path
+
+    def load_saved_config(self) -> bool:
+        config_path = self._get_config_path()
+        if not config_path or not os.path.exists(config_path):
+            return False
+
+        with open(config_path, "r") as fp:
+            config = toml.load(fp)
+
+        self._user_edit.setText(config.get("username", ""))
+        self._repo_edit.setText(config.get("repo", ""))
+        self._remote_edit.setText(config.get("remote", ""))
+        return True
+
+    def save_config(self) -> Optional[str]:
+        config_path = self._get_config_path()
+        if not config_path:
+            return None
+
+        if os.path.exists(config_path):
+            os.unlink(config_path)
+
+        config = {
+            "username": self._user_edit.text(),
+            "repo": self._repo_edit.text(),
+            "remote": self._remote_edit.text()
+        }
+        with open(config_path, "w") as fp:
+            toml.dump(config, fp)
+
+        return config_path
+
 
     #
     # Static methods

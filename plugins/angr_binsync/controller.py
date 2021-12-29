@@ -40,6 +40,12 @@ class AngrBinSyncController(BinSyncController):
 
         return binsync.data.Function(func.addr, header=FunctionHeader(func.name, func.addr))
 
+    def binary_path(self) -> Optional[str]:
+        try:
+            return self._instance.project.loader.main_object.binary
+        except Exception:
+            return None
+
     #
     # Display Fillers
     #
