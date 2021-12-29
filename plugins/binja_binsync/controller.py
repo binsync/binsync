@@ -65,6 +65,12 @@ class BinjaBinSyncController(BinSyncController):
 
         return binsync.data.Function(func.start, header=FunctionHeader(func.name, func.start))
 
+    def binary_path(self) -> Optional[str]:
+        try:
+            return self.bv.file.filename
+        except Exception:
+            return None
+
     @init_checker
     @make_ro_state
     def fill_function(self, func_addr, user=None, state=None):
