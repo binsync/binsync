@@ -1,8 +1,9 @@
 
-<h1 align="center">
-   BinSync <br> <br>
+# BinSync
+
+<p align="center">
    <img src="https://i.imgur.com/zQcqqML.png" alt="logo"/>
-</h1>
+</p>
 
 BinSync is a decompiler collaboration tool built on the Git versioning system to enable fined grained reverse
 engineering collaboration regardless of decompiler. 
