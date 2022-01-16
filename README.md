@@ -1,27 +1,57 @@
 
-# BinSync
+<h1 align="center">
+   BinSync <br> <br>
+   <img src="https://i.imgur.com/zQcqqML.png" alt="logo"/>
+</h1>
 
-## What is BinSync
+BinSync is a decompiler collaboration tool built on the Git versioning system to enable fined grained reverse
+engineering collaboration regardless of decompiler. 
 
-BinSync enables manual and automated synchronization of the following reverse engineering artifacts between IDA Pro, Binary Ninja, and angr management running on the same machine or different machines:
-
-- Function names
+All good decompilers share common objects called Reverse Engineering Artifacts (REAs). These REAs are the 
+center of BinSync's syncing ability. Here are the supported REAs:
+- Function headers (symbol, args, type)
+- Stack Variables (symbol, type)
+- Structs   
 - Comments
-- Names & types of stack variables
-- User-defined structs
 
-All data is stored in a human-friendly text format (toml) inside a Git repo.
+Note: all types support user-created types like structs.
 
 ## Supported Platforms
-Currently we support the following decompilers:
-- angr-management: **>= 9.0**
 - IDA Pro: **>= 7.3**
 - Binary Ninja: **>= 2.4**
+- angr-management: **>= 9.0**
 
-Binary Ninja is partially supported, but lacks modern UI updates. 
-Currently, we have no implementation for Ghidra, but we are looking into a solution.
+All versions require **Python >= 3.4** and **Git** installed on your system.
 
 ## Installing
+### Script (Fast)
+Use the installation script provided in the repo:
+```bash
+./install.sh --ida /path/to/ida/plugins
+```
+
+Use `--help`, for more information.
+
+### Manual 
+If you are unable to install BinSync with the script above, you are probably on Windows. In that case, installing
+BinSync is a two-step process. 
+1. Install the core with the Python version associated with your decompiler: `pip3 install -e .`
+2. Install the decompiler plugin directly into your decompilers `plugin` folder.
+
+For step 2, you copy all files (and folders) found under the plugin folder in BinSync. An an example, for IDA, 
+you would copy everything in `plugins/ida_binsync/*` to the plugins folder.
+
+
+## Usage
+Although BinSync supports various decompilers, which may have numerous
+
+
+
+
+
+
+
+
 
 ### Git Prereqs
 
@@ -36,21 +66,6 @@ to enter a password, you have two options:
 1. pull some private repo once so you need to enter your password and unlock the key
 2. generate a new key that is not password protected and add it to GitHub (or whatever host you use)
 
-
-### Install Script (IDA, Binja)
-To install just run the install script from the root of the repo and define the needed enviornment
-variable for the type of install you are doing. If you are installing for IDA Pro, you must define the variable
-`IDA_HOME`, which should be home folder of your IDA install. For me it looks like this:
-
-```bash
-IDA_HOME=~/ida/ida-7.6 ./scripts/install.sh
-```
-
-for Binja it looks like:
-
-```bash
-BINJA_HOME=~/Library/Application\ Support/Binary\ Ninja/ ./scripts/install.sh
-```
 
 ### Binja Extra Steps
 Since Binja may be running a custom Python interpreter, please manually set or verify that your Python
