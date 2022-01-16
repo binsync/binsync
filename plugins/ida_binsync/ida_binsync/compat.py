@@ -401,6 +401,7 @@ class IDAViewCTX:
 def get_screen_ea():
     return idc.get_screen_ea()
 
+
 @execute_read
 def get_function_cursor_at():
     curr_addr = get_screen_ea()
@@ -409,3 +410,11 @@ def get_function_cursor_at():
 
     return ida_func_addr(curr_addr)
 
+
+#
+# Other Utils
+#
+
+@execute_read
+def get_binary_path():
+    return idaapi.get_input_file_path()

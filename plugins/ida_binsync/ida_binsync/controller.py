@@ -23,7 +23,7 @@ import threading
 import time
 import datetime
 import logging
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 from collections import OrderedDict, defaultdict
 
 import idc
@@ -160,6 +160,9 @@ class IDABinSyncController(BinSyncController):
 
         func = binsync.data.Function(func_addr, header=FunctionHeader(compat.get_func_name(func_addr), func_addr))
         self._updated_ctx = func
+
+    def binary_path(self) -> Optional[str]:
+        return compat.get_binary_path()
 
     #
     # IDA DataBase Fillers
