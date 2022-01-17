@@ -63,8 +63,8 @@ class Struct(Artifact):
         members = state["members"]
 
         self.name = metadata["name"]
-        self.size = members["size"]
-        self.last_change = members.get("last_change", None)
+        self.size = metadata["size"]
+        self.last_change = metadata.get("last_change", None)
 
         self.struct_members = [
             StructMember.parse(toml.dumps(member)) for _, member in members.items()
