@@ -59,14 +59,74 @@ git clone git@github.com:mahaloz/binsync_example_repo.git
 cp binsync_example_repo/fauxware .
 ```
 
-2. Open the binary in your decompiler, verify it has loaded in the decompiler terminal
+2. Open the fauxware binary in your decompiler, verify it has loaded in the decompiler terminal
 ```
 [Binsync] v2.1.0 loaded
 ```
+
 If it does not show, it means the plugin is not in the plugins folder. 
 
-3. 
+3. Open the BinSync Config Pane
+   1. You can hit `Ctrl+Shift+B` to open it, OR
+   2. You can click your decompiler menu: `Edit -> Plugins -> Binsync: settings`. On Binja it's under `Tools`.
+   
+4. Give a username and find the example_repo from earlier, click ok
+   ![](./assets/images/demo1.png)
+   
+5. Verify your terminal says (with your username):
+```bash
+[BinSync]: Client has connected to sync repo with user: <username>.
+```
 
+6. You should now see an Info Panel. Click on `Activity`, you can see other user's activities. You should also notice
+   your username on the bottom right of the panel to be green (online).
+   ![](./assets/images/demo2.png)
+
+Congrats, your BinSync seems to connect to a repo, and recognize you as a user.
+Let's test pulling to verify you can actually do stuff with your install. 
+
+7. In your decompiler, click anywhere in the function `main` once. After a second or two you should notice on the
+   Info Panel that the words on the bottom left say `main@0x40071d`. This is your context.
+   
+8. Now click on the `Context` tab, and right click on the user `mahaloz`. Click the `Sync` popup.
+   ![](./assets/images/demo3.png)
+   
+9. If everything works out, your decompilation should've changed for `main`. Now the function should be named
+   `mahaloz_main`, and it should look something like:
+   
+```c
+// ***
+// This is a function comment:
+// 
+// Thanks for using BinSync <3
+// 
+// - mahaloz
+// ***
+int __cdecl mahaloz_main(int argc, const char **argv, const char **envp)
+{
+  int buf; 
+  mahalo_struct special_stack_var; 
+  char username[16]; 
+
+  username[8] = 0;
+  LOBYTE(special_stack_var.field_8) = 0;
+  puts("Username: ");
+  read(0, username, 8uLL);
+  read(0, &buf, 1uLL);
+  puts("Password: ");                           // totally a password
+  read(0, &special_stack_var, 8uLL);
+  read(0, &buf, 1uLL);
+  buf = authenticate(username, &special_stack_var);
+  if ( !buf )
+    rejected(username);
+  return accepted(username);
+} 
+```
+
+Take note of the variable names & types, and the comments. This will look different per-decompiler, but the symbols and
+types should line up for the most part.
+
+For more general use, tips, and advice, see our Wiki for full help.
 
 
 
@@ -104,55 +164,3 @@ cd ~/sync_repos
 ```bash
 [Binsync] v2.1.0 loaded!
 ```
-5. Open the BinSync Config Pane
-   1. You can hit `Ctrl+Shift+B` to open it
-   2. OR You can use click `Edit -> Plugins -> Binsync: settings`
-6. Give a username and find the example_repo from earlier, click ok
-   ![](./assets/images/binsync_1.png)
-7. Verify your IDAPython terminal says (with your username):
-```bash
-[BinSync]: Client has connected to sync repo with user: mahaloz.
-```
-
-8. You should have a few users now in the new Info Panel that has poped up
-   ![](./assets/images/binsync_2.png)
-
-Congrats, your BinSync seems to connect to a repo, and recognize you as a user.
-Let's test pulling.
-
-1. Left Click then Right click on the `main` function in the function table
-   ![](./assets/images/binsync_3.png)
-2. Click `Binsync action...`
-3. Select `mahaloz` as a user and hit OK
-   ![](./assets/images/binsync_4.png)
-4. Get your view back to the decompilation view for that function
-5. Verify your main now looks like this:
-```c
-// ***
-// This is mahaloz big ole function comment.
-// Thanks for using BinSync. <3
-// 
-// ***
-int __cdecl mahaloz_main(int argc, const char **argv, const char **envp)
-{
-  int ret_val; // [rsp+1Ch] [rbp-24h] BYREF
-  mahaloz_struct some_struct; // [rsp+20h] [rbp-20h] BYREF
-  char some_char_arr[16]; // [rsp+30h] [rbp-10h] BYREF
-
-  some_char_arr[8] = 0;
-  LOBYTE(some_struct.field_8) = 0;
-  puts("Username: ");                           // <--- username
-  read(0, some_char_arr, 8uLL);
-  read(0, &ret_val, 1uLL);
-  puts("Password: ");                           // <---- password
-  read(0, &some_struct, 8uLL);
-  read(0, &ret_val, 1uLL);
-  ret_val = authenticate(some_char_arr, &some_struct);
-  if ( !ret_val )
-    rejected(some_char_arr);
-  return accepted(some_char_arr);
-}
-```
-
-In BinSync, you right-click on the function table to select functions you want to sync.
-You can select multiple functions before right-clicking. Play around with other users.
