@@ -84,7 +84,7 @@ If it does not show, it means the plugin is not in the plugins folder.
 
 6. You should now see an Info Panel. Click on `Activity`, you can see other user's activities. You should also notice
    your username on the bottom right of the panel to be green (online).
-   ![](./assets/images/demo2.png)
+   <img src="/assets/images/demo2.png" width="50%" height="50%">
 
 Congrats, your BinSync seems to connect to a repo, and recognize you as a user.
 Let's test pulling to verify you can actually do stuff with your install. 
@@ -93,7 +93,7 @@ Let's test pulling to verify you can actually do stuff with your install.
    Info Panel that the words on the bottom left say `main@0x40071d`. This is your context.
    
 8. Now click on the `Context` tab, and right click on the user `mahaloz`. Click the `Sync` popup.
-   ![](./assets/images/demo3.png)
+   <img src="/assets/images/demo3.png" width="50%" height="50%">
    
 9. If everything works out, your decompilation should've changed for `main`. Now the function should be named
    `mahaloz_main`, and it should look something like:
