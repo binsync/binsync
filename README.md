@@ -49,8 +49,12 @@ you would copy everything in `plugins/ida_binsync/*` to the plugins folder.
 Although BinSync supports various decompilers, which may have not so subtle differences, a lot of the way you interact
 with BinSync is standard across all versions. In each decompiler we use the same UI regardless of QT version. 
 
-For decompiler specific intricacies, please see our supported decompilers usage manual in our Wiki.
-If you are using Binja, see our extra install steps.
+For decompiler specific intricacies, please see our supported decompilers usage manual in our [Wiki](https://github.com/angr/binsync/wiki).
+If you are using Binja, see our extra install steps. Lastly, before attempting to use the BinSync for its pushing
+features, **assure you have an unlocked (non-password protected) ssh key associated with the repo you plan on 
+editing**.
+
+After validating your install below, it is very helpful to read our user [Manual](https://github.com/angr/binsync/wiki/Manual) in our [Wiki](https://github.com/angr/binsync/wiki).
 
 ### Validation
 1. Copy down a local version of the testing repo and grab the `fauxware` binary
@@ -126,41 +130,4 @@ int __cdecl mahaloz_main(int argc, const char **argv, const char **envp)
 Take note of the variable names & types, and the comments. This will look different per-decompiler, but the symbols and
 types should line up for the most part.
 
-For more general use, tips, and advice, see our Wiki for full help.
-
-
-
-### Git Prereqs
-
-BinSync's backbone is `git`, which means to use BinSync you must have two things:
-1. `git` must be installed on your system.
-2. You must use an ssh key to pull and push, AND **it must be password unlocked**.
-
-Number 2 is very important. Many users have complained about BinSync not auto pushing/pulling
-things with git and almost all of them did not have their ssh key unlocked. If your key requires you 
-to enter a password, you have two options:
-
-1. pull some private repo once so you need to enter your password and unlock the key
-2. generate a new key that is not password protected and add it to GitHub (or whatever host you use)
-
-### Manual Install Without Scripts (Windows)
-If you are unable to use Bash for whatever reason, the install script only does two things for
-every decompiler:
-1. Copy the entire folder in `plugins/decoilername_binsync/` to the decompiler plugin folder
-2. Install BinSync to the same python the decompiler uses `python3 -m pip install --user -e .`
-
-## Usage  
-### Verifying your download works
-1. Make a place for sync repos to live
-```bash
-mkdir ~/sync_repos
-cd ~/sync_repos
-```
-2. Download the testing repo and get the binary out (fauxware)
-```bash
-```
-3. Launch IDA on fauxware
-4. Verify your IDAPython terminal says:
-```bash
-[Binsync] v2.1.0 loaded!
-```
+For more general use, tips, and advice, see our [Wiki Manual](https://github.com/angr/binsync/wiki/Manual) for full help.
