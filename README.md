@@ -75,7 +75,7 @@ If it does not show, it means the plugin is not in the plugins folder.
    2. You can click your decompiler menu: `Edit -> Plugins -> Binsync: settings`. On Binja it's under `Tools`.
    
 4. Give a username and find the example_repo from earlier, click ok
-   ![](./assets/images/demo1.png)
+   <img src="/assets/images/demo1.png" width="50%" height="50%">
    
 5. Verify your terminal says (with your username):
 ```bash
