@@ -1,3 +1,4 @@
+import logging
 from angrmanagement.plugins import BasePlugin
 from angrmanagement.ui.workspace import Workspace
 
@@ -7,6 +8,8 @@ from .controller import AngrBinSyncController
 from binsync.common.ui import set_ui_version
 set_ui_version("PySide2")
 from binsync.common.ui.config_dialog import SyncConfig
+
+l = logging.getLogger(__name__)
 
 class BinsyncPlugin(BasePlugin):
     def __init__(self, workspace: Workspace):

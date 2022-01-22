@@ -1,5 +1,7 @@
 from . import State
+import logging
 
+l = logging.getLogger(__name__)
 
 class MergeState:
     def __init__(self, mstr_state: State, trgt_state: State, func_addr: int):

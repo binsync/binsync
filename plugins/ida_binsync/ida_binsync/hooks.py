@@ -22,6 +22,7 @@
 # ----------------------------------------------------------------------------
 import time
 from functools import wraps
+import logging
 
 import ida_auto
 import ida_bytes
@@ -44,6 +45,7 @@ from . import compat
 from .controller import IDABinSyncController
 from binsync.data.struct import Struct
 
+l = logging.getLogger(__name__)
 
 #
 #   Decorators

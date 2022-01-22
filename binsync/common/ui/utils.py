@@ -1,4 +1,7 @@
 from . import ui_version
+import logging
+import datetime
+
 if ui_version == "PySide2":
     from PySide2.QtWidgets import QTableWidgetItem
     from PySide2.QtCore import Qt
@@ -9,8 +12,7 @@ else:
     from PyQt5.QtWidgets import QTableWidgetItem
     from PyQt5.QtCore import Qt
 
-import datetime
-
+l = logging.getLogger(__name__)
 
 class QNumericItem(QTableWidgetItem):
     def __lt__(self, other):

@@ -12,6 +12,7 @@
 import functools
 import threading
 import typing
+import logging
 
 import idc
 import idaapi
@@ -26,6 +27,7 @@ import ida_typeinf
 from binsync.data import Struct
 from .controller import IDABinSyncController
 
+l = logging.getLogger(__name__)
 
 #
 #   Helper classes for wrapping data
