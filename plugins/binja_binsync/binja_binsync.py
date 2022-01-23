@@ -22,6 +22,8 @@ from binsync.common.ui.config_dialog import SyncConfig
 from binsync.common.ui.control_panel import ControlPanel
 from .ui_tools import find_main_window, BinjaDockWidget, create_widget
 from .controller import BinjaBinSyncController
+from copy import deepcopy
+from binsync import data
 
 
 #
@@ -150,6 +152,7 @@ class FunctionNotification(BinaryDataNotification):
         self._view = view
         self._controller = controller
         self._function_requested = None
+        self._function_saved = None
 
     def function_updated(self, view, func):
         # g_function_requested == func.start
@@ -162,6 +165,30 @@ class FunctionNotification(BinaryDataNotification):
             self._function_requested = None
             self._controller.push_function_header(func.start, func.name)
 
+            # Check return type
+            if self._function_saved.header.ret_type != func.return_type.get_string_before_name():
+                before = self._function_saved.header.ret_type
+                after = func.return_type.get_string_before_name()
+                print(f"[BinSync] Function {func.start:#x} detected return type change from {before} to {after}") 
+
+            # Check arguments
+            for key, value in self._function_saved.header.args.items():
+                old_arg = value
+                try:
+                    new_arg = func.parameter_vars[key]
+                except KeyError:
+                    new_arg = None
+                    print(f"[BinSync Function {func.start:#x} detected argument {key} removed")
+                    break
+
+                if old_arg.name != new_arg.name:
+                    print(f"[BinSync] Function {func.start:#x} detected argument {key} name change from {old_arg.name} to {new_arg.name}")
+
+                if old_arg.type_str != new_arg.type.get_string_before_name():
+                    print(f"[BinSync] Function {func.start:#x} detected argument {key} type change from {old_arg.type_str} to {new_arg.type.get_string_before_name()}")
+
+            self._function_saved = None
+
     def function_update_requested(self, view, func):
         # Only get one notification but promised to happen
         # g_function_requested = func.start
@@ -169,6 +196,13 @@ class FunctionNotification(BinaryDataNotification):
         if self._function_requested == None:
             print(f"[BinSync] Function requested {func.start:#x}")
             self._function_requested = func.start
+
+            # Copy function over to binsync function
+            args = {}
+            for i, parameter in enumerate(func.parameter_vars):
+                args[i] = data.FunctionArgument(i, parameter.name, parameter.type.get_string_before_name(), 0)
+
+            self._function_saved = data.Function(func.start, header=data.FunctionHeader(func.name, func.start, ret_type=func.return_type.get_string_before_name(), args=args))
 
 
 class DataNotification(BinaryDataNotification):
