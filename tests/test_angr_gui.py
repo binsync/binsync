@@ -122,7 +122,6 @@ class TestBinSyncPluginGUI(unittest.TestCase):
     Done inside the angr-management decompiler.
     """
 
-
     def setUp(self):
         am_setUp()
 
