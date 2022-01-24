@@ -27,5 +27,7 @@ jobs:
         ./install.sh --angr /opt/hostedtoolcache/Python/3.8.12/x64/lib/python3.8/site-packages/angrmanagement/plugins/ --link
 
     - name: Pytest
+      env:
+        QT_QPA_PLATFORM: "offscreen"
       run: |
         pytest ./tests/test_angr_gui.py
