@@ -116,7 +116,7 @@ def am_setUp():
 #
 
 
-class TestBinSyncPluginUI(unittest.TestCase):
+class TestBinSyncPluginGUI(unittest.TestCase):
     """
     Unit Tests to test the BinSync Plugin for syncing across two users.
     """
