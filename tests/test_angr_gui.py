@@ -130,7 +130,6 @@ class TestBinSyncPluginGUI(unittest.TestCase):
     #
 
     def test_function_rename(self):
-        return
         binpath = os.path.join(test_location, "fauxware")
         new_function_name = "leet_main"
         user_1 = "user_1"
