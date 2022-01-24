@@ -13,10 +13,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Set up Python 3.9
+    - name: Set up Python 3.8
       uses: actions/setup-python@v2
       with:
-        python-version: "3.9"
+        python-version: "3.8"
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -24,8 +24,8 @@ jobs:
         pip install -e .
         pip install angr-management
         python -m site
-        rm -rf /opt/hostedtoolcache/Python/3.9.10/x64/lib/python3.9/site-packages/angrmanagement/plugins/binsync
-        ./install.sh --angr /opt/hostedtoolcache/Python/3.9.10/x64/lib/python3.9/site-packages/angrmanagement/plugins/ --link
+        rm -rf /opt/hostedtoolcache/Python/3.8.10/x64/lib/python3.8/site-packages/angrmanagement/plugins/binsync
+        ./install.sh --angr /opt/hostedtoolcache/Python/3.8.10/x64/lib/python3.8/site-packages/angrmanagement/plugins/ --link
 
     - name: Pytest
       run: |
