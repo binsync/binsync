@@ -119,7 +119,7 @@ def am_setUp():
 class TestBinSyncPluginGUI(unittest.TestCase):
     """
     Unit Tests to test the BinSync Plugin for syncing across two users or more.
-    Done inside angr-management decompiler and UI.
+    Done inside angr-management decompiler.
     """
 
     def setUp(self):
