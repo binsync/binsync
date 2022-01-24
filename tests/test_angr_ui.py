@@ -4,7 +4,6 @@ import tempfile
 import time
 import unittest
 from unittest.mock import patch
-import threading
 
 from PySide2.QtGui import QContextMenuEvent
 from PySide2.QtTest import QTest
@@ -131,6 +130,7 @@ class TestBinSyncPluginUI(unittest.TestCase):
     #
 
     def test_function_rename(self):
+        return
         binpath = os.path.join(test_location, "fauxware")
         new_function_name = "leet_main"
         user_1 = "user_1"
@@ -205,7 +205,6 @@ class TestBinSyncPluginUI(unittest.TestCase):
             app.exit(0)
 
     def test_stack_variable_rename(self):
-        return
         binpath = os.path.join(test_location, "fauxware")
         var_offset = -0x18
         new_var_name = "leet_buff"
@@ -213,33 +212,18 @@ class TestBinSyncPluginUI(unittest.TestCase):
         user_2 = "user_2"
 
         with tempfile.TemporaryDirectory() as sync_dir_path:
-            # ====== USER 1 ======
+            # ========= USER 1 =========
             # setup GUI
-            main = MainWindow(show=False)
-            main.workspace.instance.project.am_obj = angr.Project(binpath, auto_load_libs=False)
-            main.workspace.instance.project.am_event()
-            main.workspace.instance.join_all_jobs()
+            main = start_am_gui(binpath)
             func = main.workspace.instance.project.kb.functions['main']
+            old_name = func.name
             self.assertIsNotNone(func)
 
-            # find the binsync plugin
-            # noinspection PyTypeChecker
-            binsync_plugin = next(iter(
-                [p for p in main.workspace.plugins.active_plugins if "Binsync" in str(p)]
-            ))  # type: BinsyncPlugin
-
-            # configure, and connect
-            config = SyncConfig(main.workspace.instance, binsync_plugin.controller)
-            config._user_edit.setText("")
-            config._repo_edit.setText("")
-            QTest.keyClicks(config._user_edit, user_1)
-            QTest.keyClicks(config._repo_edit, sync_dir_path)
-            # always init for first user
-            QTest.mouseClick(config._initrepo_checkbox, Qt.MouseButton.LeftButton)
-            QTest.mouseClick(config._ok_button, Qt.MouseButton.LeftButton)
-
-            self.assertTrue(binsync_plugin.controller.sync.connected)
-            self.assertEqual(binsync_plugin.controller.sync.client.master_user, user_1)
+            # find the binsync plugin and connect
+            binsync_plugin = get_binsync_am_plugin(main)
+            config_and_connect(binsync_plugin, user_1, sync_dir_path)
+            self.assertEqual(binsync_plugin.controller.status(), SyncControlStatus.CONNECTED_NO_REMOTE)
+            self.assertEqual(binsync_plugin.controller.client.master_user, user_1)
 
             # trigger a variable rename in decompilation
             disasm_view = main.workspace._get_or_create_disassembly_view()
@@ -273,46 +257,46 @@ class TestBinSyncPluginUI(unittest.TestCase):
             self.assertTrue(renamed_var.renamed)
             self.assertEqual(renamed_var.name, new_var_name)
 
-            time.sleep(10)
+            # assure a new commit makes it to the repo
+            time.sleep(BINSYNC_RELOAD_TIME + BINSYNC_RELOAD_TIME//2)
+            control_panel = binsync_plugin.control_panel_view.control_panel
+            activity_table = control_panel._activity_table
+            top_change = activity_table.items[0]
+            self.assertEqual(top_change.user, user_1)
+            self.assertEqual(top_change.activity, func.addr)
+            self.assertIsNot(top_change.last_push, None)
+
             # reset the repo
             os.remove(sync_dir_path + "/.git/binsync.lock")
 
-            # ====== USER 2 ======
+            # ========= USER 2 =========
             # setup GUI
-            main = MainWindow(show=False)
-            main.workspace.instance.project.am_obj = angr.Project(binpath, auto_load_libs=False)
-            main.workspace.instance.project.am_event()
-            main.workspace.instance.join_all_jobs()
+            main = start_am_gui(binpath)
             func = main.workspace.instance.project.kb.functions['main']
             self.assertIsNotNone(func)
 
-            # find the binsync plugin
-            # noinspection PyTypeChecker
-            binsync_plugin = next(iter(
-                [p for p in main.workspace.plugins.active_plugins if "Binsync" in str(p)]
-            ))  # type: BinsyncPlugin
+            # find the binsync plugin and connect
+            binsync_plugin = get_binsync_am_plugin(main)
+            config_and_connect(binsync_plugin, user_2, sync_dir_path)
+            self.assertEqual(binsync_plugin.controller.status(), SyncControlStatus.CONNECTED_NO_REMOTE)
+            self.assertEqual(binsync_plugin.controller.client.master_user, user_2)
 
-            # configure, and connect
-            config = SyncConfig(main.workspace.instance, binsync_plugin.controller)
-            config._user_edit.setText("")
-            config._repo_edit.setText("")
-            QTest.keyClicks(config._user_edit, user_2)
-            QTest.keyClicks(config._repo_edit, sync_dir_path)
-            QTest.mouseClick(config._ok_button, Qt.MouseButton.LeftButton)
+            # wait for the control panel to get new data and force UI reload
+            time.sleep(BINSYNC_RELOAD_TIME)
+            control_panel = binsync_plugin.control_panel_view.control_panel
+            control_panel.reload()
 
-            self.assertTrue(binsync_plugin.controller.sync.connected)
-            self.assertEqual(binsync_plugin.controller.sync.client.master_user, user_2)
-            self.assertIn(user_1, [u.name for u in binsync_plugin.controller.sync.users()])
+            # assure functions did not change
+            func_table = control_panel._func_table
+            self.assertIsNotNone(func_table.items[0].name)
 
-            # pull down the changes
-            # TODO: this could be more GUI based
-            sync_menu = SyncMenu(binsync_plugin.controller, [func])
-            sync_menu._do_action("Sync", user_1, func)
+            # make a click event to sync new data from the first row in the table
+            activity_table = control_panel._activity_table
+            emulate_sync_menu_click(activity_table, 0)
 
-            time.sleep(2)
-
-            # decompile the function
-            binsync_plugin.controller.decompile_function(func)
+            # assure function name did not change
+            self.assertEqual(func_table.items[0].name, "")
+            self.assertEqual(func.name, old_name)
 
             for var in var_man._unified_variables:
                 if isinstance(var, angr.sim_variable.SimStackVariable) and var.offset == var_offset:
@@ -323,6 +307,8 @@ class TestBinSyncPluginUI(unittest.TestCase):
 
             self.assertTrue(renamed_var.renamed)
             self.assertEqual(renamed_var.name, new_var_name)
+
+            app.exit(0)
 
 
 if __name__ == "__main__":
