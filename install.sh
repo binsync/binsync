@@ -98,7 +98,7 @@ install_angr() {
 }
 
 install_client() {
-    pip3 install -e .
+    pip install -e .
     echo "BinSync Core installed successfully!"
 }
 

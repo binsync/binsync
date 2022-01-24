@@ -73,8 +73,10 @@ def make_ro_state(f):
 
 
 #
-# Description Classes
+# Description Constants
 #
+
+BINSYNC_RELOAD_TIME = 10
 
 class SyncControlStatus:
     CONNECTED = 0
@@ -150,15 +152,16 @@ class BinSyncController:
                 if self.ctx_change_callback:
                     self._check_and_notify_ctx()
 
-                # update the control panel with new info every 10 seconds
-                if self._last_reload is None or (datetime.datetime.now() - self._last_reload).seconds > 10:
+                # update the control panel with new info every BINSYNC_RELOAD_TIME seconds
+                if self._last_reload is None or \
+                        (datetime.datetime.now() - self._last_reload).seconds > BINSYNC_RELOAD_TIME:
                     self._last_reload = datetime.datetime.now()
                     self._update_ui()
 
-            # update client every 10 seconds if it has a remote connection
+            # update client every BINSYNC_RELOAD_TIME seconds if it has a remote connection
             if self.client.has_remote and (
                     (self.client.last_pull_attempt_at is None) or
-                    (datetime.datetime.now() - self.client.last_pull_attempt_at).seconds > 10
+                    (datetime.datetime.now() - self.client.last_pull_attempt_at).seconds > BINSYNC_RELOAD_TIME
             ):
                 self.client.update()
 
