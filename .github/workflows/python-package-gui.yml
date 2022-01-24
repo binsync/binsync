@@ -23,7 +23,6 @@ jobs:
         pip install flake8 pytest
         pip install angr-management
         rm -rf /opt/hostedtoolcache/Python/3.8.12/x64/lib/python3.8/site-packages/angrmanagement/plugins/binsync
-        mkdir -f ~/.config && mkdir -f ~/.config/angr-management/ && echo "enabled_plugins = \"BinSyncPlugin\"" >> ~/.config/angr-management/config
         ./install.sh --angr /opt/hostedtoolcache/Python/3.8.12/x64/lib/python3.8/site-packages/angrmanagement/plugins/ --link
 
     - name: Pytest

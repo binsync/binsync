@@ -41,9 +41,12 @@ def config_and_connect(binsync_plugin, username, sync_dir_path):
 
 
 def get_binsync_am_plugin(main_window):
+    _plugin = [plugin for plugin in main_window.workspace.plugins.loaded_plugins if "BinSyncPlugin" in str(plugin)][0]
+    main_window.workspace.plugins.activate_plugin(_plugin)
+
     binsync_plugin = next(iter(
         [p for p in main_window.workspace.plugins.active_plugins if "BinSync" in str(p)]
-    ))  # type: BinSyncPlugin
+    ))
     return binsync_plugin
 
 
