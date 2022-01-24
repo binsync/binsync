@@ -23,7 +23,8 @@ jobs:
         pip install flake8 pytest
         pip install -e .
         pip install angr-management
-        rm -rf ~/.local/lib/python3.9/site-packages/angrmanagement/plugins/binsync 
+        python -m site
+        rm -rf ~/.local/lib/python/site-packages/angrmanagement/plugins/binsync 
         ./install.sh --angr ~/.local/lib/python3.9/site-packages/angrmanagement/plugins/ --link
 
     - name: Pytest
