@@ -56,6 +56,7 @@ class AngrBinSyncController(BinSyncController):
     @init_checker
     @make_ro_state
     def fill_function(self, func_addr, user=None, state=None):
+        import ipdb; ipdb.set_trace()
         func = self._instance.kb.functions[func_addr]
 
         # re-decompile a function if needed

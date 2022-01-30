@@ -88,31 +88,19 @@ class QGlobalsTable(QTableWidget):
         self.setSortingEnabled(True)
 
     def contextMenuEvent(self, event):
-        # reload menu as a stub for testing support
-        from ...ui.utils import menu_stub
-        menu = menu_stub(QMenu(self))
-
-        sync_action = menu.addAction("Sync")
+        menu = QMenu(self)
+        menu.setObjectName("binsync_global_table_context_menu")
 
         # create a nested menu
         selected_row = self.rowAt(event.pos().y())
         global_name = self.item(selected_row, 0).text()
+        menu.addAction("Sync", lambda: self.controller.fill_struct(global_name, user=self.item(selected_row, 2).text()))
+
         from_menu = menu.addMenu("Sync from...")
         for username in self._get_valid_users_for_global(global_name):
-            from_menu.addAction(username)
+            from_menu.addAction(username, lambda: self.controller.fill_struct(global_name, user=username))
 
-        # execute the event
-        action = menu.exec_(self.mapToGlobal(event.pos()))
-
-        if action == sync_action:
-            username = self.item(selected_row, 2).text()
-        elif action in from_menu.actions():
-            username = action.text()
-        else:
-            return
-
-        #TODO: update for any global, not just struct
-        self.controller.fill_struct(global_name, user=username)
+        menu.popup(self.mapToGlobal(event.pos()))
 
     def update_table(self):
         known_structs = {}  # struct_name: (struct_name, name, user_name, push_time)
