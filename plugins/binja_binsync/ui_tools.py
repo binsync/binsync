@@ -1,7 +1,7 @@
 import traceback
 import sys
 
-from PySide2.QtWidgets import (
+from PySide6.QtWidgets import (
     QDockWidget,
     QWidget,
     QApplication,
@@ -19,7 +19,7 @@ from PySide2.QtWidgets import (
     QGroupBox,
     QCheckBox,
 )
-from PySide2.QtCore import Qt
+from PySide6.QtCore import Qt
 from binaryninjaui import DockContextHandler
 import binaryninja
 

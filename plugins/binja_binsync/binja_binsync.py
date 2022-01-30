@@ -1,5 +1,5 @@
-from PySide2.QtWidgets import QVBoxLayout
-from PySide2.QtCore import Qt
+from PySide6.QtWidgets import QVBoxLayout
+from PySide6.QtCore import Qt
 from binaryninjaui import (
     UIContext,
     DockHandler,
@@ -17,7 +17,7 @@ from binaryninja.binaryview import BinaryDataNotification
 from collections import defaultdict
 
 from binsync.common.ui import set_ui_version
-set_ui_version("PySide2")
+set_ui_version("PySide6")
 from binsync.common.ui.config_dialog import SyncConfig
 from binsync.common.ui.control_panel import ControlPanel
 from .ui_tools import find_main_window, BinjaDockWidget, create_widget
@@ -60,6 +60,21 @@ def instance():
         dock = BinjaDockWidget("dummy")
     return dock
 
+
+def conv_func_binja_to_binsync(binja_func):
+    args = {}
+    for i, parameter in enumerate(binja_func.parameter_vars):
+        args[i] = data.FunctionArgument(i, parameter.name, parameter.type.get_string_before_name(), 0)
+
+    sync_header = data.FunctionHeader(binja_func.name,
+                                      binja_func.start,
+                                      ret_type=binja_func.return_type.get_string_before_name(),
+                                      args=args)
+
+    sync_stack_vars = None
+    return data.Function(binja_func.start, header=sync_header, stack_vars=sync_stack_vars)
+
+
 class FunctionNotification(BinaryDataNotification):
     def __init__(self, view, controller):
         super().__init__()
@@ -74,49 +89,40 @@ class FunctionNotification(BinaryDataNotification):
         # else exit earlier
         # g_function_requested = None
         # use push function header
-        if self._function_requested == func.start:
-            print(f"[BinSync] Function {func.start:#x} matched request function pushing")
+        func = conv_func_binja_to_binsync(func)
+        if self._function_requested == func.addr:
+            print(f"[BinSync] Function {func.addr:#x} matched request function pushing")
             self._function_requested = None
-            self._controller.push_function_header(func.start, func.name)
+            self._controller.push_function_header(func.addr, func.name)
 
             # Check return type
-            if self._function_saved.header.ret_type != func.return_type.get_string_before_name():
+            if self._function_saved.header.ret_type != func.header.ret_type:
                 before = self._function_saved.header.ret_type
-                after = func.return_type.get_string_before_name()
-                print(f"[BinSync] Function {func.start:#x} detected return type change from {before} to {after}") 
+                after = func.header.ret_type
+                print(f"[BinSync] Function {func.addr:#x} detected return type change from {before} to {after}")
 
             # Check arguments
-            for key, value in self._function_saved.header.args.items():
-                old_arg = value
+            for key, old_arg in self._function_saved.header.args.items():
                 try:
-                    new_arg = func.parameter_vars[key]
+                    new_arg = func.header.args[key]
                 except KeyError:
                     new_arg = None
-                    print(f"[BinSync Function {func.start:#x} detected argument {key} removed")
+                    print(f"[BinSync Function {func.addr:#x} detected argument {key} removed")
                     break
 
                 if old_arg.name != new_arg.name:
-                    print(f"[BinSync] Function {func.start:#x} detected argument {key} name change from {old_arg.name} to {new_arg.name}")
+                    print(f"[BinSync] Function {func.addr:#x} detected argument {key} name change from {old_arg.name} to {new_arg.name}")
 
-                if old_arg.type_str != new_arg.type.get_string_before_name():
-                    print(f"[BinSync] Function {func.start:#x} detected argument {key} type change from {old_arg.type_str} to {new_arg.type.get_string_before_name()}")
+                if old_arg.type_str != new_arg.type_str:
+                    print(f"[BinSync] Function {func.addr:#x} detected argument {key} type change from {old_arg.type_str} to {new_arg.type_str}")
 
             self._function_saved = None
 
     def function_update_requested(self, view, func):
-        # Only get one notification but promised to happen
-        # g_function_requested = func.start
-        # Save function copy for diff in function_update
-        if self._function_requested == None:
+        if self._function_requested is None:
             print(f"[BinSync] Function requested {func.start:#x}")
             self._function_requested = func.start
-
-            # Copy function over to binsync function
-            args = {}
-            for i, parameter in enumerate(func.parameter_vars):
-                args[i] = data.FunctionArgument(i, parameter.name, parameter.type.get_string_before_name(), 0)
-
-            self._function_saved = data.Function(func.start, header=data.FunctionHeader(func.name, func.start, ret_type=func.return_type.get_string_before_name(), args=args))
+            self._function_saved = conv_func_binja_to_binsync(func)
 
 
 class DataNotification(BinaryDataNotification):
@@ -130,12 +136,29 @@ class DataNotification(BinaryDataNotification):
         print(f"[BinSync] Data Updated Var: {var}, Type: {type(var)}")
 
 
+class StructNotification(BinaryDataNotification):
+    def __init__(self, view, controller):
+        super().__init__()
+        self._view = view
+        self._controller = controller
+
+    def type_defined(self, view:'BinaryView', name:'_types.QualifiedName', type:'_types.Type') -> None:
+        print(f"[BinSync] Type defined!")
+
+    def type_undefined(self, view:'BinaryView', name:'_types.QualifiedName', type:'_types.Type') -> None:
+        print(f"[BinSync] Type undefined!")
+
+
 def start_function_monitor(view, controller):
     notification = FunctionNotification(view, controller)
     view.register_notification(notification)
 
 def start_data_monitor(view, controller):
     notification = DataNotification(view, controller)
+    view.register_notification(notification)
+
+def start_struct_monitor(view, controller):
+    notification = StructNotification(view, controller)
     view.register_notification(notification)
 
 
@@ -167,8 +190,11 @@ class BinjaPlugin:
     def _init_bv_dependencies(self, bv):
         print(f"[BinSync] Starting function hook")
         start_function_monitor(bv, self.controllers[bv])
-        print(f"[BinSync] Starting data hook")
-        start_data_monitor(bv, self.controllers[bv])
+        #Creates to much noise removing for time being
+        #print(f"[BinSync] Starting data hook")
+        #start_data_monitor(bv, self.controllers[bv])
+        print(f"[BinSync Starting struct hook")
+        start_struct_monitor(bv, self.controllers[bv])
 
     def _launch_config(self, bn_context):
         bv = bn_context.binaryView
