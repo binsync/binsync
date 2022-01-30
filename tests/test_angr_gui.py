@@ -300,6 +300,7 @@ class TestBinSyncPluginGUI(unittest.TestCase):
             self.assertEqual(func_table.items[0].name, "")
             self.assertEqual(func.name, old_name)
 
+            var_man = main.workspace.instance.pseudocode_variable_kb.variables.get_function_manager(func.addr)
             for var in var_man._unified_variables:
                 if isinstance(var, angr.sim_variable.SimStackVariable) and var.offset == var_offset:
                     renamed_var = var
