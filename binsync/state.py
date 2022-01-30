@@ -439,6 +439,9 @@ class State:
             raise KeyError("There is no comment at address %#x." % addr)
 
     def get_comments_in_function(self, func_addr):
+        """
+        NEED TO DEPRECATE OR UPDATE THIS
+        """
         if func_addr not in self.functions:
             return {}
 
