@@ -56,3 +56,6 @@ def friendly_datetime(time_before):
 
     s += " ago" if ago else " in the future"
     return s
+
+def menu_stub(menu):
+    return menu

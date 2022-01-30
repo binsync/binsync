@@ -1,5 +1,6 @@
 from typing import Dict
 import logging
+import importlib
 
 from .. import ui_version
 if ui_version == "PySide2":
@@ -92,7 +93,10 @@ class QFunctionTable(QTableWidget):
         self.setSortingEnabled(True)
 
     def contextMenuEvent(self, event):
-        menu = QMenu(self)
+        # reload menu as a stub for testing support
+        from ...ui.utils import menu_stub
+        menu = menu_stub(QMenu(self))
+
         sync_action = menu.addAction("Sync")
 
         # create a nested menu
@@ -103,7 +107,7 @@ class QFunctionTable(QTableWidget):
             from_menu.addAction(username)
 
         # execute the event
-        action = menu.exec_(self.mapToGlobal(event.pos()))
+        action = menu.exec_(self.mapToGlobal(event.pos()), parent=menu)
 
         if action == sync_action:
             username = self.item(selected_row, 2).text()

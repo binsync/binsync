@@ -1,0 +1,32 @@
+name: GUI Tests
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v2
+      with:
+        python-version: "3.8"
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 pytest
+        pip install angr-management
+        rm -rf /opt/hostedtoolcache/Python/3.8.12/x64/lib/python3.8/site-packages/angrmanagement/plugins/binsync
+        ./install.sh --angr /opt/hostedtoolcache/Python/3.8.12/x64/lib/python3.8/site-packages/angrmanagement/plugins/ --link
+
+    - name: Pytest
+      env:
+        QT_QPA_PLATFORM: "offscreen"
+      run: |
+        pytest ./tests/test_angr_gui.py

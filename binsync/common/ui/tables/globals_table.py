@@ -90,7 +90,10 @@ class QGlobalsTable(QTableWidget):
         self.setSortingEnabled(True)
 
     def contextMenuEvent(self, event):
-        menu = QMenu(self)
+        # reload menu as a stub for testing support
+        from ...ui.utils import menu_stub
+        menu = menu_stub(QMenu(self))
+
         sync_action = menu.addAction("Sync")
 
         # create a nested menu

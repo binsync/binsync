@@ -1,1 +1,1 @@
-from .binsync_plugin import BinsyncPlugin
+from .binsync_plugin import BinSyncPlugin

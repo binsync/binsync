@@ -11,7 +11,7 @@ from binsync.common.ui.config_dialog import SyncConfig
 
 l = logging.getLogger(__name__)
 
-class BinsyncPlugin(BasePlugin):
+class BinSyncPlugin(BasePlugin):
     def __init__(self, workspace: Workspace):
         """
         The entry point for the BinSync plugin. This class is respobsible for both initializing the GUI and
