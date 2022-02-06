@@ -135,7 +135,7 @@ class Function(Artifact):
         metadata, header, stack_vars = state["metadata"], state.get("header", None), state.get("stack_vars", {})
 
         self.addr = metadata["addr"]
-        self.addr = metadata["size"]
+        self.size = metadata["size"]
         self.last_change = metadata.get("last_change", None)
 
         self.header = FunctionHeader.parse(toml.dumps(header)) if header else None

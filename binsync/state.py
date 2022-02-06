@@ -532,9 +532,9 @@ class State:
     # Utils
     #
 
-    def find_func_for_addr(self, addr):
-        for addr, func in self.functions.items():
-            if func.addr <= addr <= (func.addr + func.size):
+    def find_func_for_addr(self, search_addr):
+        for func_addr, func in self.functions.items():
+            if func.addr <= search_addr < (func.addr + func.size):
                 return func
         else:
             return None
