@@ -417,7 +417,7 @@ class State:
         try:
             func = self.functions[addr]
         except KeyError:
-            self.functions[addr] = Function(addr)
+            self.functions[addr] = Function(addr, 0)
             func = self.functions[addr]
 
         return func
