@@ -43,6 +43,7 @@ import idc
 from . import compat
 from .controller import IDABinSyncController
 from binsync.data.struct import Struct
+from binsync.data import Comment
 
 
 #
@@ -324,19 +325,14 @@ class IDBHooks(ida_idp.IDB_Hooks):
         @param cmt_type:
         @return:
         """
-        # find the location this comment is
-        ida_func = idaapi.get_func(address)
-        # TODO: support global data: global comments (comments without a function)
-        func_addr = ida_func.start_ea if ida_func else None
-
         # disass comment changed
         if cmt_type == "cmt":
-            self.binsync_state_change(self.controller.push_comment, func_addr, address, comment)
+            self.binsync_state_change(self.controller.push_comment, address, comment)
 
         # function comment changed
         elif cmt_type == "range":
             # overwrite the entire function comment
-            self.binsync_state_change(self.controller.push_comment, func_addr, address, comment)
+            self.binsync_state_change(self.controller.push_comment, address, comment)
 
         # XXX: other?
         elif cmt_type == "extra":
@@ -495,8 +491,8 @@ class HexRaysHooks:
         # never do the same push twice
         if cmts != self._cached_funcs[ea]["cmts"]:
             # thread it!
-            kwargs = {}
-            self.binsync_state_change(self.controller.push_comments, ea, cmts, decompiled=True)
+            sync_cmts = [Comment(ea, cmt, decompiled=True) for ea, cmt in self._cached_funcs[ea]["cmts"].items()]
+            self.binsync_state_change(self.controller.push_comments, sync_cmts, decompiled=True)
 
             # cache so we don't double push a copy
             self._cached_funcs[ea]["cmts"] = cmts

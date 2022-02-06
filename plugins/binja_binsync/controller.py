@@ -63,13 +63,22 @@ class BinjaBinSyncController(BinSyncController):
         if func is None:
             return None
 
-        return binsync.data.Function(func.start, header=FunctionHeader(func.name, func.start))
+        return binsync.data.Function(
+            func.start, 0, header=FunctionHeader(func.name, func.start)
+        )
 
     def binary_path(self) -> Optional[str]:
         try:
             return self.bv.file.filename
         except Exception:
             return None
+
+    def get_func_size(self, func_addr) -> int:
+        func = self.bv.get_function_at(func_addr)
+        if not func:
+            return 0
+
+        return func.highest_address - func.start
 
     @init_checker
     @make_ro_state
@@ -83,10 +92,11 @@ class BinjaBinSyncController(BinSyncController):
             return
 
         # name
-        bn_func.name = sync_func.name
+        if sync_func.name and sync_func.name != bn_func.name:
+            bn_func.name = sync_func.name
 
         # comments
-        for addr, comment in self.pull_comments(bn_func.start, user=user, state=state).items():
+        for addr, comment in self.pull_func_comments(bn_func.start, user=user, state=state).items():
             bn_func.set_comment_at(addr, comment.comment)
 
         # stack variables
@@ -118,7 +128,7 @@ class BinjaBinSyncController(BinSyncController):
     #
 
     @init_checker
-    @make_state
+    @make_state_with_func
     def push_function_header(self, bn_func: binaryninja.function.Function, user=None, state=None):
         # Push function
         func = binsync.data.FunctionHeader(bn_func.name, bn_func.start)  # force conversion from long to int
@@ -130,7 +140,7 @@ class BinjaBinSyncController(BinSyncController):
         state.set_patch(patch.offset, patch)
 
     @init_checker
-    @make_state
+    @make_state_with_func
     def push_stack_variable(self, bn_func: binaryninja.Function, stack_var: binaryninja.function.Variable,
                             user=None, state=None):
         if stack_var.source_type != VariableSourceType.StackVariableSourceType:

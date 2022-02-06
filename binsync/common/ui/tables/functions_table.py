@@ -105,7 +105,7 @@ class QFunctionTable(QTableWidget):
             from_menu.addAction(username)
 
         # execute the event
-        action = menu.exec_(self.mapToGlobal(event.pos()), parent=menu)
+        action = menu.exec_(self.mapToGlobal(event.pos()))
 
         if action == sync_action:
             username = self.item(selected_row, 2).text()
@@ -145,13 +145,10 @@ class QFunctionTable(QTableWidget):
     def _get_valid_users_for_func(self, func_addr):
         for user in self.controller.users():
             user_state: State = self.controller.client.get_state(user=user.name)
-            try:
-                user_func = user_state.get_function(func_addr)
-            except KeyError:
-                continue
+            user_func = user_state.get_function(func_addr)
 
             # function must be changed by this user
-            if not user_func.last_change:
+            if not user_func or not user_func.last_change:
                 continue
 
             yield user.name
