@@ -100,5 +100,6 @@ class BinSyncPlugin(BasePlugin):
         return False
 
     def handle_comment_changed(self, addr: int, cmt: str, new: bool, decomp: bool):
-        self.controller.make_controller_cmd(self.controller.push_comment, addr, cmt, decomp)
+        func_addr = self.controller.get_func_addr_from_addr(addr)
+        self.controller.make_controller_cmd(self.controller.push_comment, addr, cmt, decomp, **{"func_addr": func_addr})
         return False

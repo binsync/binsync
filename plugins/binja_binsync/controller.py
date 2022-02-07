@@ -175,11 +175,9 @@ class BinjaBinSyncController(BinSyncController):
             self.push_stack_variable(bn_func, stack_var, state=state, user=user)
 
     @init_checker
-    @make_state
-    def push_comments(self, func, comments: Dict[int,str], user=None, state=None) -> None:
+    @make_state_with_func
+    def push_comments(self, comments: Dict[int,str], func_addr=None, user=None, state=None) -> None:
         # Push comments
         for addr, comment in comments.items():
-            func = self.bv.get_function_at(addr)
-            func_addr = func.start if func else None
-            cmt = binsync.data.Comment(func.start, addr, comment, decompiled=True, func_addr=func_addr)
+            cmt = binsync.data.Comment(addr, comment, decompiled=True)
             state.set_comment(cmt)

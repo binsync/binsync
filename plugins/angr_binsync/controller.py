@@ -117,8 +117,8 @@ class AngrBinSyncController(BinSyncController):
         return state.set_stack_variable(sync_var, offset, func_addr)
 
     @init_checker
-    @make_state
-    def push_comment(self, addr, cmt, decompiled, user=None, state=None):
+    @make_state_with_func
+    def push_comment(self, addr, cmt, decompiled, func_addr=None, user=None, state=None):
         sync_cmt = binsync.data.Comment(addr, cmt, decompiled=decompiled)
         return state.set_comment(sync_cmt)
 
@@ -182,7 +182,7 @@ class AngrBinSyncController(BinSyncController):
 
         return insn_addrs
 
-    def _get_func_addr_from_addr(self, addr):
+    def get_func_addr_from_addr(self, addr):
         try:
             func_addr = self._workspace.instance.kb.cfgs.get_most_accurate()\
                 .get_any_node(addr, anyaddr=True)\
