@@ -5,6 +5,6 @@ loggers = Loggers()
 del Loggers
 del logging
 
-from .state import State, ArtifactGroupType
+from .state import State, ArtifactType
 from .client import Client, StateContext, ConnectionWarnings
 from . import data
