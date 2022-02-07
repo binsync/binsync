@@ -1,4 +1,4 @@
-from typing import Dict
+import logging
 
 from .. import ui_version
 if ui_version == "PySide2":
@@ -14,6 +14,7 @@ else:
 from ..utils import QNumericItem, friendly_datetime
 from ...controller import BinSyncController
 
+l = logging.getLogger(__name__)
 
 class QCTXItem:
     """

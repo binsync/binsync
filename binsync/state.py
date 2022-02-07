@@ -1,6 +1,7 @@
 import time
 from typing import List, Dict, Iterable, Union, Optional
 import inspect
+import logging
 
 import os
 from functools import wraps
@@ -15,6 +16,7 @@ from .data import Function, FunctionHeader, Comment, Patch, StackVariable
 from .data.struct import Struct
 from .errors import MetadataNotFoundError
 
+l = logging.getLogger(__name__)
 
 class ArtifactType:
     UNSET = None
@@ -308,7 +310,7 @@ class State:
 
     def copy_state(self, target_state=None):
         if target_state is None:
-            print("Cannot copy an empty state (state == None)")
+            l.warning("Cannot copy an empty state (state == None)")
             return
 
         self.functions = target_state.functions.copy()

@@ -1,4 +1,5 @@
 from typing import Dict
+import logging
 
 from .. import ui_version
 if ui_version == "PySide2":
@@ -16,6 +17,7 @@ from ...controller import BinSyncController
 from .... import State
 from ....data import Struct
 
+l = logging.getLogger(__name__)
 
 class QGlobalItem:
     def __init__(self, name, type_, user, last_push):

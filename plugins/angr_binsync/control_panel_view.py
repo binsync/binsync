@@ -1,3 +1,4 @@
+import logging
 from PySide2.QtWidgets import QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, QComboBox
 
 from angrmanagement.ui.views.view import BaseView
@@ -7,6 +8,7 @@ set_ui_version("PySide2")
 from binsync.common.ui.control_panel import ControlPanel
 from .controller import AngrBinSyncController, SyncControlStatus
 
+l = logging.getLogger(__name__)
 
 class ControlPanelView(BaseView):
     """

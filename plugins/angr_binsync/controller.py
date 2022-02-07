@@ -1,4 +1,5 @@
 import os
+import logging
 
 from angrmanagement.ui.views import CodeView
 from angr.analyses.decompiler.structured_codegen import DummyStructuredCodeGenerator
@@ -9,6 +10,7 @@ from binsync.common.controller import *
 from binsync.data import StackOffsetType, Function, FunctionHeader
 import binsync
 
+l = logging.getLogger(__name__)
 
 class AngrBinSyncController(BinSyncController):
     """

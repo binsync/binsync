@@ -20,6 +20,7 @@
 import re
 from typing import Dict, List, Tuple, Optional, Iterable, Any
 import hashlib
+import logging
 from binaryninjaui import (
     UIContext,
     DockHandler,
@@ -35,6 +36,8 @@ from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourc
 from binsync.common.controller import *
 from binsync.data import StackOffsetType, FunctionHeader
 import binsync
+
+l = logging.getLogger(__name__)
 
 #
 # Controller
