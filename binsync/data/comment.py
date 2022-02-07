@@ -11,7 +11,7 @@ class Comment(Artifact):
 
     )
 
-    def __init__(self, addr, comment,  decompiled=False, func_addr=None, last_change=None):
+    def __init__(self, addr, comment,  decompiled=False, last_change=None):
         super(Comment, self).__init__(last_change=last_change)
         self.comment = comment  # type: str
         self.decompiled = decompiled  # TODO: use this in other places!

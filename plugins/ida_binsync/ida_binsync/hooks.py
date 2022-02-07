@@ -327,14 +327,18 @@ class IDBHooks(ida_idp.IDB_Hooks):
         @param cmt_type:
         @return:
         """
+        ida_func = idaapi.get_func(address)
+        func_addr = ida_func.start_ea if ida_func else None
+        kwarg = {"func_addr": func_addr}
+
         # disass comment changed
         if cmt_type == "cmt":
-            self.binsync_state_change(self.controller.push_comment, address, comment)
+            self.binsync_state_change(self.controller.push_comment, address, comment, **kwarg)
 
         # function comment changed
         elif cmt_type == "range":
             # overwrite the entire function comment
-            self.binsync_state_change(self.controller.push_comment, address, comment)
+            self.binsync_state_change(self.controller.push_comment, address, comment, **kwarg)
 
         # XXX: other?
         elif cmt_type == "extra":
@@ -493,8 +497,8 @@ class HexRaysHooks:
         # never do the same push twice
         if cmts != self._cached_funcs[ea]["cmts"]:
             # thread it!
-            sync_cmts = [Comment(ea, cmt, decompiled=True) for ea, cmt in self._cached_funcs[ea]["cmts"].items()]
-            self.binsync_state_change(self.controller.push_comments, sync_cmts, decompiled=True)
+            sync_cmts = [Comment(addr, cmt, decompiled=True) for addr, cmt in cmts.items()]
+            self.binsync_state_change(self.controller.push_comments, sync_cmts, **{"func_addr": ea})
 
             # cache so we don't double push a copy
             self._cached_funcs[ea]["cmts"] = cmts

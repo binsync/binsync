@@ -330,16 +330,14 @@ class IDABinSyncController(BinSyncController):
     #
 
     @init_checker
-    @make_state
-    def push_comment(self, addr, comment, decompiled=False,
-                     user=None, state: "binsync.State" = None, api_set=False):
+    @make_state_with_func
+    def push_comment(self, addr, comment, decompiled=False, func_addr=None, user=None, state=None, api_set=False):
         sync_cmt = binsync.data.Comment(addr, comment, decompiled=decompiled)
         state.set_comment(sync_cmt, set_last_change=not api_set)
 
     @init_checker
-    @make_state
-    def push_comments(self, cmt_list: List[Comment], decompiled=False,
-                      user=None, state: "binsync.State" = None, api_set=False):
+    @make_state_with_func
+    def push_comments(self, cmt_list: List[Comment], func_addr=None, user=None, state=None, api_set=False):
         for cmt in cmt_list:
             state.set_comment(cmt)
 

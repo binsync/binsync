@@ -57,9 +57,16 @@ def make_state_with_func(f):
         if state is None:
             state = self.client.get_state(user=user)
 
-        func_addr = args[0]
-        if not state.get_function(func_addr):
-            state.functions[func_addr] = Function(func_addr, self.get_func_size(func_addr))
+        # a comment
+        if "func_addr" in kwargs:
+            func_addr = kwargs["func_addr"]
+            if func_addr and not state.get_function(func_addr):
+                state.functions[func_addr] = Function(func_addr, self.get_func_size(func_addr))
+        # a func_header or stack_var
+        else:
+            func_addr = args[0]
+            if not state.get_function(func_addr):
+                state.functions[func_addr] = Function(func_addr, self.get_func_size(func_addr))
 
         kwargs['state'] = state
         r = f(self, *args, **kwargs)
