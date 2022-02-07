@@ -126,12 +126,9 @@ class QCTXTable(QTableWidget):
         for user in self.controller.users():
             state = self.controller.client.get_state(user=user.name)
 
-            try:
-                func = state.get_function(self.ctx)
-            except KeyError:
-                continue
+            func = state.get_function(self.ctx)
 
-            if not func.last_change:
+            if not func or not func.last_change:
                 continue
 
             # changes is not currently supported

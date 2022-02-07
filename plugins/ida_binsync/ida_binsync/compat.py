@@ -151,6 +151,15 @@ def get_func_name(ea):
     return idc.get_func_name(ea)
 
 
+@execute_read
+def get_func_size(ea):
+    func = idaapi.get_func(ea)
+    if not func:
+        return 0
+
+    return func.size()
+
+
 @execute_write
 def set_ida_func_name(func_addr, new_name):
     idaapi.set_name(func_addr, new_name, idaapi.SN_FORCE)

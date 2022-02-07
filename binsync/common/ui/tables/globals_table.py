@@ -145,13 +145,10 @@ class QGlobalsTable(QTableWidget):
         for user in self.controller.users():
             user_state: State = self.controller.client.get_state(user=user.name)
 
-            try:
-                user_global = user_state.get_struct(global_name)
-            except KeyError:
-                continue
+            user_global = user_state.get_struct(global_name)
 
             # function must be changed by this user
-            if user_global.last_change == -1:
+            if not user_global or not user_global.last_change:
                 continue
 
             yield user.name

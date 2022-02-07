@@ -35,7 +35,7 @@ import ida_funcs
 import ida_kernwin
 
 import binsync
-from binsync.common.controller import BinSyncController, make_state, make_ro_state, init_checker
+from binsync.common.controller import BinSyncController, make_state, make_ro_state, init_checker, make_state_with_func
 from binsync import Client, ConnectionWarnings
 from binsync.data import StackVariable, StackOffsetType, Function, FunctionHeader, Struct, Comment
 from . import compat
@@ -158,11 +158,16 @@ class IDABinSyncController(BinSyncController):
         if func_addr is None:
             return
 
-        func = binsync.data.Function(func_addr, header=FunctionHeader(compat.get_func_name(func_addr), func_addr))
+        func = binsync.data.Function(
+            func_addr, 0, header=FunctionHeader(compat.get_func_name(func_addr), func_addr)
+        )
         self._updated_ctx = func
 
     def binary_path(self) -> Optional[str]:
         return compat.get_binary_path()
+
+    def get_func_size(self, func_addr) -> int:
+        return compat.get_func_size(func_addr)
 
     #
     # IDA DataBase Fillers
@@ -228,7 +233,7 @@ class IDABinSyncController(BinSyncController):
 
         # === comments === #
         # set disassembly and decompiled comments
-        sync_cmts = self.pull_comments(func_addr, user=user, state=state)
+        sync_cmts = self.pull_func_comments(func_addr, user=user, state=state)
         for addr, cmt in sync_cmts.items():
             self.inc_api_count()
             res = compat.set_ida_comment(addr, cmt.comment, decompiled=cmt.decompiled)
@@ -320,31 +325,22 @@ class IDABinSyncController(BinSyncController):
             )
             self.update_states[func_addr].add_update_task(update_task)
 
-    @init_checker
-    @make_state
-    def remove_all_comments(self, ida_func, user=None, state=None):
-        for start_ea, end_ea in idautils.Chunks(ida_func):
-            for ins_addr in idautils.Heads(start_ea, end_ea):
-                if ins_addr in state.comments:
-                    state.remove_comment(ins_addr)
-
     #
     #   Pushers
     #
 
     @init_checker
-    @make_state
-    def push_comment(self, func_addr, addr, comment, decompiled=False,
-                     user=None, state: "binsync.State" = None, api_set=False):
-        sync_cmt = binsync.data.Comment(addr, comment, decompiled=decompiled, func_addr=func_addr)
+    @make_state_with_func
+    def push_comment(self, addr, comment, decompiled=False, func_addr=None, user=None, state=None, api_set=False):
+        sync_cmt = binsync.data.Comment(addr, comment, decompiled=decompiled)
         state.set_comment(sync_cmt, set_last_change=not api_set)
 
-    def push_comments(self, func_addr, cmt_dict: Dict[int, str], decompiled=False,
-                      user=None, state: "binsync.State" = None, api_set=False):
-        for addr in cmt_dict:
-            self.push_comment(func_addr, addr, cmt_dict[addr], decompiled=decompiled,
-                              user=user, state=state, api_set=api_set)
-        
+    @init_checker
+    @make_state_with_func
+    def push_comments(self, cmt_list: List[Comment], func_addr=None, user=None, state=None, api_set=False):
+        for cmt in cmt_list:
+            state.set_comment(cmt)
+
     '''
     # TODO: Just pass along the offset. Why the whole patch ??
     @init_checker
@@ -360,20 +356,20 @@ class IDABinSyncController(BinSyncController):
     '''
 
     @init_checker
-    @make_state
-    def push_function_header(self, attr_addr, new_name,
+    @make_state_with_func
+    def push_function_header(self, addr, new_name,
                              user=None, state: "binsync.State" = None, api_set=False):
 
-        func_header = FunctionHeader(new_name, attr_addr)
+        func_header = FunctionHeader(new_name, addr)
         state.set_function_header(func_header, set_last_change=not api_set)
 
     @init_checker
-    @make_state
-    def push_stack_variable(self, attr_addr, stack_offset, name, type_str, size,
+    @make_state_with_func
+    def push_stack_variable(self, addr, stack_offset, name, type_str, size,
                             user=None, state: "binsync.State" = None, api_set=False):
         # convert longs to ints
         stack_offset = int(stack_offset)
-        func_addr = int(attr_addr)
+        func_addr = int(addr)
         size = int(size)
 
         v = StackVariable(stack_offset,
