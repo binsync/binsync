@@ -36,10 +36,27 @@ default_config = {
             "delay": True
         }
     },
-
-    "root": {
-        "level": "INFO",
-        "handlers": ["console", "local_file_handler"],
+    'loggers': {
+        'binsync': {
+            'handlers': ["console", "local_file_handler"],
+            'level': 'INFO',
+            'propagate': False
+        },
+        'ida_binsync': {
+            'handlers': ["console", "local_file_handler"],
+            'level': 'INFO',
+            'propagate': False
+        },
+        'angr_binsync': {
+            'handlers': ["console", "local_file_handler"],
+            'level': 'INFO',
+            'propagate': False
+        },
+        'binja_binsync': {
+            'handlers': ["console", "local_file_handler"],
+            'level': 'INFO',
+            'propagate': False
+        },
     }
 }
 
@@ -93,3 +110,4 @@ originalIsEnabledFor = logging.Logger.isEnabledFor
 
 # Override isEnabledFor() for Logger class
 logging.Logger.isEnabledFor = is_enabled_for
+
