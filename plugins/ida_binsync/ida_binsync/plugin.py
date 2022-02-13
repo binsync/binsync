@@ -4,7 +4,7 @@
 # also create the config window.
 #
 # ----------------------------------------------------------------------------
-
+import logging
 import os
 
 from PyQt5 import sip
@@ -25,6 +25,7 @@ from .hooks import MasterHook
 from . import IDA_DIR, VERSION
 from .controller import IDABinSyncController
 
+l = logging.getLogger(__name__)
 controller = IDABinSyncController()
 
 # disable the annoying "Running Python script" wait box that freezes IDA at times

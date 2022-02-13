@@ -1,6 +1,7 @@
 import time
 from typing import List, Dict, Iterable, Union, Optional
 import inspect
+import logging
 
 import os
 from functools import wraps
@@ -15,13 +16,14 @@ from .data import Function, FunctionHeader, Comment, Patch, StackVariable
 from .data.struct import Struct
 from .errors import MetadataNotFoundError
 
+l = logging.getLogger(__name__)
 
-class ArtifactGroupType:
-    UNSET = -1
-    FUNCTION = 0
-    STRUCT = 1
-    PATCH = 2
-    COMMENT = 3
+class ArtifactType:
+    UNSET = None
+    FUNCTION = "function"
+    STRUCT = "struct"
+    PATCH = "patch"
+    COMMENT = "comment"
 
 
 def dirty_checker(f):
@@ -42,9 +44,7 @@ def update_last_change(f):
         artifact = args[0]
 
         # make a function if one does not exist
-        if (isinstance(artifact, Comment) and artifact.func_addr) or isinstance(artifact, StackVariable):
-            func = self.get_or_make_function(artifact.func_addr)
-        elif isinstance(artifact, FunctionHeader):
+        if isinstance(artifact, (FunctionHeader, StackVariable)):
             func = self.get_or_make_function(artifact.addr)
 
         if not should_set:
@@ -54,33 +54,33 @@ def update_last_change(f):
         # Comment
         if isinstance(artifact, Comment):
             artifact_loc = artifact.addr
-            if artifact.func_addr:
-                artifact_type = ArtifactGroupType.FUNCTION
+            artifact_type = ArtifactType.COMMENT
+            # update function its in, if it's in a function
+            func = self.find_func_for_addr(artifact.addr)
+            if func:
                 func.last_change = artifact.last_change
-            else:
-                artifact_type = ArtifactGroupType.COMMENT
 
         # Stack Var
         elif isinstance(artifact, StackVariable):
-            artifact_loc = artifact.func_addr
-            artifact_type = ArtifactGroupType.FUNCTION
+            artifact_loc = artifact.addr
+            artifact_type = ArtifactType.FUNCTION
             func.last_change = artifact.last_change
 
         # Function Header
         elif isinstance(artifact, FunctionHeader):
             artifact_loc = artifact.addr
-            artifact_type = ArtifactGroupType.FUNCTION
+            artifact_type = ArtifactType.FUNCTION
             func.last_change = artifact.last_change
 
         # Patch
         elif isinstance(artifact, Patch):
             artifact_loc = artifact.offset
-            artifact_type = ArtifactGroupType.PATCH
+            artifact_type = ArtifactType.PATCH
 
         # Struct
         elif isinstance(artifact, Struct):
             artifact_loc = artifact.name
-            artifact_type = ArtifactGroupType.STRUCT
+            artifact_type = ArtifactType.STRUCT
 
         else:
             raise Exception("Undefined Artifact Type!")
@@ -310,7 +310,7 @@ class State:
 
     def copy_state(self, target_state=None):
         if target_state is None:
-            print("Cannot copy an empty state (state == None)")
+            l.warning("Cannot copy an empty state (state == None)")
             return
 
         self.functions = target_state.functions.copy()
@@ -342,14 +342,12 @@ class State:
         if not comment:
             return False
 
-        # comment in the function header
-        is_func_cmt = comment.addr == comment.func_addr
-        if is_func_cmt and self.functions[comment.addr].header.comment != comment.comment:
-            self.functions[comment.addr].header.comment = comment.comment
-            return True
+        try:
+            old_cmt = self.comments[comment.addr]
+        except KeyError:
+            old_cmt = None
 
-        # comment located elsewhere in memory
-        elif comment.addr not in self.comments or self.comments[comment.addr] != comment:
+        if old_cmt != comment:
             self.comments[comment.addr] = comment
             return True
 
@@ -358,22 +356,40 @@ class State:
     @dirty_checker
     @update_last_change
     def set_patch(self, patch, addr, set_last_change=True):
-
-        if addr in self.patches and self.patches[addr] == patch:
-            # no update is required
+        if not patch:
             return False
 
-        self.patches[addr] = patch
-        return True
+        try:
+            old_patch = self.patches[addr]
+        except KeyError:
+            old_patch = None
+
+        if old_patch != patch:
+            self.patches[addr] = patch
+            return True
+
+        return False
 
     @dirty_checker
     @update_last_change
     def set_stack_variable(self, variable, offset, func_addr, set_last_change=True):
-        if offset in self.functions[func_addr].stack_vars and variable == self.functions[func_addr].stack_vars[offset]:
+        if not variable:
             return False
 
-        self.functions[func_addr].stack_vars[offset] = variable
-        return True
+        func = self.get_function(func_addr)
+        if not func:
+            return False
+
+        try:
+            old_var = func.stack_vars[offset]
+        except KeyError:
+            old_var = None
+
+        if old_var != variable:
+            func.stack_vars[offset] = variable
+            return True
+
+        return False
 
     @dirty_checker
     @update_last_change
@@ -417,66 +433,77 @@ class State:
         try:
             func = self.functions[addr]
         except KeyError:
-            self.functions[addr] = Function(addr)
+            self.functions[addr] = Function(addr, 0)
             func = self.functions[addr]
 
         return func
 
     def get_function(self, addr) -> Function:
-        if addr not in self.functions:
-            raise KeyError("Function %x is not found in the db." % addr)
+        try:
+            func = self.functions[addr]
+        except KeyError:
+            func = None
 
-        return self.functions[addr]
+        return func
 
     def get_comment(self, addr) -> Comment:
-        if addr in self.comments:
-            return self.comments[addr]
+        try:
+            cmt = self.comments[addr]
+        except KeyError:
+            cmt = None
 
-        elif addr in self.functions and self.functions[addr].header.comment is not None:
-            return Comment(addr, self.functions[addr].header.comment)
+        return cmt
 
-        else:
-            raise KeyError("There is no comment at address %#x." % addr)
+    def get_comments(self) -> Dict[int, Comment]:
+        return self.comments
 
-    def get_comments_in_function(self, func_addr):
-        if func_addr not in self.functions:
-            return {}
+    def get_func_comments(self, func_addr):
+        try:
+            func = self.functions[func_addr]
+        except KeyError:
+            return None
 
-        # include the function comment
-        cmts = {func_addr: Comment(func_addr, self.functions[func_addr].header.comment)}
-        for addr, comment in self.comments.items():
-            if comment.func_addr != func_addr:
-                continue
-
-            cmts[comment.addr] = comment
-
-        return cmts
+        return {
+            addr: cmt for addr, cmt in self.comments.items() if addr <= func.addr + func.size
+        }
 
     def get_patch(self, addr) -> Patch:
+        try:
+            patch = self.patches[addr]
+        except KeyError:
+            patch = None
 
-        if addr not in self.patches:
-            raise KeyError("There is no patch at address %#x." % addr)
+        return patch
 
-        return self.patches[addr]
+    def get_patches(self) -> Dict[int, Patch]:
+        return self.patches
 
-    def get_patches(self) -> Iterable[Patch]:
-        return self.patches.values()
+    def get_stack_variable(self, func_addr, offset) -> Optional[StackVariable]:
+        func = self.get_function(func_addr)
+        if not func:
+            return None
 
-    def get_stack_variable(self, func_addr, offset) -> StackVariable:
-        if func_addr in self.functions and offset in self.functions[func_addr].stack_vars:
-            return self.functions[func_addr].stack_vars[offset]
-        else:
-            raise KeyError("No stack variable exists at offset %d in function %#x." % (offset, func_addr))
+        try:
+            stack_var = func.stack_vars[offset]
+        except KeyError:
+            stack_var = None
 
-    def get_stack_variables(self, func_addr):
-        if func_addr not in self.functions:
-            raise KeyError("No stack variables are defined for function %#x." % func_addr)
-        return self.functions[func_addr].stack_vars.items()
+        return stack_var
 
-    def get_struct(self, struct_name) -> Struct:
-        if struct_name not in self.structs:
-            raise KeyError(f"No struct by the name {struct_name} defined.")
-        return self.structs[struct_name]
+    def get_stack_variables(self, func_addr) -> Dict[int, StackVariable]:
+        func = self.get_function(func_addr)
+        if not func:
+            return {}
+
+        return func.stack_vars
+
+    def get_struct(self, struct_name) -> Optional[Struct]:
+        try:
+            struct = self.structs[struct_name]
+        except KeyError:
+            struct = None
+
+        return struct
 
     def get_structs(self) -> Iterable[Struct]:
         return self.structs.values()
@@ -485,20 +512,39 @@ class State:
         last_change = -1
         artifact = None
 
-        if artifact_type == ArtifactGroupType.FUNCTION:
+        if artifact_type == ArtifactType.FUNCTION:
             for function in self.functions.values():
                 if function.last_change > last_change:
                     last_change = function.last_change
                     artifact = function.addr
-        elif artifact_type == ArtifactGroupType.STRUCT:
+        elif artifact_type == ArtifactType.STRUCT:
             for struct in self.structs.values():
                 if struct.last_change > last_change:
                     last_change = struct.last_change
                     artifact = struct.name
-        elif artifact_type == ArtifactGroupType.PATCH:
+        elif artifact_type == ArtifactType.PATCH:
             for patch in self.patches.values():
                 if patch.last_change > last_change:
                     last_change = patch.last_change
                     artifact = patch.offset
 
         return tuple((artifact, last_change))
+
+    #
+    # Utils
+    #
+
+    def find_func_for_addr(self, search_addr):
+        for func_addr, func in self.functions.items():
+            if func.addr <= search_addr < (func.addr + func.size):
+                return func
+        else:
+            return None
+
+    def find_latest_comment_for_func(self, func: Function) -> Optional[Comment]:
+        cmts = [cmt for addr, cmt in self.comments.items() if addr <= func.addr + func.size]
+        if not cmts:
+            return None
+
+        lastest_cmt = max(cmts, key=lambda c: c.last_change if c.last_change else -1)
+        return lastest_cmt

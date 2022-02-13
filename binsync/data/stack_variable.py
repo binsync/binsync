@@ -17,7 +17,7 @@ class StackVariable(Artifact):
 
     __slots__ = (
         "last_change",
-        "func_addr",
+        "addr",
         "name",
         "stack_offset",
         "stack_offset_type",
@@ -25,14 +25,14 @@ class StackVariable(Artifact):
         "type",
     )
 
-    def __init__(self, stack_offset, offset_type, name, type_, size, func_addr, last_change=None):
+    def __init__(self, stack_offset, offset_type, name, type_, size, addr, last_change=None):
         super(StackVariable, self).__init__(last_change=last_change)
         self.stack_offset = stack_offset  # type: int
         self.stack_offset_type = offset_type  # type: int
         self.name = name  # type: str
         self.type = type_  # type: str
         self.size = size  # type: int
-        self.func_addr = func_addr  # type: int
+        self.addr = addr  # type: int
         self.last_change = last_change
 
     def __eq__(self, other):
@@ -42,7 +42,7 @@ class StackVariable(Artifact):
                    and other.name == self.name \
                    and other.type == self.type \
                    and other.size == self.size \
-                   and other.func_addr == self.func_addr
+                   and other.addr == self.addr
         return False
 
     def get_offset(self, offset_type):

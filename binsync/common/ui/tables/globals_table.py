@@ -1,4 +1,5 @@
 from typing import Dict
+import logging
 
 from .. import ui_version
 if ui_version == "PySide2":
@@ -16,6 +17,7 @@ from ...controller import BinSyncController
 from .... import State
 from ....data import Struct
 
+l = logging.getLogger(__name__)
 
 class QGlobalItem:
     def __init__(self, name, type_, user, last_push):
@@ -143,13 +145,10 @@ class QGlobalsTable(QTableWidget):
         for user in self.controller.users():
             user_state: State = self.controller.client.get_state(user=user.name)
 
-            try:
-                user_global = user_state.get_struct(global_name)
-            except KeyError:
-                continue
+            user_global = user_state.get_struct(global_name)
 
             # function must be changed by this user
-            if user_global.last_change == -1:
+            if not user_global or not user_global.last_change:
                 continue
 
             yield user.name

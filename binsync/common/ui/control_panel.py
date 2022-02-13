@@ -1,5 +1,5 @@
 import datetime
-
+import logging
 import binsync.data
 
 from . import ui_version
@@ -18,6 +18,7 @@ from .tables.activity_table import QActivityTable
 from .tables.ctx_table import QCTXTable
 from .tables.globals_table import QGlobalsTable
 
+l = logging.getLogger(__name__)
 
 class ControlPanel(QWidget):
     update_ready = Signal()

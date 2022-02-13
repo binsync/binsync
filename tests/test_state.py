@@ -68,7 +68,7 @@ class TestState(unittest.TestCase):
 
         self.assertNotEqual(state.last_push_time, None)
         self.assertEqual(state.last_push_artifact, "some_struct")
-        self.assertEqual(state.last_push_artifact_type, binsync.state.ArtifactGroupType.STRUCT)
+        self.assertEqual(state.last_push_artifact_type, binsync.state.ArtifactType.STRUCT)
 
 
 if __name__ == "__main__":

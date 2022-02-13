@@ -42,7 +42,6 @@ class FunctionHeader(Artifact):
         "last_change",
         "name",
         "addr",
-        "comment",
         "ret_type",
         "args"
     )
@@ -51,7 +50,6 @@ class FunctionHeader(Artifact):
         super(FunctionHeader, self).__init__(last_change=last_change)
         self.name = name
         self.addr = addr
-        self.comment = comment
         self.ret_type = ret_type
         self.args = args or {}
 
@@ -62,7 +60,6 @@ class FunctionHeader(Artifact):
             "last_change": self.last_change,
             "name": self.name,
             "addr": self.addr,
-            "comment": self.comment,
             "ret_type": self.ret_type,
             "args": args if len(args) > 0 else None,
         }
@@ -71,7 +68,6 @@ class FunctionHeader(Artifact):
         self.last_change = state.get("last_change", None)
         self.name = state.get("name", None)
         self.addr = state["addr"]
-        self.comment = state.get("comment", None)
         self.ret_type = state.get("ret_type", None)
         args = state.get("args", {})
         self.args = {int(idx, 16): StackVariable.parse(toml.dumps(arg)) for idx, arg in args.items()}
@@ -98,20 +94,22 @@ class Function(Artifact):
     2. Header
     3. Stack Vars
 
-    The metadata contains info on changes and size. The header holds the function comment, return type,
+    The metadata contains info on changes and size. The header holds the return type,
     and arguments (including their types). The stack vars contain StackVariables.
     """
 
     __slots__ = (
         "last_change",
         "addr",
+        "size",
         "header",
-        "stack_vars"
+        "stack_vars",
     )
 
-    def __init__(self, addr, header=None, stack_vars=None, last_change=None):
+    def __init__(self, addr, size, header=None, stack_vars=None, last_change=None):
         super(Function, self).__init__(last_change=last_change)
         self.addr: int = addr
+        self.size: int = size
         self.header: Optional[FunctionHeader] = header
         self.stack_vars: Dict[int, StackVariable] = stack_vars or {}
 
@@ -123,6 +121,7 @@ class Function(Artifact):
         return {
             "metadata": {
                 "addr": self.addr,
+                "size": self.size,
                 "last_change": self.last_change
             },
             "header": header,
@@ -136,6 +135,7 @@ class Function(Artifact):
         metadata, header, stack_vars = state["metadata"], state.get("header", None), state.get("stack_vars", {})
 
         self.addr = metadata["addr"]
+        self.size = metadata["size"]
         self.last_change = metadata.get("last_change", None)
 
         self.header = FunctionHeader.parse(toml.dumps(header)) if header else None
@@ -146,13 +146,13 @@ class Function(Artifact):
 
     @classmethod
     def parse(cls, s):
-        func = Function(None)
+        func = Function(None, None)
         func.__setstate__(s)
         return func
 
     @classmethod
     def load(cls, func_toml):
-        f = Function(None)
+        f = Function(None, None)
         f.__setstate__(func_toml)
         return f
 
@@ -174,17 +174,6 @@ class Function(Artifact):
     @property
     def args(self):
         return self.header.args
-
-    @property
-    def comment(self):
-        return self.header.comment if self.header else None
-
-    @comment.setter
-    def comment(self, value):
-        # create a header if one does not exist for this function
-        if not self.header:
-            self.header = FunctionHeader(None, self.addr)
-        self.header.name = value
 
     def set_stack_var(self, name, off: int, off_type: int, size: int, type_str, last_change):
         self.stack_vars[off] = StackVariable(off, off_type, name, type_str, size, self.addr, last_change=last_change)

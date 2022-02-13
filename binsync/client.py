@@ -15,7 +15,7 @@ from .data import User, Function, Struct, Patch
 from .state import State
 from .errors import MetadataNotFoundError, ExternalUserCommitError
 
-_l = logging.getLogger(name=__name__)
+l = logging.getLogger(__name__)
 BINSYNC_BRANCH_PREFIX = 'binsync'
 BINSYNC_ROOT_BRANCH = f'{BINSYNC_BRANCH_PREFIX}/__root__'
 
@@ -261,6 +261,7 @@ class Client(object):
                 with self.repo.git.custom_environment(**env):
                     self.repo.remotes[self.remote].pull()
                 self._last_pull_at = datetime.datetime.now()
+                l.info("Pull completed successfully at %s", self._last_pull_at)
             except git.exc.GitCommandError as ex:
                 if print_error:
                     print("Failed to pull from remote \"%s\".\n"
@@ -286,6 +287,7 @@ class Client(object):
                     self.repo.remotes[self.remote].push(BINSYNC_ROOT_BRANCH)
                     self.repo.remotes[self.remote].push(self.user_branch_name)
                 self._last_push_at = datetime.datetime.now()
+                l.info("Push completed successfully at %s", self._last_push_at)
             except git.exc.GitCommandError as ex:
                 if print_error:
                     print("Failed to push to remote \"%s\".\n"

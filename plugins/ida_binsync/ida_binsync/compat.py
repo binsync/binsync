@@ -12,6 +12,7 @@
 import functools
 import threading
 import typing
+import logging
 
 import idc
 import idaapi
@@ -26,6 +27,7 @@ import ida_typeinf
 from binsync.data import Struct
 from .controller import IDABinSyncController
 
+l = logging.getLogger(__name__)
 
 #
 #   Helper classes for wrapping data
@@ -147,6 +149,15 @@ def ida_func_addr(addr):
 @execute_read
 def get_func_name(ea):
     return idc.get_func_name(ea)
+
+
+@execute_read
+def get_func_size(ea):
+    func = idaapi.get_func(ea)
+    if not func:
+        return 0
+
+    return func.size()
 
 
 @execute_write

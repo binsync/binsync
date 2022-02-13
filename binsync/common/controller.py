@@ -40,17 +40,40 @@ def make_state(f):
         user = kwargs.pop('user', None)
         if state is None:
             state = self.client.get_state(user=user)
-            kwargs['state'] = state
-            r = f(self, *args, **kwargs)
-            self.client.commit_state(msg=self._generate_commit_message(f, *args, **kwargs))
-            #state.save()
-        else:
-            kwargs['state'] = state
-            r = f(self, *args, **kwargs)
 
+        kwargs['state'] = state
+        r = f(self, *args, **kwargs)
+        self.client.commit_state(msg=self._generate_commit_message(f, *args, **kwargs))
         return r
 
     return state_check
+
+
+def make_state_with_func(f):
+    @wraps(f)
+    def _make_state_with_func(self, *args, **kwargs):
+        state: binsync.State = kwargs.pop('state', None)
+        user = kwargs.pop('user', None)
+        if state is None:
+            state = self.client.get_state(user=user)
+
+        # a comment
+        if "func_addr" in kwargs:
+            func_addr = kwargs["func_addr"]
+            if func_addr and not state.get_function(func_addr):
+                state.functions[func_addr] = Function(func_addr, self.get_func_size(func_addr))
+        # a func_header or stack_var
+        else:
+            func_addr = args[0]
+            if not state.get_function(func_addr):
+                state.functions[func_addr] = Function(func_addr, self.get_func_size(func_addr))
+
+        kwargs['state'] = state
+        r = f(self, *args, **kwargs)
+        self.client.commit_state(msg=self._generate_commit_message(f, *args, **kwargs))
+        return r
+
+    return _make_state_with_func
 
 
 def make_ro_state(f):
@@ -255,6 +278,15 @@ class BinSyncController:
         """
         raise NotImplementedError
 
+    def get_func_size(self, func_addr) -> int:
+        """
+        Returns the size of a function
+
+        @param func_addr:
+        @return:
+        """
+        raise NotImplementedError
+
     #
     # Fillers
     #
@@ -302,12 +334,12 @@ class BinSyncController:
         raise NotImplementedError
 
     @init_checker
-    @make_state
+    @make_state_with_func
     def push_function_header(self, *args, user=None, state=None, **kwargs):
         raise NotImplementedError
 
     @init_checker
-    @make_state
+    @make_state_with_func
     def push_stack_variable(self, *args, user=None, state=None, **kwargs):
         raise NotImplementedError
 
@@ -326,20 +358,12 @@ class BinSyncController:
         if not func_addr:
             return None
 
-        try:
-            func = state.get_function(func_addr)
-        except KeyError:
-            return None
-
-        return func
+        return state.get_function(func_addr)
 
     @init_checker
     @make_ro_state
     def pull_stack_variables(self, func_addr, user=None, state=None) -> Dict[int, StackVariable]:
-        try:
-            return dict(state.get_stack_variables(func_addr))
-        except KeyError:
-            return {}
+        return state.get_stack_variables(func_addr)
 
     @init_checker
     @make_ro_state
@@ -348,16 +372,18 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def pull_comments(self, func_addr, user=None, state=None) -> Dict[int, Comment]:
-        return state.get_comments_in_function(func_addr)
+    def pull_func_comments(self, func_addr, user=None, state=None) -> Dict[int, Comment]:
+        return state.get_func_comments(func_addr)
 
     @init_checker
     @make_ro_state
     def pull_comment(self, addr, user=None, state=None) -> Comment:
-        try:
-            return state.get_comment(addr)
-        except KeyError:
-            return None
+        return state.get_comment(addr)
+
+    @init_checker
+    @make_ro_state
+    def pull_comments(self, user=None, state=None) -> Comment:
+        return state.comments()
 
     @init_checker
     @make_ro_state

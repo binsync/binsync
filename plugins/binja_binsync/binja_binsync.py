@@ -15,6 +15,7 @@ from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourc
 from binaryninja.binaryview import BinaryDataNotification
 
 from collections import defaultdict
+import logging
 
 from binsync.common.ui import set_ui_version
 set_ui_version("PySide6")
@@ -25,6 +26,7 @@ from .controller import BinjaBinSyncController
 from copy import deepcopy
 from binsync import data
 
+l = logging.getLogger(__name__)
 
 #
 # Binja UI

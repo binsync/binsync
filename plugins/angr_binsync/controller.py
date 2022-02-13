@@ -1,4 +1,5 @@
 import os
+import logging
 
 from angrmanagement.ui.views import CodeView
 from angr.analyses.decompiler.structured_codegen import DummyStructuredCodeGenerator
@@ -9,6 +10,7 @@ from binsync.common.controller import *
 from binsync.data import StackOffsetType, Function, FunctionHeader
 import binsync
 
+l = logging.getLogger(__name__)
 
 class AngrBinSyncController(BinSyncController):
     """
@@ -38,13 +40,22 @@ class AngrBinSyncController(BinSyncController):
         if func is None or func.am_obj is None:
             return None
 
-        return binsync.data.Function(func.addr, header=FunctionHeader(func.name, func.addr))
+        return binsync.data.Function(
+            func.addr, 0, header=FunctionHeader(func.name, func.addr)
+        )
 
     def binary_path(self) -> Optional[str]:
         try:
             return self._instance.project.loader.main_object.binary
         except Exception:
             return None
+
+    def get_func_size(self, func_addr) -> int:
+        try:
+            func = self._instance.kb.functions[func_addr]
+            return func.size
+        except KeyError:
+            return 0
 
     #
     # Display Fillers
@@ -61,18 +72,19 @@ class AngrBinSyncController(BinSyncController):
         # re-decompile a function if needed
         decompilation = self.decompile_function(func)
 
-        _func: binsync.data.Function = self.pull_function(func.addr, user=user)
-        if _func is None:
+        sync_func: binsync.data.Function = self.pull_function(func.addr, user=user)
+        if sync_func is None:
             # the function does not exist for that user's state
             return False
 
         # ==== Function Name ==== #
-        func.name = _func.name
-        decompilation.cfunc.name = _func.name
-        decompilation.cfunc.demangled_name = _func.name
+        if sync_func.name and sync_func.name != func.name:
+            func.name = sync_func.name
+            decompilation.cfunc.name = sync_func.name
+            decompilation.cfunc.demangled_name = sync_func.name
 
         # ==== Comments ==== #
-        for addr, cmt in self.pull_comments(func_addr).items():
+        for addr, cmt in self.pull_func_comments(func_addr).items():
             if not cmt or not cmt.comment:
                 continue
 
@@ -99,20 +111,19 @@ class AngrBinSyncController(BinSyncController):
     #
 
     @init_checker
-    @make_state
+    @make_state_with_func
     def push_stack_variable(self, func_addr, offset, name, type_, size_, user=None, state=None):
         sync_var = binsync.data.StackVariable(offset, StackOffsetType.ANGR, name, type_, size_, func_addr)
         return state.set_stack_variable(sync_var, offset, func_addr)
 
     @init_checker
-    @make_state
-    def push_comment(self, addr, cmt, decompiled, user=None, state=None):
-        func_addr = self._get_func_addr_from_addr(addr)
-        sync_cmt = binsync.data.Comment(addr, cmt, func_addr=func_addr, decompiled=decompiled)
+    @make_state_with_func
+    def push_comment(self, addr, cmt, decompiled, func_addr=None, user=None, state=None):
+        sync_cmt = binsync.data.Comment(addr, cmt, decompiled=decompiled)
         return state.set_comment(sync_cmt)
 
     @init_checker
-    @make_state
+    @make_state_with_func
     def push_function_header(self, func_addr, new_name, user=None, state=None):
         func_header = binsync.data.FunctionHeader(new_name, func_addr)
         return state.set_function_header(func_header)
@@ -171,7 +182,7 @@ class AngrBinSyncController(BinSyncController):
 
         return insn_addrs
 
-    def _get_func_addr_from_addr(self, addr):
+    def get_func_addr_from_addr(self, addr):
         try:
             func_addr = self._workspace.instance.kb.cfgs.get_most_accurate()\
                 .get_any_node(addr, anyaddr=True)\

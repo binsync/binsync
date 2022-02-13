@@ -33,7 +33,7 @@ class TestClient(unittest.TestCase):
 
             # destroy the old state to see if data persits
             client.state = None
-            state = client.get_state()
+            state = client.get_state(user="user0")
             self.assertTrue(len(state.functions), 1)
             self.assertTrue(state.functions[0x400080].header, func_header)
 
