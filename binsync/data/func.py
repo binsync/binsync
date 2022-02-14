@@ -1,10 +1,5 @@
-import os
-import time
-
 import toml
 from typing import Dict, Optional
-
-from collections import defaultdict
 
 from .artifact import Artifact
 from .stack_variable import StackVariable
@@ -46,7 +41,7 @@ class FunctionHeader(Artifact):
         "args"
     )
 
-    def __init__(self, name, addr, comment=None, ret_type=None, args=None, last_change=None):
+    def __init__(self, name, addr, ret_type=None, args=None, last_change=None):
         super(FunctionHeader, self).__init__(last_change=last_change)
         self.name = name
         self.addr = addr
@@ -81,6 +76,47 @@ class FunctionHeader(Artifact):
         fh = FunctionHeader(None, None)
         fh.__setstate__(toml.loads(s))
         return fh
+
+    def diff(self, other, **kwargs) -> Dict:
+        diff_dict = {}
+        # early exit if the two do not match type
+        if not isinstance(other, FunctionHeader):
+            for k in ["name", "addr", "ret_type"]:
+                diff_dict[k] = {
+                    "before": getattr(self, k),
+                    "after": None
+                }
+
+            diff_dict["args"] = {idx: arg.diff(None) for idx, arg in self.args.items()}
+            return diff_dict
+
+        # metadata
+        for k in ["name", "addr", "ret_type"]:
+            if getattr(self, k) == getattr(other, k):
+                continue
+
+            diff_dict[k] = {
+                "before": getattr(self, k),
+                "after": getattr(other, k)
+            }
+
+        # args
+        diff_dict["args"] = {}
+        for idx, self_arg in self.args.items():
+            try:
+                other_arg = other.args[idx]
+            except KeyError:
+                other_arg = None
+
+            diff_dict["args"][idx] = self_arg.diff(other_arg)
+
+        for idx, other_arg in other.args.items():
+            if idx in diff_dict["args"]:
+                continue
+
+            diff_dict["args"][idx] = self.invert_diff(other_arg.diff(None))
+
+        return diff_dict
 
 
 #
@@ -143,6 +179,61 @@ class Function(Artifact):
         self.stack_vars = {
             int(off, 16): StackVariable.parse(toml.dumps(stack_var)) for off, stack_var in stack_vars.items()
         } if stack_vars else {}
+
+    def diff(self, other, **kwargs) -> Dict:
+        diff_dict = {}
+        if not isinstance(other, Function):
+            # metadata
+            for k in ["addr", "size"]:
+                diff_dict[k] = {
+                    "before": getattr(self, k),
+                    "after": None
+                }
+
+            # header
+            diff_dict["header"] = self.header.diff(other.header)
+            # args
+            diff_dict["stack_vars"] = {off: var.diff(None) for off, var in self.stack_vars.items()}
+            return diff_dict
+
+        # metadata
+        for k in ["addr", "size"]:
+            if getattr(self, k) == getattr(other, k):
+                continue
+
+            diff_dict[k] = {
+                "before": getattr(self, k),
+                "after": getattr(other, k)
+            }
+
+        # header
+        if self.header:
+            diff_dict["header"] = self.header.diff(other.header)
+        elif other.header:
+            diff_dict["header"] = self.invert_diff(other.header.diff(None))
+        else:
+            diff_dict["header"] = {"before": None, "after": None}
+
+        # stack vars
+        diff_dict["stack_vars"] = {}
+        for off, self_var in self.stack_vars.items():
+            try:
+                other_var = other.stack_vars[off]
+            except KeyError:
+                other_var = None
+
+            diff_dict["stack_vars"][off] = self_var.diff(other_var)
+
+        for off, other_var in other.stack_vars.items():
+            if off in diff_dict["stack_vars"]:
+                continue
+
+            diff_dict["stack_vars"][off] = self.invert_diff(other_var.diff(None))
+
+
+        return diff_dict
+
+
 
     @classmethod
     def parse(cls, s):
