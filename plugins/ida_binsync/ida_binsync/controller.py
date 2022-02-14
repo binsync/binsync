@@ -42,6 +42,22 @@ from . import compat
 
 _l = logging.getLogger(name=__name__)
 
+
+def update_on_view(f):
+    wraps(f)
+    def _update_on_view(self: IDABinSyncController, func_addr, *args, **kwargs):
+        # always execute something we are looking at
+        active_ctx = self.active_context()
+        if active_ctx and active_ctx.addr == func_addr:
+            return f(self, func_addr, *args, **kwargs)
+
+        # otherwise, execute next time we look at it through the hooks
+        task = UpdateTask(f, self, func_addr, *args, **kwargs)
+        self.update_states[func_addr].add_update_task(task)
+
+    return _update_on_view()
+
+
 #
 #   Wrapper Classes
 #
@@ -90,7 +106,7 @@ class UpdateTaskState:
         with self.update_tasks_lock:
             self.update_tasks[update_task] = False
 
-    def do_needed_updates(self):
+    def do_updates(self):
         with self.update_tasks_lock:
             # run each task in the update task queue
             for update_task in list(self.update_tasks.keys()):
@@ -357,16 +373,13 @@ class IDABinSyncController(BinSyncController):
 
     @init_checker
     @make_state_with_func
-    def push_function_header(self, addr, new_name,
-                             user=None, state: "binsync.State" = None, api_set=False):
-
-        func_header = FunctionHeader(new_name, addr)
+    def push_function_header(self, addr, new_name, ret_type=None, args=None, user=None, state=None, api_set=False):
+        func_header = FunctionHeader(new_name, addr, ret_type=ret_type, args=args)
         state.set_function_header(func_header, set_last_change=not api_set)
 
     @init_checker
     @make_state_with_func
-    def push_stack_variable(self, addr, stack_offset, name, type_str, size,
-                            user=None, state: "binsync.State" = None, api_set=False):
+    def push_stack_variable(self, addr, stack_offset, name, type_str, size, user=None, state=None, api_set=False):
         # convert longs to ints
         stack_offset = int(stack_offset)
         func_addr = int(addr)

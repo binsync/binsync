@@ -24,6 +24,7 @@ import ida_struct
 import ida_idaapi
 import ida_typeinf
 
+import binsync
 from binsync.data import Struct
 from .controller import IDABinSyncController
 
@@ -33,6 +34,7 @@ l = logging.getLogger(__name__)
 #   Helper classes for wrapping data
 #
 
+
 class IDAStackVar:
     def __init__(self, func_addr, offset, name, type_str, size):
         self.func_addr = func_addr
@@ -40,6 +42,22 @@ class IDAStackVar:
         self.name = name
         self.type_str = type_str
         self.size = size
+
+
+class IDAFunctionArg:
+    def __init__(self, idx, name, type_str, size):
+        self.idx = idx
+        self.name = name
+        self.type_str = type_str
+        self.size = size
+
+
+class IDAFunction:
+    def __init__(self, func_addr, name, ret_type_str, func_args: typing.Dict[int, IDAFunctionArg]):
+        self.func_addr = func_addr
+        self.name = name
+        self.ret_type_str = ret_type_str
+        self.func_args = func_args
 
 
 #
@@ -147,7 +165,7 @@ def ida_func_addr(addr):
 
 
 @execute_read
-def get_func_name(ea):
+def get_func_name(ea) -> typing.Optional[str]:
     return idc.get_func_name(ea)
 
 
@@ -167,6 +185,87 @@ def set_ida_func_name(func_addr, new_name):
     ida_kernwin.request_refresh(ida_kernwin.IWID_STRUCTS)
     ida_kernwin.request_refresh(ida_kernwin.IWID_STKVIEW)
 
+
+@execute_read
+def get_func_prototype_info(ida_cfunc) -> IDAFunction:
+    func_addr = ida_cfunc.entry_ea
+
+    # collect the function arguments
+    func_args = {}
+    for idx, arg in enumerate(ida_cfunc.arguments):
+        size = arg.width
+        name = arg.name
+        type_str = str(arg.type())
+        func_args[idx] = IDAFunctionArg(idx, name, type_str, size)
+
+    # collect the header ret_type and name
+    func_name = get_func_name(func_addr)
+    try:
+        ret_type_str = str(ida_cfunc.type).split(" ")[0]
+    except Exception:
+        ret_type_str = ""
+
+    ida_function_info = IDAFunction(func_addr, func_name, ret_type_str, func_args)
+    return ida_function_info
+
+
+@execute_write
+def set_func_prototype(ida_func_code_view, binsync_func: binsync.data.Function, controller: "BinsyncController"):
+    controller.decomp_working = True
+    all_was_set = True
+    ida_cfunc = ida_func_code_view.cfunc
+    func_addr = ida_cfunc.entry_ea
+
+    cur_ida_func = get_func_prototype_info(ida_cfunc)
+
+    # set the function name
+    if binsync_func.name and binsync_func.name != cur_ida_func.name:
+        controller.inc_api_count()
+        set_ida_func_name(func_addr, binsync_func.name)
+
+    # TODO: fix this so type returns are settable
+    # set the return type
+    #if binsync_func.ret_type_str and binsync_func.ret_type_str != "":
+    #    cur_ret_type_str = str(ida_cfunc.type).split(" ")
+    #    if cur_ret_type_str[0] != binsync_func.ret_type_str:
+    #        cur_ret_type_str[0] = binsync_func.ret_type_str
+    #        new_ret_type_str = " ".join(cur_ret_type_str)
+    #        idc.SetType(func_addr, new_ret_type_str)
+
+    # set each argument name and type
+    for idx, binsync_arg in binsync_func.arguments.items():
+        if idx >= len(cur_ida_func.func_args):
+            break
+
+        cur_ida_arg = cur_ida_func.func_args[idx]
+
+        # set the name
+        if binsync_arg.name and binsync_arg.name != "" and binsync_arg.name != cur_ida_arg.name:
+            controller.inc_api_count()
+            print(f"Setting {cur_ida_arg.name} -> {binsync_arg.name}")
+            all_was_set = ida_func_code_view.rename_lvar(ida_cfunc.arguments[idx], binsync_arg.name, 1)
+            print(f"ALL WAS SET: {all_was_set}")
+            print(f"SEEING: {str(ida_cfunc.type)}")
+            refresh_pseudocode_view(func_addr)
+
+        # TODO: fix this so types are settable
+        # maybe try to just change the DECLERATION STRING, instead of each
+        # member in the arguments
+        #
+        # parse and set the type
+        #if binsync_arg.type_str and binsync_arg.type_str != "" and binsync_arg.type_str != cur_ida_arg.type_str:
+        #    ida_type = convert_type_str_to_ida_type(binsync_arg.type_str)
+        #    if ida_type:
+        #        controller.inc_api_count()
+        #        try:
+        #            ida_func_code_view.set_lvar_type(ida_cfunc.arguments[idx], ida_type)
+        #        except Exception:
+        #            print(f"[BinSync]: An error occured while setting a type in {hex(func_addr)} arguments"
+        #                  f" with type of {binsync_arg.type_str} {binsync_arg.name}")
+        #            with controller.api_lock:
+        #                controller.api_count -= 1
+
+    controller.decomp_working = False
 
 #
 #   IDA Comment r/w
