@@ -246,8 +246,6 @@ class TestBinSyncPluginGUI(unittest.TestCase):
             old_name = func.name
             self.assertIsNotNone(func)
 
-            print(f"OLD FUNCTION NAME: {old_name}")
-
             # find the binsync plugin and connect
             binsync_plugin = get_binsync_am_plugin(main)
             config_and_connect(binsync_plugin, user_1, sync_dir_path)
