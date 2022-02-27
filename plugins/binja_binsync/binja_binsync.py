@@ -89,6 +89,7 @@ class FunctionNotification(BinaryDataNotification):
     def function_updated(self, view, func):
         # Service requested function only
         if self._function_requested == func.start:
+            print(f"[BinSync] Servicing function: {func.start:#x}")
             # Found function clear request
             self._function_requested = None
             # Convert to binsync Function type for diffing
@@ -102,30 +103,34 @@ class FunctionNotification(BinaryDataNotification):
 
             # Check return type
             if self._function_saved.header.ret_type != bs_func.header.ret_type:
-                before = self._function_saved.header.ret_type
-                after = bs_func.header.ret_type
-                self._controller.push_function_header(bs_func.header)
+                self._controller.push_function_header(bs_func.addr, bs_func.header)
+                self._function_saved = None
                 return
 
             # Check arguments
+            arg_changed = False
             for key, old_arg in self._function_saved.header.args.items():
                 try:
                     new_arg = bs_func.header.args[key]
                 except KeyError:
-                    new_arg = None
-                    print(f"[BinSync Function {bs_func.addr:#x} detected argument {key} removed")
+                    arg_changed = True
                     break
 
                 if old_arg.name != new_arg.name:
-                    print(f"[BinSync] Function {bs_func.addr:#x} detected argument {key} name change from {old_arg.name} to {new_arg.name}")
+                    arg_changed = True
+                    break
 
                 if old_arg.type_str != new_arg.type_str:
-                    print(f"[BinSync] Function {bs_func.addr:#x} detected argument {key} type change from {old_arg.type_str} to {new_arg.type_str}")
+                    arg_changed = True
+                    break
+
+            if arg_changed:
+                self._controller.push_function_header(bs_func.addr, bs_func.header)
 
             self._function_saved = None
 
     def function_update_requested(self, view, func):
-        if self._function_requested is None:
+        if not self._controller.syncing and self._function_requested is None:
             print(f"[BinSync] Function requested {func.start:#x}")
             self._function_requested = func.start
             self._function_saved = conv_func_binja_to_binsync(func)
