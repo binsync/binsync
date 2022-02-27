@@ -4,11 +4,13 @@ from angrmanagement.ui.views import CodeView
 from angr.analyses.decompiler.structured_codegen import DummyStructuredCodeGenerator
 from angr import knowledge_plugins
 import angr
+import logging
 
 from binsync.common.controller import *
 from binsync.data import StackOffsetType, Function, FunctionHeader
 import binsync
 
+_l = logging.getLogger(name=__name__)
 
 class AngrBinSyncController(BinSyncController):
     """
@@ -56,7 +58,6 @@ class AngrBinSyncController(BinSyncController):
     @init_checker
     @make_ro_state
     def fill_function(self, func_addr, user=None, state=None):
-        import ipdb; ipdb.set_trace()
         func = self._instance.kb.functions[func_addr]
 
         # re-decompile a function if needed
@@ -68,9 +69,10 @@ class AngrBinSyncController(BinSyncController):
             return False
 
         # ==== Function Name ==== #
-        func.name = _func.name
-        decompilation.cfunc.name = _func.name
-        decompilation.cfunc.demangled_name = _func.name
+        if _func.name and _func.name != func.name:
+            func.name = _func.name
+            decompilation.cfunc.name = _func.name
+            decompilation.cfunc.demangled_name = _func.name
 
         # ==== Comments ==== #
         for addr, cmt in self.pull_comments(func_addr).items():

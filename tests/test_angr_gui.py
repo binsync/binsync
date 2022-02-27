@@ -3,6 +3,7 @@ import sys
 import tempfile
 import time
 import unittest
+import logging
 from unittest.mock import patch
 
 from PySide2.QtGui import QContextMenuEvent
@@ -23,7 +24,7 @@ from binsync.common.ui.config_dialog import SyncConfig
 
 app = None
 test_location = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'binaries')
-
+logging.disable(logging.CRITICAL)
 
 #
 # Test Utilities
@@ -58,56 +59,15 @@ def start_am_gui(binpath):
     return main
 
 
-def emulate_sync_menu_click(table, row_idx, sync_from=None):
-    """
-    Simulates a click on a row in any given table followed by another click for a context menu selection.
-    This is so you can use both the "Sync" and "Sync From..." options.
-
-    table: the table you want to sync from
-    row_idx: the index of the row in the table you want to click (0 is the first row)
-    sync_from: the optional user/function you want to sync from
-    """
-
-    def _menu_stub(menu):
-        """
-        This is a stub override function. Found in the utilities of BinSync common UI is a
-        stub that wraps QMenu. It just returns QMenu back when normally called in the code. We
-        override the stub so that we can also override the objects `exec_` method.
-
-        We override the exec_ method to avoid a popup and to allow us to select a sync action
-        from the menu that will popup.
-        """
-        def exec_(*args, **kwargs):
-            # find the parent menu
-            parent = kwargs.get("parent", None)
-            if not parent:
-                return None
-
-            # sync from shown user
-            if not sync_from:
-                return [action for action in parent.actions() if action.text() == "Sync"][0]
-
-            # sync from a selected user/function
-            actions = [action for action in parent.actions() if action.text() != "Sync"][0]
-            action = [act for act in actions if act.text() == sync_from][0]
-            return action
-
-        menu.exec_ = exec_
-        return menu
-
-    # create a real coordinate click point from the given target row idx
-    click_point = QPoint(5, table.rowViewportPosition(row_idx))
-    click_event = QContextMenuEvent(
-        QContextMenuEvent.Reason.Mouse,
-        click_point,  # QPoint(0 + PIXEL_OFFSET, 0 + PIXEL_OFFSET)
-    )
-
-    # only temporarily override the menu_stub
-    with unittest.mock.patch.object(utils, "menu_stub", _menu_stub):
-        table.contextMenuEvent(click_event)
-
-
 def am_setUp():
+    logging.getLogger("angr").setLevel("ERROR")
+    logging.getLogger("vex").setLevel("ERROR")
+    logging.getLogger("claripy").setLevel("ERROR")
+    logging.getLogger("cle").setLevel("ERROR")
+    logging.getLogger("angrmanagement").setLevel("ERROR")
+    logging.getLogger("ipykernel").setLevel("ERROR")
+    logging.getLogger("qt").setLevel("CRITICAL")
+    logging.getLogger().setLevel("ERROR")
     global app
     if app is None:
         app = QApplication([])
@@ -131,13 +91,11 @@ class TestBinSyncPluginGUI(unittest.TestCase):
     #
     # Tests
     #
-
     def test_function_rename(self):
         binpath = os.path.join(test_location, "fauxware")
         new_function_name = "leet_main"
         user_1 = "user_1"
         user_2 = "user_2"
-
         with tempfile.TemporaryDirectory() as sync_dir_path:
             # ========= USER 1 =========
             # setup GUI
@@ -171,7 +129,7 @@ class TestBinSyncPluginGUI(unittest.TestCase):
             self.assertEqual(func.name, new_function_name)
 
             # assure a new commit makes it to the repo
-            time.sleep(BINSYNC_RELOAD_TIME + BINSYNC_RELOAD_TIME//2)
+            time.sleep(BINSYNC_RELOAD_TIME + BINSYNC_RELOAD_TIME // 2)
             control_panel = binsync_plugin.control_panel_view.control_panel
             func_table = control_panel._func_table
             top_change = func_table.items[0]
@@ -201,7 +159,12 @@ class TestBinSyncPluginGUI(unittest.TestCase):
 
             # make a click event to sync new data from the first row in the table
             func_table = control_panel._func_table
-            emulate_sync_menu_click(func_table, 0)
+            func_table.contextMenuEvent(QContextMenuEvent(QContextMenuEvent.Mouse, QPoint(0,0)))
+            context_menu = next(filter(lambda x: isinstance(x, QMenu) and x.objectName() == "binsync_function_table_context_menu", QApplication.topLevelWidgets()))
+            #triple check we got the right menu
+            assert (context_menu.objectName() == "binsync_function_table_context_menu")
+            sync_action = next(filter(lambda x: x.text() == "Sync", context_menu.actions()))
+            sync_action.trigger()
 
             self.assertEqual(func.name, new_function_name)
             app.exit(0)
@@ -220,6 +183,8 @@ class TestBinSyncPluginGUI(unittest.TestCase):
             func = main.workspace.instance.project.kb.functions['main']
             old_name = func.name
             self.assertIsNotNone(func)
+
+            print(f"OLD FUNCTION NAME: {old_name}")
 
             # find the binsync plugin and connect
             binsync_plugin = get_binsync_am_plugin(main)
@@ -242,6 +207,7 @@ class TestBinSyncPluginGUI(unittest.TestCase):
                     break
             else:
                 self.fail("The CVariable _instance is not found.")
+
             rnode = RenameNode(code_view=pseudocode_view, node=var_node)
             rnode._name_box.setText("")
             QTest.keyClicks(rnode._name_box, new_var_name)
@@ -268,6 +234,10 @@ class TestBinSyncPluginGUI(unittest.TestCase):
             self.assertEqual(top_change.activity, func.addr)
             self.assertIsNot(top_change.last_push, None)
 
+            print(f"NEW FUNCTION NAME: {func.name}")
+            func = main.workspace.instance.project.kb.functions['main']
+            print(f"NEW FUNCTION NAME 2: {func.name}")
+            print(f"SYNC_DIR_PATH: {sync_dir_path}")
             # reset the repo
             os.remove(sync_dir_path + "/.git/binsync.lock")
 
@@ -291,13 +261,25 @@ class TestBinSyncPluginGUI(unittest.TestCase):
             # assure functions did not change
             func_table = control_panel._func_table
             self.assertIsNotNone(func_table.items[0].name)
+            print(f"BEFORE SYNC: {func_table.items[0].name}")
 
             # make a click event to sync new data from the first row in the table
             activity_table = control_panel._activity_table
-            emulate_sync_menu_click(activity_table, 0)
+            activity_table.contextMenuEvent(QContextMenuEvent(QContextMenuEvent.Mouse, QPoint(0, 0)))
+            context_menu = next(
+                filter(lambda x: isinstance(x, QMenu) and x.objectName() == "binsync_activity_table_context_menu",
+                       QApplication.topLevelWidgets()))
+            # triple check we got the right menu
+            assert (context_menu.objectName() == "binsync_activity_table_context_menu")
+            sync_action = next(filter(lambda x: x.text() == "Sync", context_menu.actions()))
+            sync_action.trigger()
+            time.sleep(2)
 
+            #func = main.workspace.instance.project.kb.functions['main']
+            #self.assertIsNotNone(func)
             # assure function name did not change
             self.assertEqual(func_table.items[0].name, "")
+            # failure point
             self.assertEqual(func.name, old_name)
 
             for var in var_man._unified_variables:
