@@ -60,14 +60,6 @@ def start_am_gui(binpath):
 
 
 def am_setUp():
-    logging.getLogger("angr").setLevel("ERROR")
-    logging.getLogger("vex").setLevel("ERROR")
-    logging.getLogger("claripy").setLevel("ERROR")
-    logging.getLogger("cle").setLevel("ERROR")
-    logging.getLogger("angrmanagement").setLevel("ERROR")
-    logging.getLogger("ipykernel").setLevel("ERROR")
-    logging.getLogger("qt").setLevel("CRITICAL")
-    logging.getLogger().setLevel("ERROR")
     global app
     if app is None:
         app = QApplication([])
