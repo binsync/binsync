@@ -47,6 +47,7 @@ class BinjaBinSyncController(BinSyncController):
     def __init__(self):
         super(BinjaBinSyncController, self).__init__()
         self.bv = None
+        self.syncing = False
 
     def binary_hash(self) -> str:
         return hashlib.md5(self.bv.file.raw[:]).hexdigest()
@@ -90,9 +91,11 @@ class BinjaBinSyncController(BinSyncController):
         Grab all relevant information from the specified user and fill the @bn_func.
         """
         bn_func = self.bv.get_function_at(func_addr)
-        sync_func = self.pull_function(func_addr, user=user, state=state)
+        sync_func = self.pull_function(func_addr, user=user, state=state) # type: Function
         if sync_func is None:
             return
+
+        self.syncing = True
 
         # name
         if sync_func.name and sync_func.name != bn_func.name:
@@ -123,8 +126,15 @@ class BinjaBinSyncController(BinSyncController):
             except Exception as e:
                 print(f"[BinSync]: Could not sync stack variable {bn_offset}: {e}")
 
+        # ret type
+        if sync_func.header.ret_type and sync_func.header.ret_type != bn_func.return_type.get_string_before_name():
+            new_type, _ = self.bv.parse_type_string(sync_func.header.ret_type)
+            bn_func.return_type = new_type
+
         bn_func.reanalyze()
         print(f"[Binsync]: New data synced for \'{user}\' on function {hex(bn_func.start)}.")
+
+        self.syncing = False
 
     #
     #   Pushers
@@ -132,10 +142,9 @@ class BinjaBinSyncController(BinSyncController):
 
     @init_checker
     @make_state_with_func
-    def push_function_header(self, bn_func: binaryninja.function.Function, user=None, state=None):
-        # Push function
-        func = binsync.data.FunctionHeader(bn_func.name, bn_func.start)  # force conversion from long to int
-        state.set_function_header(func)
+    def push_function_header(self, addr, bs_func_header: binsync.data.FunctionHeader, user=None, state=None, api_set=False):
+        # Push function header
+        state.set_function_header(bs_func_header, set_last_change=not api_set)
 
     @init_checker
     @make_state
