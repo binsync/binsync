@@ -482,7 +482,7 @@ class HexRaysHooks:
         cur_header_str = str(ida_cfunc.type)
         if cur_header_str != self._cached_funcs[ida_cfunc.entry_ea]["header"]:
             # convert to binsync type
-            cur_func_header = compat.get_func_prototype_info(ida_cfunc)
+            cur_func_header = compat.get_func_header_info(ida_cfunc)
             binsync_args = {}
             for idx, arg in cur_func_header.func_args.items():
                 binsync_args[idx] = FunctionArgument(idx, arg.name, arg.type_str, arg.size)

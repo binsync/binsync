@@ -149,6 +149,10 @@ class IDABinSyncController(BinSyncController):
         with self.api_lock:
             self.api_count += 1
 
+    def reset_api_count(self):
+        with self.api_lock:
+            self.api_count = 0
+
     def make_controller_cmd(self, cmd_func, *args, **kwargs):
         with self.queue_lock:
             if cmd_func == self.push_struct:
@@ -199,6 +203,7 @@ class IDABinSyncController(BinSyncController):
         @param state:
         @return:
         """
+        data_changed = False
         # sanity check, the desired user has some structs to sync
         pulled_structs: List[Struct] = self.pull_structs(user=user, state=state)
         if len(pulled_structs) <= 0:
@@ -207,14 +212,13 @@ class IDABinSyncController(BinSyncController):
 
         # convert each binsync struct into an ida struct and set it in the GUI
         for struct in pulled_structs:
-            compat.set_ida_struct(struct, self)
+            data_changed |= compat.set_ida_struct(struct, self)
 
         # set the type of each member in the structs
-        all_typed_success = True
         for struct in pulled_structs:
-            all_typed_success &= compat.set_ida_struct_member_types(struct, self)
+            data_changed |= compat.set_ida_struct_member_types(struct, self)
 
-        return all_typed_success
+        return data_changed
 
     @init_checker
     @make_ro_state
@@ -222,50 +226,66 @@ class IDABinSyncController(BinSyncController):
         """
         Grab all relevant information from the specified user and fill the @func_adrr.
         """
+        data_changed = False
 
-        # === sanity and cache checks === #
-        # check that this function exists in IDA
+        # sanity check this function
         ida_func = ida_funcs.get_func(func_addr)
         if ida_func is None:
             print(f"[BinSync]: IDA Error on sync for \'{user}\' on function {hex(func_addr)}.")
-            return -1
+            return data_changed
 
-        # preform a diff check to see if we need to do a change
-        master_state = self.client.get_state(user=self.client.master_user)
-        no_change = master_state.compare_function(func_addr, state)
-        if no_change:
-            print(f"[BinSync]: No change on sync for \'{user}\' on function {hex(func_addr)}.")
-            return 0
+        #
+        # FUNCTION HEADER
+        #
 
-        # check if the function exists in the pulled state
-        _func = self.pull_function(func_addr, user=user, state=state)
-        if _func is None:
-            return -1
+        # function should exist in pulled state
+        binsync_func = self.pull_function(func_addr, user=user, state=state) # type: Function
+        if binsync_func is None:
+            return data_changed
 
-        # === function name === #
-        if _func.name and _func.name != "" and compat.get_func_name(ida_func.start_ea) != _func.name:
-            self.inc_api_count()
-            compat.set_ida_func_name(ida_func.start_ea, _func.name)
+        ida_code_view = ida_hexrays.open_pseudocode(ida_func.start_ea, 0)
+        # check if a header has been set for the func
+        if binsync_func.header:
+            updated_header = False
+            try:
+                updated_header = compat.set_func_header(ida_code_view, binsync_func.header, self)
+            except Exception as e:
+                _l.info(f"Header filling failed with exception {e}")
+                self.reset_api_count()
 
-        # === comments === #
-        # set disassembly and decompiled comments
+            # if it failed, we likely are missing a type. Try again!
+            if not updated_header:
+                _l.info("ATTEMPTING TO SYNC STRUCTS")
+                data_changed |= self.fill_structs(user=user, state=state)
+            try:
+                updated_header = compat.set_func_header(ida_code_view, binsync_func.header, self)
+            except Exception as e:
+                _l.info(f"Header filling failed with exception {e}")
+                self.reset_api_count()
+
+            data_changed |= updated_header
+
+        #
+        # COMMENTS
+        #
+
         sync_cmts = self.pull_func_comments(func_addr, user=user, state=state)
         for addr, cmt in sync_cmts.items():
             self.inc_api_count()
             res = compat.set_ida_comment(addr, cmt.comment, decompiled=cmt.decompiled)
             if not res:
-                # XXX: this can be dangerous:
-                # if the above comment fails and the api_count never gets decreased after
-                # getting increased, we can be stalled for a long time.
-                print(f"[BinSync]: Failed to sync comment at <{hex(addr)}>: \'{cmt.comment}\'")
+                _l.debug(f"Failed to sync comment at <{hex(addr)}>: \'{cmt.comment}\'")
+                self.reset_api_count()
 
-        # === stack variables === #
-        # sanity check that this function has a stack frame
+        #
+        # STACK VARIABLES
+        #
+
         frame = idaapi.get_frame(ida_func.start_ea)
         if frame is None or frame.memqty <= 0:
             _l.debug("Function %#x does not have an associated function frame. Skip variable name sync-up.",
                      ida_func.start_ea)
-            return -1
+            return data_changed
 
         # collect and covert the info of each stack variable
         existing_stack_vars = {}
@@ -273,14 +293,14 @@ class IDABinSyncController(BinSyncController):
             existing_stack_vars[compat.ida_to_angr_stack_offset(ida_func.start_ea, offset)] = ida_var
 
         stack_vars_to_set = {}
-        ida_code_view = ida_hexrays.open_pseudocode(ida_func.start_ea, 0)
         # only try to set stack vars that actually exist
         for offset, stack_var in self.pull_stack_variables(func_addr, user=user, state=state).items():
             if offset in existing_stack_vars:
                 # change the variable's name
                 if stack_var.name != existing_stack_vars[offset].name:
                     self.inc_api_count()
-                    ida_struct.set_member_name(frame, existing_stack_vars[offset].offset, stack_var.name)
+                    if ida_struct.set_member_name(frame, existing_stack_vars[offset].offset, stack_var.name):
+                        data_changed |= True
 
                 # check if the variables type should be changed
                 if ida_code_view and stack_var.type != existing_stack_vars[offset].type_str:
@@ -290,14 +310,14 @@ class IDABinSyncController(BinSyncController):
                         # its possible the type is just a custom type from the same user
                         # TODO: make it possible to sync a single struct
                         if self._typestr_in_state_structs(stack_var.type, user=user, state=state):
-                            self.fill_structs(user=user, state=state)
+                            data_changed |= self.fill_structs(user=user, state=state)
 
                         ida_type = compat.convert_type_str_to_ida_type(stack_var.type)
                         # it really is just a bad type
                         if ida_type is None:
-                            print(f"[BinSync]: Failed to parse stack variable stored type at offset"
-                                  f" {hex(existing_stack_vars[offset].offset)} with type {stack_var.type}"
-                                  f" on function {hex(ida_func.start_ea)}.")
+                            _l.debug(f"Failed to parse stack variable stored type at offset"
+                                     f" {hex(existing_stack_vars[offset].offset)} with type {stack_var.type}"
+                                     f" on function {hex(ida_func.start_ea)}.")
                             continue
 
                     # queue up the change!
@@ -305,11 +325,14 @@ class IDABinSyncController(BinSyncController):
 
             # change the type of all vars that need to be changed
             # NOTE: api_count is incremented inside the function
-            compat.set_stack_vars_types(stack_vars_to_set, ida_code_view, self)
+            data_changed |= compat.set_stack_vars_types(stack_vars_to_set, ida_code_view, self)
 
         # ===== update the pseudocode ==== #
-        compat.refresh_pseudocode_view(_func.addr)
-        print(f"[Binsync]: New data synced for \'{user}\' on function {hex(ida_func.start_ea)}.")
+        compat.refresh_pseudocode_view(binsync_func.addr)
+        if data_changed:
+            _l.info(f"New data synced for \'{user}\' on function {hex(ida_func.start_ea)}.")
+        else:
+            _l.info(f"No new data was set either by failure or lack of differences.")
 
     #
     #   Pullers

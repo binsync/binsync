@@ -187,7 +187,7 @@ def set_ida_func_name(func_addr, new_name):
 
 
 @execute_read
-def get_func_prototype_info(ida_cfunc) -> IDAFunction:
+def get_func_header_info(ida_cfunc) -> IDAFunction:
     func_addr = ida_cfunc.entry_ea
 
     # collect the function arguments
@@ -201,7 +201,7 @@ def get_func_prototype_info(ida_cfunc) -> IDAFunction:
     # collect the header ret_type and name
     func_name = get_func_name(func_addr)
     try:
-        ret_type_str = str(ida_cfunc.type).split(" ")[0]
+        ret_type_str = str(ida_cfunc.type.get_rettype())
     except Exception:
         ret_type_str = ""
 
@@ -210,62 +210,81 @@ def get_func_prototype_info(ida_cfunc) -> IDAFunction:
 
 
 @execute_write
-def set_func_prototype(ida_func_code_view, binsync_func: binsync.data.Function, controller: "BinsyncController"):
-    controller.decomp_working = True
-    all_was_set = True
+def set_func_header(ida_func_code_view, binsync_header: binsync.data.FunctionHeader, controller: "BinsyncController"):
+    data_changed = False
     ida_cfunc = ida_func_code_view.cfunc
     func_addr = ida_cfunc.entry_ea
 
-    cur_ida_func = get_func_prototype_info(ida_cfunc)
+    cur_ida_func = get_func_header_info(ida_cfunc)
 
-    # set the function name
-    if binsync_func.name and binsync_func.name != cur_ida_func.name:
+    #
+    # FUNCTION NAME
+    #
+
+    if binsync_header.name and binsync_header.name != cur_ida_func.name:
         controller.inc_api_count()
-        set_ida_func_name(func_addr, binsync_func.name)
+        set_ida_func_name(func_addr, binsync_header.name)
 
-    # TODO: fix this so type returns are settable
-    # set the return type
-    #if binsync_func.ret_type_str and binsync_func.ret_type_str != "":
-    #    cur_ret_type_str = str(ida_cfunc.type).split(" ")
-    #    if cur_ret_type_str[0] != binsync_func.ret_type_str:
-    #        cur_ret_type_str[0] = binsync_func.ret_type_str
-    #        new_ret_type_str = " ".join(cur_ret_type_str)
-    #        idc.SetType(func_addr, new_ret_type_str)
+    #
+    # FUNCTION RET TYPE
+    #
 
-    # set each argument name and type
-    for idx, binsync_arg in binsync_func.arguments.items():
+    func_name = get_func_name(func_addr)
+    cur_ret_type_str = str(ida_cfunc.type.get_rettype())
+    if binsync_header.ret_type and binsync_header.ret_type != cur_ret_type_str:
+        old_prototype = str(ida_cfunc.type).replace("(", f" {func_name}(", 1)
+        new_prototype = old_prototype.replace(cur_ret_type_str, binsync_header.ret_type, 1)
+        controller.inc_api_count()
+        success = idc.SetType(func_addr, new_prototype)
+        data_changed |= success is True
+        refresh_pseudocode_view(func_addr)
+
+    #
+    # FUNCTION ARGS
+    #
+
+    types_to_change = {}
+    for idx, binsync_arg in binsync_header.args.items():
         if idx >= len(cur_ida_func.func_args):
             break
 
         cur_ida_arg = cur_ida_func.func_args[idx]
 
-        # set the name
-        if binsync_arg.name and binsync_arg.name != "" and binsync_arg.name != cur_ida_arg.name:
+        # change the name
+        if binsync_arg.name and binsync_arg.name != cur_ida_arg.name:
             controller.inc_api_count()
-            print(f"Setting {cur_ida_arg.name} -> {binsync_arg.name}")
-            all_was_set = ida_func_code_view.rename_lvar(ida_cfunc.arguments[idx], binsync_arg.name, 1)
-            print(f"ALL WAS SET: {all_was_set}")
-            print(f"SEEING: {str(ida_cfunc.type)}")
+            success = ida_func_code_view.rename_lvar(ida_cfunc.arguments[idx], binsync_arg.name, 1)
+            data_changed |= success is True
             refresh_pseudocode_view(func_addr)
 
-        # TODO: fix this so types are settable
-        # maybe try to just change the DECLERATION STRING, instead of each
-        # member in the arguments
-        #
-        # parse and set the type
-        #if binsync_arg.type_str and binsync_arg.type_str != "" and binsync_arg.type_str != cur_ida_arg.type_str:
-        #    ida_type = convert_type_str_to_ida_type(binsync_arg.type_str)
-        #    if ida_type:
-        #        controller.inc_api_count()
-        #        try:
-        #            ida_func_code_view.set_lvar_type(ida_cfunc.arguments[idx], ida_type)
-        #        except Exception:
-        #            print(f"[BinSync]: An error occured while setting a type in {hex(func_addr)} arguments"
-        #                  f" with type of {binsync_arg.type_str} {binsync_arg.name}")
-        #            with controller.api_lock:
-        #                controller.api_count -= 1
+        # record the type to change
+        if binsync_arg.type_str and binsync_arg.type_str != cur_ida_arg.type_str:
+            types_to_change[idx] = (cur_ida_arg.type_str, binsync_arg.type_str)
 
-    controller.decomp_working = False
+    # crazy prototype parsing
+    func_prototype = str(ida_cfunc.type).replace("(", f" {func_name}(", 1)
+    proto_split = func_prototype.split("(", maxsplit=1)
+    proto_head, proto_body = proto_split[0], "(" + proto_split[1]
+    arg_strs = proto_body.split(",")
+
+    # update prototype body from left to right
+    for idx in range(len(cur_ida_func.func_args)):
+        try:
+            old_t, new_t = types_to_change[idx]
+        except KeyError:
+            continue
+
+        arg_strs[idx] = arg_strs[idx].replace(old_t, new_t, 1)
+
+    # set the change
+    proto_body = ",".join(arg_strs)
+    new_prototype = proto_head + proto_body
+    controller.inc_api_count()
+    success = idc.SetType(func_addr, new_prototype)
+    data_changed |= success is True
+
+    return data_changed
+
 
 #
 #   IDA Comment r/w
@@ -373,7 +392,7 @@ def set_stack_vars_types(var_type_dict, code_view, controller: "IDABinSyncContro
     @return:
     """
 
-    all_success = True
+    data_changed = False
     fixed_point = False
     while not fixed_point:
         fixed_point = True
@@ -382,12 +401,12 @@ def set_stack_vars_types(var_type_dict, code_view, controller: "IDABinSyncContro
             if lvar.is_stk_var() and cur_off in var_type_dict:
                 if str(lvar.type()) != str(var_type_dict[cur_off]):
                     controller.inc_api_count()
-                    all_success &= code_view.set_lvar_type(lvar, var_type_dict.pop(cur_off))
+                    data_changed |= code_view.set_lvar_type(lvar, var_type_dict.pop(cur_off))
                     fixed_point = False
                     # make sure to break, in case the size of lvars array has now changed
                     break
 
-    return all_success
+    return data_changed
 
 @execute_read
 def ida_get_frame(func_addr):
@@ -403,12 +422,14 @@ def set_struct_member_name(ida_struct, frame, offset, name):
 
 @execute_write
 def set_ida_struct(struct: Struct, controller) -> bool:
+    data_changed = False
+
     # first, delete any struct by the same name if it exists
     sid = ida_struct.get_struc_id(struct.name)
     if sid != 0xffffffffffffffff:
         sptr = ida_struct.get_struc(sid)
         controller.inc_api_count()
-        ida_struct.del_struc(sptr)
+        data_changed |= ida_struct.del_struc(sptr)
 
     # now make a struct header
     controller.inc_api_count()
@@ -427,7 +448,7 @@ def set_ida_struct(struct: Struct, controller) -> bool:
 
         # create the new member
         controller.inc_api_count()
-        ida_struct.add_struc_member(
+        data_changed |= ida_struct.add_struc_member(
             sptr,
             member.member_name,
             member.offset,
@@ -436,13 +457,15 @@ def set_ida_struct(struct: Struct, controller) -> bool:
             member.size,
         )
 
+    return data_changed
+
 
 @execute_write
 def set_ida_struct_member_types(struct: Struct, controller) -> bool:
     # find the specific struct
     sid = ida_struct.get_struc_id(struct.name)
     sptr = ida_struct.get_struc(sid)
-    all_typed_success = True
+    data_changed = False
 
     for idx, member in enumerate(struct.struct_members):
         # set the new member type if it has one
@@ -452,7 +475,6 @@ def set_ida_struct_member_types(struct: Struct, controller) -> bool:
         # assure its convertible
         tif = convert_type_str_to_ida_type(member.type)
         if tif is None:
-            all_typed_success = False
             continue
 
         # set the type
@@ -465,9 +487,9 @@ def set_ida_struct_member_types(struct: Struct, controller) -> bool:
             tif,
             mptr.flag
         )
-        all_typed_success &= True if was_set == 1 else False
+        data_changed |= was_set == 1
 
-    return all_typed_success
+    return data_changed
 
 
 #
