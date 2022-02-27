@@ -164,40 +164,6 @@ class State:
                    and other.patches == self.patches
         return False
 
-    def compare_function(self, func_addr: int, other: "State"):
-        """
-        Compares this state with another states function, and all the artifcats within that function.
-
-        @param func_addr:   func address of interest
-        @param other:       other state
-        @return:            True if eq.
-        """
-
-        if not isinstance(other, State):
-            return False
-
-        are_eq = True
-
-        # function headers
-        try:
-            are_eq &= self.functions[func_addr] == other.functions[func_addr]
-        except KeyError:
-            return False
-
-        # comments
-        try:
-            are_eq &= self.comments[func_addr] == other.comments[func_addr]
-        except KeyError:
-            return False
-
-        # stack vars
-        try:
-            are_eq &= self.stack_variables[func_addr] == other.stack_variables[func_addr]
-        except KeyError:
-            return False
-
-        return are_eq
-
     @property
     def dirty(self):
         return self._dirty
@@ -533,6 +499,38 @@ class State:
     #
     # Utils
     #
+
+    def diff_comments(self, other_comments: Dict[int, Comment], diff_range=None):
+        """
+
+        :param other_comments:
+        :param diff_range: [start_addr, end_addr]
+        :return:
+        """
+        diff_dict = {}
+
+        for addr, cmt in self.comments.items():
+            # if addr is less than start or bigger than end
+            if diff_range and (diff_range[0] > addr or addr >= diff_range[1]):
+                continue
+
+            try:
+                other_cmt = other_comments[addr]
+            except KeyError:
+                other_cmt = None
+
+            diff_dict[addr] = cmt.diff(other_cmt)
+
+        for addr, cmt in other_comments.items():
+            if diff_range and (diff_range[0] > addr or addr >= diff_range[1]):
+                continue
+
+            if addr in diff_dict:
+                continue
+
+            diff_dict[addr] = cmt.diff(None)
+
+        return diff_dict
 
     def find_func_for_addr(self, search_addr):
         for func_addr, func in self.functions.items():

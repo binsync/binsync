@@ -73,6 +73,23 @@ class Struct(Artifact):
     def add_struct_member(self, mname, moff, mtype, size):
         self.struct_members.append(StructMember(mname, moff, mtype, size))
 
+    def diff(self, other, **kwargs) -> Dict:
+        diff_dict = {}
+        if not isinstance(other, Struct):
+            return diff_dict
+
+        for k in ["name", "size"]:
+            if getattr(self, k) == getattr(other, k):
+                continue
+
+            diff_dict[k] = {
+                "before": getattr(self, k),
+                "after": getattr(other, k)
+            }
+
+        # TODO: fix struct members
+        diff_dict["struct_members"] = {}
+
     @classmethod
     def parse(cls, s):
         struct = Struct(None, None, None)
