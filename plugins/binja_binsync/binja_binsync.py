@@ -74,7 +74,8 @@ def conv_func_binja_to_binsync(binja_func):
                                       args=args)
 
     sync_stack_vars = None
-    return data.Function(binja_func.start, header=sync_header, stack_vars=sync_stack_vars)
+    size = binja_func.address_ranges[0].end - binja_func.address_ranges[0].start
+    return data.Function(binja_func.start, size, header=sync_header, stack_vars=sync_stack_vars)
 
 
 class FunctionNotification(BinaryDataNotification):
@@ -86,37 +87,40 @@ class FunctionNotification(BinaryDataNotification):
         self._function_saved = None
 
     def function_updated(self, view, func):
-        # g_function_requested == func.start
-        # if so push this func
-        # else exit earlier
-        # g_function_requested = None
-        # use push function header
-        func = conv_func_binja_to_binsync(func)
-        if self._function_requested == func.addr:
-            print(f"[BinSync] Function {func.addr:#x} matched request function pushing")
+        # Service requested function only
+        if self._function_requested == func.start:
+            # Found function clear request
             self._function_requested = None
-            self._controller.push_function_header(func.addr, func.name)
+            # Convert to binsync Function type for diffing
+            bs_func = conv_func_binja_to_binsync(func)
+
+            # Check if name changed
+            if self._function_saved.header.name != bs_func.header.name:
+                before = self._function_saved.header.name
+                after = bs_func.header.name
+                print(f"[BinSync] Function {bs_func.addr:#x} detected name change from {before} to {after}")
 
             # Check return type
-            if self._function_saved.header.ret_type != func.header.ret_type:
+            if self._function_saved.header.ret_type != bs_func.header.ret_type:
                 before = self._function_saved.header.ret_type
-                after = func.header.ret_type
-                print(f"[BinSync] Function {func.addr:#x} detected return type change from {before} to {after}")
+                after = bs_func.header.ret_type
+                self._controller.push_function_header(bs_func.header)
+                return
 
             # Check arguments
             for key, old_arg in self._function_saved.header.args.items():
                 try:
-                    new_arg = func.header.args[key]
+                    new_arg = bs_func.header.args[key]
                 except KeyError:
                     new_arg = None
-                    print(f"[BinSync Function {func.addr:#x} detected argument {key} removed")
+                    print(f"[BinSync Function {bs_func.addr:#x} detected argument {key} removed")
                     break
 
                 if old_arg.name != new_arg.name:
-                    print(f"[BinSync] Function {func.addr:#x} detected argument {key} name change from {old_arg.name} to {new_arg.name}")
+                    print(f"[BinSync] Function {bs_func.addr:#x} detected argument {key} name change from {old_arg.name} to {new_arg.name}")
 
                 if old_arg.type_str != new_arg.type_str:
-                    print(f"[BinSync] Function {func.addr:#x} detected argument {key} type change from {old_arg.type_str} to {new_arg.type_str}")
+                    print(f"[BinSync] Function {bs_func.addr:#x} detected argument {key} type change from {old_arg.type_str} to {new_arg.type_str}")
 
             self._function_saved = None
 
@@ -195,8 +199,8 @@ class BinjaPlugin:
         #Creates to much noise removing for time being
         #print(f"[BinSync] Starting data hook")
         #start_data_monitor(bv, self.controllers[bv])
-        print(f"[BinSync Starting struct hook")
-        start_struct_monitor(bv, self.controllers[bv])
+        #print(f"[BinSync Starting struct hook")
+        #start_struct_monitor(bv, self.controllers[bv])
 
     def _launch_config(self, bn_context):
         bv = bn_context.binaryView

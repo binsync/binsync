@@ -132,10 +132,10 @@ class BinjaBinSyncController(BinSyncController):
 
     @init_checker
     @make_state_with_func
-    def push_function_header(self, bn_func: binaryninja.function.Function, user=None, state=None):
+    def push_function_header(self, bs_func_header: binsync.data.FunctionHeader, user=None, state=None):
         # Push function
-        func = binsync.data.FunctionHeader(name, addr)  # force conversion from long to int
-        state.set_function_header(func)
+        #func = binsync.data.FunctionHeader(name, addr)  # force conversion from long to int
+        state.set_function_header(bs_func_header)
 
     @init_checker
     @make_state
