@@ -93,30 +93,18 @@ class QFunctionTable(QTableWidget):
         self.setSortingEnabled(True)
 
     def contextMenuEvent(self, event):
-        # reload menu as a stub for testing support
-        from ...ui.utils import menu_stub
-        menu = menu_stub(QMenu(self))
+        menu = QMenu(self)
+        menu.setObjectName("binsync_function_table_context_menu")
 
-        sync_action = menu.addAction("Sync")
-
-        # create a nested menu
         selected_row = self.rowAt(event.pos().y())
         func_addr = self.item(selected_row, 0).data(Qt.UserRole)
+        menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=self.item(selected_row, 2).text()))
+
         from_menu = menu.addMenu("Sync from...")
         for username in self._get_valid_users_for_func(func_addr):
-            from_menu.addAction(username)
+            from_menu.addAction(username, lambda: self.controller.fill_function(func_addr, user=username))
 
-        # execute the event
-        action = menu.exec_(self.mapToGlobal(event.pos()))
-
-        if action == sync_action:
-            username = self.item(selected_row, 2).text()
-        elif action in from_menu.actions():
-            username = action.text()
-        else:
-            return
-
-        self.controller.fill_function(func_addr, user=username)
+        menu.popup(self.mapToGlobal(event.pos()))
 
     def update_table(self):
         known_funcs = {}  # addr: (addr, name, user_name, push_time)

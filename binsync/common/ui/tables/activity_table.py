@@ -100,30 +100,18 @@ class QActivityTable(QTableWidget):
         self.setSortingEnabled(True)
 
     def contextMenuEvent(self, event):
-        # reload menu as a stub for testing support
-        from ...ui.utils import menu_stub
-        menu = menu_stub(QMenu(self))
+        menu = QMenu(self)
+        menu.setObjectName("binsync_activity_table_context_menu")
 
-        sync_action = menu.addAction("Sync")
-
-        # create a nested menu
         selected_row = self.rowAt(event.pos().y())
         username = self.item(selected_row, 0).text()
+        menu.addAction("Sync", lambda: self.controller.fill_function(self.item(selected_row, 1).data(Qt.UserRole), user=username))
+
         for_menu = menu.addMenu("Sync for...")
         for func_addr_str in self._get_valid_funcs_for_user(username):
-            for_menu.addAction(func_addr_str)
+            for_menu.addAction(func_addr_str, lambda: self.controller.fill_function(int(func_addr_str, 16), user=username))
 
-        # execute the event
-        action = menu.exec_(self.mapToGlobal(event.pos()))
-
-        if action == sync_action:
-            activity_item = self.item(selected_row, 1).data(Qt.UserRole)
-        elif action in for_menu.actions():
-            activity_item = int(action.text(), 16)
-        else:
-            return
-
-        self.controller.fill_function(activity_item, user=username)
+        menu.popup(self.mapToGlobal(event.pos()))
 
     def update_table(self):
         self.items = []
