@@ -3,6 +3,7 @@ import sys
 import tempfile
 import time
 import unittest
+import logging
 from unittest.mock import patch
 
 from PySide2.QtGui import QContextMenuEvent
@@ -23,7 +24,7 @@ from binsync.common.ui.config_dialog import SyncConfig
 
 app = None
 test_location = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'binaries')
-
+logging.disable(logging.CRITICAL)
 
 #
 # Test Utilities
@@ -58,62 +59,11 @@ def start_am_gui(binpath):
     return main
 
 
-def emulate_sync_menu_click(table, row_idx, sync_from=None):
-    """
-    Simulates a click on a row in any given table followed by another click for a context menu selection.
-    This is so you can use both the "Sync" and "Sync From..." options.
-
-    table: the table you want to sync from
-    row_idx: the index of the row in the table you want to click (0 is the first row)
-    sync_from: the optional user/function you want to sync from
-    """
-
-    def _menu_stub(menu):
-        """
-        This is a stub override function. Found in the utilities of BinSync common UI is a
-        stub that wraps QMenu. It just returns QMenu back when normally called in the code. We
-        override the stub so that we can also override the objects `exec_` method.
-
-        We override the exec_ method to avoid a popup and to allow us to select a sync action
-        from the menu that will popup.
-        """
-        def exec_(*args, **kwargs):
-            # find the parent menu
-            parent = kwargs.get("parent", None)
-            if not parent:
-                return None
-
-            # sync from shown user
-            if not sync_from:
-                return [action for action in parent.actions() if action.text() == "Sync"][0]
-
-            # sync from a selected user/function
-            actions = [action for action in parent.actions() if action.text() != "Sync"][0]
-            action = [act for act in actions if act.text() == sync_from][0]
-            return action
-
-        menu.exec_ = exec_
-        return menu
-
-    # create a real coordinate click point from the given target row idx
-    click_point = QPoint(5, table.rowViewportPosition(row_idx))
-    click_event = QContextMenuEvent(
-        QContextMenuEvent.Reason.Mouse,
-        click_point,  # QPoint(0 + PIXEL_OFFSET, 0 + PIXEL_OFFSET)
-    )
-
-    # only temporarily override the menu_stub
-    with unittest.mock.patch.object(utils, "menu_stub", _menu_stub):
-        table.contextMenuEvent(click_event)
-
-
 def am_setUp():
     global app
     if app is None:
         app = QApplication([])
         Conf.init_font_config()
-
-
 #
 # Tests
 #
@@ -129,15 +79,103 @@ class TestBinSyncPluginGUI(unittest.TestCase):
         am_setUp()
 
     #
+    # Helpers
+    #
+    def rename_function(self, main, func, new_function_name):
+        """
+        Renames a given function
+        """
+        disasm_view = main.workspace._get_or_create_disassembly_view()
+        disasm_view._t_flow_graph_visible = True
+        disasm_view.display_function(func)
+        disasm_view.decompile_current_function()
+        main.workspace.instance.join_all_jobs()
+        pseudocode_view = main.workspace._get_or_create_pseudocode_view()
+        for _, item in pseudocode_view.codegen.map_pos_to_node.items():
+            if isinstance(item.obj, angr.analyses.decompiler.structured_codegen.c.CFunction):
+                func_node = item.obj
+                break
+        else:
+            self.fail("The CFunction _instance is not found.")
+        rnode = RenameNode(code_view=pseudocode_view, node=func_node)
+        rnode._name_box.setText("")
+        QTest.keyClicks(rnode._name_box, new_function_name)
+        QTest.mouseClick(rnode._ok_button, Qt.MouseButton.LeftButton)
+        self.assertEqual(func.name, new_function_name)
+
+    def rename_stack_variable(self, main, func, var_offset, new_var_name):
+        """
+        Renames a stack variable at a given function and offset
+        """
+        disasm_view = main.workspace._get_or_create_disassembly_view()
+        disasm_view._t_flow_graph_visible = True
+        disasm_view.display_function(func)
+        disasm_view.decompile_current_function()
+        main.workspace.instance.join_all_jobs()
+        pseudocode_view = main.workspace._get_or_create_pseudocode_view()
+        for _, item in pseudocode_view.codegen.map_pos_to_node.items():
+            if isinstance(item.obj, angr.analyses.decompiler.structured_codegen.c.CVariable) and \
+                    isinstance(item.obj.variable, angr.sim_variable.SimStackVariable) and \
+                    item.obj.variable.offset == var_offset:
+                var_node = item.obj
+                break
+        else:
+            self.fail("The CVariable _instance is not found.")
+
+        rnode = RenameNode(code_view=pseudocode_view, node=var_node)
+        rnode._name_box.setText("")
+        QTest.keyClicks(rnode._name_box, new_var_name)
+        QTest.mouseClick(rnode._ok_button, Qt.MouseButton.LeftButton)
+
+    def get_stack_variable(self, main, func, var_offset, var_man = None):
+        """
+        Gets a stack variable from a given function and offset
+        """
+        if var_man is None:
+            var_man = main.workspace.instance.pseudocode_variable_kb.variables.get_function_manager(func.addr)
+        for var in var_man._unified_variables:
+            if isinstance(var, angr.sim_variable.SimStackVariable) and var.offset == var_offset:
+                renamed_var = var
+                break
+        else:
+            return None
+        return renamed_var
+
+    def click_sync_menu(self, table, obj_name):
+        """
+        Syncs from the first entry in a context menu for a given table and menu object name
+        """
+        table.contextMenuEvent(QContextMenuEvent(QContextMenuEvent.Mouse, QPoint(0, 0)))
+        context_menu = next(
+            filter(lambda x: isinstance(x, QMenu) and x.objectName() == obj_name,
+                   QApplication.topLevelWidgets()))
+        # triple check we got the right menu
+        assert (context_menu.objectName() == obj_name)
+        sync_action = next(filter(lambda x: x.text() == "Sync", context_menu.actions()))
+        sync_action.trigger()
+
+    def check_repo_update(self, binsync_plugin, user, func_name=None, func_addr=None):
+        """
+        Checks to ensure the repo has been updated correctly with either a function name or address
+        """
+        time.sleep(BINSYNC_RELOAD_TIME + BINSYNC_RELOAD_TIME // 2)
+        control_panel = binsync_plugin.control_panel_view.control_panel
+        top_change_func = control_panel._func_table.items[0]
+        top_change_activity = control_panel._activity_table.items[0]
+        self.assertEqual(top_change_func.user, user)
+        if func_name is not None:
+            self.assertEqual(top_change_func.name, func_name)
+        if func_addr is not None:
+            self.assertEqual(top_change_activity.activity, func_addr)
+        self.assertIsNot(top_change_func.last_push, None)
+    #
     # Tests
     #
-
     def test_function_rename(self):
         binpath = os.path.join(test_location, "fauxware")
         new_function_name = "leet_main"
         user_1 = "user_1"
         user_2 = "user_2"
-
         with tempfile.TemporaryDirectory() as sync_dir_path:
             # ========= USER 1 =========
             # setup GUI
@@ -152,32 +190,10 @@ class TestBinSyncPluginGUI(unittest.TestCase):
             self.assertEqual(binsync_plugin.controller.client.master_user, user_1)
 
             # trigger a function rename in decompilation
-            disasm_view = main.workspace._get_or_create_disassembly_view()
-            disasm_view._t_flow_graph_visible = True
-            disasm_view.display_function(func)
-            disasm_view.decompile_current_function()
-            main.workspace.instance.join_all_jobs()
-            pseudocode_view = main.workspace._get_or_create_pseudocode_view()
-            for _, item in pseudocode_view.codegen.map_pos_to_node.items():
-                if isinstance(item.obj, angr.analyses.decompiler.structured_codegen.c.CFunction):
-                    func_node = item.obj
-                    break
-            else:
-                self.fail("The CFunction _instance is not found.")
-            rnode = RenameNode(code_view=pseudocode_view, node=func_node)
-            rnode._name_box.setText("")
-            QTest.keyClicks(rnode._name_box, new_function_name)
-            QTest.mouseClick(rnode._ok_button, Qt.MouseButton.LeftButton)
-            self.assertEqual(func.name, new_function_name)
+            self.rename_function(main, func, new_function_name)
 
             # assure a new commit makes it to the repo
-            time.sleep(BINSYNC_RELOAD_TIME + BINSYNC_RELOAD_TIME//2)
-            control_panel = binsync_plugin.control_panel_view.control_panel
-            func_table = control_panel._func_table
-            top_change = func_table.items[0]
-            self.assertEqual(top_change.user, user_1)
-            self.assertEqual(top_change.name, new_function_name)
-            self.assertIsNot(top_change.last_push, None)
+            self.check_repo_update(binsync_plugin, user_1, func_name=new_function_name)
 
             # reset the repo
             os.remove(sync_dir_path + "/.git/binsync.lock")
@@ -200,10 +216,11 @@ class TestBinSyncPluginGUI(unittest.TestCase):
             control_panel.reload()
 
             # make a click event to sync new data from the first row in the table
-            func_table = control_panel._func_table
-            emulate_sync_menu_click(func_table, 0)
+            self.click_sync_menu(control_panel._func_table, "binsync_function_table_context_menu")
 
+            # check to ensure function name synced properly
             self.assertEqual(func.name, new_function_name)
+
             app.exit(0)
 
     def test_stack_variable_rename(self):
@@ -228,45 +245,14 @@ class TestBinSyncPluginGUI(unittest.TestCase):
             self.assertEqual(binsync_plugin.controller.client.master_user, user_1)
 
             # trigger a variable rename in decompilation
-            disasm_view = main.workspace._get_or_create_disassembly_view()
-            disasm_view._t_flow_graph_visible = True
-            disasm_view.display_function(func)
-            disasm_view.decompile_current_function()
-            main.workspace.instance.join_all_jobs()
-            pseudocode_view = main.workspace._get_or_create_pseudocode_view()
-            for _, item in pseudocode_view.codegen.map_pos_to_node.items():
-                if isinstance(item.obj, angr.analyses.decompiler.structured_codegen.c.CVariable) and \
-                        isinstance(item.obj.variable, angr.sim_variable.SimStackVariable) and \
-                        item.obj.variable.offset == var_offset:
-                    var_node = item.obj
-                    break
-            else:
-                self.fail("The CVariable _instance is not found.")
-            rnode = RenameNode(code_view=pseudocode_view, node=var_node)
-            rnode._name_box.setText("")
-            QTest.keyClicks(rnode._name_box, new_var_name)
-            QTest.mouseClick(rnode._ok_button, Qt.MouseButton.LeftButton)
+            self.rename_stack_variable(main, func, var_offset, new_var_name)
 
-            # find the variable in the var manager
+            # check renamed variable
             var_man = main.workspace.instance.pseudocode_variable_kb.variables.get_function_manager(func.addr)
-            for var in var_man._unified_variables:
-                if isinstance(var, angr.sim_variable.SimStackVariable) and var.offset == var_offset:
-                    renamed_var = var
-                    break
-            else:
-                self.fail("Renamed variable is not found")
-
-            self.assertTrue(renamed_var.renamed)
-            self.assertEqual(renamed_var.name, new_var_name)
+            self.assertEqual(self.get_stack_variable(main, func, var_offset, var_man).name, new_var_name)
 
             # assure a new commit makes it to the repo
-            time.sleep(BINSYNC_RELOAD_TIME + BINSYNC_RELOAD_TIME//2)
-            control_panel = binsync_plugin.control_panel_view.control_panel
-            activity_table = control_panel._activity_table
-            top_change = activity_table.items[0]
-            self.assertEqual(top_change.user, user_1)
-            self.assertEqual(top_change.activity, func.addr)
-            self.assertIsNot(top_change.last_push, None)
+            self.check_repo_update(binsync_plugin, user_1, func_addr=func.addr)
 
             # reset the repo
             os.remove(sync_dir_path + "/.git/binsync.lock")
@@ -293,22 +279,14 @@ class TestBinSyncPluginGUI(unittest.TestCase):
             self.assertIsNotNone(func_table.items[0].name)
 
             # make a click event to sync new data from the first row in the table
-            activity_table = control_panel._activity_table
-            emulate_sync_menu_click(activity_table, 0)
+            self.click_sync_menu(control_panel._activity_table, "binsync_activity_table_context_menu")
 
             # assure function name did not change
             self.assertEqual(func_table.items[0].name, "")
             self.assertEqual(func.name, old_name)
 
-            for var in var_man._unified_variables:
-                if isinstance(var, angr.sim_variable.SimStackVariable) and var.offset == var_offset:
-                    renamed_var = var
-                    break
-            else:
-                self.fail("Renamed variable is not found")
-
-            self.assertTrue(renamed_var.renamed)
-            self.assertEqual(renamed_var.name, new_var_name)
+            # assure stack variable synced properly
+            self.assertEqual(self.get_stack_variable(main, func, var_offset, var_man).name, new_var_name)
 
             app.exit(0)
 

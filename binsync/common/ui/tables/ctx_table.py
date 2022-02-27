@@ -98,23 +98,16 @@ class QCTXTable(QTableWidget):
         self.setSortingEnabled(True)
 
     def contextMenuEvent(self, event):
-        # reload menu as a stub for testing support
-        from ...ui.utils import menu_stub
-        menu = menu_stub(QMenu(self))
-
-        sync_action = menu.addAction("Sync")
-
-        # create a nested menu
+        menu = QMenu(self)
+        menu.setObjectName("binsync_context_table_context_menu")
+        
+        func_addr = self.ctx if self.ctx else None
         selected_row = self.rowAt(event.pos().y())
         username = self.item(selected_row, 0).text()
+        menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=username))
 
-        # execute the event
-        action = menu.exec_(self.mapToGlobal(event.pos()))
+        menu.popup(self.mapToGlobal(event.pos()))
 
-        if action != sync_action or not self.ctx:
-            return
-        func_addr = self.ctx
-        self.controller.fill_function(func_addr, user=username)
 
     def update_table(self, new_ctx=None):
         # only functions currently supported
