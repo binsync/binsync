@@ -15,7 +15,7 @@ center of BinSync's syncing ability. Here are the supported REAs:
 - Structs   
 - Comments
 
-Note: all types support user-created types like structs.
+Note: all types support user-created types like structs. Join our discord below for more online help:
 
 [![Discord](https://img.shields.io/discord/900841083532087347?label=Discord&style=plastic)](https://discord.gg/wZSCeXnEvR)
 

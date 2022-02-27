@@ -1,5 +1,6 @@
 import traceback
 import sys
+import logging
 
 from PySide2.QtWidgets import (
     QDockWidget,
@@ -23,6 +24,7 @@ from PySide2.QtCore import Qt
 from binaryninjaui import DockContextHandler
 import binaryninja
 
+l = logging.getLogger(__name__)
 
 # Some code is derived from https://github.com/NOPDev/BinjaDock/tree/master/defunct
 # Thanks @NOPDev

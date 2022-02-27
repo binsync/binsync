@@ -6,29 +6,27 @@ class Comment(Artifact):
     __slots__ = (
         "last_change",
         "addr",
-        "func_addr",
         "comment",
         "decompiled",
 
     )
 
-    def __init__(self, addr, comment,  decompiled=False, func_addr=None, last_change=None):
+    def __init__(self, addr, comment,  decompiled=False, last_change=None):
         super(Comment, self).__init__(last_change=last_change)
         self.comment = comment  # type: str
         self.decompiled = decompiled  # TODO: use this in other places!
         self.addr = addr  # type: int
-        self.func_addr = func_addr
 
     @classmethod
     def parse(cls, s):
-        comm = Comment(None, None, None)
+        comm = Comment(None, None)
         comm.__setstate__(toml.loads(s))
         return comm
 
     @classmethod
     def load_many(cls, comms_toml):
         for comm_toml in comms_toml.values():
-            comm = Comment(None, None, None)
+            comm = Comment(None, None)
             try:
                 comm.__setstate__(comm_toml)
             except TypeError:

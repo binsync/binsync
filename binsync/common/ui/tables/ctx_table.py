@@ -1,4 +1,4 @@
-from typing import Dict
+import logging
 
 from .. import ui_version
 if ui_version == "PySide2":
@@ -14,6 +14,7 @@ else:
 from ..utils import QNumericItem, friendly_datetime
 from ...controller import BinSyncController
 
+l = logging.getLogger(__name__)
 
 class QCTXItem:
     """
@@ -118,12 +119,9 @@ class QCTXTable(QTableWidget):
         for user in self.controller.users():
             state = self.controller.client.get_state(user=user.name)
 
-            try:
-                func = state.get_function(self.ctx)
-            except KeyError:
-                continue
+            func = state.get_function(self.ctx)
 
-            if not func.last_change:
+            if not func or not func.last_change:
                 continue
 
             # changes is not currently supported

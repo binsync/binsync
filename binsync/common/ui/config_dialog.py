@@ -3,6 +3,7 @@ import os
 from typing import Optional, Dict
 import toml
 import time
+import logging
 
 from . import ui_version
 if ui_version == "PySide2":
@@ -20,6 +21,7 @@ else:
 
 from ...client import ConnectionWarnings
 
+l = logging.getLogger(__name__)
 
 class SyncConfig(QDialog):
     """
@@ -129,6 +131,8 @@ class SyncConfig(QDialog):
         path = self._repo_edit.text()
         init_repo = self._initrepo_checkbox.isChecked()
 
+        l.debug("Attempting to connect to/init repo, user: %s | path: %s | init_repo? %r", user, path, init_repo)
+
         if not user:
             QMessageBox(self).critical(None, "Invalid user name",
                                        "User name cannot be empty."
@@ -157,16 +161,17 @@ class SyncConfig(QDialog):
         try:
             connection_warnings = self.controller.connect(user, path, init_repo=init_repo, remote_url=remote_url)
         except Exception as e:
+            l.critical("Error connecting to specified repository!")
             QMessageBox(self).critical(None, "Error connecting to repository", str(e))
             traceback.print_exc()
             return
 
         self._parse_and_display_connection_warnings(connection_warnings)
-        print(f"[BinSync] Client has connected to sync repo with user: {user}.")
+        l.info(f"Client has connected to sync repo with user: {user}.")
 
         saved_config = self.save_config()
         if saved_config:
-            print(f"[BinSync] Configuration config was saved to {saved_config}.")
+            l.info(f"Configuration config was saved to {saved_config}.")
 
         self.close()
 
