@@ -207,7 +207,7 @@ class IDABinSyncController(BinSyncController):
         # sanity check, the desired user has some structs to sync
         pulled_structs: List[Struct] = self.pull_structs(user=user, state=state)
         if len(pulled_structs) <= 0:
-            print(f"[BinSync]: User {user} has no structs to sync!")
+            _l.info(f"User {user} has no structs to sync!")
             return 0
 
         # convert each binsync struct into an ida struct and set it in the GUI
@@ -231,7 +231,7 @@ class IDABinSyncController(BinSyncController):
         # sanity check this function
         ida_func = ida_funcs.get_func(func_addr)
         if ida_func is None:
-            print(f"[BinSync]: IDA Error on sync for \'{user}\' on function {hex(func_addr)}.")
+            _l.warning(f"IDA function does not exist on sync for \'{user}\' on function {hex(func_addr)}.")
             return data_changed
 
         #
@@ -248,20 +248,21 @@ class IDABinSyncController(BinSyncController):
         if binsync_func.header:
             updated_header = False
             try:
-                updated_header = compat.set_func_header(ida_code_view, binsync_func.header, self)
+                # allow set_func_header to return None to let us know a type is missing
+                updated_header = compat.set_func_header(ida_code_view, binsync_func.header, self, exit_on_bad_type=True)
             except Exception as e:
-                _l.info(f"Header filling failed with exception {e}")
+                _l.warning(f"Header filling failed with exception {e}")
                 self.reset_api_count()
 
-            # if it failed, we likely are missing a type. Try again!
-            if not updated_header:
-                _l.info("ATTEMPTING TO SYNC STRUCTS")
+            # this means the type failed
+            if updated_header is None:
+                # we likely are missing a custom type. Try again!
                 data_changed |= self.fill_structs(user=user, state=state)
-            try:
-                updated_header = compat.set_func_header(ida_code_view, binsync_func.header, self)
-            except Exception as e:
-                _l.info(f"Header filling failed with exception {e}")
-                self.reset_api_count()
+                try:
+                    updated_header = compat.set_func_header(ida_code_view, binsync_func.header, self)
+                except Exception as e:
+                    _l.warning(f"Header filling failed with exception {e}, even after pulling custom types.")
+                    self.reset_api_count()
 
             data_changed |= updated_header
 
@@ -274,7 +275,7 @@ class IDABinSyncController(BinSyncController):
             self.inc_api_count()
             res = compat.set_ida_comment(addr, cmt.comment, decompiled=cmt.decompiled)
             if not res:
-                _l.debug(f"Failed to sync comment at <{hex(addr)}>: \'{cmt.comment}\'")
+                _l.warning(f"Failed to sync comment at <{hex(addr)}>: \'{cmt.comment}\'")
                 self.reset_api_count()
 
         #
@@ -283,7 +284,7 @@ class IDABinSyncController(BinSyncController):
 
         frame = idaapi.get_frame(ida_func.start_ea)
         if frame is None or frame.memqty <= 0:
-            _l.debug("Function %#x does not have an associated function frame. Skip variable name sync-up.",
+            _l.warning("Function %#x does not have an associated function frame. Stopping sync here!",
                      ida_func.start_ea)
             return data_changed
 
@@ -327,7 +328,6 @@ class IDABinSyncController(BinSyncController):
             # NOTE: api_count is incremented inside the function
             data_changed |= compat.set_stack_vars_types(stack_vars_to_set, ida_code_view, self)
 
-        # ===== update the pseudocode ==== #
         compat.refresh_pseudocode_view(binsync_func.addr)
         if data_changed:
             _l.info(f"New data synced for \'{user}\' on function {hex(ida_func.start_ea)}.")

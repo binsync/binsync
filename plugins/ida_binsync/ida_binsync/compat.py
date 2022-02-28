@@ -210,7 +210,8 @@ def get_func_header_info(ida_cfunc) -> IDAFunction:
 
 
 @execute_write
-def set_func_header(ida_func_code_view, binsync_header: binsync.data.FunctionHeader, controller: "BinsyncController"):
+def set_func_header(ida_func_code_view, binsync_header: binsync.data.FunctionHeader,
+                    controller, exit_on_bad_type=False):
     data_changed = False
     ida_cfunc = ida_func_code_view.cfunc
     func_addr = ida_cfunc.entry_ea
@@ -236,6 +237,11 @@ def set_func_header(ida_func_code_view, binsync_header: binsync.data.FunctionHea
         new_prototype = old_prototype.replace(cur_ret_type_str, binsync_header.ret_type, 1)
         controller.inc_api_count()
         success = idc.SetType(func_addr, new_prototype)
+
+        # we may need to reload types
+        if success is None and exit_on_bad_type:
+            return None
+
         data_changed |= success is True
         refresh_pseudocode_view(func_addr)
 
@@ -281,6 +287,11 @@ def set_func_header(ida_func_code_view, binsync_header: binsync.data.FunctionHea
     new_prototype = proto_head + proto_body
     controller.inc_api_count()
     success = idc.SetType(func_addr, new_prototype)
+
+    # we may need to reload types
+    if success is None and exit_on_bad_type:
+        return None
+
     data_changed |= success is True
 
     return data_changed
