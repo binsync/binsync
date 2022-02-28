@@ -65,7 +65,7 @@ class FunctionHeader(Artifact):
         self.addr = state["addr"]
         self.ret_type = state.get("ret_type", None)
         args = state.get("args", {})
-        self.args = {int(idx, 16): StackVariable.parse(toml.dumps(arg)) for idx, arg in args.items()}
+        self.args = {int(idx, 16): FunctionArgument.parse(toml.dumps(arg)) for idx, arg in args.items()}
 
     @classmethod
     def parse(cls, s):

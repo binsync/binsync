@@ -20,6 +20,7 @@
 # allowing us to send the new comment to be queued in the Controller actions.
 #
 # ----------------------------------------------------------------------------
+import threading
 import time
 from functools import wraps
 import logging
@@ -44,7 +45,7 @@ import idc
 from . import compat
 from .controller import IDABinSyncController
 from binsync.data.struct import Struct
-from binsync.data import Comment
+from binsync.data import Comment, Function, FunctionHeader, FunctionArgument
 
 l = logging.getLogger(__name__)
 
@@ -421,7 +422,7 @@ class HexRaysHooks:
         self._available = None
         self._installed = False
         self._cached_funcs = {}
-        self.controller_update_working = False
+        self.updating_states = threading.Lock()
 
     def hook(self):
         if self._available is None:
@@ -455,18 +456,47 @@ class HexRaysHooks:
             if func is None:
                 return 0
 
-            # run update tasks needed for this function
-            if not self.controller_update_working:
-                self.controller_update_working = True
-                # recursion can happen here
-                self.controller.update_states[func_addr].do_needed_updates()
-                self.controller_update_working = False
+            # run update tasks needed for this function since we are looking at it
+            if not self.updating_states.locked():
+                with self.updating_states:
+                    self.controller.update_states[func_addr].do_updates()
 
-            # do decompilation comment updates
+            # create a new cache for unseen funcs
             if func.start_ea not in self._cached_funcs.keys():
-                self._cached_funcs[func.start_ea] = {"cmts": []}
-            self._update_user_cmts(func.start_ea)
+                self._cached_funcs[func.start_ea] = {"cmts": [], "header": None}
+
+            # push changes viewable only in decompilation
+            self._push_new_comments(func.start_ea)
+            self._push_new_func_header(ida_cfunc)
+
         return 0
+
+    @quite_init_checker
+    def _push_new_func_header(self, ida_cfunc):
+        # on first time seeing it, we dont want a push
+        if not self._cached_funcs[ida_cfunc.entry_ea]["header"]:
+            cur_header_str = str(ida_cfunc.type)
+            self._cached_funcs[ida_cfunc.entry_ea]["header"] = cur_header_str
+            return
+
+        cur_header_str = str(ida_cfunc.type)
+        if cur_header_str != self._cached_funcs[ida_cfunc.entry_ea]["header"]:
+            # convert to binsync type
+            cur_func_header = compat.get_func_header_info(ida_cfunc)
+            binsync_args = {}
+            for idx, arg in cur_func_header.func_args.items():
+                binsync_args[idx] = FunctionArgument(idx, arg.name, arg.type_str, arg.size)
+
+            # send the change
+            self.binsync_state_change(
+                self.controller.push_function_header,
+                cur_func_header.func_addr,
+                cur_func_header.name,
+                ret_type=cur_func_header.ret_type_str,
+                args=binsync_args
+            )
+
+            self._cached_funcs[ida_cfunc.entry_ea]["header"] = cur_header_str
 
     @staticmethod
     def _get_user_cmts(ea):
@@ -480,13 +510,12 @@ class HexRaysHooks:
             cmt = ida_hexrays.user_cmts_second(it)
             cmts[tl.ea] = str(cmt)
 
-            #print(f"TL EA: {tl.ea} | TL ITP: {tl.itp}")
             it = ida_hexrays.user_cmts_next(it)
         ida_hexrays.user_cmts_free(user_cmts)
         return cmts
 
     @quite_init_checker
-    def _update_user_cmts(self, ea):
+    def _push_new_comments(self, ea):
         # get the comments for the function
         cmts = HexRaysHooks._get_user_cmts(ea)
 

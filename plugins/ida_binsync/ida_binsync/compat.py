@@ -24,6 +24,7 @@ import ida_struct
 import ida_idaapi
 import ida_typeinf
 
+import binsync
 from binsync.data import Struct
 from .controller import IDABinSyncController
 
@@ -33,6 +34,7 @@ l = logging.getLogger(__name__)
 #   Helper classes for wrapping data
 #
 
+
 class IDAStackVar:
     def __init__(self, func_addr, offset, name, type_str, size):
         self.func_addr = func_addr
@@ -40,6 +42,22 @@ class IDAStackVar:
         self.name = name
         self.type_str = type_str
         self.size = size
+
+
+class IDAFunctionArg:
+    def __init__(self, idx, name, type_str, size):
+        self.idx = idx
+        self.name = name
+        self.type_str = type_str
+        self.size = size
+
+
+class IDAFunction:
+    def __init__(self, func_addr, name, ret_type_str, func_args: typing.Dict[int, IDAFunctionArg]):
+        self.func_addr = func_addr
+        self.name = name
+        self.ret_type_str = ret_type_str
+        self.func_args = func_args
 
 
 #
@@ -147,7 +165,7 @@ def ida_func_addr(addr):
 
 
 @execute_read
-def get_func_name(ea):
+def get_func_name(ea) -> typing.Optional[str]:
     return idc.get_func_name(ea)
 
 
@@ -166,6 +184,117 @@ def set_ida_func_name(func_addr, new_name):
     ida_kernwin.request_refresh(ida_kernwin.IWID_DISASMS)
     ida_kernwin.request_refresh(ida_kernwin.IWID_STRUCTS)
     ida_kernwin.request_refresh(ida_kernwin.IWID_STKVIEW)
+
+
+@execute_read
+def get_func_header_info(ida_cfunc) -> IDAFunction:
+    func_addr = ida_cfunc.entry_ea
+
+    # collect the function arguments
+    func_args = {}
+    for idx, arg in enumerate(ida_cfunc.arguments):
+        size = arg.width
+        name = arg.name
+        type_str = str(arg.type())
+        func_args[idx] = IDAFunctionArg(idx, name, type_str, size)
+
+    # collect the header ret_type and name
+    func_name = get_func_name(func_addr)
+    try:
+        ret_type_str = str(ida_cfunc.type.get_rettype())
+    except Exception:
+        ret_type_str = ""
+
+    ida_function_info = IDAFunction(func_addr, func_name, ret_type_str, func_args)
+    return ida_function_info
+
+
+@execute_write
+def set_func_header(ida_func_code_view, binsync_header: binsync.data.FunctionHeader,
+                    controller, exit_on_bad_type=False):
+    data_changed = False
+    ida_cfunc = ida_func_code_view.cfunc
+    func_addr = ida_cfunc.entry_ea
+
+    cur_ida_func = get_func_header_info(ida_cfunc)
+
+    #
+    # FUNCTION NAME
+    #
+
+    if binsync_header.name and binsync_header.name != cur_ida_func.name:
+        controller.inc_api_count()
+        set_ida_func_name(func_addr, binsync_header.name)
+
+    #
+    # FUNCTION RET TYPE
+    #
+
+    func_name = get_func_name(func_addr)
+    cur_ret_type_str = str(ida_cfunc.type.get_rettype())
+    if binsync_header.ret_type and binsync_header.ret_type != cur_ret_type_str:
+        old_prototype = str(ida_cfunc.type).replace("(", f" {func_name}(", 1)
+        new_prototype = old_prototype.replace(cur_ret_type_str, binsync_header.ret_type, 1)
+        controller.inc_api_count()
+        success = idc.SetType(func_addr, new_prototype)
+
+        # we may need to reload types
+        if success is None and exit_on_bad_type:
+            return None
+
+        data_changed |= success is True
+        refresh_pseudocode_view(func_addr)
+
+    #
+    # FUNCTION ARGS
+    #
+
+    types_to_change = {}
+    for idx, binsync_arg in binsync_header.args.items():
+        if idx >= len(cur_ida_func.func_args):
+            break
+
+        cur_ida_arg = cur_ida_func.func_args[idx]
+
+        # change the name
+        if binsync_arg.name and binsync_arg.name != cur_ida_arg.name:
+            controller.inc_api_count()
+            success = ida_func_code_view.rename_lvar(ida_cfunc.arguments[idx], binsync_arg.name, 1)
+            data_changed |= success is True
+            refresh_pseudocode_view(func_addr)
+
+        # record the type to change
+        if binsync_arg.type_str and binsync_arg.type_str != cur_ida_arg.type_str:
+            types_to_change[idx] = (cur_ida_arg.type_str, binsync_arg.type_str)
+
+    # crazy prototype parsing
+    func_prototype = str(ida_cfunc.type).replace("(", f" {func_name}(", 1)
+    proto_split = func_prototype.split("(", maxsplit=1)
+    proto_head, proto_body = proto_split[0], "(" + proto_split[1]
+    arg_strs = proto_body.split(",")
+
+    # update prototype body from left to right
+    for idx in range(len(cur_ida_func.func_args)):
+        try:
+            old_t, new_t = types_to_change[idx]
+        except KeyError:
+            continue
+
+        arg_strs[idx] = arg_strs[idx].replace(old_t, new_t, 1)
+
+    # set the change
+    proto_body = ",".join(arg_strs)
+    new_prototype = proto_head + proto_body
+    controller.inc_api_count()
+    success = idc.SetType(func_addr, new_prototype)
+
+    # we may need to reload types
+    if success is None and exit_on_bad_type:
+        return None
+
+    data_changed |= success is True
+
+    return data_changed
 
 
 #
@@ -274,7 +403,7 @@ def set_stack_vars_types(var_type_dict, code_view, controller: "IDABinSyncContro
     @return:
     """
 
-    all_success = True
+    data_changed = False
     fixed_point = False
     while not fixed_point:
         fixed_point = True
@@ -283,12 +412,12 @@ def set_stack_vars_types(var_type_dict, code_view, controller: "IDABinSyncContro
             if lvar.is_stk_var() and cur_off in var_type_dict:
                 if str(lvar.type()) != str(var_type_dict[cur_off]):
                     controller.inc_api_count()
-                    all_success &= code_view.set_lvar_type(lvar, var_type_dict.pop(cur_off))
+                    data_changed |= code_view.set_lvar_type(lvar, var_type_dict.pop(cur_off))
                     fixed_point = False
                     # make sure to break, in case the size of lvars array has now changed
                     break
 
-    return all_success
+    return data_changed
 
 @execute_read
 def ida_get_frame(func_addr):
@@ -304,12 +433,14 @@ def set_struct_member_name(ida_struct, frame, offset, name):
 
 @execute_write
 def set_ida_struct(struct: Struct, controller) -> bool:
+    data_changed = False
+
     # first, delete any struct by the same name if it exists
     sid = ida_struct.get_struc_id(struct.name)
     if sid != 0xffffffffffffffff:
         sptr = ida_struct.get_struc(sid)
         controller.inc_api_count()
-        ida_struct.del_struc(sptr)
+        data_changed |= ida_struct.del_struc(sptr)
 
     # now make a struct header
     controller.inc_api_count()
@@ -328,7 +459,7 @@ def set_ida_struct(struct: Struct, controller) -> bool:
 
         # create the new member
         controller.inc_api_count()
-        ida_struct.add_struc_member(
+        data_changed |= ida_struct.add_struc_member(
             sptr,
             member.member_name,
             member.offset,
@@ -337,13 +468,15 @@ def set_ida_struct(struct: Struct, controller) -> bool:
             member.size,
         )
 
+    return data_changed
+
 
 @execute_write
 def set_ida_struct_member_types(struct: Struct, controller) -> bool:
     # find the specific struct
     sid = ida_struct.get_struc_id(struct.name)
     sptr = ida_struct.get_struc(sid)
-    all_typed_success = True
+    data_changed = False
 
     for idx, member in enumerate(struct.struct_members):
         # set the new member type if it has one
@@ -353,7 +486,6 @@ def set_ida_struct_member_types(struct: Struct, controller) -> bool:
         # assure its convertible
         tif = convert_type_str_to_ida_type(member.type)
         if tif is None:
-            all_typed_success = False
             continue
 
         # set the type
@@ -366,9 +498,9 @@ def set_ida_struct_member_types(struct: Struct, controller) -> bool:
             tif,
             mptr.flag
         )
-        all_typed_success &= True if was_set == 1 else False
+        data_changed |= was_set == 1
 
-    return all_typed_success
+    return data_changed
 
 
 #
