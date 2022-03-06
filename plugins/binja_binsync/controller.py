@@ -131,6 +131,27 @@ class BinjaBinSyncController(BinSyncController):
             new_type, _ = self.bv.parse_type_string(sync_func.header.ret_type)
             bn_func.return_type = new_type
 
+        # Parameters
+        if sync_func.header.args:
+            prototype_tokens = []
+            if sync_func.header.ret_type:
+                prototype_tokens.append(sync_func.header.ret_type)
+            else:
+                prototype_tokens.append(bn_func.return_type.get_string_before_name())
+
+            prototype_tokens.append("(")
+            for idx, func_arg in sync_func.header.args.items():
+                prototype_tokens.append(func_arg.type_str)
+                prototype_tokens.append(func_arg.name)
+                prototype_tokens.append(",")
+
+            if prototype_tokens[-1] == ",":
+                prototype_tokens[-1] = ")"
+
+            prototype_str = " ".join(prototype_tokens)
+            bn_prototype, _ = self.bv.parse_type_string(prototype_str)
+            bn_func.function_type = bn_prototype
+
         bn_func.reanalyze()
         print(f"[Binsync]: New data synced for \'{user}\' on function {hex(bn_func.start)}.")
 
