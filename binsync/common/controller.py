@@ -8,7 +8,7 @@ from collections import OrderedDict
 
 import binsync.data
 from ..client import Client
-from ..data import User, Function, StackVariable, Comment, Struct
+from ..data import User, Function, StackVariable, Comment, Struct, GlobalVariable, Enum
 
 _l = logging.getLogger(name=__name__)
 
@@ -100,6 +100,7 @@ def make_ro_state(f):
 #
 
 BINSYNC_RELOAD_TIME = 10
+
 
 class SyncControlStatus:
     CONNECTED = 0
@@ -318,6 +319,42 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
+    def fill_global_var(self, var_addr, user=None, state=None):
+        """
+        Grab a global variable for a specified address and fill it locally
+
+        @param var_addr:
+        @param user:
+        @param state:
+        @return:
+        """
+        raise NotImplementedError
+
+    @init_checker
+    @make_ro_state
+    def fill_enum(self, enum_name, user=None, state=None):
+        """
+        Grab an enum and fill it locally
+
+        @param enum_name:
+        @param user:
+        @param state:
+        @return:
+        """
+
+    @init_checker
+    @make_ro_state
+    def fill_enums(self, user=None, state=None):
+        """
+        Grab all enums and fill it locally
+
+        @param user:
+        @param state:
+        @return:
+        """
+
+    @init_checker
+    @make_ro_state
     def fill_function(self, func_addr, user=None, state=None):
         """
         Grab all relevant information from the specified user and fill the @func_adrr.
@@ -346,6 +383,16 @@ class BinSyncController:
     @init_checker
     @make_state
     def push_struct(self, *args, user=None, state=None, **kwargs):
+        raise NotImplementedError
+
+    @init_checker
+    @make_state
+    def push_global_var(self, *args, user=None, state=None, **kwargs):
+        raise NotImplementedError
+
+    @init_checker
+    @make_state
+    def push_enum(self, *args, user=None, state=None, **kwargs):
         raise NotImplementedError
 
     #
@@ -387,6 +434,11 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
+    def pull_struct(self, struct_name, user=None, state=None) -> Struct:
+        return state.get_struct(struct_name)
+
+    @init_checker
+    @make_ro_state
     def pull_structs(self, user=None, state=None) -> List[Struct]:
         """
         Pull structs downwards.
@@ -396,6 +448,21 @@ class BinSyncController:
         @return:
         """
         return state.get_structs()
+
+    @init_checker
+    @make_ro_state
+    def pull_global_var(self, addr, user=None, state=None) -> GlobalVariable:
+        return state.get_global_var(addr)
+
+    @init_checker
+    @make_ro_state
+    def pull_enum(self, enum_name, user=None, state=None) -> Enum:
+        return state.get_enum(enum_name)
+
+    @init_checker
+    @make_ro_state
+    def pull_enums(self, user=None, state=None) -> List[Enum]:
+        return state.get_enums()
 
     #
     # Utils

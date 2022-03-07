@@ -1,5 +1,6 @@
 from typing import Dict
 import logging
+import re
 
 from .. import ui_version
 if ui_version == "PySide2":
@@ -96,44 +97,72 @@ class QGlobalsTable(QTableWidget):
         # create a nested menu
         selected_row = self.rowAt(event.pos().y())
         global_name = self.item(selected_row, 0).text()
-        menu.addAction("Sync", lambda: self.controller.fill_struct(global_name, user=self.item(selected_row, 2).text()))
+        global_type = self.item(selected_row, 1).text()
+        user_name = self.item(selected_row, 2).text()
 
+        if global_type == "Struct":
+            filler_func = lambda: self.controller.fill_struct(global_name, user=user_name)
+        elif global_type == "Variable":
+            var_addr = int(re.findall(r'0x[a-f,0-9]+', global_name.split(" ")[1])[0], 16)
+            global_name = var_addr
+            filler_func = lambda: self.controller.fill_global_var(global_name, user=user_name)
+        elif global_type == "Enum":
+            filler_func = lambda: self.controller.fill_enum(global_name, user=user_name)
+        else:
+            l.warning("Invalid global table sync option")
+            return
+
+        menu.addAction("Sync", filler_func)
         from_menu = menu.addMenu("Sync from...")
-        for username in self._get_valid_users_for_global(global_name):
-            from_menu.addAction(username, lambda: self.controller.fill_struct(global_name, user=username))
+        for username in self._get_valid_users_for_global(global_name, global_type):
+            from_menu.addAction(username, filler_func)
 
         menu.popup(self.mapToGlobal(event.pos()))
 
     def update_table(self):
-        known_structs = {}  # struct_name: (struct_name, name, user_name, push_time)
+        known_globals = {}
 
-        # first check if any functions are unknown to the table
         for user in self.controller.users():
             state = self.controller.client.get_state(user=user.name)
-            user_structs: Dict[str, Struct] = state.structs
+            user_structs = state.structs
+            user_gvars = state.global_vars
+            user_enums = state.enums
 
-            for struct_name, sync_struct in user_structs.items():
-                struct_change_time = sync_struct.last_change
+            all_artifacts = ((user_enums, "Enum"), (user_structs, "Struct"), (user_gvars, "Variable"))
+            for user_artifacts, global_type in all_artifacts:
+                for _, artifact in user_artifacts.items():
+                    change_time = artifact.last_change
 
-                # don't add functions that were never changed by the user
-                if not sync_struct.last_change:
-                    continue
-
-                # check if we already know about it
-                if struct_name in known_structs:
-                    # compare this users change time to the store change time
-                    if not struct_change_time or struct_change_time < known_structs[struct_name][3]:
+                    if not change_time:
                         continue
 
-                known_structs[struct_name] = [struct_name, "Struct", user.name, struct_change_time]
+                    if artifact.name in known_globals:
+                        # change_time < artifact_stored_change_time
+                        if not change_time or change_time < known_globals[artifact.name][3]:
+                            continue
 
-        self.items = [QGlobalItem(*row) for row in known_structs.values()]
+                    artifact_name = artifact.name if global_type != "Variable" \
+                        else f"{artifact.name} ({hex(artifact.addr)})"
 
-    def _get_valid_users_for_global(self, global_name):
+                    known_globals[artifact_name] = (artifact_name, global_type, user.name, change_time)
+
+        self.items = [QGlobalItem(*row) for row in known_globals.values()]
+
+    def _get_valid_users_for_global(self, global_name, global_type):
+        if global_type == "Struct":
+            global_getter = "get_struct"
+        elif global_type == "Variable":
+            global_getter = "get_global_var"
+        elif global_type == "Enum":
+            global_getter = "get_enum"
+        else:
+            l.warning("Failed to get a valid type for global type")
+            return
+
         for user in self.controller.users():
             user_state: State = self.controller.client.get_state(user=user.name)
-
-            user_global = user_state.get_struct(global_name)
+            get_global = getattr(user_state, global_getter)
+            user_global = get_global(global_name)
 
             # function must be changed by this user
             if not user_global or not user_global.last_change:

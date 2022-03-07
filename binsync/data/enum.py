@@ -18,6 +18,25 @@ class Enum(Artifact):
 
     @classmethod
     def parse(cls, s):
-        en = Enum(None, None)
+        en = Enum(None, {})
         en.__setstate__(toml.loads(s))
         return en
+
+    @classmethod
+    def load_many(cls, enums_toml):
+        for enum_toml in enums_toml.values():
+            enum = Enum(None, {})
+            try:
+                enum.__setstate__(enum_toml)
+            except TypeError:
+                # skip all incorrect ones
+                continue
+            yield enum
+
+    @classmethod
+    def dump_many(cls, enums):
+        enums_ = {}
+
+        for name, enum in enums.items():
+            enums_[name] = enum.__getstate__()
+        return enums_
