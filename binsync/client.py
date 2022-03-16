@@ -287,7 +287,7 @@ class Client(object):
                     self.repo.remotes[self.remote].push(BINSYNC_ROOT_BRANCH)
                     self.repo.remotes[self.remote].push(self.user_branch_name)
                 self._last_push_at = datetime.datetime.now()
-                l.info("Push completed successfully at %s", self._last_push_at)
+                l.debug("Push completed successfully at %s", self._last_push_at)
             except git.exc.GitCommandError as ex:
                 if print_error:
                     print("Failed to push to remote \"%s\".\n"
