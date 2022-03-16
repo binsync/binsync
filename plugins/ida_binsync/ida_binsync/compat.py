@@ -502,6 +502,13 @@ def set_ida_struct_member_types(struct: Struct, controller) -> bool:
 
     return data_changed
 
+#
+# Other Globals
+#
+
+@execute_write
+def set_global_var_name(var_addr, name):
+    return idaapi.set_name(var_addr, name)
 
 #
 #   IDA GUI r/w

@@ -17,12 +17,12 @@ class StackVariable(Artifact):
 
     __slots__ = (
         "last_change",
-        "addr",
-        "name",
         "stack_offset",
         "stack_offset_type",
-        "size",
+        "name",
         "type",
+        "size",
+        "addr",
     )
 
     def __init__(self, stack_offset, offset_type, name, type_, size, addr, last_change=None):

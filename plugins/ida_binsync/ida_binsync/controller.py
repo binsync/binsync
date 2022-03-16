@@ -37,7 +37,7 @@ import ida_kernwin
 import binsync
 from binsync.common.controller import BinSyncController, make_state, make_ro_state, init_checker, make_state_with_func
 from binsync import Client, ConnectionWarnings
-from binsync.data import StackVariable, StackOffsetType, Function, FunctionHeader, Struct, Comment
+from binsync.data import StackVariable, StackOffsetType, Function, FunctionHeader, Struct, Comment, GlobalVariable, Enum
 from . import compat
 
 _l = logging.getLogger(name=__name__)
@@ -149,6 +149,10 @@ class IDABinSyncController(BinSyncController):
         with self.api_lock:
             self.api_count += 1
 
+    def dec_api_count(self):
+        with self.api_lock:
+            self.api_count -= 1
+
     def reset_api_count(self):
         with self.api_lock:
             self.api_count = 0
@@ -219,6 +223,27 @@ class IDABinSyncController(BinSyncController):
             data_changed |= compat.set_ida_struct_member_types(struct, self)
 
         return data_changed
+
+    @init_checker
+    @make_ro_state
+    def fill_global_var(self, var_addr, user=None, state=None):
+        changed = False
+        global_var = self.pull_global_var(var_addr, user=user)
+        if global_var and global_var.name:
+            self.inc_api_count()
+            changed = compat.set_global_var_name(var_addr, global_var.name)
+            if not changed:
+                self.dec_api_count()
+
+        if changed:
+            _l.info(f"Synced variable at {hex(var_addr)} from user {user}.")
+            ctx = self.active_context()
+            if ctx:
+                compat.refresh_pseudocode_view(ctx.addr)
+        else:
+            _l.info(f"No change synced for {hex(var_addr)} from user {user}")
+
+        return changed
 
     @init_checker
     @make_ro_state
@@ -422,6 +447,18 @@ class IDABinSyncController(BinSyncController):
                     user=None, state=None, api_set=False):
         old_name = None if old_name == "" else old_name
         state.set_struct(struct, old_name, set_last_change=not api_set)
+
+    @init_checker
+    @make_state
+    def push_global_var(self, addr, name, type_str=None, size=0, user=None, state=None, api_set=False):
+        gvar = GlobalVariable(addr, name, type_str=type_str, size=size)
+        state.set_global_var(gvar, set_last_change=not api_set)
+
+    @init_checker
+    @make_state
+    def push_enum(self, name, value_map, user=None, state=None, api_set=False):
+        enum = Enum(name, value_map)
+        state.set_enum(enum, set_last_change=not api_set)
 
     #
     # Utils

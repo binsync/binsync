@@ -12,11 +12,12 @@ from sortedcontainers import SortedDict
 import toml
 import git
 
-from .data import Function, FunctionHeader, Comment, Patch, StackVariable
+from .data import Function, FunctionHeader, Comment, Patch, StackVariable, GlobalVariable, Enum
 from .data.struct import Struct
 from .errors import MetadataNotFoundError
 
 l = logging.getLogger(__name__)
+
 
 class ArtifactType:
     UNSET = None
@@ -24,6 +25,8 @@ class ArtifactType:
     STRUCT = "struct"
     PATCH = "patch"
     COMMENT = "comment"
+    GLOBAL_VAR = "global variable"
+    ENUM = "enum"
 
 
 def dirty_checker(f):
@@ -81,6 +84,16 @@ def update_last_change(f):
         elif isinstance(artifact, Struct):
             artifact_loc = artifact.name
             artifact_type = ArtifactType.STRUCT
+
+        # Global Var
+        elif isinstance(artifact, GlobalVariable):
+            artifact_loc = artifact.addr
+            artifact_type = ArtifactType.GLOBAL_VAR
+
+        # Enum
+        elif isinstance(artifact, Enum):
+            artifact_loc = artifact.name
+            artifact_type = ArtifactType.ENUM
 
         else:
             raise Exception("Undefined Artifact Type!")
@@ -151,17 +164,21 @@ class State:
         self._dirty = False  # type: bool
 
         # data
-        self.functions = {}  # type: Dict[int, Function]
-        self.comments = {}  # type: Dict[int, Comment]
-        self.structs = {}  # type: Dict[str, Struct]
-        self.patches = SortedDict()
+        self.functions: Dict[int, Function] = {}
+        self.comments: Dict[int, Comment] = {}
+        self.structs: Dict[str, Struct] = {}
+        self.patches: Dict[int, Patch] = SortedDict()
+        self.global_vars: Dict[int, GlobalVariable] = {}
+        self.enums: Dict[str, Enum] = {}
 
     def __eq__(self, other):
         if isinstance(other, State):
             return other.functions == self.functions \
                    and other.comments == self.comments \
                    and other.structs == self.structs \
-                   and other.patches == self.patches
+                   and other.patches == self.patches \
+                   and other.global_vars == self.global_vars \
+                   and other.enums == self.enums
         return False
 
     @property
@@ -204,6 +221,11 @@ class State:
         # dump patches
         add_data(index, 'patches.toml', toml.dumps(Patch.dump_many(self.patches)).encode())
 
+        # dump global vars
+        add_data(index, 'global_vars.toml', toml.dumps(GlobalVariable.dump_many(self.global_vars)).encode())
+
+        # dump enums
+        add_data(index, 'enums.toml', toml.dumps(Enum.dump_many(self.enums)).encode())
 
     @staticmethod
     def load_metadata(tree):
@@ -257,6 +279,27 @@ class State:
                 patches[patch.offset] = patch
             s.patches = SortedDict(patches)
 
+        # load global_vars
+        try:
+            global_vars_toml = toml.loads(tree['global_vars.toml'].data_stream.read().decode())
+        except:
+            pass
+        else:
+            global_vars = {}
+            for global_var in GlobalVariable.load_many(global_vars_toml):
+                global_vars[global_var.addr] = global_var
+            s.global_vars = SortedDict(global_vars)
+
+        # load enums
+        try:
+            enums_toml = toml.loads(tree['enums.toml'].data_stream.read().decode())
+        except:
+            pass
+        else:
+            s.enums = {
+                enum.name: enum for enum in Enum.load_many(enums_toml)
+            }
+
         # load structs
         tree_files = list_files_in_tree(tree)
         struct_files = [name for name in tree_files if name.startswith("structs")]
@@ -283,6 +326,8 @@ class State:
         self.comments = target_state.comments.copy()
         self.patches = target_state.patches.copy()
         self.structs = target_state.structs.copy()
+        self.global_vars = target_state.global_vars.copy()
+        self.enums = target_state.enums.copy()
         
     def save(self):
         if self.client is None:
@@ -391,6 +436,34 @@ class State:
         if struct.name is not None:
             self.structs[struct.name] = struct
 
+    @dirty_checker
+    @update_last_change
+    def set_global_var(self, gloabl_var: GlobalVariable, set_last_change=True):
+        try:
+            old_gvar = self.global_vars[gloabl_var.addr]
+        except KeyError:
+            old_gvar = None
+
+        if old_gvar != gloabl_var:
+            self.global_vars[gloabl_var.addr] = gloabl_var
+            return True
+
+        return False
+
+    @dirty_checker
+    @update_last_change
+    def set_enum(self, enum: Enum, set_last_change=True):
+        try:
+            old_enum = self.enums[enum.name]
+        except KeyError:
+            old_enum = None
+
+        if old_enum != enum:
+            self.enums[enum.name] = enum
+            return True
+
+        return False
+
     #
     # Getters
     #
@@ -473,6 +546,25 @@ class State:
 
     def get_structs(self) -> Iterable[Struct]:
         return self.structs.values()
+
+    def get_global_var(self, addr):
+        try:
+            gvar = self.global_vars[addr]
+        except KeyError:
+            gvar = None
+
+        return gvar
+
+    def get_enum(self, name):
+        try:
+            enum = self.enums[name]
+        except KeyError:
+            enum = None
+
+        return enum
+
+    def get_enums(self):
+        return self.enums.values()
 
     def get_last_push_for_artifact_type(self, artifact_type):
         last_change = -1
