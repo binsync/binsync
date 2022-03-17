@@ -67,7 +67,7 @@ class SyncConfig(QDialog):
         # repo path
         self._repo_edit = QLineEdit(self)
         self._repo_edit.textChanged.connect(self._on_repo_textchanged)
-        self._repo_edit.setFixedWidth(150)
+        #self._repo_edit.setFixedWidth(150)
 
         # repo path selection button
         repo_button = QPushButton(self)
