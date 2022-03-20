@@ -128,6 +128,7 @@ class SyncConfig(QDialog):
     def _on_ok_clicked(self):
         user = self._user_edit.text()
         path = self._repo_edit.text()
+        remote_url = self._remote_edit.text()
         init_repo = self._initrepo_checkbox.isChecked()
 
         l.debug("Attempting to connect to/init repo, user: %s | path: %s | init_repo? %r", user, path, init_repo)
@@ -144,7 +145,7 @@ class SyncConfig(QDialog):
                                        )
             return
 
-        if not os.path.isdir(path) and not init_repo:
+        if not remote_url and not os.path.isdir(path) and not init_repo:
             QMessageBox(self).critical(None, "Repo does not exist",
                                        "The specified sync directory does not exist. "
                                        "Do you maybe want to initialize it?"
@@ -152,9 +153,7 @@ class SyncConfig(QDialog):
             return
 
         # convert to remote repo if no local is provided
-        if not self.is_git_repo(path):
-            remote_url = self._remote_edit.text()
-        else:
+        if self.is_git_repo(path):
             remote_url = None
 
         if remote_url and not path:
