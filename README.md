@@ -29,6 +29,12 @@ Note: all types support user-created types like structs.
 All versions require **Python >= 3.4** and **Git** installed on your system.
 
 ## Installing
+### Oneliner (IDA only)
+If you are using IDA, paste this oneliner in your IDA terminal, let it run, and restart:
+```python
+import urllib.request, sys, os; sys.path.insert(1, os.getcwd()); urllib.request.urlretrieve("https://raw.githubusercontent.com/angr/binsync/master/plugins/ida_binsync/ida_binsync/oneliner.py", "oneliner.py"); from oneliner import install; install()
+```
+
 ### Script (Fast)
 Use the installation script provided in the repo:
 ```bash
