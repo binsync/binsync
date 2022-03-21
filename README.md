@@ -40,7 +40,7 @@ Use `--help`, for more information.
 ### Manual 
 If you are unable to install BinSync with the script above, you are probably on Windows. In that case, installing
 BinSync is a two-step process. 
-1. Install the core with the Python version associated with your decompiler: `pip3 install -e .`
+1. Install the core with the Python version associated with your decompiler: `pip3 install binsync`
 2. Install the decompiler plugin directly into your decompilers `plugin` folder.
 
 For step 2, you copy all files (and folders) found under the plugin folder in BinSync. An an example, for IDA, 
