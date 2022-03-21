@@ -4,7 +4,7 @@ import subprocess
 from urllib.request import urlretrieve
 
 # How to run:
-# import urllib; urllib.request.urlretrieve(https://github.com/angr/binsync/blob/master/plugins/ida_binsync/oneliner.py, "oneliner.py"); from oneliner import install; install()
+# import urllib.request, sys, os; sys.path.insert(1, os.getcwd()); urllib.request.urlretrieve("https://raw.githubusercontent.com/angr/binsync/one_liner_ida/plugins/ida_binsync/ida_binsync/oneliner.py", "oneliner.py"); from oneliner import install; install()
 
 
 class PlatformType:
@@ -25,7 +25,7 @@ def find_platform():
 
 
 def plugin_install_binsync(plugins_path):
-    github_url_base = "https://github.com/angr/binsync/blob/master/plugins/ida_binsync/"
+    github_url_base = "https://raw.githubusercontent.com/angr/binsync/master/plugins/ida_binsync/"
     ida_binsync_folder = os.path.join(plugins_path, "ida_binsync")
 
     # install entry point of binsync
