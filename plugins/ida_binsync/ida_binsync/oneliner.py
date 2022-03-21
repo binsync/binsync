@@ -81,8 +81,4 @@ def install():
     plugin_install_binsync(plugin_path)
     print("[+] Successfully installed BinSync IDA Plugin into the plugins folder")
     print("[+] Install finished. PLEASE RESTART IDA for plugin to be loaded")
-
-
-
-
-
+    os.remove("oneliner.py")
