@@ -44,6 +44,10 @@ def plugin_install_binsync(plugins_path):
 
 def pip_install_binsync(python_path):
     subprocess.run([python_path] + "-m pip install binsync".split(" "))
+    # just in case...
+    location = subprocess.run(["which", "python3"], stdout=subprocess.PIPE)
+    python_path = location.stdout.strip()
+    subprocess.run([python_path.decode()] + "-m pip install binsync".split(" "))
 
 
 def install():
