@@ -203,7 +203,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
             try:
                 stack_var_info = compat.get_func_stack_var_info(func_addr)[mptr.soff]
             except KeyError:
-                l.warning(f"Failed to track an internal changing stack var: {mptr}.")
+                l.warning(f"Failed to track an internal changing stack var: {mptr.id}.")
                 return 0
 
             # find the properties of the changed stack var
@@ -236,7 +236,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
                 all_var_info = compat.get_func_stack_var_info(func_addr)
                 stack_var_info = all_var_info[mptr.soff]
             except KeyError:
-                l.warning(f"Failed to track an internal changing stack var: {mptr}.")
+                l.warning(f"Failed to track an internal changing stack var: {mptr.id}.")
                 return 0
 
             # find the properties of the changed stack var
