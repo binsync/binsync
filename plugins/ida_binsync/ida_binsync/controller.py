@@ -369,7 +369,7 @@ class IDABinSyncController(BinSyncController):
         self.client.sync_states(user=user)
         new_state = self.client.get_state(user=self.client.master_user)
         func_addrs = new_state.functions.keys()
-        print("[BinSync]: Target Addrs for sync being cached:", [hex(x) for x in func_addrs])
+        _l.info(f"Target Addrs for sync being cached: {[hex(x) for x in func_addrs]}")
 
         # set the new stuff in the UI
         for func_addr in func_addrs:
