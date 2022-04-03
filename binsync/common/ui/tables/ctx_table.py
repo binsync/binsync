@@ -98,12 +98,17 @@ class QCTXTable(QTableWidget):
         self.setSortingEnabled(True)
 
     def contextMenuEvent(self, event):
+        if len(self.items) == 0:
+            return
         menu = QMenu(self)
         menu.setObjectName("binsync_context_table_context_menu")
         
         func_addr = self.ctx if self.ctx else None
         selected_row = self.rowAt(event.pos().y())
-        username = self.item(selected_row, 0).text()
+        item = self.item(selected_row, 0)
+        if item is None:
+            return
+        username = item.text()
         menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=username))
 
         menu.popup(self.mapToGlobal(event.pos()))

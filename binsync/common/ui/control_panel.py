@@ -6,19 +6,24 @@ from . import ui_version
 if ui_version == "PySide2":
     from PySide2.QtWidgets import QVBoxLayout, QGroupBox, QWidget, QLabel, QTabWidget, QTableWidget, QStatusBar
     from PySide2.QtCore import Signal
+    from PySide2 import sip
 elif ui_version == "PySide6":
     from PySide6.QtWidgets import QVBoxLayout, QGroupBox, QWidget, QLabel, QTabWidget, QTableWidget, QStatusBar
     from PySide6.QtCore import Signal
+    from PySide6 import sip
 else:
     from PyQt5.QtWidgets import QVBoxLayout, QGroupBox, QWidget, QLabel, QTabWidget, QTableWidget, QStatusBar
     from PyQt5.QtCore import pyqtSignal as Signal
+    from PyQt5 import sip
 
 from .tables.functions_table import QFunctionTable
 from .tables.activity_table import QActivityTable
 from .tables.ctx_table import QCTXTable
 from .tables.globals_table import QGlobalsTable
+from .tables.settings_panel import QSettingsPanel
 
 l = logging.getLogger(__name__)
+l.critical(__name__)
 
 class ControlPanel(QWidget):
     update_ready = Signal()
@@ -38,6 +43,9 @@ class ControlPanel(QWidget):
         self.ctx_change.connect(self._reload_ctx)
         self.controller.ctx_change_callback = self.ctx_callback
 
+        self.controller.show_ui = self.show
+        self.controller.hide_ui = self.hide
+
     def update_callback(self):
         """
         This function will be called in another thread, so the work
@@ -49,6 +57,9 @@ class ControlPanel(QWidget):
         self.update_ready.emit()
 
     def ctx_callback(self):
+        if sip.isdeleted(self):
+            return
+
         if isinstance(self.controller.last_ctx, binsync.data.Function):
             self._ctx_table.update_table(new_ctx=self.controller.last_ctx.addr)
 
@@ -85,11 +96,13 @@ class ControlPanel(QWidget):
         self._func_table = QFunctionTable(self.controller)
         self._global_table = QGlobalsTable(self.controller)
         self._activity_table = QActivityTable(self.controller)
+        self._settings_panel = QSettingsPanel(self.controller)
 
         self.tabView.addTab(self._ctx_table, "Context")
         self.tabView.addTab(self._func_table, "Functions")
         self.tabView.addTab(self._global_table, "Globals")
         self.tabView.addTab(self._activity_table, "Activity")
+        self.tabView.addTab(self._settings_panel, "Settings")
 
         self.tables.update({
             "context": self._ctx_table,

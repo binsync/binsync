@@ -93,11 +93,16 @@ class QFunctionTable(QTableWidget):
         self.setSortingEnabled(True)
 
     def contextMenuEvent(self, event):
+        if len(self.items) == 0:
+            return
         menu = QMenu(self)
         menu.setObjectName("binsync_function_table_context_menu")
 
         selected_row = self.rowAt(event.pos().y())
-        func_addr = self.item(selected_row, 0).data(Qt.UserRole)
+        item = self.item(selected_row, 0)
+        if item is None:
+            return
+        func_addr = item.data(Qt.UserRole)
         menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=self.item(selected_row, 2).text()))
 
         from_menu = menu.addMenu("Sync from...")

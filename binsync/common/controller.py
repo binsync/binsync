@@ -131,15 +131,18 @@ class BinSyncController:
         # ui callback created on UI init
         self.ui_callback = None  # func()
         self.ctx_change_callback = None  # func()
+        self.show_ui = None  # func()
+        self.hide_ui = None  # func()
         self._last_reload = None
         self.last_ctx = None
+        self.plugin = None
 
         # command locks
         self.queue_lock = threading.Lock()
         self.cmd_queue = OrderedDict()
 
         # create a pulling thread, but start on connection
-        self.updater_thread = threading.Thread(target=self.updater_routine)
+        self.updater_thread = None
 
     #
     #   Multithreading updaters, locks, and evaluators
@@ -199,6 +202,7 @@ class BinSyncController:
         self.ui_callback()
 
     def start_updater_routine(self):
+        self.updater_thread = threading.Thread(target=self.updater_routine)
         self.updater_thread.setDaemon(True)
         self.updater_thread.start()
 

@@ -135,13 +135,13 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         Open the control panel view and attach it to IDA View-A or Pseudocode-A.
         """
 
-        wrapper = ControlPanelViewWrapper(controller)
-        if not wrapper.twidget:
+        self.wrapper = ControlPanelViewWrapper(controller)
+        if not self.wrapper.twidget:
             raise RuntimeError("Unexpected: twidget does not exist.")
 
         flags = idaapi.PluginForm.WOPN_TAB | idaapi.PluginForm.WOPN_RESTORE | idaapi.PluginForm.WOPN_PERSIST
-        idaapi.display_widget(wrapper.twidget, flags)
-        wrapper.widget.visible = True
+        idaapi.display_widget(self.wrapper.twidget, flags)
+        self.wrapper.widget.visible = True
 
         # Dock it
         for target in ["IDA View-A", "Pseudocode-A"]:
@@ -149,6 +149,8 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
             if dwidget:
                 idaapi.set_dock_pos(ControlPanelViewWrapper.NAME, target, idaapi.DP_RIGHT)
                 break
+
+        self.wrapper._controller.plugin = self
 
     def install_actions(self):
         self.install_control_panel_action()

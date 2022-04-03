@@ -91,12 +91,17 @@ class QGlobalsTable(QTableWidget):
         self.setSortingEnabled(True)
 
     def contextMenuEvent(self, event):
+        if len(self.items) == 0:
+            return
         menu = QMenu(self)
         menu.setObjectName("binsync_global_table_context_menu")
 
         # create a nested menu
         selected_row = self.rowAt(event.pos().y())
-        global_name = self.item(selected_row, 0).text()
+        item = self.item(selected_row, 0)
+        if item is None:
+            return
+        global_name = item.text()
         global_type = self.item(selected_row, 1).text()
         user_name = self.item(selected_row, 2).text()
 
