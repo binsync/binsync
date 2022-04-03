@@ -5,7 +5,7 @@ import subprocess
 import re
 import datetime
 import logging
-import typing
+from typing import Optional, Iterable
 
 import git
 import git.exc
@@ -41,39 +41,33 @@ class StateContext(object):
         self.client.commit_state(state=self.state)
 
 
-class Client(object):
-    """
-    The binsync Client.
-
-    :ivar str master_user:  User name of the master user.
-    :ivar str repo_root:    Local path of the Git repo.
-    :ivar str remote:       Git remote.
-    :ivar int _commit_interval: The interval for committing local changes into the Git repo, pushing to the remote
-                            side, and pulling from the remote.
-    """
-
+class Client:
     def __init__(
         self,
-        master_user,
-        repo_root,
-        binary_hash,
-        remote="origin",
-        commit_interval=10,
-        init_repo=False,
-        remote_url=None,
-        ssh_agent_pid=None,
-        ssh_auth_sock=None
+        master_user: str,
+        repo_root: str,
+        binary_hash: bytes,
+        remote: str = "origin",
+        commit_interval: int = 10,
+        init_repo: bool = False,
+        remote_url: Optional[str] = None,
+        ssh_agent_pid: Optional[int] = None,
+        ssh_auth_sock: Optional[str] = None
     ):
         """
-        :param str master_user:     The username of the current user
-        :param str repo_root:       The path to the repository directory to be loaded or created
-        :param str binary_hash:     The binary's md5 hash, as a hex string, for validation
-        :param remote:
-        :param commit_interval:
-        :param init_repo:
-        :param remote_url:
-        :param ssh_agent_pid:
-        :param ssh_auth_sock:
+        The Client class is responsible for making the low-level Git operations for the BinSync environment.
+        Things like committing, pulling, and pushing all happen on the client level. It also starts a thread
+        for continuous pushing.
+
+        :param master_user:         Username of the user that is initing the client (the master user)
+        :param repo_root:           Path to the BinSync repo where the project will be stored
+        :param binary_hash:         The hash, usually md5, of the binary the client is connected for
+        :param remote:              The optional Git remote (usually origin)
+        :param commit_interval:     The seconds between each commit in the worker thread
+        :param init_repo:           Bool to decide initing for both remote and local repos
+        :param remote_url:          Remote URL to a Git Repo which may be used for cloning or initing
+        :param ssh_agent_pid:       SSH Agent PID
+        :param ssh_auth_sock:       SSH Auth Socket
         """
         self.master_user = master_user
         self.repo_root = repo_root
@@ -90,49 +84,7 @@ class Client(object):
         self.ssh_auth_sock = ssh_auth_sock  # type: str
         self.connection_warnings = []
 
-        # three scenarios
-        # 1. We already have the repo checked out
-        # 2. We haven't checked out the repo, but there is a remote repo. In this case, we clone the repo from
-        #    @remote_url
-        # 3. There is no such repo, and we are the very first group of people trying to setup this repo. In this case,
-        #    @init_repo should be True, and we will initialize the repo.
-
-        try:
-            # case 1
-            # open the local repo
-            self.repo = git.Repo(self.repo_root)
-
-            # Initialize branches
-            self.init_remote()
-
-            if init_repo:
-                raise Exception("Could not initialize repository - it already exists!")
-            if not any(b.name == BINSYNC_ROOT_BRANCH for b in self.repo.branches):
-                raise Exception(f"This is not a binsync repo - it must have a {BINSYNC_ROOT_BRANCH} branch.")
-        except (git.NoSuchPathError, git.InvalidGitRepositoryError):
-            # initialization
-            if remote_url:
-                # case 2
-                self.repo = self.clone(remote_url)
-            elif init_repo:
-                # case 3
-                self.repo = git.Repo.init(self.repo_root)
-                self._setup_repo()
-            else:
-                raise
-
-        stored = self._get_stored_hash()
-        if stored != binary_hash:
-            self.connection_warnings.append(ConnectionWarnings.HASH_MISMATCH)
-
-        assert not self.repo.bare, "it should not be a bare repo"
-
-        self.repo_lock = filelock.FileLock(self.repo_root + "/.git/binsync.lock")
-        try:
-            self.repo_lock.acquire(timeout=0)
-        except filelock.Timeout as e:
-            raise Exception("Can only have one binsync client touching a local repository at once.\n"
-                            "If the previous client crashed, you need to delete " + self.repo_root + "/.git/binsync.lock") from e
+        self.repo = self._get_binsync_repo(remote_url, init_repo)
 
         # check out the appropriate branch
         try:
@@ -157,9 +109,80 @@ class Client(object):
         self.state = None
         self.commit_lock = threading.Lock()
 
-    def init_remote(self):
+    def __del__(self):
+        if self.repo_lock is not None:
+            self.repo_lock.release()
+
+    def _get_binsync_repo(self, remote_url, init_repo):
         """
-        Init PyGits view of remote references in a repo.
+        Gets the BinSync repo from either a local or remote git location and then sets up the repo as well
+        as checks that the repo is the right repo for the current binary.
+
+        When getting the repo there are four scenarios:
+        1. The user fills out the remote_url and does not try to init it. In this case we should clone down
+           the repo and assure that the head is remote/binsync/__root__
+        2. The user fills out the remote_url and want to init it. In this case, we should clone it down to the repo
+           root specified in the path. If there is no path, just place it locally then try to set it up with a hash
+        3. The user fills out only the path of the git repo (no remote), then we just need to get that local git
+           repo and assure it is a BinSync repo
+        4. Last case is what happens if a user wants to init a local folder that is not a Git folder. In this case,
+           they will be offline but will have a local git repo.
+
+        :param remote_url:
+        :param init_repo:
+        :return:
+        """
+        if remote_url:
+            # given a remove URL and no local folder, make it based on the URL name
+            if not self.repo_root:
+                self.repo_root = re.findall(r"/(.*)\.git", remote_url)[0]
+
+            self.repo: git.Repo = self.clone(remote_url, no_head_check=init_repo)
+
+            if init_repo:
+                if any(b.name == BINSYNC_ROOT_BRANCH for b in self.repo.branches):
+                    raise Exception("Can't init this remote repo since a BinSync root already exists")
+
+                self._setup_repo()
+        else:
+            try:
+                self.repo = git.Repo(self.repo_root)
+
+                # update view of remote branches (which may be new)
+                self.update_remote_view()
+
+                if init_repo:
+                    raise Exception("Could not initialize repository - it already exists!")
+                if not any(b.name == BINSYNC_ROOT_BRANCH for b in self.repo.branches):
+                    raise Exception(f"This is not a BinSync repo - it must have a {BINSYNC_ROOT_BRANCH} branch.")
+            except (git.NoSuchPathError, git.InvalidGitRepositoryError):
+                if init_repo:
+                    # case 3
+                    self.repo = git.Repo.init(self.repo_root)
+                    self._setup_repo()
+                else:
+                    raise Exception(f"Failed to connect or create a BinSync repo")
+
+        stored = self._get_stored_hash()
+        if stored != self.binary_hash:
+            self.connection_warnings.append(ConnectionWarnings.HASH_MISMATCH)
+
+        assert not self.repo.bare, "it should not be a bare repo"
+
+        self.repo_lock = filelock.FileLock(self.repo_root + "/.git/binsync.lock")
+        try:
+            self.repo_lock.acquire(timeout=0)
+        except filelock.Timeout as e:
+            raise Exception("Can only have one binsync client touching a local repository at once.\n"
+                            "If the previous client crashed, you need to delete " + self.repo_root +
+                            "/.git/binsync.lock") from e
+
+        return self.repo
+
+    def update_remote_view(self):
+        """
+        Updates PyGits view of remote references in the repo by both trying to get remote references
+        and checking out local ones.
         """
         # get all remote branches
         try:
@@ -176,10 +199,6 @@ class Client(object):
                 self.repo.git.checkout('--track', branch.name)
             except git.GitCommandError as e:
                 pass
-
-    def __del__(self):
-        if self.repo_lock is not None:
-            self.repo_lock.release()
 
     @property
     def user_branch_name(self):
@@ -219,7 +238,7 @@ class Client(object):
 
         self.repo.create_remote(name, url=remote_url)
 
-    def clone(self, remote_url):
+    def clone(self, remote_url, no_head_check=False):
         """
         Checkout from a remote_url to a local path specified by self.local_root.
 
@@ -229,6 +248,9 @@ class Client(object):
 
         env = self.ssh_agent_env()
         repo = git.Repo.clone_from(remote_url, self.repo_root, env=env)
+
+        if no_head_check:
+            return repo
 
         try:
             repo.create_head(BINSYNC_ROOT_BRANCH, f'{self.remote}/{BINSYNC_ROOT_BRANCH}')
@@ -287,7 +309,7 @@ class Client(object):
                     self.repo.remotes[self.remote].push(BINSYNC_ROOT_BRANCH)
                     self.repo.remotes[self.remote].push(self.user_branch_name)
                 self._last_push_at = datetime.datetime.now()
-                l.info("Push completed successfully at %s", self._last_push_at)
+                l.debug("Push completed successfully at %s", self._last_push_at)
             except git.exc.GitCommandError as ex:
                 if print_error:
                     print("Failed to push to remote \"%s\".\n"
@@ -299,12 +321,13 @@ class Client(object):
                         str(ex)
                     ))
 
-    def users(self) -> typing.Iterable[User]:
+    def users(self) -> Iterable[User]:
         for ref in self._get_best_refs():
             try:
                 metadata = State.load_metadata(ref.commit.tree)
                 yield User.from_metadata(metadata)
             except Exception as e:
+                l.debug(f"Unable to load user {e}")
                 continue
 
     def tally(self, users=None):

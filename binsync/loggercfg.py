@@ -10,10 +10,10 @@ default_config = {
     "disable_existing_loggers": False,
     "formatters": {
         "console": {
-            "format": "%(levelname)-7s | %(asctime)s | %(name)-8s | %(message)s"
+            "format": "%(levelname)s | %(asctime)s | %(name)-8s | %(message)s"
         },
         "logfile": {
-            "format": "%(levelname)-7s | %(asctime)s | %(name)-8s | %(message)s"
+            "format": "%(levelname)s | %(asctime)s | %(name)-8s | %(message)s"
         },
     },
 

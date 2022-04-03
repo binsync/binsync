@@ -4,11 +4,11 @@ from typing import Dict
 
 class Artifact:
     __slots__ = (
-        "last_change"
+        "last_change",
     )
 
     def __init__(self, last_change=None):
-        self.last_change = None
+        self.last_change = last_change
 
     def __getstate__(self) -> Dict:
         """

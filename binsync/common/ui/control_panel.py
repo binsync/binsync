@@ -116,7 +116,7 @@ class ControlPanel(QWidget):
 
     def _update_table_data(self):
         if self.controller.client.has_remote:
-            self.controller.client.init_remote()
+            self.controller.client.update_remote_view()
 
         for _, table in self.tables.items():
             table.update_table()

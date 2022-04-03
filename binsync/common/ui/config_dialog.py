@@ -67,7 +67,7 @@ class SyncConfig(QDialog):
         # repo path
         self._repo_edit = QLineEdit(self)
         self._repo_edit.textChanged.connect(self._on_repo_textchanged)
-        self._repo_edit.setFixedWidth(150)
+        #self._repo_edit.setFixedWidth(150)
 
         # repo path selection button
         repo_button = QPushButton(self)
@@ -84,7 +84,6 @@ class SyncConfig(QDialog):
         remote_label = QLabel(self)
         remote_label.setText("Remote URL")
         self._remote_edit = QLineEdit(self)
-        self._remote_edit.setEnabled(False)
 
         upper_layout.addWidget(remote_label, row, 0)
         upper_layout.addWidget(self._remote_edit, row, 1)
@@ -96,7 +95,7 @@ class SyncConfig(QDialog):
         self._initrepo_checkbox.setToolTip("I'm the first user of this binsync project and I'd "
                                            "like to initialize it as a sync repo.")
         self._initrepo_checkbox.setChecked(False)
-        self._initrepo_checkbox.setEnabled(False)
+        #self._initrepo_checkbox.setEnabled(False)
 
         upper_layout.addWidget(self._initrepo_checkbox, row, 1)
         row += 1
@@ -129,6 +128,7 @@ class SyncConfig(QDialog):
     def _on_ok_clicked(self):
         user = self._user_edit.text()
         path = self._repo_edit.text()
+        remote_url = self._remote_edit.text()
         init_repo = self._initrepo_checkbox.isChecked()
 
         l.debug("Attempting to connect to/init repo, user: %s | path: %s | init_repo? %r", user, path, init_repo)
@@ -145,7 +145,7 @@ class SyncConfig(QDialog):
                                        )
             return
 
-        if not os.path.isdir(path) and not init_repo:
+        if not remote_url and not os.path.isdir(path) and not init_repo:
             QMessageBox(self).critical(None, "Repo does not exist",
                                        "The specified sync directory does not exist. "
                                        "Do you maybe want to initialize it?"
@@ -153,10 +153,13 @@ class SyncConfig(QDialog):
             return
 
         # convert to remote repo if no local is provided
-        if not self.is_git_repo(path):
-            remote_url = self._remote_edit.text()
-        else:
+        if self.is_git_repo(path):
             remote_url = None
+
+        if remote_url and not path:
+            path = os.path.join(os.path.dirname(self.controller.binary_path()),
+                                os.path.basename(self.controller.binary_path()) + "_bs"
+                                )
 
         try:
             connection_warnings = self.controller.connect(user, path, init_repo=init_repo, remote_url=remote_url)
@@ -189,12 +192,10 @@ class SyncConfig(QDialog):
         if not self.is_git_repo(new_text.strip()):
             # no it's not
             # maybe we want to clone from the remote side?
-            self._remote_edit.setEnabled(True)
             self._initrepo_checkbox.setEnabled(True)
         else:
             # yes it is!
             # we don't want to initialize it or allow cloning from the remote side
-            self._remote_edit.setEnabled(False)
             self._initrepo_checkbox.setEnabled(False)
 
     def _on_cancel_clicked(self):

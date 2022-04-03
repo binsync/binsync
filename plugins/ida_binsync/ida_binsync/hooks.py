@@ -200,7 +200,11 @@ class IDBHooks(ida_idp.IDB_Hooks):
         if sptr.is_frame():
             stack_frame = sptr
             func_addr = idaapi.get_func_by_frame(stack_frame.id)
-            stack_var_info = compat.get_func_stack_var_info(func_addr)[mptr.soff]
+            try:
+                stack_var_info = compat.get_func_stack_var_info(func_addr)[mptr.soff]
+            except KeyError:
+                l.warning(f"Failed to track an internal changing stack var: {mptr.id}.")
+                return 0
 
             # find the properties of the changed stack var
             angr_offset = compat.ida_to_angr_stack_offset(func_addr, stack_var_info.offset)
@@ -232,7 +236,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
                 all_var_info = compat.get_func_stack_var_info(func_addr)
                 stack_var_info = all_var_info[mptr.soff]
             except KeyError:
-                print("[BinSync]: Failed to track an internal changing stack var to IDA. That or it was deleted.")
+                l.warning(f"Failed to track an internal changing stack var: {mptr.id}.")
                 return 0
 
             # find the properties of the changed stack var
@@ -273,14 +277,17 @@ class IDBHooks(ida_idp.IDB_Hooks):
         if ida_struct.is_member_id(ea) or ida_struct.get_struc(ea) or ida_enum.get_enum_name(ea):
             return 0
 
-        # confirm we are renaming a function
         ida_func = idaapi.get_func(ea)
-        if ida_func is None or ida_func.start_ea != ea:
-            return 0
+        # global var renaming
+        if ida_func is None:
+            size = idaapi.get_item_size(ea)
+            self.binsync_state_change(self.controller.push_global_var, ea, new_name, size=size)
 
-        # grab the name instead from ida
-        name = idc.get_func_name(ida_func.start_ea)
-        self.binsync_state_change(self.controller.push_function_header, ida_func.start_ea, name)
+        # function name renaming
+        elif ida_func.start_ea == ea:
+            # grab the name instead from ida
+            name = idc.get_func_name(ida_func.start_ea)
+            self.binsync_state_change(self.controller.push_function_header, ida_func.start_ea, name)
 
         return 0
 
@@ -290,7 +297,6 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     @quite_init_checker
     def cmt_changed(self, ea, repeatable_cmt):
-        #print(f"cmt changed for {hex(ea)} being {'repetable' if repeatable_cmt else 'non-repeatable'}")
         if repeatable_cmt:
             cmt = ida_bytes.get_cmt(ea, repeatable_cmt)
             if cmt:
