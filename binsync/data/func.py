@@ -31,6 +31,9 @@ class FunctionArgument(Artifact):
         fa.__setstate__(toml.loads(s))
         return fa
 
+    def copy(self):
+        return FunctionArgument(self.idx, self.name, self.type_str, self.size, last_change=self.last_change)
+
 
 class FunctionHeader(Artifact):
     __slots__ = (
@@ -117,6 +120,11 @@ class FunctionHeader(Artifact):
             diff_dict["args"][idx] = self.invert_diff(other_arg.diff(None))
 
         return diff_dict
+
+    def copy(self):
+        fh = FunctionHeader(self.name, self.addr, ret_type=self.ret_type, last_change=self.last_change)
+        fh.args = {k: v.copy() for k, v in self.args.items()}
+        return fh
 
 
 #
@@ -230,10 +238,14 @@ class Function(Artifact):
 
             diff_dict["stack_vars"][off] = self.invert_diff(other_var.diff(None))
 
-
         return diff_dict
 
+    def copy(self):
+        func = Function(self.addr, self.size, last_change=self.last_change)
+        func.header = self.header.copy() if self.header else None
+        func.stack_vars = {k: v.copy() for k, v in self.stack_vars.items()}
 
+        return func
 
     @classmethod
     def parse(cls, s):
@@ -246,6 +258,51 @@ class Function(Artifact):
         f = Function(None, None)
         f.__setstate__(func_toml)
         return f
+
+    @classmethod
+    def from_nonconflicting_merge(cls, func1: "Function", func2: "Function") -> "Function":
+        func_diff = func1.diff(func2)
+        merge_func = func1.copy()
+
+        if merge_func.header is None:
+            merge_func.header = func2.header.copy()
+        else:
+            header_diff = func_diff["header"]
+            # name
+            if merge_func.name is None:
+                merge_func.header.name = func2.name
+            # type_str
+            if merge_func.header.ret_type is None:
+                merge_func.header.ret_type = func2.header.ret_type
+
+            # header args
+            args_diff = header_diff["args"]
+            # TODO: correct this for when offset numbers differ (IDA sync Binja)
+            for off, var in func2.header.args.items():
+                # arg differs, and the before is not nonexistent
+                if off in args_diff and (
+                        (args_diff[off]["name"]["before"] is not None)
+                        or (args_diff[off]["type_str"]["before"] is not None)
+                ):
+                    continue
+
+                # stack var does not conflict
+                merge_func.header.args[off] = var.copy()
+
+        # stack vars
+        stack_var_diff = func_diff["stack_vars"]
+        for off, var in func2.stack_vars.items():
+            # stack var differs, and the before is not nonexistent
+            if off in stack_var_diff and (
+                    (stack_var_diff[off]["name"]["before"] is not None)
+                    or (stack_var_diff[off]["type"]["before"] is not None)
+            ):
+                continue
+
+            # stack var does not conflict
+            merge_func.stack_vars[off] = var.copy()
+
+        return merge_func
 
     #
     # Property Shortcuts (Alias)
