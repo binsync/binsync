@@ -54,14 +54,8 @@ def install():
     # confirm install platform works
     platform = find_platform()
     if platform not in [PlatformType.LINUX, PlatformType.MACOS]:
+        os.remove("oneliner.py")
         raise Exception("Platform is not supported for oneliner install.")
-
-    # find plugin path
-    for plugin_path in sys.path:
-        if os.path.basename(plugin_path) == "plugins" and "ida" in plugin_path:
-            break
-    else:
-        raise Exception("Unable to find the local plugins folder to install BinSync.")
 
     # find python executable
     if platform == PlatformType.LINUX:
@@ -74,10 +68,31 @@ def install():
                 if os.path.exists(python_path):
                     break
         else:
+            os.remove("oneliner.py")
             raise Exception("Unable to locate your local python executable. Please use manual install.")
 
     pip_install_binsync(python_path)
     print("[+] Successfully installed BinSync to IDA pip")
+
+    # find plugin path
+    not_found = False
+    for plugin_path in sys.path:
+        if os.path.basename(plugin_path) == "plugins" and "ida" in plugin_path:
+            break
+    else:
+        not_found = True
+
+    # tray again with a less reliable search
+    if not_found:
+        for plugin_path in sys.path:
+            if os.path.basename(plugin_path) == "python" and "ida" in plugin_path:
+                break
+        else:
+            os.remove("oneliner.py")
+            raise Exception("Unable to find the local plugins folder to install BinSync, install manually!")
+
+        plugin_path = os.path.join(os.path.dirname(plugin_path), "plugins")
+
     plugin_install_binsync(plugin_path)
     print("[+] Successfully installed BinSync IDA Plugin into the plugins folder")
     print("[+] Install finished. PLEASE RESTART IDA for plugin to be loaded")
