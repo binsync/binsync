@@ -97,6 +97,8 @@ class BinjaBinSyncController(BinSyncController):
 
         self.syncing = True
 
+        sync_func = self.generate_func_for_sync_level(sync_func)
+
         # name
         if sync_func.name and sync_func.name != bn_func.name:
             bn_func.name = sync_func.name

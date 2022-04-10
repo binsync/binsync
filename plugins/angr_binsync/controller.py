@@ -79,6 +79,8 @@ class AngrBinSyncController(BinSyncController):
             # the function does not exist for that user's state
             return False
 
+        sync_func = self.generate_func_for_sync_level(sync_func)
+
         # ==== Function Name ==== #
         if sync_func.name and sync_func.name != func.name:
             func.name = sync_func.name

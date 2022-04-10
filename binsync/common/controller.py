@@ -108,6 +108,12 @@ class SyncControlStatus:
     DISCONNECTED = 2
 
 
+class SyncLevel:
+    OVERWRITE = 0
+    NON_CONFLICTING = 1
+    MERGE = 2
+
+
 #
 #   Controller
 #
@@ -133,6 +139,9 @@ class BinSyncController:
         self.ctx_change_callback = None  # func()
         self._last_reload = None
         self.last_ctx = None
+
+        # settings
+        self.sync_level: int = SyncLevel.NON_CONFLICTING
 
         # command locks
         self.queue_lock = threading.Lock()
@@ -467,6 +476,27 @@ class BinSyncController:
     #
     # Utils
     #
+
+    def generate_func_for_sync_level(self, sync_func: Function) -> Function:
+        if self.sync_level == SyncLevel.OVERWRITE:
+            return sync_func
+
+        master_state = self.client.get_state()
+        master_func = master_state.get_function(sync_func.addr)
+        if not master_func:
+            return sync_func
+
+        if self.sync_level == SyncLevel.NON_CONFLICTING:
+            new_func = Function.from_nonconflicting_merge(master_func, sync_func)
+
+        elif self.sync_level == SyncLevel.MERGE:
+            _l.warning("Manual Merging is not currently supported, using non-conflict syncing...")
+            new_func = Function.from_nonconflicting_merge(master_func, sync_func)
+
+        else:
+            raise Exception("Your BinSync Client has an unsupported Sync Level activated")
+
+        return new_func
 
     @staticmethod
     def get_default_type_str(size):
