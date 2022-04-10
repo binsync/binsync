@@ -44,11 +44,6 @@ class QSettingsPanel(QWidget):
             return
         l.debug(f"Sync level changed to: {selected_opt}")
 
-    def _handle_hide_press(self):
-        import idaapi
-        idaapi.close_widget(self.controller.plugin.wrapper.twidget, 0)
-
-
     def _init_widgets(self):
         self._debug_log_toggle = QCheckBox("Toggle Debug Logging")
         self._debug_log_toggle.setToolTip("Toggles the logging of events BinSync developers care about.")
@@ -75,18 +70,11 @@ class QSettingsPanel(QWidget):
         sync_level_group.layout().addWidget(self._sync_level_label)
         sync_level_group.layout().addWidget(self._sync_level_combobox)
 
-
-        self._btn_hide_binsync = QPushButton("Hide BinSync")
-        self._btn_hide_binsync.setToolTip("Unloads BinSync. For when you're unhappy with it.")
-        self._btn_hide_binsync.pressed.connect(self._handle_hide_press)
-
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(1, 1, 1, 1)
         main_layout.setSpacing(20)
         main_layout.setAlignment(Qt.AlignTop)
         main_layout.addWidget(sync_level_group)
         main_layout.addWidget(self._debug_log_toggle)
-        main_layout.addWidget(self._btn_hide_binsync)
-
         self.setLayout(main_layout)
 

@@ -6,15 +6,12 @@ from . import ui_version
 if ui_version == "PySide2":
     from PySide2.QtWidgets import QVBoxLayout, QGroupBox, QWidget, QLabel, QTabWidget, QTableWidget, QStatusBar
     from PySide2.QtCore import Signal
-    from PySide2 import sip
 elif ui_version == "PySide6":
     from PySide6.QtWidgets import QVBoxLayout, QGroupBox, QWidget, QLabel, QTabWidget, QTableWidget, QStatusBar
     from PySide6.QtCore import Signal
-    from PySide6 import sip
 else:
     from PyQt5.QtWidgets import QVBoxLayout, QGroupBox, QWidget, QLabel, QTabWidget, QTableWidget, QStatusBar
     from PyQt5.QtCore import pyqtSignal as Signal
-    from PyQt5 import sip
 
 from .tables.functions_table import QFunctionTable
 from .tables.activity_table import QActivityTable
@@ -57,9 +54,6 @@ class ControlPanel(QWidget):
         self.update_ready.emit()
 
     def ctx_callback(self):
-        if sip.isdeleted(self):
-            return
-
         if isinstance(self.controller.last_ctx, binsync.data.Function):
             self._ctx_table.update_table(new_ctx=self.controller.last_ctx.addr)
 

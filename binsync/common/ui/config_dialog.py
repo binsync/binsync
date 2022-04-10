@@ -13,6 +13,7 @@ if ui_version == "PySide2":
 elif ui_version == "PySide6":
     from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QMessageBox, \
         QFileDialog, QCheckBox, QGridLayout
+    from PySide6.QtCore import QDir
 else:
     from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QMessageBox, \
         QFileDialog, QCheckBox, QGridLayout

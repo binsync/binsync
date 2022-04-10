@@ -141,7 +141,6 @@ class BinSyncController:
         self.hide_ui = None  # func()
         self._last_reload = None
         self.last_ctx = None
-        self.plugin = None
 
         # settings
         self.sync_level: int = SyncLevel.NON_CONFLICTING
