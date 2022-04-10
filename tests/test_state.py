@@ -139,6 +139,45 @@ class TestState(unittest.TestCase):
 
         print(json.dumps(diff_dict, sort_keys=False, indent=4))
 
+    def test_nonconflicting_funcs(self):
+        state1 = binsync.State("user1")
+        state2 = binsync.State("user2")
+
+        # setup top
+        func1 = FunctionHeader("user1_func", 0x400000, ret_type="int *", args={})
+        func2 = FunctionHeader("main", func1.addr, ret_type="long *", args={})
+
+        state1.set_function_header(func1)
+        state2.set_function_header(func2)
+        state1.functions[func1.addr].size = 0x100
+        state2.functions[func1.addr].size = 0x100
+
+        stack_vars1 = {
+            0x0: StackVariable(0, 3, "v0", "int", 4, func1.addr),
+            0x4: StackVariable(4, 3, "my_var", "int", 4, func1.addr)
+        }
+        stack_vars2 = {
+            0x0: StackVariable(0, 3, "v0", "int", 4, func1.addr),
+            0x4: StackVariable(4, 3, "v4", "long", 8, func1.addr),
+            0x8: StackVariable(4, 3, "v8", "long", 8, func1.addr)
+        }
+
+        for stack_vars_info in [(stack_vars1, state1), (stack_vars2, state2)]:
+            state = stack_vars_info[1]
+            stack_vars = stack_vars_info[0]
+            for off, var in stack_vars.items():
+                state.set_stack_variable(var, off, var.addr)
+        
+        func1, func2 = state1.get_function(0x400000), state2.get_function(0x400000) 
+        merge_func = Function.from_nonconflicting_merge(func1, func2)
+
+        self.assertEqual(merge_func.name, "user1_func")
+        self.assertEqual(merge_func.header.ret_type, "int *")
+        self.assertEqual(merge_func.stack_vars[0].name, "v0")
+        self.assertEqual(merge_func.stack_vars[4].name, "my_var")
+        self.assertEqual(merge_func.stack_vars[4].type, "int")
+        self.assertEqual(merge_func.stack_vars[8].name, "v8")
+
 
 if __name__ == "__main__":
     unittest.main(argv=sys.argv)

@@ -264,9 +264,12 @@ class IDABinSyncController(BinSyncController):
         #
 
         # function should exist in pulled state
-        binsync_func = self.pull_function(func_addr, user=user, state=state) # type: Function
+        binsync_func = self.pull_function(func_addr, user=user, state=state)  # type: Function
         if binsync_func is None:
             return data_changed
+
+        # make function prepared for either merging or not
+        binsync_func = self.generate_func_for_sync_level(binsync_func)
 
         ida_code_view = ida_hexrays.open_pseudocode(ida_func.start_ea, 0)
         # check if a header has been set for the func
@@ -320,7 +323,7 @@ class IDABinSyncController(BinSyncController):
 
         stack_vars_to_set = {}
         # only try to set stack vars that actually exist
-        for offset, stack_var in self.pull_stack_variables(func_addr, user=user, state=state).items():
+        for offset, stack_var in binsync_func.stack_vars.items():
             if offset in existing_stack_vars:
                 # change the variable's name
                 if stack_var.name != existing_stack_vars[offset].name:
@@ -369,7 +372,7 @@ class IDABinSyncController(BinSyncController):
         self.client.sync_states(user=user)
         new_state = self.client.get_state(user=self.client.master_user)
         func_addrs = new_state.functions.keys()
-        print("[BinSync]: Target Addrs for sync being cached:", [hex(x) for x in func_addrs])
+        _l.info(f"Target Addrs for sync being cached: {[hex(x) for x in func_addrs]}")
 
         # set the new stuff in the UI
         for func_addr in func_addrs:

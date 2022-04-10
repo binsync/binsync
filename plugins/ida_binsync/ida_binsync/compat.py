@@ -122,6 +122,7 @@ def execute_ui(func):
 #
 #   Data Type Converters
 #
+
 @execute_read
 def convert_type_str_to_ida_type(type_str) -> typing.Optional['ida_typeinf']:
     ida_type_str = type_str + ";"
@@ -129,6 +130,7 @@ def convert_type_str_to_ida_type(type_str) -> typing.Optional['ida_typeinf']:
     valid_parse = ida_typeinf.parse_decl(tif, None, ida_type_str, 1)
 
     return tif if valid_parse is not None else None
+
 
 @execute_read
 def ida_to_angr_stack_offset(func_addr, angr_stack_offset):
@@ -139,15 +141,31 @@ def ida_to_angr_stack_offset(func_addr, angr_stack_offset):
     return ida_stack_offset
 
 
-def convert_member_flag(size):
-    if size == 1:
-        return 0x400
-    elif size == 2:
-        return 0x10000400
-    elif size == 4:
-        return 0x20000400
-    elif size == 8:
-        return 0x30000400
+@execute_read
+def convert_size_to_flag(size):
+    """
+    Converts a size to the arch specific flag.
+
+    Inspired by: https://github.com/arizvisa/ida-minsc/blob/master/base/_interface.py
+
+    :param size: in bytes
+    :return: ida flag_t
+    """
+
+    size_map = {
+        1: idaapi.byte_flag(),
+        2: idaapi.word_flag(),
+        4: idaapi.dword_flag(),
+        8: idaapi.qword_flag()
+    }
+
+    try:
+        flag = size_map[size]
+    except KeyError:
+        # just always assign something
+        flag = idaapi.byte_flag()
+
+    return flag
 
 
 #
@@ -455,7 +473,7 @@ def set_ida_struct(struct: Struct, controller) -> bool:
     # add every member of the struct
     for member in struct.struct_members:
         # convert to ida's flag system
-        mflag = convert_member_flag(member.size)
+        mflag = convert_size_to_flag(member.size)
 
         # create the new member
         controller.inc_api_count()
@@ -564,6 +582,19 @@ def get_function_cursor_at():
 #
 # Other Utils
 #
+
+@execute_read
+def get_ptr_size():
+    """
+    Gets the size of the ptr, which in affect tells you the bit size of the binary.
+
+    Taken from: https://github.com/arizvisa/ida-minsc/blob/master/base/database.py
+    :return: int, size in bytes
+    """
+    tif = ida_typeinf.tinfo_t()
+    tif.create_ptr(ida_typeinf.tinfo_t(ida_typeinf.BT_VOID))
+    return tif.get_size()
+
 
 @execute_read
 def get_binary_path():

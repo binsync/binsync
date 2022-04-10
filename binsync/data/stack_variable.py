@@ -58,6 +58,12 @@ class StackVariable(Artifact):
         else:
             raise NotImplementedError()
 
+    def copy(self):
+        return StackVariable(
+            self.stack_offset, self.stack_offset_type, self.name, self.type, self.size, self.addr,
+            last_change=self.last_change
+        )
+
     @classmethod
     def parse(cls, s):
         sv = StackVariable(None, None, None, None, None, None)
