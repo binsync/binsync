@@ -490,7 +490,8 @@ class BinSyncController:
             new_func = Function.from_nonconflicting_merge(master_func, sync_func)
 
         elif self.sync_level == SyncLevel.MERGE:
-            pass
+            _l.warning("Manual Merging is not currently supported, using non-conflict syncing...")
+            new_func = Function.from_nonconflicting_merge(master_func, sync_func)
 
         else:
             raise Exception("Your BinSync Client has an unsupported Sync Level activated")
