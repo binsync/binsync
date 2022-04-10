@@ -32,9 +32,11 @@ class QSettingsPanel(QWidget):
             logging.getLogger("ida_binsync").setLevel("INFO")
             l.info("Logger has been set to level: INFO")
 
+    def _handle_sync_level_change(self):
+        print("aaa")
+
     def _handle_hide_press(self):
         import idaapi
-        #idaapi.widget_invisible(self.controller.plugin.wrapper.twidget)
         idaapi.close_widget(self.controller.plugin.wrapper.twidget, 0)
 
 
@@ -58,6 +60,7 @@ class QSettingsPanel(QWidget):
         self._sync_level_label.setTextFormat(Qt.RichText)
         self._sync_level_combobox = QComboBox()
         self._sync_level_combobox.addItems(["Non-Conflicting", "Overwrite", "Manual"])
+        self._sync_level_combobox.currentIndexChanged.connect(self._handle_sync_level_change)
         sync_level_group = QGroupBox()
         sync_level_group.setLayout(QHBoxLayout())
         sync_level_group.layout().setContentsMargins(0, 0, 0, 0)
@@ -71,6 +74,7 @@ class QSettingsPanel(QWidget):
 
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(1, 1, 1, 1)
+        main_layout.setSpacing(20)
         main_layout.setAlignment(Qt.AlignTop)
         main_layout.addWidget(sync_level_group)
         main_layout.addWidget(self._debug_log_toggle)
