@@ -20,7 +20,6 @@ from .tables.globals_table import QGlobalsTable
 from .tables.settings_panel import QSettingsPanel
 
 l = logging.getLogger(__name__)
-l.critical(__name__)
 
 class ControlPanel(QWidget):
     update_ready = Signal()

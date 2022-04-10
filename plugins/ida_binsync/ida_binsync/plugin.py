@@ -150,8 +150,6 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
                 idaapi.set_dock_pos(ControlPanelViewWrapper.NAME, target, idaapi.DP_RIGHT)
                 break
 
-        self.wrapper._controller.plugin = self
-
     def install_actions(self):
         self.install_control_panel_action()
 
