@@ -109,9 +109,9 @@ class SyncControlStatus:
 
 
 class SyncLevel:
-    OVERWRITE = 0
-    NON_CONFLICTING = 1
-    MERGE = 2
+    NON_CONFLICTING = 0
+    OVERWRITE = 1
+    MANUAL = 2
 
 
 #
@@ -493,7 +493,7 @@ class BinSyncController:
         if self.sync_level == SyncLevel.NON_CONFLICTING:
             new_func = Function.from_nonconflicting_merge(master_func, sync_func)
 
-        elif self.sync_level == SyncLevel.MERGE:
+        elif self.sync_level == SyncLevel.MANUAL:
             _l.warning("Manual Merging is not currently supported, using non-conflict syncing...")
             new_func = Function.from_nonconflicting_merge(master_func, sync_func)
 
