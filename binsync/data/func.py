@@ -280,7 +280,7 @@ class Function(Artifact):
             # TODO: correct this for when offset numbers differ (IDA sync Binja)
             for off, var in func2.header.args.items():
                 # arg differs, and the before is not nonexistent
-                if off in args_diff and (
+                if off in args_diff and args_diff[off] and (
                         (args_diff[off]["name"]["before"] is not None)
                         or (args_diff[off]["type_str"]["before"] is not None)
                 ):
@@ -293,7 +293,7 @@ class Function(Artifact):
         stack_var_diff = func_diff["stack_vars"]
         for off, var in func2.stack_vars.items():
             # stack var differs, and the before is not nonexistent
-            if off in stack_var_diff and (
+            if off in stack_var_diff and stack_var_diff[off] and (
                     (stack_var_diff[off]["name"]["before"] is not None)
                     or (stack_var_diff[off]["type"]["before"] is not None)
             ):
