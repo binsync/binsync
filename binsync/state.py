@@ -500,7 +500,7 @@ class State:
         try:
             func = self.functions[func_addr]
         except KeyError:
-            return None
+            return {}
 
         return {
             addr: cmt for addr, cmt in self.comments.items() if addr <= func.addr + func.size

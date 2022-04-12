@@ -18,6 +18,7 @@
 # ----------------------------------------------------------------------------
 
 import re
+import threading
 from typing import Dict, List, Tuple, Optional, Iterable, Any
 import hashlib
 import logging
@@ -47,7 +48,7 @@ class BinjaBinSyncController(BinSyncController):
     def __init__(self):
         super(BinjaBinSyncController, self).__init__()
         self.bv = None
-        self.syncing = False
+        self.sync_lock = False
 
     def binary_hash(self) -> str:
         return hashlib.md5(self.bv.file.raw[:]).hexdigest()
@@ -90,74 +91,96 @@ class BinjaBinSyncController(BinSyncController):
         """
         Grab all relevant information from the specified user and fill the @bn_func.
         """
+        updates = False
         bn_func = self.bv.get_function_at(func_addr)
-        sync_func = self.pull_function(func_addr, user=user, state=state) # type: Function
+        sync_func = self.pull_function(func_addr, user=user) # type: Function
         if sync_func is None:
             return
 
-        self.syncing = True
-
+        self.sync_lock = True
         sync_func = self.generate_func_for_sync_level(sync_func)
 
-        # name
-        if sync_func.name and sync_func.name != bn_func.name:
-            bn_func.name = sync_func.name
+        #
+        # header
+        #
 
-        # comments
-        for addr, comment in self.pull_func_comments(bn_func.start, user=user, state=state).items():
-            bn_func.set_comment_at(addr, comment.comment)
+        if sync_func.header:
+            # func name
+            if sync_func.name and sync_func.name != bn_func.name:
+                bn_func.name = sync_func.name
+                updates |= True
 
+            # ret type
+            if sync_func.header.ret_type and \
+                    sync_func.header.ret_type != bn_func.return_type.get_string_before_name():
+                new_type, _ = self.bv.parse_type_string(sync_func.header.ret_type)
+                bn_func.return_type = new_type
+                updates |= True
+
+            # parameters
+            if sync_func.header.args:
+                prototype_tokens = [sync_func.header.ret_type] if sync_func.header.ret_type \
+                    else [bn_func.return_type.get_string_before_name()]
+
+                prototype_tokens.append("(")
+                for idx, func_arg in sync_func.header.args.items():
+                    prototype_tokens.append(func_arg.type_str)
+                    prototype_tokens.append(func_arg.name)
+                    prototype_tokens.append(",")
+
+                if prototype_tokens[-1] == ",":
+                    prototype_tokens[-1] = ")"
+
+                prototype_str = " ".join(prototype_tokens)
+                bn_prototype, _ = self.bv.parse_type_string(prototype_str)
+                bn_func.function_type = bn_prototype
+                updates |= True
+
+        #
         # stack variables
-        existing_stack_vars: Dict[int, Any] = dict((v.storage, v) for v in bn_func.stack_layout
-                                                  if v.source_type == VariableSourceType.StackVariableSourceType)
-        for offset, stack_var in self.pull_stack_variables(bn_func.start, user=user, state=state).items():
+        #
+
+
+        existing_stack_vars: Dict[int, Any] = {
+            v.storage: v for v in bn_func.stack_layout
+            if v.source_type == VariableSourceType.StackVariableSourceType
+        }
+
+        for offset, stack_var in self.pull_stack_variables(bn_func.start, user=user).items():
             bn_offset = stack_var.get_offset(StackOffsetType.BINJA)
             # skip if this variable already exists
-            type_, _ = bn_func.view.parse_type_string(stack_var.type)
-            if bn_offset in existing_stack_vars \
-                    and existing_stack_vars[bn_offset].name == stack_var.name \
-                    and existing_stack_vars[bn_offset].type == type_:
+            if bn_offset not in existing_stack_vars:
                 continue
+            
+            if existing_stack_vars[bn_offset].name != stack_var.name:
+                existing_stack_vars[bn_offset].name = stack_var.name
 
-            existing_stack_vars[bn_offset].name = stack_var.name
-            last_type = existing_stack_vars[bn_offset].type
+            type_, _ = bn_func.view.parse_type_string(stack_var.type)
+            if existing_stack_vars[bn_offset].type != type_:
+                existing_stack_vars[bn_offset].type = type_
 
             try:
-                bn_func.create_user_stack_var(bn_offset, last_type, stack_var.name)
-                bn_func.create_auto_stack_var(bn_offset, last_type, stack_var.name)
+                bn_func.create_user_stack_var(bn_offset, type_, stack_var.name)
+                bn_func.create_auto_stack_var(bn_offset, type_, stack_var.name)
             except Exception as e:
-                print(f"[BinSync]: Could not sync stack variable {bn_offset}: {e}")
+                l.warning(f"BinSync could not sync stack variable at offset {bn_offset}: {e}")
 
-        # ret type
-        if sync_func.header.ret_type and sync_func.header.ret_type != bn_func.return_type.get_string_before_name():
-            new_type, _ = self.bv.parse_type_string(sync_func.header.ret_type)
-            bn_func.return_type = new_type
+            updates |= True
 
-        # Parameters
-        if sync_func.header.args:
-            prototype_tokens = []
-            if sync_func.header.ret_type:
-                prototype_tokens.append(sync_func.header.ret_type)
-            else:
-                prototype_tokens.append(bn_func.return_type.get_string_before_name())
+        #
+        # comments
+        #
 
-            prototype_tokens.append("(")
-            for idx, func_arg in sync_func.header.args.items():
-                prototype_tokens.append(func_arg.type_str)
-                prototype_tokens.append(func_arg.name)
-                prototype_tokens.append(",")
-
-            if prototype_tokens[-1] == ",":
-                prototype_tokens[-1] = ")"
-
-            prototype_str = " ".join(prototype_tokens)
-            bn_prototype, _ = self.bv.parse_type_string(prototype_str)
-            bn_func.function_type = bn_prototype
+        for addr, comment in self.pull_func_comments(bn_func.start, user=user).items():
+            bn_func.set_comment_at(addr, comment.comment)
+            updates |= True
 
         bn_func.reanalyze()
-        print(f"[Binsync]: New data synced for \'{user}\' on function {hex(bn_func.start)}.")
-
-        self.syncing = False
+        if updates:
+            l.info(f"New data synced for \'{user}\' on function {hex(bn_func.start)}.")
+        else:
+            l.info(f"No new data was set either by failure or lack of differences.")
+        self.sync_lock = False
 
     #
     #   Pushers
@@ -176,20 +199,16 @@ class BinjaBinSyncController(BinSyncController):
 
     @init_checker
     @make_state_with_func
-    def push_stack_variable(self, bn_func: binaryninja.Function, stack_var: binaryninja.function.Variable,
-                            user=None, state=None):
-        if stack_var.source_type != VariableSourceType.StackVariableSourceType:
-            raise TypeError("Unexpected source type %s of the variable %r." % (stack_var.source_type, stack_var))
-
-        type_str = stack_var.type.get_string_before_name()
-        size = stack_var.type.width
-        v = StackVariable(stack_var.storage,
-                          StackOffsetType.BINJA,
-                          stack_var.name,
-                          type_str,
-                          size,
-                          bn_func.start)
-        state.set_stack_variable(v, stack_var.storage, bn_func.start)
+    def push_stack_variable(self, addr, stack_offset, name, type_str, size, user=None, state=None, api_set=False):
+        v = StackVariable(
+            stack_offset,
+            StackOffsetType.IDA,
+            name,
+            type_str,
+            size,
+            addr
+        )
+        state.set_stack_variable(v, stack_offset, addr)
 
     @init_checker
     @make_state

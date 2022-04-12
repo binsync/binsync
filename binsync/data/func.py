@@ -265,7 +265,8 @@ class Function(Artifact):
         merge_func = func1.copy()
 
         if merge_func.header is None:
-            merge_func.header = func2.header.copy()
+            merge_func.header = func2.header.copy() if func2.header else None
+
         else:
             header_diff = func_diff["header"]
             # name
@@ -278,16 +279,18 @@ class Function(Artifact):
             # header args
             args_diff = header_diff["args"]
             # TODO: correct this for when offset numbers differ (IDA sync Binja)
-            for off, var in func2.header.args.items():
-                # arg differs, and the before is not nonexistent
-                if off in args_diff and args_diff[off] and (
-                        (args_diff[off]["name"]["before"] is not None)
-                        or (args_diff[off]["type_str"]["before"] is not None)
-                ):
-                    continue
+            if func2.header:
+                for off, var in func2.header.args.items():
+                    # arg differs, and the before is not nonexistent
+                    if off in args_diff and args_diff[off] and (
+                            (args_diff[off]["name"]["before"] is not None)
+                            or (args_diff[off]["type_str"]["before"] is not None)
+                    ):
+                        continue
 
-                # stack var does not conflict
-                merge_func.header.args[off] = var.copy()
+                    # stack var does not conflict
+                    merge_func.header.args[off] = var.copy()
+
 
         # stack vars
         stack_var_diff = func_diff["stack_vars"]
