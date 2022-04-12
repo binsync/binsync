@@ -49,7 +49,7 @@ class StackVariable(Artifact):
         if offset_type == self.stack_offset_type:
             return self.stack_offset
         # conversion required
-        if self.stack_offset_type in (StackOffsetType.IDA, StackOffsetType.BINJA):
+        if self.stack_offset_type in (StackOffsetType.IDA, StackOffsetType.BINJA, StackOffsetType.ANGR):
             off = self.stack_offset
         else:
             raise NotImplementedError()

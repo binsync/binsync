@@ -81,13 +81,27 @@ class AngrBinSyncController(BinSyncController):
 
         sync_func = self.generate_func_for_sync_level(sync_func)
 
-        # ==== Function Name ==== #
-        if sync_func.name and sync_func.name != func.name:
-            func.name = sync_func.name
-            decompilation.cfunc.name = sync_func.name
-            decompilation.cfunc.demangled_name = sync_func.name
+        #
+        # Function Header
+        #
 
-        # ==== Comments ==== #
+        if sync_func.header:
+            if sync_func.name and sync_func.name != func.name:
+                func.name = sync_func.name
+                decompilation.cfunc.name = sync_func.name
+                decompilation.cfunc.demangled_name = sync_func.name
+
+            if sync_func.header.args:
+                for i, arg in sync_func.header.args.items():
+                    if i >= len(decompilation.cfunc.arg_list):
+                        break
+
+                    decompilation.cfunc.arg_list[i].variable.name = arg.name
+
+        #
+        # Comments
+        #
+
         for addr, cmt in self.pull_func_comments(func_addr).items():
             if not cmt or not cmt.comment:
                 continue
@@ -116,6 +130,12 @@ class AngrBinSyncController(BinSyncController):
 
     @init_checker
     @make_state_with_func
+    def push_function_header(self, addr, new_name, ret_type=None, args=None, user=None, state=None):
+        func_header = FunctionHeader(new_name, addr, ret_type=ret_type, args=args)
+        return state.set_function_header(func_header)
+
+    @init_checker
+    @make_state_with_func
     def push_stack_variable(self, func_addr, offset, name, type_, size_, user=None, state=None):
         sync_var = binsync.data.StackVariable(offset, StackOffsetType.ANGR, name, type_, size_, func_addr)
         return state.set_stack_variable(sync_var, offset, func_addr)
@@ -125,12 +145,6 @@ class AngrBinSyncController(BinSyncController):
     def push_comment(self, addr, cmt, decompiled, func_addr=None, user=None, state=None):
         sync_cmt = binsync.data.Comment(addr, cmt, decompiled=decompiled)
         return state.set_comment(sync_cmt)
-
-    @init_checker
-    @make_state_with_func
-    def push_function_header(self, func_addr, new_name, user=None, state=None):
-        func_header = binsync.data.FunctionHeader(new_name, func_addr)
-        return state.set_function_header(func_header)
 
     #
     #   Utils
@@ -177,6 +191,21 @@ class AngrBinSyncController(BinSyncController):
                 return var
 
         return None
+
+    def stack_var_type_str(self, decompilation, stack_var: angr.sim_variable.SimStackVariable):
+        try:
+            var_type = decompilation.cfunc.variable_manager.get_variable_type(stack_var)
+        except Exception:
+            return None
+
+        return var_type.c_repr()
+
+    def get_func_args(self, decompilation):
+        arg_info = {
+            i: (arg.variable, decompilation.cfunc.functy.args[i].c_repr())
+            for i, arg in enumerate(decompilation.cfunc.arg_list)
+        }
+        return arg_info
 
     @staticmethod
     def func_insn_addrs(func: angr.knowledge_plugins.Function):
