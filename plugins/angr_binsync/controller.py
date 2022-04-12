@@ -107,8 +107,12 @@ class AngrBinSyncController(BinSyncController):
                 continue
 
             if cmt.decompiled:
-                pos = decompilation.map_addr_to_pos.get_nearest_pos(addr)
-                corrected_addr = decompilation.map_pos_to_addr.get_node(pos).tags['ins_addr']
+                try:
+                    pos = decompilation.map_addr_to_pos.get_nearest_pos(addr)
+                    corrected_addr = decompilation.map_pos_to_addr.get_node(pos).tags['ins_addr']
+                except Exception:
+                    break
+
                 decompilation.stmt_comments[corrected_addr] = cmt.comment
             else:
                 self._instance.kb.comments[cmt.addr] = cmt.comment
