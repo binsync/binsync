@@ -266,6 +266,7 @@ class Function(Artifact):
 
         if merge_func.header is None:
             merge_func.header = func2.header.copy() if func2.header else None
+
         else:
             header_diff = func_diff["header"]
             # name
@@ -289,6 +290,7 @@ class Function(Artifact):
 
                     # stack var does not conflict
                     merge_func.header.args[off] = var.copy()
+
 
         # stack vars
         stack_var_diff = func_diff["stack_vars"]

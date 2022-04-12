@@ -140,6 +140,7 @@ class BinjaBinSyncController(BinSyncController):
         # stack variables
         #
 
+
         existing_stack_vars: Dict[int, Any] = {
             v.storage: v for v in bn_func.stack_layout
             if v.source_type == VariableSourceType.StackVariableSourceType
