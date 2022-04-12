@@ -1,3 +1,5 @@
+import threading
+
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtCore import Qt
 from binaryninjaui import (
@@ -9,7 +11,7 @@ from binaryninjaui import (
     Menu,
 )
 import binaryninja
-from binaryninja import PluginCommand, BinaryView
+from binaryninja import PluginCommand, BinaryView, SymbolType
 from binaryninja.interaction import show_message_box
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourceType
 from binaryninja.binaryview import BinaryDataNotification
@@ -17,6 +19,7 @@ from binaryninja.binaryview import BinaryDataNotification
 from collections import defaultdict
 import logging
 
+import binsync
 from binsync.common.ui import set_ui_version
 set_ui_version("PySide6")
 from binsync.common.ui.config_dialog import SyncConfig
@@ -64,18 +67,53 @@ def instance():
 
 
 def conv_func_binja_to_binsync(binja_func):
-    args = {}
-    for i, parameter in enumerate(binja_func.parameter_vars):
-        args[i] = data.FunctionArgument(i, parameter.name, parameter.type.get_string_before_name(), 0)
 
-    sync_header = data.FunctionHeader(binja_func.name,
-                                      binja_func.start,
-                                      ret_type=binja_func.return_type.get_string_before_name(),
-                                      args=args)
+    #
+    # header: name, ret type, args
+    #
+    
+    args = {
+        i: data.FunctionArgument(i, parameter.name, parameter.type.get_string_before_name(), parameter.type.width)
+        for i, parameter in enumerate(binja_func.parameter_vars)
+    }
 
-    sync_stack_vars = None
+    sync_header = data.FunctionHeader(
+        binja_func.name,
+        binja_func.start,
+        ret_type=binja_func.return_type.get_string_before_name(),
+        args=args
+    )
+
+    #
+    # stack vars
+    #
+
+    binja_stack_vars = {
+        v.storage: v for v in binja_func.stack_layout if v.source_type == VariableSourceType.StackVariableSourceType
+    }
+    sorted_stack = sorted(binja_func.stack_layout, key=lambda x: x.storage)
+    var_sizes = {}
+
+    for off, var in binja_stack_vars.items():
+        i = sorted_stack.index(var)
+        if i + 1 >= len(sorted_stack):
+            var_sizes[var] = 0
+        else:
+            var_sizes[var] = var.storage - sorted_stack[i].storage
+
+    bs_stack_vars = {
+        off: binsync.StackVariable(
+            off, binsync.StackOffsetType.BINJA,
+            var.name,
+            var.type.get_string_before_name(),
+            var_sizes[var],
+            binja_func.start
+        )
+        for off, var in binja_stack_vars.items()
+    }
+
     size = binja_func.address_ranges[0].end - binja_func.address_ranges[0].start
-    return data.Function(binja_func.start, size, header=sync_header, stack_vars=sync_stack_vars)
+    return data.Function(binja_func.start, size, header=sync_header, stack_vars=bs_stack_vars)
 
 
 class FunctionNotification(BinaryDataNotification):
@@ -86,26 +124,26 @@ class FunctionNotification(BinaryDataNotification):
         self._function_requested = None
         self._function_saved = None
 
-    def function_updated(self, view, func):
+    def function_updated(self, view, func_):
         # Service requested function only
-        if self._function_requested == func.start:
-            print(f"[BinSync] Servicing function: {func.start:#x}")
+        if self._function_requested == func_.start:
+            #print(f"[BinSync] Servicing function: {func_.start:#x}")
             # Found function clear request
             self._function_requested = None
+
             # Convert to binsync Function type for diffing
+            func = view.get_function_at(func_.start)
             bs_func = conv_func_binja_to_binsync(func)
 
-            # Check if name changed
-            if self._function_saved.header.name != bs_func.header.name:
-                before = self._function_saved.header.name
-                after = bs_func.header.name
-                print(f"[BinSync] Function {bs_func.addr:#x} detected name change from {before} to {after}")
+            #
+            # header
+            #
+            # note: function name done inside symbol update hook
+            #
 
             # Check return type
             if self._function_saved.header.ret_type != bs_func.header.ret_type:
                 self._controller.push_function_header(bs_func.addr, bs_func.header)
-                self._function_saved = None
-                return
 
             # Check arguments
             arg_changed = False
@@ -127,13 +165,40 @@ class FunctionNotification(BinaryDataNotification):
             if arg_changed:
                 self._controller.push_function_header(bs_func.addr, bs_func.header)
 
+            #
+            # stack vars
+            #
+
+            for off, var in self._function_saved.stack_vars.items():
+                if off in bs_func.stack_vars and var != bs_func.stack_vars[off]:
+                    new_var = bs_func.stack_vars[off]
+                    self._controller.push_stack_variable(
+                        bs_func.addr,
+                        off,
+                        new_var.name,
+                        new_var.type,
+                        new_var.size
+                    )
+
             self._function_saved = None
 
     def function_update_requested(self, view, func):
-        if not self._controller.syncing and self._function_requested is None:
-            print(f"[BinSync] Function requested {func.start:#x}")
+        if not self._controller.sync_lock and self._function_requested is None:
+            #print(f"[BinSync] Function requested {func.start:#x}")
             self._function_requested = func.start
             self._function_saved = conv_func_binja_to_binsync(func)
+    
+    def symbol_updated(self, view, sym):
+        if sym.type == SymbolType.FunctionSymbol:
+            func = view.get_function_at(sym.address)
+            bs_func = conv_func_binja_to_binsync(func)
+            self._controller.push_function_header(
+                sym.address,
+                data.FunctionHeader(sym.name, sym.address, ret_type=bs_func.header.ret_type, args=bs_func.header.args)
+            )
+
+        elif sym.type == SymbolType.DataSymbol:
+            pass
 
 
 class DataNotification(BinaryDataNotification):
@@ -199,7 +264,7 @@ class BinjaPlugin:
         )
 
     def _init_bv_dependencies(self, bv):
-        print(f"[BinSync] Starting function hook")
+        l.debug(f"Starting function hook")
         start_function_monitor(bv, self.controllers[bv])
         #Creates to much noise removing for time being
         #print(f"[BinSync] Starting data hook")
