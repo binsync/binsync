@@ -47,7 +47,7 @@ def pip_install_binsync(python_path):
     # just in case...
     location = subprocess.run(["which", "python3"], stdout=subprocess.PIPE)
     python_path = location.stdout.strip()
-    subprocess.run([python_path.decode()] + "-m pip install binsync".split(" "))
+    subprocess.run([python_path.decode()] + "-m pip install git+https://github.com/angr/binsync".split(" "))
 
 
 def install():
