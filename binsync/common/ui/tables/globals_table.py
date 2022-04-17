@@ -3,6 +3,7 @@ import logging
 import re
 
 from .. import ui_version
+
 if ui_version == "PySide2":
     from PySide2.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView, QMenu
     from PySide2.QtCore import Qt
@@ -19,6 +20,7 @@ from .... import State
 from ....data import Struct
 
 l = logging.getLogger(__name__)
+
 
 class QGlobalItem:
     def __init__(self, name, type_, user, last_push):
@@ -51,7 +53,6 @@ class QGlobalItem:
 
 
 class QGlobalsTable(QTableWidget):
-
     HEADER = [
         'Name',
         'Type',
@@ -96,9 +97,14 @@ class QGlobalsTable(QTableWidget):
 
         # create a nested menu
         selected_row = self.rowAt(event.pos().y())
-        global_name = self.item(selected_row, 0).text()
-        global_type = self.item(selected_row, 1).text()
-        user_name = self.item(selected_row, 2).text()
+        item0 = self.item(selected_row, 0)
+        item1 = self.item(selected_row, 1)
+        item2 = self.item(selected_row, 2)
+        if any(x is None for x in [item0, item1, item2]):
+            return
+        global_name = item0.text()
+        global_type = item1.text()
+        user_name = item2.text()
 
         if global_type == "Struct":
             filler_func = lambda: self.controller.fill_struct(global_name, user=user_name)
@@ -109,7 +115,7 @@ class QGlobalsTable(QTableWidget):
         elif global_type == "Enum":
             filler_func = lambda: self.controller.fill_enum(global_name, user=user_name)
         else:
-            l.warning("Invalid global table sync option")
+            l.warning(f"Invalid global table sync option: {global_type}")
             return
 
         menu.addAction("Sync", filler_func)
