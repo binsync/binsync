@@ -199,6 +199,27 @@ class IDABinSyncController(BinSyncController):
 
     @init_checker
     @make_ro_state
+    def fill_struct(self, struct_name, user=None, state=None):
+        data_changed = False
+
+        pulled_structs: List[Struct] = self.pull_structs(user=user, state=state)
+        if len(pulled_structs) <= 0:
+            _l.info(f"User {user} has no structs to sync!")
+            return 0
+
+        for struct in pulled_structs:
+            if struct.name == struct_name:
+                compat.set_ida_struct(struct)
+                compat.set_ida_struct_member_types(struct)
+                data_changed |= True
+                break
+        else:
+            _l.warning("Was not able to find the struct you requested in other users name")
+
+        return data_changed
+
+    @init_checker
+    @make_ro_state
     def fill_structs(self, user=None, state=None):
         """
         Grab all the structs from a specified user, then fill them locally
