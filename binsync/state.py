@@ -427,8 +427,7 @@ class State:
         if old_name is not None:
             try:
                 del self.structs[old_name]
-                # delete the repo toml for the struct
-                remove_data(self.client.repo.index, os.path.join('structs', f'{old_name}.toml'))
+                #remove_data(self.client.repo.index, os.path.join('structs', f'{old_name}.toml'))
             except KeyError:
                 pass
 

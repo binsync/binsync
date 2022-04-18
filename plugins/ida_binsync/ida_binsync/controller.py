@@ -209,13 +209,17 @@ class IDABinSyncController(BinSyncController):
 
         for struct in pulled_structs:
             if struct.name == struct_name:
-                compat.set_ida_struct(struct)
-                compat.set_ida_struct_member_types(struct)
+                compat.set_ida_struct(struct, self)
+                compat.set_ida_struct_member_types(struct, self)
                 data_changed |= True
                 break
         else:
             _l.warning("Was not able to find the struct you requested in other users name")
 
+        if data_changed:
+            _l.info(f"New data synced for \'{user}\'.")
+        else:
+            _l.info(f"No new data was set either by failure or lack of differences.")
         return data_changed
 
     @init_checker
