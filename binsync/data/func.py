@@ -290,6 +290,7 @@ class Function(Artifact):
                 # stack var does not conflict
                 merge_func.header.args[off] = var.copy()
 
+
         # stack vars
         stack_var_diff = func_diff["stack_vars"]
         for off, var in func2.stack_vars.items():
