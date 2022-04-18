@@ -1,18 +1,18 @@
 import os
 import logging
+from typing import Optional
 
-from angrmanagement.ui.views import CodeView
-from angr.analyses.decompiler.structured_codegen import DummyStructuredCodeGenerator
-from angr import knowledge_plugins
-import angr
-import logging
-
-from binsync.common.controller import *
-from binsync.data import StackOffsetType, Function, FunctionHeader
+from binsync.common.controller import BinSyncController, init_checker, make_ro_state, make_state_with_func
+from binsync.data import StackOffsetType, FunctionHeader
 import binsync
+
+from angr.analyses.decompiler.structured_codegen import DummyStructuredCodeGenerator
+import angr
+from ...ui.views import CodeView
 
 
 l = logging.getLogger(__name__)
+
 
 class AngrBinSyncController(BinSyncController):
     """
@@ -22,7 +22,7 @@ class AngrBinSyncController(BinSyncController):
     """
 
     def __init__(self, workspace):
-        super(AngrBinSyncController, self).__init__()
+        super().__init__()
         self._workspace = workspace
         self._instance = workspace.instance
 
@@ -49,6 +49,7 @@ class AngrBinSyncController(BinSyncController):
     def binary_path(self) -> Optional[str]:
         try:
             return self._instance.project.loader.main_object.binary
+        # pylint: disable=broad-except
         except Exception:
             return None
 
@@ -110,6 +111,7 @@ class AngrBinSyncController(BinSyncController):
                 try:
                     pos = decompilation.map_addr_to_pos.get_nearest_pos(addr)
                     corrected_addr = decompilation.map_pos_to_addr.get_node(pos).tags['ins_addr']
+                # pylint: disable=broad-except
                 except Exception:
                     break
 
@@ -127,6 +129,7 @@ class AngrBinSyncController(BinSyncController):
 
         decompilation.regenerate_text()
         self.decompile_function(func, refresh_gui=True)
+        return True
 
     #
     #   Pushers
@@ -134,18 +137,21 @@ class AngrBinSyncController(BinSyncController):
 
     @init_checker
     @make_state_with_func
+    # pylint: disable=arguments-differ
     def push_function_header(self, addr, new_name, ret_type=None, args=None, user=None, state=None):
         func_header = FunctionHeader(new_name, addr, ret_type=ret_type, args=args)
         return state.set_function_header(func_header)
 
     @init_checker
     @make_state_with_func
+    # pylint: disable=arguments-differ
     def push_stack_variable(self, func_addr, offset, name, type_, size_, user=None, state=None):
         sync_var = binsync.data.StackVariable(offset, StackOffsetType.ANGR, name, type_, size_, func_addr)
         return state.set_stack_variable(sync_var, offset, func_addr)
 
     @init_checker
     @make_state_with_func
+    # pylint: disable=unused-argument,arguments-differ
     def push_comment(self, addr, cmt, decompiled, func_addr=None, user=None, state=None):
         sync_cmt = binsync.data.Comment(addr, cmt, decompiled=decompiled)
         return state.set_comment(sync_cmt)
@@ -196,15 +202,18 @@ class AngrBinSyncController(BinSyncController):
 
         return None
 
-    def stack_var_type_str(self, decompilation, stack_var: angr.sim_variable.SimStackVariable):
+    @staticmethod
+    def stack_var_type_str(decompilation, stack_var: angr.sim_variable.SimStackVariable):
         try:
             var_type = decompilation.cfunc.variable_manager.get_variable_type(stack_var)
+        # pylint: disable=broad-except
         except Exception:
             return None
 
         return var_type.c_repr()
 
-    def get_func_args(self, decompilation):
+    @staticmethod
+    def get_func_args(decompilation):
         arg_info = {
             i: (arg.variable, decompilation.cfunc.functy.args[i].c_repr())
             for i, arg in enumerate(decompilation.cfunc.arg_list)
