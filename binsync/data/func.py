@@ -266,33 +266,30 @@ class Function(Artifact):
 
         if merge_func.header is None:
             merge_func.header = func2.header.copy() if func2.header else None
+        elif func2.header is not None:
+            header_diff = func_diff["header"]
+            # name
+            if merge_func.name is None and func2.header.name:
+                merge_func.header.name = func2.name
 
-        else:
-
-            if func2.header:
-                header_diff = func_diff["header"]
-                # name
-                if merge_func.name is None and func2.header.name:
-                    merge_func.header.name = func2.name
-
-                # type_str
-                if merge_func.header.ret_type is None and func2.header.ret_type:
-                    merge_func.header.ret_type = func2.header.ret_type
+            # type_str
+            if merge_func.header.ret_type is None and func2.header.ret_type:
+                merge_func.header.ret_type = func2.header.ret_type
 
             # header args
-            if func2.header:
-                args_diff = header_diff["args"]
-                # TODO: correct this for when offset numbers differ (IDA sync Binja)
-                for off, var in func2.header.args.items():
-                    # arg differs, and the before is not nonexistent
-                    if off in args_diff and args_diff[off] and (
-                            ("name" in args_diff[off] and args_diff[off]["name"]["before"] is not None)
-                            or ("type_str" in args_diff[off] and args_diff[off]["type_str"]["before"] is not None)
-                    ):
-                        continue
+            args_diff = header_diff["args"]
+            # TODO: correct this for when offset numbers differ (IDA sync Binja)
+            for off, var in func2.header.args.items():
+                # arg differs, and the before is not nonexistent
+                if off in args_diff and args_diff[off] and (
+                        ("name" in args_diff[off] and args_diff[off]["name"]["before"] is not None)
+                        or ("type_str" in args_diff[off] and args_diff[off]["type_str"]["before"] is not None)
+                ):
+                    continue
 
-                    # stack var does not conflict
-                    merge_func.header.args[off] = var.copy()
+                # stack var does not conflict
+                merge_func.header.args[off] = var.copy()
+
 
         # stack vars
         stack_var_diff = func_diff["stack_vars"]

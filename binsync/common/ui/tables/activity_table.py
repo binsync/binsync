@@ -104,7 +104,10 @@ class QActivityTable(QTableWidget):
         menu.setObjectName("binsync_activity_table_context_menu")
 
         selected_row = self.rowAt(event.pos().y())
-        username = self.item(selected_row, 0).text()
+        item = self.item(selected_row, 0)
+        if item is None:
+            return
+        username = item.text()
         menu.addAction("Sync", lambda: self.controller.fill_function(self.item(selected_row, 1).data(Qt.UserRole), user=username))
 
         for_menu = menu.addMenu("Sync for...")
