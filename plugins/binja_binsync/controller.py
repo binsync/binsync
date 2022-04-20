@@ -19,6 +19,7 @@
 
 import re
 import threading
+import functools
 from typing import Dict, List, Tuple, Optional, Iterable, Any
 import hashlib
 import logging
@@ -30,8 +31,8 @@ from binaryninjaui import (
     UIActionHandler,
     Menu,
 )
-import binaryninja
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourceType
+from binaryninja.mainthread import execute_on_main_thread, is_main_thread
 
 
 from binsync.common.controller import *
@@ -39,6 +40,28 @@ from binsync.data import StackOffsetType, FunctionHeader
 import binsync
 
 l = logging.getLogger(__name__)
+
+#
+# Helpers
+#
+
+
+def background_and_wait(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        output = [None]
+
+        def thunk():
+            output[0] = func(*args, **kwargs)
+            return 1
+
+        thread = threading.Thread(target=thunk)
+        thread.start()
+        thread.join()
+
+        return output[0]
+    return wrapper
+
 
 #
 # Controller
@@ -85,15 +108,20 @@ class BinjaBinSyncController(BinSyncController):
 
         return func.highest_address - func.start
 
+    #
+    # Fillers
+    #
+
     @init_checker
     @make_ro_state
+    @background_and_wait
     def fill_function(self, func_addr, user=None, state=None):
         """
         Grab all relevant information from the specified user and fill the @bn_func.
         """
         updates = False
         bn_func = self.bv.get_function_at(func_addr)
-        sync_func = self.pull_function(func_addr, user=user) # type: Function
+        sync_func = self.pull_function(func_addr, user=user, state=state) # type: Function
         if sync_func is None:
             return
 
@@ -113,9 +141,17 @@ class BinjaBinSyncController(BinSyncController):
             # ret type
             if sync_func.header.ret_type and \
                     sync_func.header.ret_type != bn_func.return_type.get_string_before_name():
-                new_type, _ = self.bv.parse_type_string(sync_func.header.ret_type)
-                bn_func.return_type = new_type
-                updates |= True
+
+                valid_type = False
+                try:
+                    new_type, _ = self.bv.parse_type_string(sync_func.header.ret_type)
+                    valid_type = True
+                except Exception:
+                    pass
+
+                if valid_type:
+                    bn_func.return_type = new_type
+                    updates |= True
 
             # parameters
             if sync_func.header.args:
@@ -132,40 +168,54 @@ class BinjaBinSyncController(BinSyncController):
                     prototype_tokens[-1] = ")"
 
                 prototype_str = " ".join(prototype_tokens)
-                bn_prototype, _ = self.bv.parse_type_string(prototype_str)
-                bn_func.function_type = bn_prototype
-                updates |= True
+
+                valid_type = False
+                try:
+                    bn_prototype, _ = self.bv.parse_type_string(prototype_str)
+                    valid_type = True
+                except Exception:
+                    pass
+
+                if valid_type:
+                    bn_func.function_type = bn_prototype
+                    updates |= True
 
         #
         # stack variables
         #
-
 
         existing_stack_vars: Dict[int, Any] = {
             v.storage: v for v in bn_func.stack_layout
             if v.source_type == VariableSourceType.StackVariableSourceType
         }
 
-        for offset, stack_var in self.pull_stack_variables(bn_func.start, user=user).items():
+        for offset, stack_var in sync_func.stack_vars.items():
             bn_offset = stack_var.get_offset(StackOffsetType.BINJA)
             # skip if this variable already exists
             if bn_offset not in existing_stack_vars:
                 continue
-            
+
             if existing_stack_vars[bn_offset].name != stack_var.name:
                 existing_stack_vars[bn_offset].name = stack_var.name
 
-            type_, _ = bn_func.view.parse_type_string(stack_var.type)
-            if existing_stack_vars[bn_offset].type != type_:
-                existing_stack_vars[bn_offset].type = type_
-
+            valid_type = False
             try:
-                bn_func.create_user_stack_var(bn_offset, type_, stack_var.name)
-                bn_func.create_auto_stack_var(bn_offset, type_, stack_var.name)
-            except Exception as e:
-                l.warning(f"BinSync could not sync stack variable at offset {bn_offset}: {e}")
+                type_, _ = self.bv.parse_type_string(stack_var.type)
+                valid_type = True
+            except Exception:
+                pass
 
-            updates |= True
+            if valid_type:
+                if existing_stack_vars[bn_offset].type != type_:
+                    existing_stack_vars[bn_offset].type = type_
+
+                try:
+                    bn_func.create_user_stack_var(bn_offset, type_, stack_var.name)
+                    bn_func.create_auto_stack_var(bn_offset, type_, stack_var.name)
+                except Exception as e:
+                    l.warning(f"BinSync could not sync stack variable at offset {bn_offset}: {e}")
+
+                updates |= True
 
         #
         # comments
