@@ -66,11 +66,14 @@ class AngrBinSyncController(BinSyncController):
     def rebase_addr(self, addr, up=False):
         base_addr = self._instance.project.loader.main_object.mapped_base
         is_pie = self._instance.project.loader.main_object.pic
-        if up:
-            return addr + base_addr
 
-        if is_pie and addr > base_addr:
-            return addr - base_addr
+        if is_pie:
+            if up:
+                return addr + base_addr
+            elif addr > base_addr:
+                return addr - base_addr
+
+        return addr
 
 
     #
