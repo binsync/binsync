@@ -283,7 +283,7 @@ class Client:
                 with self.repo.git.custom_environment(**env):
                     self.repo.remotes[self.remote].pull()
                 self._last_pull_at = datetime.datetime.now()
-                l.info("Pull completed successfully at %s", self._last_pull_at)
+                l.debug("Pull completed successfully at %s", self._last_pull_at)
             except git.exc.GitCommandError as ex:
                 if print_error:
                     print("Failed to pull from remote \"%s\".\n"

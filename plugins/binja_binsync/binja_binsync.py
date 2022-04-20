@@ -143,7 +143,12 @@ class FunctionNotification(BinaryDataNotification):
 
             # Check return type
             if self._function_saved.header.ret_type != bs_func.header.ret_type:
-                self._controller.push_function_header(bs_func.addr, bs_func.header)
+                self._controller.make_controller_cmd(
+                    self._controller.push_function_header,
+                    bs_func.addr,
+                    bs_func.header
+                )
+                
 
             # Check arguments
             arg_changed = False
@@ -163,7 +168,11 @@ class FunctionNotification(BinaryDataNotification):
                     break
 
             if arg_changed:
-                self._controller.push_function_header(bs_func.addr, bs_func.header)
+                self._controller.make_controller_cmd(
+                    self._controller.push_function_header,
+                    bs_func.addr,
+                    bs_func.header
+                )
 
             #
             # stack vars
@@ -172,7 +181,8 @@ class FunctionNotification(BinaryDataNotification):
             for off, var in self._function_saved.stack_vars.items():
                 if off in bs_func.stack_vars and var != bs_func.stack_vars[off]:
                     new_var = bs_func.stack_vars[off]
-                    self._controller.push_stack_variable(
+                    self._controller.make_controller_cmd(
+                        self._controller.push_stack_variable,
                         bs_func.addr,
                         off,
                         new_var.name,
@@ -192,7 +202,8 @@ class FunctionNotification(BinaryDataNotification):
         if sym.type == SymbolType.FunctionSymbol:
             func = view.get_function_at(sym.address)
             bs_func = conv_func_binja_to_binsync(func)
-            self._controller.push_function_header(
+            self._controller.make_controller_cmd(
+                self._controller.push_function_header,
                 sym.address,
                 data.FunctionHeader(sym.name, sym.address, ret_type=bs_func.header.ret_type, args=bs_func.header.args)
             )
