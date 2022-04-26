@@ -122,7 +122,7 @@ class BinjaBinSyncController(BinSyncController):
         updates = False
         bn_func = self.bv.get_function_at(func_addr)
         sync_func = self.pull_function(func_addr, user=user, state=state) # type: Function
-        if sync_func is None:
+        if sync_func is None or bn_func is None:
             return
 
         self.sync_lock = True
