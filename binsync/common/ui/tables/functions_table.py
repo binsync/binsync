@@ -81,6 +81,8 @@ class QFunctionTable(QTableWidget):
 
         self.setSortingEnabled(True)
 
+        self.doubleClicked.connect(self._doubleclick_handler)
+
     def reload(self):
         self.setSortingEnabled(False)
         self.setRowCount(len(self.items))
@@ -145,3 +147,15 @@ class QFunctionTable(QTableWidget):
                 continue
 
             yield user.name
+
+    def _doubleclick_handler(self):
+        # Doubleclick only allows for a single item select so just take first one from list
+        row_idx = self.selectionModel().selectedIndexes()[0].row()
+        row = self.items[row_idx]
+        self.controller.goto_address(row.addr)
+
+        # Debug print remove before merge
+        print(f"Double clicked item at row: {row_idx}, address: {row.addr:#x}")
+
+
+
