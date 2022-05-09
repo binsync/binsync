@@ -236,6 +236,7 @@ class BinjaBinSyncController(BinSyncController):
 
         return updates
         self.sync_lock = False
+        return updates
 
     #
     #   Pushers

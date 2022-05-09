@@ -1,3 +1,4 @@
+import textwrap
 import traceback
 import os
 from typing import Optional, Dict
@@ -8,15 +9,15 @@ import logging
 from . import ui_version
 if ui_version == "PySide2":
     from PySide2.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QMessageBox, \
-        QFileDialog, QCheckBox, QGridLayout
+        QFileDialog, QCheckBox, QGridLayout, QInputDialog
     from PySide2.QtCore import QDir
 elif ui_version == "PySide6":
     from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QMessageBox, \
-        QFileDialog, QCheckBox, QGridLayout
+        QFileDialog, QCheckBox, QGridLayout, QInputDialog
     from PySide6.QtCore import QDir
 else:
     from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QMessageBox, \
-        QFileDialog, QCheckBox, QGridLayout
+        QFileDialog, QCheckBox, QGridLayout, QInputDialog
     from PyQt5.QtCore import QDir
 
 from ...client import ConnectionWarnings
@@ -33,7 +34,6 @@ class SyncConfig(QDialog):
     def __init__(self, controller, parent=None):
         super().__init__(parent)
         self.controller = controller
-
         self.setWindowTitle("Configure BinSync")
 
         self._main_layout = QVBoxLayout()
@@ -169,12 +169,22 @@ class SyncConfig(QDialog):
             traceback.print_exc()
             return
 
+        #
+        # controller is now successfully connected to a real BinSync client. Everything from this point
+        # onwards assumes that all normal client properties and functions work.
+        #
+
+        # warn user of anything that might look off
         self._parse_and_display_connection_warnings(connection_warnings)
         l.info(f"Client has connected to sync repo with user: {user}.")
 
+        # create and save config if possible
         saved_config = self.save_config()
         if saved_config:
-            l.info(f"Configuration config was saved to {saved_config}.")
+            l.debug(f"Configuration config was saved to {saved_config}.")
+
+        # attempt a magic sync
+        self.display_magic_sync_dialog()
 
         self.close()
 
@@ -205,6 +215,29 @@ class SyncConfig(QDialog):
     # Utils
     #
 
+    def display_magic_sync_dialog(self):
+        text = \
+            "Magic Sync is a one-time sync that attempts to sync non-conflicting data from all users\n" \
+            "on all functions, essentially a global knowledge merge. Would you like to preform this action?\n" \
+            "You may optionally select a user you would like prioritized for non-conflicting sync first.\n\n" \
+            "Preferred User:"
+
+        items = ["None"] + list(self.controller.usernames())
+        user, ok = QInputDialog.getItem(
+            self.parent(),
+            "Would you like to Magic Sync?",
+            text,
+            items,
+            0,
+            False
+        )
+
+        if not ok:
+            return
+
+        user = user if user != "None" else None
+        self.controller.magic_fill(preference_user=user)
+        
     def _get_config_path(self):
         binary_path = self.controller.binary_path()
         if not binary_path:
