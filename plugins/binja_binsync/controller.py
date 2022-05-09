@@ -231,6 +231,7 @@ class BinjaBinSyncController(BinSyncController):
         else:
             l.info(f"No new data was set either by failure or lack of differences.")
         self.sync_lock = False
+        return updates
 
     #
     #   Pushers
