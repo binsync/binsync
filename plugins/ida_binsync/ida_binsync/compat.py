@@ -602,4 +602,10 @@ def get_binary_path():
 
 @execute_ui
 def jumpto(addr):
+    """
+    Changes the pseudocode view to the function address provided.
+
+    @param addr: Address of function to jump to
+    @return:
+    """
     idaapi.jumpto(addr)
