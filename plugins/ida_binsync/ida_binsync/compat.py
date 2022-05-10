@@ -599,3 +599,13 @@ def get_ptr_size():
 @execute_read
 def get_binary_path():
     return idaapi.get_input_file_path()
+
+@execute_ui
+def jumpto(addr):
+    """
+    Changes the pseudocode view to the function address provided.
+
+    @param addr: Address of function to jump to
+    @return:
+    """
+    idaapi.jumpto(addr)

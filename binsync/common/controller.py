@@ -297,6 +297,15 @@ class BinSyncController:
         """
         raise NotImplementedError
 
+    def goto_address(self, func_addr) -> None:
+        """
+        Relocates decompiler display to provided address
+
+        @param func_addr:
+        @return:
+        """
+        raise NotImplementedError
+
     #
     # Fillers
     #

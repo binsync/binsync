@@ -193,6 +193,9 @@ class IDABinSyncController(BinSyncController):
     def get_func_size(self, func_addr) -> int:
         return compat.get_func_size(func_addr)
 
+    def goto_address(self, func_addr) -> None:
+        compat.jumpto(func_addr)
+
     #
     # IDA DataBase Fillers
     #
