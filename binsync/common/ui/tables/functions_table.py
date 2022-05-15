@@ -154,8 +154,5 @@ class QFunctionTable(QTableWidget):
         row = self.items[row_idx]
         self.controller.goto_address(row.addr)
 
-        # Debug print remove before merge
-        print(f"Double clicked item at row: {row_idx}, address: {row.addr:#x}")
-
 
 

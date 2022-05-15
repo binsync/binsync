@@ -1,5 +1,8 @@
 import datetime
 import logging
+
+from binsync.common.ui.tables.settings_panel import QUtilPanel
+
 import binsync.data
 
 from . import ui_version
@@ -85,11 +88,13 @@ class ControlPanel(QWidget):
         self._func_table = QFunctionTable(self.controller)
         self._global_table = QGlobalsTable(self.controller)
         self._activity_table = QActivityTable(self.controller)
+        self._utilities_panel = QUtilPanel(self.controller)
 
         self.tabView.addTab(self._ctx_table, "Context")
         self.tabView.addTab(self._func_table, "Functions")
         self.tabView.addTab(self._global_table, "Globals")
         self.tabView.addTab(self._activity_table, "Activity")
+        self.tabView.addTab(self._utilities_panel, "Utilities")
 
         self.tables.update({
             "context": self._ctx_table,
