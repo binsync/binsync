@@ -108,6 +108,9 @@ class BinjaBinSyncController(BinSyncController):
 
         return func.highest_address - func.start
 
+    def goto_address(self, func_addr) -> None:
+        self.bv.offset = func_addr
+
     #
     # Fillers
     #
