@@ -1,5 +1,6 @@
 import datetime
 import logging
+
 import binsync.data
 
 from . import ui_version
@@ -13,10 +14,11 @@ else:
     from PyQt5.QtWidgets import QVBoxLayout, QGroupBox, QWidget, QLabel, QTabWidget, QTableWidget, QStatusBar
     from PyQt5.QtCore import pyqtSignal as Signal
 
-from .tables.functions_table import QFunctionTable
-from .tables.activity_table import QActivityTable
-from .tables.ctx_table import QCTXTable
-from .tables.globals_table import QGlobalsTable
+from .panel_tabs.functions_table import QFunctionTable
+from .panel_tabs.activity_table import QActivityTable
+from .panel_tabs.ctx_table import QCTXTable
+from .panel_tabs.util_panel import QUtilPanel
+from .panel_tabs.globals_table import QGlobalsTable
 
 l = logging.getLogger(__name__)
 
@@ -77,19 +79,21 @@ class ControlPanel(QWidget):
         # control box
         control_layout = QVBoxLayout()
 
-        # tabs for tables
+        # tabs for panel_tabs
         self.tabView = QTabWidget()
 
-        # add tables to tabs
+        # add panel_tabs to tabs
         self._ctx_table = QCTXTable(self.controller)
         self._func_table = QFunctionTable(self.controller)
         self._global_table = QGlobalsTable(self.controller)
         self._activity_table = QActivityTable(self.controller)
+        self._utilities_panel = QUtilPanel(self.controller)
 
         self.tabView.addTab(self._ctx_table, "Context")
         self.tabView.addTab(self._func_table, "Functions")
         self.tabView.addTab(self._global_table, "Globals")
         self.tabView.addTab(self._activity_table, "Activity")
+        self.tabView.addTab(self._utilities_panel, "Utilities")
 
         self.tables.update({
             "context": self._ctx_table,

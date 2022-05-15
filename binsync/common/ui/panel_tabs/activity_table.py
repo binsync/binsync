@@ -1,6 +1,5 @@
 from typing import Dict
 import logging
-import importlib
 
 from .. import ui_version
 if ui_version == "PySide2":
@@ -20,19 +19,21 @@ from ....data import Function
 
 l = logging.getLogger(__name__)
 
-class QFunctionItem:
-    def __init__(self, addr, name, user, last_push):
-        self.addr = addr
-        self.name = name
+class QActivityItem:
+    def __init__(self, user, activity, last_push):
         self.user = user
+        self.activity = activity
         self.last_push = last_push
 
     def widgets(self):
-        # sort by int value
-        addr = QNumericItem(hex(self.addr))
-        addr.setData(Qt.UserRole, self.addr)
+        if isinstance(self.activity, int):
+            activity = QNumericItem(hex(self.activity))
+            activity.setData(Qt.UserRole, self.activity)
+        else:
+            activity = QNumericItem(self.activity)
+            # set to max number so its last
+            activity.setData(Qt.UserRole, -1)
 
-        name = QTableWidgetItem(self.name)
         user = QTableWidgetItem(self.user)
 
         # sort by unix value
@@ -40,9 +41,8 @@ class QFunctionItem:
         last_push.setData(Qt.UserRole, self.last_push)
 
         widgets = [
-            addr,
-            name,
             user,
+            activity,
             last_push
         ]
 
@@ -52,17 +52,24 @@ class QFunctionItem:
         return widgets
 
 
-class QFunctionTable(QTableWidget):
+class QActivityTable(QTableWidget):
+    """
+    The activity table shown in the Control Panel. This table is responsible for showing users information
+    that is relevant to other users activity. The main user wants to know what others are doing, and how
+    often they are doing it. This table should also allow users to sync from a user if they see them as
+    being very active.
+
+    TODO: refactor the below code to allow activity view to show any item, not just a function!
+    """
 
     HEADER = [
-        'Addr',
-        'Remote Name',
         'User',
+        'Activity',
         'Last Push'
     ]
 
     def __init__(self, controller: BinSyncController, parent=None):
-        super(QFunctionTable, self).__init__(parent)
+        super(QActivityTable, self).__init__(parent)
         self.controller = controller
         self.items = []
 
@@ -81,8 +88,6 @@ class QFunctionTable(QTableWidget):
 
         self.setSortingEnabled(True)
 
-        self.doubleClicked.connect(self._doubleclick_handler)
-
     def reload(self):
         self.setSortingEnabled(False)
         self.setRowCount(len(self.items))
@@ -96,26 +101,29 @@ class QFunctionTable(QTableWidget):
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
-        menu.setObjectName("binsync_function_table_context_menu")
+        menu.setObjectName("binsync_activity_table_context_menu")
 
         selected_row = self.rowAt(event.pos().y())
         item = self.item(selected_row, 0)
         if item is None:
             return
-        func_addr = item.data(Qt.UserRole)
-        menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=self.item(selected_row, 2).text()))
+        username = item.text()
+        menu.addAction("Sync", lambda: self.controller.fill_function(self.item(selected_row, 1).data(Qt.UserRole), user=username))
 
-        from_menu = menu.addMenu("Sync from...")
-        for username in self._get_valid_users_for_func(func_addr):
-            from_menu.addAction(username, lambda: self.controller.fill_function(func_addr, user=username))
+        menu.addAction("Sync-All", lambda: l.info(f"Sync-All Clicked for User: {username}"))
+
+        for_menu = menu.addMenu("Sync for...")
+        for func_addr_str in self._get_valid_funcs_for_user(username):
+            for_menu.addAction(func_addr_str, lambda: self.controller.fill_function(int(func_addr_str, 16), user=username))
 
         menu.popup(self.mapToGlobal(event.pos()))
 
     def update_table(self):
-        known_funcs = {}  # addr: (addr, name, user_name, push_time)
+        self.items = []
 
         # first check if any functions are unknown to the table
         for user in self.controller.users():
+            changed_funcs = {}
             state = self.controller.client.get_state(user=user.name)
             user_funcs: Dict[int, Function] = state.functions
 
@@ -127,35 +135,30 @@ class QFunctionTable(QTableWidget):
                     continue
 
                 # check if we already know about it
-                if func_addr in known_funcs:
+                if func_addr in changed_funcs:
                     # compare this users change time to the store change time
-                    if not func_change_time or func_change_time < known_funcs[func_addr][3]:
+                    if not func_change_time or func_change_time < changed_funcs[func_addr]:
                         continue
 
-                remote_func_name = sync_func.name if sync_func.name else ""
-                known_funcs[func_addr] = [func_addr, remote_func_name, user.name, func_change_time]
+                changed_funcs[func_addr] = func_change_time
 
-        self.items = [QFunctionItem(*row) for row in known_funcs.values()]
+            if len(changed_funcs) > 0:
+                most_recent_func = list(changed_funcs)[0]
+                last_state_change = state.last_push_time \
+                    if not state.last_push_time \
+                    else list(changed_funcs.values())[0]
+            else:
+                most_recent_func = ""
+                last_state_change = state.last_push_time
 
-    def _get_valid_users_for_func(self, func_addr):
-        for user in self.controller.users():
-            user_state: State = self.controller.client.get_state(user=user.name)
-            user_func = user_state.get_function(func_addr)
+            self.items.append(
+                QActivityItem(user.name, most_recent_func, last_state_change)
+            )
 
-            # function must be changed by this user
-            if not user_func or not user_func.last_change:
-                continue
+    def _get_valid_funcs_for_user(self, username):
+        user_state: State = self.controller.client.get_state(user=username)
+        func_addrs = [addr for addr in user_state.functions]
 
-            yield user.name
-
-    def _doubleclick_handler(self):
-        # Doubleclick only allows for a single item select so just take first one from list
-        row_idx = self.selectionModel().selectedIndexes()[0].row()
-        row = self.items[row_idx]
-        self.controller.goto_address(row.addr)
-
-        # Debug print remove before merge
-        print(f"Double clicked item at row: {row_idx}, address: {row.addr:#x}")
-
-
-
+        func_addrs.sort()
+        for func_addr in func_addrs:
+            yield hex(func_addr)
