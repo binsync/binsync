@@ -11,10 +11,11 @@ else:
     from PyQt5.QtWidgets import QWidget, QCheckBox, QVBoxLayout, QLabel, QComboBox, QHBoxLayout, QGroupBox, QPushButton
     from PyQt5.QtCore import Qt
 
-from ..utils import QNumericItem, friendly_datetime
 from ...controller import BinSyncController, SyncLevel
 
+
 l = logging.getLogger(__name__)
+
 
 class QUtilPanel(QWidget):
     def __init__(self, controller: BinSyncController, parent=None):
