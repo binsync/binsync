@@ -18,7 +18,7 @@ l = logging.getLogger(__name__)
 
 class QUtilPanel(QWidget):
     def __init__(self, controller: BinSyncController, parent=None):
-        super(QWidget, self).__init__(parent)
+        super().__init__(parent)
         self.controller = controller
         self._init_widgets()
 

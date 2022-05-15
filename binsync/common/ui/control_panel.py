@@ -1,8 +1,6 @@
 import datetime
 import logging
 
-from binsync.common.ui.tables.settings_panel import QUtilPanel
-
 import binsync.data
 
 from . import ui_version
@@ -19,6 +17,7 @@ else:
 from .tables.functions_table import QFunctionTable
 from .tables.activity_table import QActivityTable
 from .tables.ctx_table import QCTXTable
+from .tables.settings_panel import QUtilPanel
 from .tables.globals_table import QGlobalsTable
 
 l = logging.getLogger(__name__)
