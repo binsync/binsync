@@ -110,7 +110,7 @@ class QActivityTable(QTableWidget):
         username = item.text()
         menu.addAction("Sync", lambda: self.controller.fill_function(self.item(selected_row, 1).data(Qt.UserRole), user=username))
 
-        menu.addAction("Sync-All", lambda: l.info(f"Sync-All Clicked for User: {username}"))
+        menu.addAction("Sync-All", lambda: self.controller.fill_all(user=username))
 
         for_menu = menu.addMenu("Sync for...")
         for func_addr_str in self._get_valid_funcs_for_user(username):

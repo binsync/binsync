@@ -401,6 +401,8 @@ class BinSyncController:
     @init_checker
     @make_ro_state
     def fill_all(self, user=None, state=None):
+        _l.info(f"Filling all data from user {user}...")
+
         fillers = [
             self.fill_structs, self.fill_enums, self.fill_global_vars, self.fill_functions
         ]
@@ -410,6 +412,8 @@ class BinSyncController:
 
     @init_checker
     def magic_fill(self, preference_user=None):
+        _l.info(f"Staring a magic sync with a preference for {preference_user}")
+
         # re-order users for the prefered user to be at the front of the queue (if they exist)
         all_users = list(self.usernames())
         ordered_users = all_users if preference_user not in all_users \
