@@ -9,17 +9,18 @@ import logging
 from . import ui_version
 if ui_version == "PySide2":
     from PySide2.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QMessageBox, \
-        QFileDialog, QCheckBox, QGridLayout, QInputDialog
+        QFileDialog, QCheckBox, QGridLayout
     from PySide2.QtCore import QDir
 elif ui_version == "PySide6":
     from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QMessageBox, \
-        QFileDialog, QCheckBox, QGridLayout, QInputDialog
+        QFileDialog, QCheckBox, QGridLayout
     from PySide6.QtCore import QDir
 else:
     from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QMessageBox, \
-        QFileDialog, QCheckBox, QGridLayout, QInputDialog
+        QFileDialog, QCheckBox, QGridLayout
     from PyQt5.QtCore import QDir
 
+from .magic_sync_dialog import MagicSyncDialog
 from ...client import ConnectionWarnings
 
 l = logging.getLogger(__name__)
@@ -216,28 +217,14 @@ class SyncConfig(QDialog):
     #
 
     def display_magic_sync_dialog(self):
-        text = \
-            "Magic Sync is a one-time sync that attempts to sync non-conflicting data from all users\n" \
-            "on all functions, essentially a global knowledge merge. Would you like to preform this action?\n" \
-            "You may optionally select a user you would like prioritized for non-conflicting sync first.\n\n" \
-            "Preferred User:"
+        dialog = MagicSyncDialog(self.controller)
+        dialog.exec_()
 
-        items = ["None"] + list(self.controller.usernames())
-        user, ok = QInputDialog.getItem(
-            self.parent(),
-            "Would you like to Magic Sync?",
-            text,
-            items,
-            0,
-            False
-        )
-
-        if not ok:
+        if not dialog.should_sync:
             return
 
-        user = user if user != "None" else None
-        self.controller.magic_fill(preference_user=user)
-        
+        self.controller.magic_fill(preference_user=dialog.preferred_user)
+
     def _get_config_path(self):
         binary_path = self.controller.binary_path()
         if not binary_path:

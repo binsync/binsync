@@ -11,6 +11,7 @@ else:
     from PyQt5.QtWidgets import QWidget, QCheckBox, QVBoxLayout, QLabel, QComboBox, QHBoxLayout, QGroupBox, QPushButton
     from PyQt5.QtCore import Qt
 
+from ..magic_sync_dialog import MagicSyncDialog
 from ...controller import BinSyncController, SyncLevel
 
 
@@ -115,3 +116,11 @@ class QUtilPanel(QWidget):
         main_layout.addWidget(dev_options_group)
         self.setLayout(main_layout)
 
+    def _display_magic_sync_dialog(self):
+        dialog = MagicSyncDialog(self.controller)
+        dialog.exec_()
+
+        if not dialog.should_sync:
+            return
+
+        self.controller.magic_fill(preference_user=dialog.preferred_user)
