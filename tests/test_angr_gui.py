@@ -31,7 +31,7 @@ logging.disable(logging.CRITICAL)
 #
 
 def config_and_connect(binsync_plugin, username, sync_dir_path):
-    config = SyncConfig(binsync_plugin.controller)
+    config = SyncConfig(binsync_plugin.controller, open_magic_sync=False)
     config._user_edit.setText("")
     config._repo_edit.setText("")
     QTest.keyClicks(config._user_edit, username)

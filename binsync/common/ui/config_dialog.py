@@ -32,9 +32,10 @@ class SyncConfig(QDialog):
     - cloning a remote
     - using a locally pulled remote repo
     """
-    def __init__(self, controller, parent=None):
+    def __init__(self, controller, open_magic_sync=True, parent=None):
         super().__init__(parent)
         self.controller = controller
+        self._open_magic_sync = open_magic_sync
         self.setWindowTitle("Configure BinSync")
 
         self._main_layout = QVBoxLayout()
@@ -217,6 +218,9 @@ class SyncConfig(QDialog):
     #
 
     def display_magic_sync_dialog(self):
+        if not self._open_magic_sync:
+            return
+
         dialog = MagicSyncDialog(self.controller)
         dialog.exec_()
 
