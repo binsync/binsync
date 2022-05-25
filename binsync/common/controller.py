@@ -258,6 +258,10 @@ class BinSyncController:
     def users(self) -> Iterable[User]:
         return self.client.users()
 
+    def usernames(self) -> Iterable[str]:
+        for user in self.users():
+            yield user.name
+
     #
     # Override Mandatory Functions
     #
@@ -350,6 +354,14 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
+    def fill_global_vars(self, user=None, state=None):
+        for off, gvar in state.global_vars.items():
+            self.fill_global_var(off, user=user, state=state)
+
+        return True
+
+    @init_checker
+    @make_ro_state
     def fill_enum(self, enum_name, user=None, state=None):
         """
         Grab an enum and fill it locally
@@ -378,6 +390,25 @@ class BinSyncController:
         Grab all relevant information from the specified user and fill the @func_adrr.
         """
         raise NotImplementedError
+
+    def fill_functions(self, user=None, state=None):
+        change = False
+        for addr, func in state.functions.items():
+            change |= self.fill_function(addr, user=user, state=state)
+
+        return change
+
+    @init_checker
+    @make_ro_state
+    def fill_all(self, user=None, state=None):
+        _l.info(f"Filling all data from user {user}...")
+
+        fillers = [
+            self.fill_structs, self.fill_enums, self.fill_global_vars, self.fill_functions
+        ]
+
+        for filler in fillers:
+            filler(user=user, state=state)
 
     #
     # Pushers
@@ -419,7 +450,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def pull_function(self, func_addr, user=None, state=None) -> Function:
+    def pull_function(self, func_addr, user=None, state=None) -> Optional[Function]:
         if not func_addr:
             return None
 

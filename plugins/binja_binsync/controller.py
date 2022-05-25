@@ -233,6 +233,8 @@ class BinjaBinSyncController(BinSyncController):
             l.info(f"New data synced for \'{user}\' on function {hex(bn_func.start)}.")
         else:
             l.info(f"No new data was set either by failure or lack of differences.")
+
+        return updates
         self.sync_lock = False
 
     #

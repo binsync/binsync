@@ -390,6 +390,8 @@ class IDABinSyncController(BinSyncController):
         else:
             _l.info(f"No new data was set either by failure or lack of differences.")
 
+        return data_changed
+
     #
     #   Pullers
     #

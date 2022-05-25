@@ -8,3 +8,5 @@ del logging
 from .state import State, ArtifactType
 from .client import Client, StateContext, ConnectionWarnings
 from .data import *
+
+VERSION = "2.3.0"
