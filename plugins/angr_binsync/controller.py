@@ -75,7 +75,6 @@ class AngrBinSyncController(BinSyncController):
 
         return addr
 
-
     #
     # Display Fillers
     #
