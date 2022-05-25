@@ -533,7 +533,7 @@ def set_global_var_name(var_addr, name):
 #
 
 @execute_ui
-def refresh_pseudocode_view(ea):
+def refresh_pseudocode_view(ea, set_focus=True):
     """Refreshes the pseudocode view in IDA."""
     names = ["Pseudocode-%c" % chr(ord("A") + i) for i in range(5)]
     for name in names:
@@ -546,6 +546,7 @@ def refresh_pseudocode_view(ea):
             func = ida_funcs.get_func(func_ea)
             if ida_funcs.func_contains(func, ea):
                 vu.refresh_view(True)
+                ida_kernwin.activate_widget(widget, set_focus)
 
 
 class IDAViewCTX:

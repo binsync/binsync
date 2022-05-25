@@ -299,7 +299,7 @@ class IDABinSyncController(BinSyncController):
         # make function prepared for either merging or not
         binsync_func = self.generate_func_for_sync_level(binsync_func)
 
-        ida_code_view = ida_hexrays.open_pseudocode(ida_func.start_ea, 0)
+        ida_code_view = ida_hexrays.open_pseudocode(ida_func.start_ea, ida_hexrays.OPF_REUSE_ACTIVE)
         # check if a header has been set for the func
         if binsync_func.header:
             updated_header = False

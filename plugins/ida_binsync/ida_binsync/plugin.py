@@ -13,7 +13,8 @@ from PyQt5.QtCore import QObject
 import idaapi
 import ida_kernwin
 import idc
-import ida_idp
+import ida_hexrays
+import idautils
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
 
 from binsync.common.ui import set_ui_version
@@ -144,11 +145,22 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         wrapper.widget.visible = True
 
         # Dock it
-        for target in ["IDA View-A", "Pseudocode-A"]:
+        target = "Pseudocode-A"
+        dwidget = idaapi.find_widget(target)
+        if not dwidget:
+            func_addr = next(idautils.Functions())
+            ida_hexrays.open_pseudocode(func_addr, 0)
             dwidget = idaapi.find_widget(target)
-            if dwidget:
-                idaapi.set_dock_pos(ControlPanelViewWrapper.NAME, target, idaapi.DP_RIGHT)
-                break
+
+            if not dwidget:
+                target = "IDA View-A"
+
+        idaapi.set_dock_pos(ControlPanelViewWrapper.NAME, target, idaapi.DP_RIGHT)
+        #for target in ["IDA View-A", "Pseudocode-A"]:
+        #    dwidget = idaapi.find_widget(target)
+        #    if dwidget:
+        #        idaapi.set_dock_pos(ControlPanelViewWrapper.NAME, target, idaapi.DP_RIGHT)
+        #        break
 
     def install_actions(self):
         self.install_control_panel_action()
