@@ -73,7 +73,7 @@ cp binsync_example_repo/fauxware .
 
 2. Open the fauxware binary in your decompiler, verify it has loaded in the decompiler terminal
 ```
-[Binsync] v2.2.0 loaded
+[Binsync] 2.3.0 loaded
 ```
 
 If it does not show, it means the plugin is not in the plugins folder. 

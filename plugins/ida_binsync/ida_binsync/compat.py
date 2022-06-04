@@ -383,7 +383,7 @@ def get_func_stack_var_info(func_addr) -> typing.Dict[int, IDAStackVar]:
     try:
         decompilation = ida_hexrays.decompile(func_addr)
     except ida_hexrays.DecompilationFailure:
-        print("[BinSync]: Decompiling too many functions too fast! Slow down and try that operation again.")
+        l.debug("Decompiling too many functions too fast! Slow down and try that operation again.")
         return {}
 
     stack_var_info = {}

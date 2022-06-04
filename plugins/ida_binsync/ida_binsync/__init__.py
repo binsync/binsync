@@ -1,6 +1,7 @@
 import os
+from binsync import VERSION as _VERSION
 
-VERSION = "v2.2.0"
+VERSION = _VERSION
 PLUGIN_DIR = os.path.dirname(os.path.realpath(__file__))
 IDA_DIR = os.path.abspath(os.path.join(PLUGIN_DIR, "..", ".."))
 UI_DIR = os.path.join(PLUGIN_DIR, "ui")
