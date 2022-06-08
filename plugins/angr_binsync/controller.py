@@ -252,3 +252,6 @@ class AngrBinSyncController(BinSyncController):
             func_addr = None
 
         return func_addr
+    
+    def goto_address(self, addr):
+        self._workspace.jump_to(addr)
