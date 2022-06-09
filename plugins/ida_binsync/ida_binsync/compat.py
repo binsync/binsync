@@ -533,6 +533,37 @@ def set_global_var_name(var_addr, name):
 #
 
 @execute_ui
+def acquire_pseudocode_vdui(addr):
+    """
+    Acquires a IDA HexRays vdui pointer, which is a pointer to a pseudocode view that contains
+    the cfunc which describes the code on the screen. Using this function optimizes the switching of code views
+    by using in-place switching if a view is already present.
+
+    @param addr:
+    @return:
+    """
+    func = ida_funcs.get_func(addr)
+    if not func:
+        return None
+
+    names = ["Pseudocode-%c" % chr(ord("A") + i) for i in range(5)]
+    for name in names:
+        widget = ida_kernwin.find_widget(name)
+        if not widget:
+            continue
+
+        vu = ida_hexrays.get_widget_vdui(widget)
+    else:
+        vu = ida_hexrays.open_pseudocode(func.start_ea, False)
+
+    if func.start_ea != vu.cfunc.entry_ea:
+        target_cfunc = idaapi.decompile(func.start_ea)
+        vu.switch_to(target_cfunc, False)
+
+    return vu
+
+
+@execute_ui
 def refresh_pseudocode_view(ea, set_focus=True):
     """Refreshes the pseudocode view in IDA."""
     names = ["Pseudocode-%c" % chr(ord("A") + i) for i in range(5)]
