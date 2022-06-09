@@ -1,8 +1,7 @@
 import os
 import logging
-from typing import Optional, Dict
+from typing import Optional
 
-from binsync import Function, StackVariable, Comment
 from binsync.common.controller import BinSyncController, init_checker, make_ro_state, make_state_with_func
 from binsync.data import StackOffsetType, FunctionHeader
 import binsync
@@ -254,4 +253,4 @@ class AngrBinSyncController(BinSyncController):
         return func_addr
     
     def goto_address(self, addr):
-        self._workspace.jump_to(addr)
+        self._workspace.jump_to(self.rebase_addr(addr, up=True))
