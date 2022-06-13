@@ -145,7 +145,7 @@ class BinSyncController:
 
         # command locks
         self.queue_lock = threading.Lock()
-        self.cmd_queue = OrderedDict()
+        self.cmd_queue = list()
 
         # create a pulling thread, but start on connection
         self.updater_thread = threading.Thread(target=self.updater_routine)
@@ -156,21 +156,29 @@ class BinSyncController:
 
     def make_controller_cmd(self, cmd_func, *args, **kwargs):
         with self.queue_lock:
-            self.cmd_queue[time.time()] = (cmd_func, args, kwargs)
+            self.cmd_queue.append((cmd_func, args, kwargs))
 
-    def _eval_cmd_queue(self):
-        cmd = None
-        with self.queue_lock:
-            if len(self.cmd_queue) > 0:
-                # pop the first command from the queue
-                cmd = self.cmd_queue.popitem(last=False)[1]
-
+    def _eval_cmd(self, cmd):
         # parse the command if present
         if not cmd:
             return
 
         func, f_args, f_kargs = cmd[:]
+        _l.info(f"Running job {func} now!")
         func(*f_args, **f_kargs)
+
+    def _eval_cmd_queue(self):
+        with self.queue_lock:
+            if not self.cmd_queue:
+                return
+
+            job_count = 1
+            jobs = [
+                self.cmd_queue.pop(0) for _ in range(job_count)
+            ]
+
+        for job in jobs:
+            self._eval_cmd(job)
 
     def updater_routine(self):
         while True:
@@ -400,12 +408,14 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_all(self, user=None, state=None):
+    def fill_all(self, user=None, state=None, no_functions=False):
         _l.info(f"Filling all data from user {user}...")
 
         fillers = [
-            self.fill_structs, self.fill_enums, self.fill_global_vars, self.fill_functions
+            self.fill_structs, self.fill_enums, self.fill_global_vars
         ]
+        if not no_functions:
+            fillers.append(self.fill_functions)
 
         for filler in fillers:
             filler(user=user, state=state)
@@ -419,9 +429,14 @@ class BinSyncController:
         ordered_users = all_users if preference_user not in all_users \
             else [preference_user] + [u for u in all_users if u != preference_user]
 
-        # copy the entire state from every user in the database
-        for user in ordered_users:
-            self.fill_all(user=user)
+        # copy the global data, but not functions yet
+        #for user in ordered_users:
+        #    self.fill_all(user=user, no_functions=False)
+
+        # copy each user's functions, minimizing window changing
+        for func_addr in self.get_all_changed_funcs():
+            for user in ordered_users:
+                self.fill_function(func_addr, user=user)
 
     #
     # Pushers
@@ -594,3 +609,12 @@ class BinSyncController:
         if not sync_data:
             msg = "Generic Update"
         return msg
+
+    def get_all_changed_funcs(self):
+        known_funcs = set()
+        for username in self.usernames():
+            state = self.client.get_state(username)
+            for func_addr in state.functions:
+                known_funcs.add(func_addr)
+
+        return known_funcs

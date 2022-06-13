@@ -553,6 +553,7 @@ def acquire_pseudocode_vdui(addr):
             continue
 
         vu = ida_hexrays.get_widget_vdui(widget)
+        break
     else:
         vu = ida_hexrays.open_pseudocode(func.start_ea, False)
 

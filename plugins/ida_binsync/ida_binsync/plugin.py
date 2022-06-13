@@ -21,6 +21,7 @@ from binsync.common.ui import set_ui_version
 set_ui_version("PyQt5")
 from binsync.common.ui.config_dialog import SyncConfig
 from binsync.common.ui.control_panel import ControlPanel
+from binsync.common.ui.magic_sync_dialog import display_magic_sync_dialog
 
 from .hooks import MasterHook
 from . import IDA_DIR, VERSION
@@ -124,12 +125,17 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         dialog = SyncConfig(controller)
         dialog.exec_()
 
-        if controller.check_client():
-            if not self.hooks_started:
-                self.action_hooks.hook()
-                self.view_hook.hook()
+        if not controller.check_client():
+            return
 
-            self.open_control_panel()
+        if not self.hooks_started:
+            self.action_hooks.hook()
+            self.view_hook.hook()
+
+        self.open_control_panel()
+
+        if dialog.open_magic_sync:
+            display_magic_sync_dialog(controller)
 
     def open_control_panel(self):
         """

@@ -157,12 +157,12 @@ class IDABinSyncController(BinSyncController):
         with self.api_lock:
             self.api_count = 0
 
-    def make_controller_cmd(self, cmd_func, *args, **kwargs):
-        with self.queue_lock:
-            if cmd_func == self.push_struct:
-                self.cmd_queue[args[0].name] = (cmd_func, args, kwargs)
-            else:
-                self.cmd_queue[time.time()] = (cmd_func, args, kwargs)
+    #def make_controller_cmd(self, cmd_func, *args, **kwargs):
+    #    with self.queue_lock:
+    #        if cmd_func == self.push_struct:
+    #            self.cmd_queue[args[0].name] = (cmd_func, args, kwargs)
+    #        else:
+    #            self.cmd_queue[time.time()] = (cmd_func, args, kwargs)
 
     #
     # Controller Interaction
@@ -367,6 +367,7 @@ class IDABinSyncController(BinSyncController):
                         # its possible the type is just a custom type from the same user
                         # TODO: make it possible to sync a single struct
                         if self._typestr_in_state_structs(stack_var.type, user=user, state=state):
+                            _l.info(f"Importing structs from user {user}")
                             data_changed |= self.fill_structs(user=user, state=state)
 
                         ida_type = compat.convert_type_str_to_ida_type(stack_var.type)
@@ -496,12 +497,6 @@ class IDABinSyncController(BinSyncController):
     #
     # Utils
     #
-
-    def _update_function_name_if_none(self, func_addr, state=None, user=None):
-        curr_name = compat.get_func_name(func_addr)
-        if state.functions[func_addr].name is None or state.functions[func_addr].name == "":
-            state.functions[func_addr].name = curr_name
-            state.save()
 
     @init_checker
     def _typestr_in_state_structs(self, type_str, user=None, state=None):

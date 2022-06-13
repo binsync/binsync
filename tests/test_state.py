@@ -45,7 +45,7 @@ class TestState(unittest.TestCase):
 
             # load the state
             state_tree = client.get_tree(state.user)
-            new_state = binsync.State.parse(state_tree)
+            new_state = binsync.State.parse(state_tree, client=client)
 
             self.assertEqual(new_state.user, "user0")
             self.assertEqual(new_state.version, 1)

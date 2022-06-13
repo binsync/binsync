@@ -72,3 +72,13 @@ class MagicSyncDialog(QDialog):
     def _on_no_clicked(self):
         self.should_sync = False
         self.close()
+
+
+def display_magic_sync_dialog(controller):
+    dialog = MagicSyncDialog(controller)
+    dialog.exec_()
+
+    if not dialog.should_sync:
+        return
+
+    controller.magic_fill(preference_user=dialog.preferred_user)

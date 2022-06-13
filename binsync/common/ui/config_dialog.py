@@ -20,7 +20,6 @@ else:
         QFileDialog, QCheckBox, QGridLayout
     from PyQt5.QtCore import QDir
 
-from .magic_sync_dialog import MagicSyncDialog
 from ...client import ConnectionWarnings
 
 l = logging.getLogger(__name__)
@@ -35,7 +34,7 @@ class SyncConfig(QDialog):
     def __init__(self, controller, open_magic_sync=True, parent=None):
         super().__init__(parent)
         self.controller = controller
-        self._open_magic_sync = open_magic_sync
+        self.open_magic_sync = open_magic_sync
         self.setWindowTitle("Configure BinSync")
 
         self._main_layout = QVBoxLayout()
@@ -185,9 +184,6 @@ class SyncConfig(QDialog):
         if saved_config:
             l.debug(f"Configuration config was saved to {saved_config}.")
 
-        # attempt a magic sync
-        self.display_magic_sync_dialog()
-
         self.close()
 
     def _on_repo_clicked(self):
@@ -216,18 +212,6 @@ class SyncConfig(QDialog):
     #
     # Utils
     #
-
-    def display_magic_sync_dialog(self):
-        if not self._open_magic_sync:
-            return
-
-        dialog = MagicSyncDialog(self.controller)
-        dialog.exec_()
-
-        if not dialog.should_sync:
-            return
-
-        self.controller.magic_fill(preference_user=dialog.preferred_user)
 
     def _get_config_path(self):
         binary_path = self.controller.binary_path()

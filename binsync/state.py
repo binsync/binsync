@@ -107,39 +107,6 @@ def update_last_change(f):
     return _update_last_change
 
 
-def list_files_in_tree(base_tree: git.Tree):
-    """
-    Lists all the files in a repo at a given tree
-
-    :param commit: A gitpython Tree object
-    """
-
-    file_list = []
-    stack = [base_tree]
-    while len(stack) > 0:
-        tree = stack.pop()
-        # enumerate blobs (files) at this level
-        for b in tree.blobs:
-            file_list.append(b.path)
-        for subtree in tree.trees:
-            stack.append(subtree)
-
-    return file_list
-
-
-def add_data(index: git.IndexFile, path: str, data: bytes):
-    fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
-    pathlib.Path(fullpath).parent.mkdir(parents=True, exist_ok=True)
-    with open(fullpath, 'wb') as fp:
-        fp.write(data)
-    index.add([fullpath])
-
-
-def remove_data(index: git.IndexFile, path: str):
-    fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
-    pathlib.Path(fullpath).parent.mkdir(parents=True, exist_ok=True)
-    index.remove([fullpath], working_tree=True)
-
 
 class State:
     """
@@ -199,7 +166,7 @@ class State:
             "last_push_artifact": self.last_push_artifact,
             "last_push_artifact_type": self.last_push_artifact_type,
         }
-        add_data(index, 'metadata.toml', toml.dumps(d).encode())
+        self.client.add_data(index, 'metadata.toml', toml.dumps(d).encode())
 
     def dump(self, index: git.IndexFile):
         # dump metadata
@@ -208,24 +175,24 @@ class State:
         # dump functions, one file per function in ./functions/
         for addr, func in self.functions.items():
             path = os.path.join('functions', "%08x.toml" % addr)
-            add_data(index, path, func.dump().encode())
+            self.client.add_data(index, path, func.dump().encode())
 
         # dump structs, one file per struct in ./structs/
         for s_name, struct in self.structs.items():
             path = os.path.join('structs', f"{s_name}.toml")
-            add_data(index, path, struct.dump().encode())
+            self.client.add_data(index, path, struct.dump().encode())
 
         # dump comments
-        add_data(index, 'comments.toml', toml.dumps(Comment.dump_many(self.comments)).encode())
+        self.client.add_data(index, 'comments.toml', toml.dumps(Comment.dump_many(self.comments)).encode())
 
         # dump patches
-        add_data(index, 'patches.toml', toml.dumps(Patch.dump_many(self.patches)).encode())
+        self.client.add_data(index, 'patches.toml', toml.dumps(Patch.dump_many(self.patches)).encode())
 
         # dump global vars
-        add_data(index, 'global_vars.toml', toml.dumps(GlobalVariable.dump_many(self.global_vars)).encode())
+        self.client.add_data(index, 'global_vars.toml', toml.dumps(GlobalVariable.dump_many(self.global_vars)).encode())
 
         # dump enums
-        add_data(index, 'enums.toml', toml.dumps(Enum.dump_many(self.enums)).encode())
+        self.client.add_data(index, 'enums.toml', toml.dumps(Enum.dump_many(self.enums)).encode())
 
     @staticmethod
     def load_metadata(tree):
@@ -246,7 +213,7 @@ class State:
         s.version = version if version is not None else metadata["version"]
 
         # load functions
-        tree_files = list_files_in_tree(tree)
+        tree_files = client.list_files_in_tree(tree)
         function_files = [name for name in tree_files if name.startswith("functions")]
         for func_file in function_files:
             try:
@@ -301,7 +268,7 @@ class State:
             }
 
         # load structs
-        tree_files = list_files_in_tree(tree)
+        tree_files = client.list_files_in_tree(tree)
         struct_files = [name for name in tree_files if name.startswith("structs")]
         for struct_file in struct_files:
             try:
