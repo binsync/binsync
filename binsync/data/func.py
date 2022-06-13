@@ -290,19 +290,23 @@ class Function(Artifact):
                 # stack var does not conflict
                 merge_func.header.args[off] = var.copy()
 
-
         # stack vars
         stack_var_diff = func_diff["stack_vars"]
         for off, var in func2.stack_vars.items():
-            # stack var differs, and the before is not nonexistent
-            if off in stack_var_diff and stack_var_diff[off] and (
-                    ("name" in stack_var_diff[off] and stack_var_diff[off]["name"]["before"] is not None)
-                    or ("type" in stack_var_diff[off] and stack_var_diff[off]["type"]["before"] is not None)
-            ):
+            # check existence of any difference
+            if off not in stack_var_diff:
+                merge_func.stack_vars[off] = var.copy()
                 continue
 
-            # stack var does not conflict
-            merge_func.stack_vars[off] = var.copy()
+            new_var = merge_func.stack_vars[off] if off in merge_func.stack_vars else var
+            var_diff = stack_var_diff[off]
+            if ("name" not in var_diff) or (var_diff["name"]["before"] is None):
+                new_var.name = var.name
+
+            if ("type" not in var_diff) or (var_diff["type"]["before"] is None):
+                new_var.type = var.type
+
+            merge_func.stack_vars[off] = new_var
 
         return merge_func
 

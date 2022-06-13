@@ -20,7 +20,7 @@ class TestState(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             # create a client only for accurate git usage
             client = binsync.Client("user0", tmpdir, "fake_hash", init_repo=True)
-            state = binsync.State("user0")
+            state = binsync.State("user0", client=client)
             client.state = state
 
             # dump to the current repo, current branch
@@ -29,15 +29,16 @@ class TestState(unittest.TestCase):
             self.assertTrue(os.path.isfile(metadata_path))
 
     def test_state_loading(self):
-        # create a state for dumping
-        state = binsync.State("user0")
-        state.version = 1
-        func_header = binsync.data.FunctionHeader("some_name", 0x400080)
-        state.set_function_header(func_header)
-
         with tempfile.TemporaryDirectory() as tmpdir:
             # create a client only for accurate git usage
             client = binsync.Client("user0", tmpdir, "fake_hash", init_repo=True)
+            state = binsync.State("user0", client=client)
+
+            # create a state for dumping
+            state.version = 1
+            func_header = binsync.data.FunctionHeader("some_name", 0x400080)
+            state.set_function_header(func_header)
+
             client.state = state
 
             # dump and commit state to tree
