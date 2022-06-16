@@ -1,5 +1,6 @@
-from . import State
 import logging
+
+from binsync.state import State
 
 l = logging.getLogger(__name__)
 

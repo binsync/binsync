@@ -1,18 +1,15 @@
 import logging
 
-from .. import ui_version
-if ui_version == "PySide2":
-    from PySide2.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView, QMenu
-    from PySide2.QtCore import Qt
-elif ui_version == "PySide6":
-    from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView, QMenu
-    from PySide6.QtCore import Qt
-else:
-    from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView, QMenu
-    from PyQt5.QtCore import Qt
-
-from ..utils import QNumericItem, friendly_datetime
-from ...controller import BinSyncController
+from binsync.common.controller import BinSyncController
+from binsync.common.ui.qt_objects import (
+    QAbstractItemView,
+    QHeaderView,
+    QMenu,
+    Qt,
+    QTableWidget,
+    QTableWidgetItem,
+)
+from binsync.common.ui.utils import QNumericItem, friendly_datetime
 
 l = logging.getLogger(__name__)
 

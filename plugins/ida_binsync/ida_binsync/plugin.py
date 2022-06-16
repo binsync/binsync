@@ -16,7 +16,7 @@ import idc
 import ida_idp
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
 
-from binsync.common.ui import set_ui_version
+from binsync.common.ui.version import set_ui_version
 set_ui_version("PyQt5")
 from binsync.common.ui.config_dialog import SyncConfig
 from binsync.common.ui.control_panel import ControlPanel
@@ -113,7 +113,7 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
     wanted_hotkey = "Ctrl-Shift-B"
 
     def __init__(self, *args, **kwargs):
-        print("[Binsync] {} loaded!".format(VERSION))
+        print("[BinSync] {} loaded!".format(VERSION))
 
         QObject.__init__(self, *args, **kwargs)
         idaapi.plugin_t.__init__(self)
