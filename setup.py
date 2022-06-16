@@ -19,5 +19,7 @@ setup(
         "filelock",
     ],
     description='Collaboration framework for binary analysis tasks.',
+    long_description='Collaboration framework for binary analysis tasks.',
+    long_description_content_type='text/markdown',
     url='https://github.com/angr/binsync',
 )
