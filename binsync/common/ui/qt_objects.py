@@ -49,7 +49,8 @@ elif ui_version == "PySide6":
         QWidget,
     )
 else:
-    from PyQt5.QtCore import QDir, Qt, Signal
+    from PyQt5.QtCore import QDir, Qt
+    from PyQt5.QtCore import pyqtSignal as Signal
     from PyQt5.QtWidgets import (
         QAbstractItemView,
         QCheckBox,
