@@ -429,14 +429,50 @@ class BinSyncController:
         ordered_users = all_users if preference_user not in all_users \
             else [preference_user] + [u for u in all_users if u != preference_user]
 
+        #
+        # new code:
+        # It will go through each user and use the cool diffing stuff we have to make a single final function
+        # that is ready for fill function on our selves.
+        #
+        # 1. How to we fix it when types are synced that are useless
+        #   - you can ignore if the type is not special
+        #
+        #
+
+        preference_user = preference_user if preference_user else self.client.master_user
+        all_users.remove(preference_user)
+        master_state = self.client.get_state(self.client.master_user)
+
+        # functions
+        pref_state = self.client.get_state(preference_user)
+        for func_addr in self.get_all_changed_funcs():
+            pref_func = pref_state.get_function(addr=func_addr)
+            for user in all_users:
+                user_state = self.client.get_state(user)
+                user_func = user_state.get_function(func_addr)
+
+                if not user_func:
+                    continue
+
+                if not pref_func:
+                    pref_func = user_func.copy()
+                    continue
+
+                pref_func = Function.from_nonconflicting_merge(pref_func, user_func)
+
+            master_state.functions[func_addr] = pref_func
+            self.fill_function(func_addr, state=master_state)
+
+        self.client.commit_state(state=master_state, msg="Magic Sync Merged")
+
         # copy the global data, but not functions yet
         #for user in ordered_users:
         #    self.fill_all(user=user, no_functions=False)
 
         # copy each user's functions, minimizing window changing
-        for func_addr in self.get_all_changed_funcs():
-            for user in ordered_users:
-                self.fill_function(func_addr, user=user)
+        #for func_addr in self.get_all_changed_funcs():
+        #    for user in ordered_users:
+        #        self.fill_function(func_addr, user=user)
 
     #
     # Pushers
