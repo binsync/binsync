@@ -1,20 +1,25 @@
-import time
-from typing import List, Dict, Iterable, Union, Optional
-import inspect
 import logging
-
 import os
-from functools import wraps
-from collections import defaultdict
 import pathlib
+import time
+from functools import wraps
+from typing import Dict, Iterable, Optional
 
-from sortedcontainers import SortedDict
-import toml
 import git
+import toml
+from sortedcontainers import SortedDict
 
-from .data import Function, FunctionHeader, Comment, Patch, StackVariable, GlobalVariable, Enum
-from .data.struct import Struct
-from .errors import MetadataNotFoundError
+from binsync.data import (
+    Comment,
+    Enum,
+    Function,
+    FunctionHeader,
+    GlobalVariable,
+    Patch,
+    StackVariable,
+)
+from binsync.data.struct import Struct
+from binsync.errors import MetadataNotFoundError
 
 l = logging.getLogger(__name__)
 

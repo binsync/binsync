@@ -1,24 +1,19 @@
-import datetime
 import logging
 
 import binsync.data
-
-from . import ui_version
-if ui_version == "PySide2":
-    from PySide2.QtWidgets import QVBoxLayout, QGroupBox, QWidget, QLabel, QTabWidget, QTableWidget, QStatusBar
-    from PySide2.QtCore import Signal
-elif ui_version == "PySide6":
-    from PySide6.QtWidgets import QVBoxLayout, QGroupBox, QWidget, QLabel, QTabWidget, QTableWidget, QStatusBar
-    from PySide6.QtCore import Signal
-else:
-    from PyQt5.QtWidgets import QVBoxLayout, QGroupBox, QWidget, QLabel, QTabWidget, QTableWidget, QStatusBar
-    from PyQt5.QtCore import pyqtSignal as Signal
-
-from .panel_tabs.functions_table import QFunctionTable
-from .panel_tabs.activity_table import QActivityTable
-from .panel_tabs.ctx_table import QCTXTable
-from .panel_tabs.util_panel import QUtilPanel
-from .panel_tabs.globals_table import QGlobalsTable
+from binsync.common.ui.panel_tabs.activity_table import QActivityTable
+from binsync.common.ui.panel_tabs.ctx_table import QCTXTable
+from binsync.common.ui.panel_tabs.functions_table import QFunctionTable
+from binsync.common.ui.panel_tabs.globals_table import QGlobalsTable
+from binsync.common.ui.panel_tabs.util_panel import QUtilPanel
+from binsync.common.ui.qt_objects import (
+    QLabel,
+    QStatusBar,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+    Signal
+)
 
 l = logging.getLogger(__name__)
 

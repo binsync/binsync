@@ -1,7 +1,8 @@
-import toml
-from typing import List, Dict
+from typing import Dict, List
 
-from .artifact import Artifact
+import toml
+
+from binsync.data.artifact import Artifact
 
 
 class StructMember(Artifact):

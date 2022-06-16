@@ -1,19 +1,19 @@
-import time
-import threading
-import os
-import subprocess
-import re
 import datetime
 import logging
-from typing import Optional, Iterable
+import os
+import re
+import subprocess
+import threading
+import time
+from typing import Iterable, Optional
 
+import filelock
 import git
 import git.exc
-import filelock
 
-from .data import User, Function, Struct, Patch
-from .state import State
-from .errors import MetadataNotFoundError, ExternalUserCommitError
+from binsync.data import User
+from binsync.errors import ExternalUserCommitError, MetadataNotFoundError
+from binsync.state import State
 
 l = logging.getLogger(__name__)
 BINSYNC_BRANCH_PREFIX = 'binsync'

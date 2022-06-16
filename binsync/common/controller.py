@@ -1,14 +1,15 @@
-from functools import wraps
-import threading
-import time
 import datetime
 import logging
-from typing import Optional, Iterable, Dict, List
+import threading
+import time
 from collections import OrderedDict
+from functools import wraps
+from typing import Dict, Iterable, List, Optional
 
 import binsync.data
-from ..client import Client
-from ..data import User, Function, StackVariable, Comment, Struct, GlobalVariable, Enum
+from binsync.client import Client
+from binsync.data import (Comment, Enum, Function, GlobalVariable,
+                          StackVariable, Struct, User)
 
 _l = logging.getLogger(name=__name__)
 

@@ -1,18 +1,17 @@
 import logging
 
-from .. import ui_version
-if ui_version == "PySide2":
-    from PySide2.QtWidgets import QWidget, QCheckBox, QVBoxLayout, QLabel, QComboBox, QHBoxLayout, QGroupBox, QPushButton
-    from PySide2.QtCore import Qt
-elif ui_version == "PySide6":
-    from PySide6.QtWidgets import QWidget, QCheckBox, QVBoxLayout, QLabel, QComboBox, QHBoxLayout, QGroupBox, QPushButton
-    from PySide6.QtCore import Qt
-else:
-    from PyQt5.QtWidgets import QWidget, QCheckBox, QVBoxLayout, QLabel, QComboBox, QHBoxLayout, QGroupBox, QPushButton
-    from PyQt5.QtCore import Qt
-
-from ...controller import BinSyncController, SyncLevel
-
+from binsync.common.controller import BinSyncController, SyncLevel
+from binsync.common.ui.qt_objects import (
+    QCheckBox,
+    QComboBox,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    Qt,
+    QVBoxLayout,
+    QWidget,
+)
 
 l = logging.getLogger(__name__)
 
