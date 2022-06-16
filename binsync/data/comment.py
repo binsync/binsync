@@ -1,5 +1,6 @@
 import toml
-from .artifact import Artifact
+
+from binsync.data.artifact import Artifact
 
 
 class Comment(Artifact):

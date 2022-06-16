@@ -1,5 +1,6 @@
-import toml
 from typing import Dict
+
+import toml
 
 
 class Artifact:

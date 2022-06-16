@@ -1,15 +1,18 @@
-import os
 import logging
+import os
 from typing import Optional
 
-from binsync.common.controller import BinSyncController, init_checker, make_ro_state, make_state_with_func
-from binsync.data import StackOffsetType, FunctionHeader
-import binsync
-
-from angr.analyses.decompiler.structured_codegen import DummyStructuredCodeGenerator
 import angr
-from ...ui.views import CodeView
-
+import binsync
+from angr.analyses.decompiler.structured_codegen import DummyStructuredCodeGenerator
+from angrmanagement.ui.views import CodeView
+from binsync.common.controller import (
+    BinSyncController,
+    init_checker,
+    make_ro_state,
+    make_state_with_func
+)
+from binsync.data import FunctionHeader, StackOffsetType
 
 l = logging.getLogger(__name__)
 
