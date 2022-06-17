@@ -188,6 +188,13 @@ class BinSyncController:
             if not self.check_client():
                 continue
 
+            # update client every BINSYNC_RELOAD_TIME seconds if it has a remote connection
+            if self.client.has_remote and (
+                    (self.client.last_pull_attempt_at is None) or
+                    (datetime.datetime.now() - self.client.last_pull_attempt_at).seconds > BINSYNC_RELOAD_TIME
+            ):
+                self.client.update()
+
             if not self.headless:
                 # update context knowledge every 1 second
                 if self.ctx_change_callback:
@@ -199,12 +206,6 @@ class BinSyncController:
                     self._last_reload = datetime.datetime.now()
                     self._update_ui()
 
-            # update client every BINSYNC_RELOAD_TIME seconds if it has a remote connection
-            if self.client.has_remote and (
-                    (self.client.last_pull_attempt_at is None) or
-                    (datetime.datetime.now() - self.client.last_pull_attempt_at).seconds > BINSYNC_RELOAD_TIME
-            ):
-                self.client.update()
 
             # evaluate commands started by the user
             self._eval_cmd_queue()

@@ -348,7 +348,6 @@ class Client:
                 l.warning(f"Failed to get commit because: {e}")
 
             bct = best.commit.tree
-
         return bct
 
     def get_state(self, user=None, version=None):
@@ -441,7 +440,7 @@ class Client:
             master_user_branch.commit = commit
             state._dirty = False
 
-        self.push()
+            self.push()
 
     def sync_states(self, user=None):
         target_state = self.get_state(user)
