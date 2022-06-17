@@ -13,7 +13,6 @@ class MergeState:
         self.cmt_diff = {}
         self.var_diff = {}
         self.func_name_diff = {}
-        self.conflicts = False
 
     def _gen_state_diff(self):
         self.conflicts |= self._gen_func_name_diff()
