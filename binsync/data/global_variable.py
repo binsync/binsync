@@ -41,3 +41,7 @@ class GlobalVariable(Artifact):
         for v in sorted(global_vars.values(), key=lambda x: x.addr):
             global_vars_["%x" % v.addr] = v.__getstate__()
         return global_vars_
+
+    def copy(self):
+        gvar = GlobalVariable(self.addr, self.name, self.type_str, self.size)
+        return gvar

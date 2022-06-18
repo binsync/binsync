@@ -471,7 +471,7 @@ def set_ida_struct(struct: Struct, controller) -> bool:
     ida_struct.expand_struc(sptr, 0, struct.size)
 
     # add every member of the struct
-    for member in struct.struct_members:
+    for off, member in struct.struct_members.items():
         # convert to ida's flag system
         mflag = convert_size_to_flag(member.size)
 
@@ -496,7 +496,7 @@ def set_ida_struct_member_types(struct: Struct, controller) -> bool:
     sptr = ida_struct.get_struc(sid)
     data_changed = False
 
-    for idx, member in enumerate(struct.struct_members):
+    for idx, member in enumerate(struct.struct_members.values()):
         # set the new member type if it has one
         if member.type == "":
             continue

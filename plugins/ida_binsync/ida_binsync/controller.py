@@ -157,12 +157,12 @@ class IDABinSyncController(BinSyncController):
         with self.api_lock:
             self.api_count = 0
 
-    #def make_controller_cmd(self, cmd_func, *args, **kwargs):
-    #    with self.queue_lock:
-    #        if cmd_func == self.push_struct:
-    #            self.cmd_queue[args[0].name] = (cmd_func, args, kwargs)
-    #        else:
-    #            self.cmd_queue[time.time()] = (cmd_func, args, kwargs)
+    def make_controller_cmd(self, cmd_func, *args, **kwargs):
+        with self.queue_lock:
+            if cmd_func == self.push_struct:
+                self.cmd_queue[args[0].name] = (cmd_func, args, kwargs)
+            else:
+                self.cmd_queue[time.time()] = (cmd_func, args, kwargs)
 
     #
     # Controller Interaction
