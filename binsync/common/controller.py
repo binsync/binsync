@@ -409,10 +409,13 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_all(self, user=None, state=None, no_functions=False):
+    def fill_all(self, user=None, state=None):
         """
         Connected to the Sync All action:
         syncs in all the data from the targeted user
+
+        TODO:
+        - add support for enums
 
         @param user:
         @param state:
@@ -424,8 +427,6 @@ class BinSyncController:
         fillers = [
             self.fill_structs, self.fill_enums, self.fill_global_vars
         ]
-        if not no_functions:
-            fillers.append(self.fill_functions)
 
         for filler in fillers:
             filler(user=user, state=state)
