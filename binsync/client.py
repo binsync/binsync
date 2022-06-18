@@ -1,20 +1,20 @@
-import time
-import threading
-import os
-import subprocess
-import re
 import datetime
 import logging
 import pathlib
-from typing import Optional, Iterable
+import os
+import re
+import subprocess
+import threading
+import time
+from typing import Iterable, Optional
 
+import filelock
 import git
 import git.exc
-import filelock
 
-from .data import User, Function, Struct, Patch
-from .state import State
-from .errors import MetadataNotFoundError, ExternalUserCommitError
+from binsync.data import User
+from binsync.errors import ExternalUserCommitError, MetadataNotFoundError
+from binsync.state import State
 
 l = logging.getLogger(__name__)
 BINSYNC_BRANCH_PREFIX = 'binsync'
@@ -342,12 +342,9 @@ class Client:
                 raise ValueError(f'No such user "{user}" found in repository')
 
             # find the latest commit for the specified user!
-            try:
-                best = max(options, key=lambda ref: ref.commit.authored_date)
-            except Exception as e:
-                l.warning(f"Failed to get commit because: {e}")
-
+            best = max(options, key=lambda ref: ref.commit.authored_date)
             bct = best.commit.tree
+
         return bct
 
     def get_state(self, user=None, version=None):

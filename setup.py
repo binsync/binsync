@@ -10,7 +10,7 @@ except ImportError:
 
 setup(
     name='binsync',
-    version='2.3.0',
+    version='2.3.1',
     packages=packages,
     install_requires=[
         "sortedcontainers",
@@ -19,5 +19,7 @@ setup(
         "filelock",
     ],
     description='Collaboration framework for binary analysis tasks.',
+    long_description='Collaboration framework for binary analysis tasks.',
+    long_description_content_type='text/markdown',
     url='https://github.com/angr/binsync',
 )

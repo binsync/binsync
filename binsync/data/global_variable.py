@@ -1,5 +1,6 @@
-from .artifact import Artifact
 import toml
+
+from binsync.data.artifact import Artifact
 
 
 class GlobalVariable(Artifact):

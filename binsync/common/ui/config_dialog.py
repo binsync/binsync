@@ -1,26 +1,23 @@
-import textwrap
-import traceback
-import os
-from typing import Optional, Dict
-import toml
-import time
 import logging
+import os
+import traceback
+from typing import Optional
 
-from . import ui_version
-if ui_version == "PySide2":
-    from PySide2.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QMessageBox, \
-        QFileDialog, QCheckBox, QGridLayout
-    from PySide2.QtCore import QDir
-elif ui_version == "PySide6":
-    from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QMessageBox, \
-        QFileDialog, QCheckBox, QGridLayout
-    from PySide6.QtCore import QDir
-else:
-    from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QMessageBox, \
-        QFileDialog, QCheckBox, QGridLayout
-    from PyQt5.QtCore import QDir
-
-from ...client import ConnectionWarnings
+import toml
+from binsync.client import ConnectionWarnings
+from binsync.common.ui.qt_objects import (
+    QCheckBox,
+    QDialog,
+    QDir,
+    QFileDialog,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+)
 
 l = logging.getLogger(__name__)
 

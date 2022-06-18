@@ -1,9 +1,9 @@
-import toml
 from typing import Dict, Optional
 
-from .artifact import Artifact
-from .stack_variable import StackVariable
+import toml
 
+from binsync.data.artifact import Artifact
+from binsync.data.stack_variable import StackVariable
 
 #
 # Function Header Classes

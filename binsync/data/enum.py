@@ -1,7 +1,9 @@
-from .artifact import Artifact
-from typing import Dict
 from collections import OrderedDict
+from typing import Dict
+
 import toml
+
+from binsync.data.artifact import Artifact
 
 
 class Enum(Artifact):

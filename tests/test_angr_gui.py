@@ -18,7 +18,7 @@ from angrmanagement.config import Conf
 
 from binsync.common.controller import SyncControlStatus, BINSYNC_RELOAD_TIME
 from binsync.common.ui import utils
-from binsync.common.ui import set_ui_version
+from binsync.common.ui.version import set_ui_version
 set_ui_version("PySide2")
 from binsync.common.ui.config_dialog import SyncConfig
 
