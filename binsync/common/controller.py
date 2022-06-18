@@ -159,19 +159,26 @@ class BinSyncController:
         with self.queue_lock:
             self.cmd_queue[time.time()] = (cmd_func, args, kwargs)
 
-    def _eval_cmd_queue(self):
-        cmd = None
-        with self.queue_lock:
-            if len(self.cmd_queue) > 0:
-                # pop the first command from the queue
-                cmd = self.cmd_queue.popitem(last=False)[1]
-
+    def _eval_cmd(self, cmd):
         # parse the command if present
         if not cmd:
             return
 
         func, f_args, f_kargs = cmd[:]
         func(*f_args, **f_kargs)
+
+    def _eval_cmd_queue(self):
+        with self.queue_lock:
+            if not self.cmd_queue:
+                return
+
+            job_count = 1
+            jobs = [
+                self.cmd_queue.popitem(last=False)[1] for _ in range(job_count)
+            ]
+
+        for job in jobs:
+            self._eval_cmd(job)
 
     def updater_routine(self):
         while True:
@@ -180,6 +187,13 @@ class BinSyncController:
             # verify the client is connected
             if not self.check_client():
                 continue
+
+            # update client every BINSYNC_RELOAD_TIME seconds if it has a remote connection
+            if self.client.has_remote and (
+                    (self.client.last_pull_attempt_at is None) or
+                    (datetime.datetime.now() - self.client.last_pull_attempt_at).seconds > BINSYNC_RELOAD_TIME
+            ):
+                self.client.update()
 
             if not self.headless:
                 # update context knowledge every 1 second
@@ -192,12 +206,6 @@ class BinSyncController:
                     self._last_reload = datetime.datetime.now()
                     self._update_ui()
 
-            # update client every BINSYNC_RELOAD_TIME seconds if it has a remote connection
-            if self.client.has_remote and (
-                    (self.client.last_pull_attempt_at is None) or
-                    (datetime.datetime.now() - self.client.last_pull_attempt_at).seconds > BINSYNC_RELOAD_TIME
-            ):
-                self.client.update()
 
             # evaluate commands started by the user
             self._eval_cmd_queue()
@@ -402,14 +410,138 @@ class BinSyncController:
     @init_checker
     @make_ro_state
     def fill_all(self, user=None, state=None):
+        """
+        Connected to the Sync All action:
+        syncs in all the data from the targeted user
+
+        TODO:
+        - add support for enums
+
+        @param user:
+        @param state:
+        @param no_functions:
+        @return:
+        """
         _l.info(f"Filling all data from user {user}...")
 
         fillers = [
-            self.fill_structs, self.fill_enums, self.fill_global_vars, self.fill_functions
+            self.fill_structs, self.fill_enums, self.fill_global_vars
         ]
 
         for filler in fillers:
             filler(user=user, state=state)
+
+    @init_checker
+    def magic_fill(self, preference_user=None):
+        """
+        Traverses all the data in the BinSync repo, starting with an optional preference user,
+        and sequentially merges that data together in a non-conflicting way. This also means that the prefrence
+        user makes up the majority of the initial data you sync in.
+
+        This process supports: functions (header, stack vars), structs, and global vars
+        TODO:
+        - support for comments
+        - support for enums
+        - refactor fill_function to stop attempting to set master state after we do
+        -
+
+        @param preference_user:
+        @return:
+        """
+
+        _l.info(f"Staring a magic sync with a preference for {preference_user}")
+
+        # re-order users for the prefered user to be at the front of the queue (if they exist)
+        all_users = list(self.usernames())
+        preference_user = preference_user if preference_user else self.client.master_user
+        all_users.remove(preference_user)
+        master_state = self.client.get_state(self.client.master_user)
+
+        #
+        # structs
+        #
+
+        _l.info(f"Magic Syncing Structs...")
+        pref_state = self.client.get_state(preference_user)
+        for struct_name in self.get_all_changed_structs():
+            pref_struct = pref_state.get_struct(struct_name)
+            for user in all_users:
+                user_state = self.client.get_state(user)
+                user_struct = user_state.get_struct(user)
+
+                if not user_struct:
+                    continue
+
+                if not pref_struct:
+                    pref_struct = user_struct.copy()
+                    continue
+
+                pref_struct = Struct.from_nonconflicting_merge(pref_struct, user_struct)
+                pref_struct.last_change = None
+
+            if pref_struct:
+                master_state.structs[struct_name] = pref_struct
+
+            self.fill_struct(struct_name, state=master_state)
+        self.client.commit_state(state=master_state, msg="Magic Sync Structs Merged")
+
+        #
+        # functions
+        #
+
+        master_state = self.client.get_state(self.client.master_user)
+
+        _l.info(f"Magic Syncing Functions...")
+        pref_state = self.client.get_state(preference_user)
+        for func_addr in self.get_all_changed_funcs():
+            pref_func = pref_state.get_function(addr=func_addr)
+            for user in all_users:
+                user_state = self.client.get_state(user)
+                user_func = user_state.get_function(func_addr)
+
+                if not user_func:
+                    continue
+
+                if not pref_func:
+                    pref_func = user_func.copy()
+                    continue
+
+                pref_func = Function.from_nonconflicting_merge(pref_func, user_func)
+                pref_func.last_change = None
+
+            master_state.functions[func_addr] = pref_func
+            self.fill_function(func_addr, state=master_state)
+
+        self.client.commit_state(state=master_state, msg="Magic Sync Funcs Merged")
+
+        #
+        # global vars
+        #
+
+        _l.info(f"Magic Syncing Global Vars...")
+        master_state = self.client.get_state(self.client.master_user)
+        pref_state = self.client.get_state(preference_user)
+        for gvar_addr in self.get_all_changed_global_vars():
+            pref_gvar = pref_state.get_global_var(gvar_addr)
+            for user in all_users:
+                user_state = self.client.get_state(user)
+                user_gvar = user_state.get_global_var(gvar_addr)
+
+                if not user_gvar:
+                    continue
+
+                if not pref_gvar:
+                    pref_gvar = user_gvar.copy()
+                    continue
+
+                pref_gvar = GlobalVariable.from_nonconflicting_merge(pref_gvar, user_gvar)
+                pref_gvar.last_change = None
+
+            master_state.global_vars[gvar_addr] = pref_gvar
+            self.fill_global_var(gvar_addr, state=master_state)
+
+        self.client.commit_state(state=master_state, msg="Magic Sync Global Vars Merged")
+        _l.info(f"Magic Syncing Completed!")
 
     #
     # Pushers
@@ -582,3 +714,30 @@ class BinSyncController:
         if not sync_data:
             msg = "Generic Update"
         return msg
+
+    def get_all_changed_funcs(self):
+        known_funcs = set()
+        for username in self.usernames():
+            state = self.client.get_state(username)
+            for func_addr in state.functions:
+                known_funcs.add(func_addr)
+
+        return known_funcs
+
+    def get_all_changed_structs(self):
+        known_structs = set()
+        for username in self.usernames():
+            state = self.client.get_state(username)
+            for struct_name in state.structs:
+                known_structs.add(struct_name)
+
+        return known_structs
+
+    def get_all_changed_global_vars(self):
+        known_gvars = set()
+        for username in self.usernames():
+            state = self.client.get_state(username)
+            for offset in state.global_vars:
+                known_gvars.add(offset)
+
+        return known_gvars

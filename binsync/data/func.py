@@ -267,7 +267,6 @@ class Function(Artifact):
         if merge_func.header is None:
             merge_func.header = func2.header.copy() if func2.header else None
         elif func2.header is not None:
-            header_diff = func_diff["header"]
             # name
             if merge_func.name is None and func2.header.name:
                 merge_func.header.name = func2.name
@@ -277,32 +276,18 @@ class Function(Artifact):
                 merge_func.header.ret_type = func2.header.ret_type
 
             # header args
-            args_diff = header_diff["args"]
-            # TODO: correct this for when offset numbers differ (IDA sync Binja)
             for off, var in func2.header.args.items():
-                # arg differs, and the before is not nonexistent
-                if off in args_diff and args_diff[off] and (
-                        ("name" in args_diff[off] and args_diff[off]["name"]["before"] is not None)
-                        or ("type_str" in args_diff[off] and args_diff[off]["type_str"]["before"] is not None)
-                ):
-                    continue
+                merge_var = func1.header.args[off].copy() if off in func1.header.args else var
+                merge_var = FunctionArgument.from_nonconflicting_merge(merge_var, var)
 
-                # stack var does not conflict
-                merge_func.header.args[off] = var.copy()
-
+                merge_func.header.args[off]= merge_var
 
         # stack vars
-        stack_var_diff = func_diff["stack_vars"]
         for off, var in func2.stack_vars.items():
-            # stack var differs, and the before is not nonexistent
-            if off in stack_var_diff and stack_var_diff[off] and (
-                    ("name" in stack_var_diff[off] and stack_var_diff[off]["name"]["before"] is not None)
-                    or ("type" in stack_var_diff[off] and stack_var_diff[off]["type"]["before"] is not None)
-            ):
-                continue
+            merge_var = func1.stack_vars[off].copy() if off in func1.stack_vars else var
+            merge_var = StackVariable.from_nonconflicting_merge(merge_var, var)
 
-            # stack var does not conflict
-            merge_func.stack_vars[off] = var.copy()
+            merge_func.stack_vars[off] = merge_var
 
         return merge_func
 

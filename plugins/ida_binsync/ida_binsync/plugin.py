@@ -13,13 +13,15 @@ from PyQt5.QtCore import QObject
 import idaapi
 import ida_kernwin
 import idc
-import ida_idp
+import ida_hexrays
+import idautils
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
 
 from binsync.common.ui.version import set_ui_version
 set_ui_version("PyQt5")
 from binsync.common.ui.config_dialog import SyncConfig
 from binsync.common.ui.control_panel import ControlPanel
+from binsync.common.ui.magic_sync_dialog import display_magic_sync_dialog
 
 from .hooks import MasterHook
 from . import IDA_DIR, VERSION
@@ -123,12 +125,18 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         dialog = SyncConfig(controller)
         dialog.exec_()
 
-        if controller.check_client():
-            if not self.hooks_started:
-                self.action_hooks.hook()
-                self.view_hook.hook()
+        if not controller.check_client():
+            return
 
-            self.open_control_panel()
+        if not self.hooks_started:
+            self.action_hooks.hook()
+            self.view_hook.hook()
+
+        self.open_control_panel()
+
+        if dialog.open_magic_sync:
+            #display_magic_sync_dialog(controller)
+            l.debug("Magic Sync is disabled on startup for now.")
 
     def open_control_panel(self):
         """
@@ -143,12 +151,19 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         idaapi.display_widget(wrapper.twidget, flags)
         wrapper.widget.visible = True
 
-        # Dock it
-        for target in ["IDA View-A", "Pseudocode-A"]:
+        # prioritize attaching the binsync panel to a decompilation window
+        target = "Pseudocode-A"
+        dwidget = idaapi.find_widget(target)
+        if not dwidget:
+            func_addr = next(idautils.Functions())
+            ida_hexrays.open_pseudocode(func_addr, 0)
             dwidget = idaapi.find_widget(target)
-            if dwidget:
-                idaapi.set_dock_pos(ControlPanelViewWrapper.NAME, target, idaapi.DP_RIGHT)
-                break
+
+            if not dwidget:
+                target = "IDA View-A"
+
+        # attach the panel to the found target
+        idaapi.set_dock_pos(ControlPanelViewWrapper.NAME, target, idaapi.DP_RIGHT)
 
     def install_actions(self):
         self.install_control_panel_action()

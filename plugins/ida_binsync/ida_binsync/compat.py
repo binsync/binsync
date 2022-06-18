@@ -471,7 +471,7 @@ def set_ida_struct(struct: Struct, controller) -> bool:
     ida_struct.expand_struc(sptr, 0, struct.size)
 
     # add every member of the struct
-    for member in struct.struct_members:
+    for off, member in struct.struct_members.items():
         # convert to ida's flag system
         mflag = convert_size_to_flag(member.size)
 
@@ -496,7 +496,7 @@ def set_ida_struct_member_types(struct: Struct, controller) -> bool:
     sptr = ida_struct.get_struc(sid)
     data_changed = False
 
-    for idx, member in enumerate(struct.struct_members):
+    for idx, member in enumerate(struct.struct_members.values()):
         # set the new member type if it has one
         if member.type == "":
             continue
@@ -533,7 +533,39 @@ def set_global_var_name(var_addr, name):
 #
 
 @execute_ui
-def refresh_pseudocode_view(ea):
+def acquire_pseudocode_vdui(addr):
+    """
+    Acquires a IDA HexRays vdui pointer, which is a pointer to a pseudocode view that contains
+    the cfunc which describes the code on the screen. Using this function optimizes the switching of code views
+    by using in-place switching if a view is already present.
+
+    @param addr:
+    @return:
+    """
+    func = ida_funcs.get_func(addr)
+    if not func:
+        return None
+
+    names = ["Pseudocode-%c" % chr(ord("A") + i) for i in range(5)]
+    for name in names:
+        widget = ida_kernwin.find_widget(name)
+        if not widget:
+            continue
+
+        vu = ida_hexrays.get_widget_vdui(widget)
+        break
+    else:
+        vu = ida_hexrays.open_pseudocode(func.start_ea, False)
+
+    if func.start_ea != vu.cfunc.entry_ea:
+        target_cfunc = idaapi.decompile(func.start_ea)
+        vu.switch_to(target_cfunc, False)
+
+    return vu
+
+
+@execute_ui
+def refresh_pseudocode_view(ea, set_focus=True):
     """Refreshes the pseudocode view in IDA."""
     names = ["Pseudocode-%c" % chr(ord("A") + i) for i in range(5)]
     for name in names:
@@ -546,6 +578,7 @@ def refresh_pseudocode_view(ea):
             func = ida_funcs.get_func(func_ea)
             if ida_funcs.func_contains(func, ea):
                 vu.refresh_view(True)
+                ida_kernwin.activate_widget(widget, set_focus)
 
 
 class IDAViewCTX:

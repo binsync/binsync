@@ -86,6 +86,9 @@ class Artifact:
         """
         return toml.dumps(self.__getstate__())
 
+    def copy(self):
+        pass
+
     @classmethod
     def parse(cls, s):
         """
@@ -110,3 +113,14 @@ class Artifact:
                 inverted_diff[k] = v
 
         return inverted_diff
+
+    @classmethod
+    def from_nonconflicting_merge(cls, obj1: "Artifact", obj2: "Artifact"):
+        obj_diff = obj1.diff(obj2)
+        merge_obj = obj1.copy()
+
+        for attr in cls.__slots__:
+            if attr in obj_diff and obj_diff[attr]["before"] is None:
+                setattr(merge_obj, attr, getattr(obj2, attr))
+
+        return merge_obj

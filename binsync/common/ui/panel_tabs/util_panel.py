@@ -12,6 +12,8 @@ from binsync.common.ui.qt_objects import (
     QVBoxLayout,
     QWidget,
 )
+from binsync.common.ui.magic_sync_dialog import MagicSyncDialog
+from binsync.common.controller import BinSyncController
 
 l = logging.getLogger(__name__)
 
@@ -45,9 +47,13 @@ class QUtilPanel(QWidget):
         l.debug(f"Sync level changed to: {selected_opt}")
 
     def _handle_magic_sync_button(self):
-        l.info("magic_sync")
-        l.debug("magic_sync")
+        dialog = MagicSyncDialog(self.controller)
+        dialog.exec_()
 
+        if not dialog.should_sync:
+            return
+
+        self.controller.magic_fill(preference_user=dialog.preferred_user)
 
     def _init_widgets(self):
 
@@ -113,4 +119,3 @@ class QUtilPanel(QWidget):
         main_layout.addWidget(sync_options_group)
         main_layout.addWidget(dev_options_group)
         self.setLayout(main_layout)
-

@@ -1,5 +1,6 @@
 import datetime
 import logging
+import pathlib
 import os
 import re
 import subprocess
@@ -273,25 +274,25 @@ class Client:
 
         :return:    None
         """
+        with self.commit_lock:
+            self.last_pull_attempt_at = datetime.datetime.now()
 
-        self.last_pull_attempt_at = datetime.datetime.now()
-
-        self.checkout_to_master_user()
-        if self.has_remote:
-            try:
-                env = self.ssh_agent_env()
-                with self.repo.git.custom_environment(**env):
-                    self.repo.remotes[self.remote].pull()
-                self._last_pull_at = datetime.datetime.now()
-                l.debug("Pull completed successfully at %s", self._last_pull_at)
-            except git.exc.GitCommandError as ex:
-                if print_error:
-                    print("Failed to pull from remote \"%s\".\n"
-                          "\n"
-                          "Git error: %s." % (
-                              self.remote,
-                              str(ex)
-                          ))
+            self.checkout_to_master_user()
+            if self.has_remote:
+                try:
+                    env = self.ssh_agent_env()
+                    with self.repo.git.custom_environment(**env):
+                        self.repo.remotes[self.remote].pull()
+                    self._last_pull_at = datetime.datetime.now()
+                    l.debug("Pull completed successfully at %s", self._last_pull_at)
+                except git.exc.GitCommandError as ex:
+                    if print_error:
+                        print("Failed to pull from remote \"%s\".\n"
+                              "\n"
+                              "Git error: %s." % (
+                                  self.remote,
+                                  str(ex)
+                              ))
 
     def push(self, print_error=False):
         """
@@ -329,72 +330,6 @@ class Client:
             except Exception as e:
                 l.debug(f"Unable to load user {e}")
                 continue
-
-    def tally(self, users=None):
-        """
-        Return a dict of user names and what information they can provide, e.g.,
-        {"user":
-            {
-                "functions": [0x400080],
-            }
-        }
-
-        :param list users:  A list of user names or None if we don't want to limit the range of user names we care about.
-        :return:            A dict with tally information.
-        :rtype:             dict
-        """
-
-        if users is not None:
-            users = set(users)
-        else:
-            users = [x.name for x in self.users()]
-
-        all_info = {}
-
-        for user in self.users():
-            if user is None or user.name not in users:
-                continue
-
-            # what information does this user provide?
-            info = {}
-            state = self.get_state(user=user.name)
-            info["function"] = list(state.functions.keys())
-            #info["comments"] = list(state.comments.keys())
-            info["patches"] = list(
-                {"obj_name": p.obj_name, "offset": p.offset}
-                for p in state.patches.values()
-            )
-
-            all_info[user.name] = info
-
-        return all_info
-
-    def status(self):
-        """
-        Return a dict of status information.
-        """
-
-        d = {}
-
-        d['remote_name'] = self.remote
-
-        if self.repo is not None:
-            d['last_commit_hash'] = self.repo.heads[0].commit.hexsha
-            try:
-                d['last_commit_time'] = self.repo.heads[0].commit.committed_datetime.replace(tzinfo=None)
-            except IOError:  # sometimes GitPython throws this exception
-                d['last_commit_time'] = "<unknown>"
-            if any(r.name == self.remote for r in self.repo.remotes):
-                d['remote_url'] = ";".join(self.repo.remotes[self.remote].urls)
-            else:
-                d['remote_url'] = "<does not exist>"
-
-            d['last_change'] = self._last_push_at if self._last_push_at is not None else "never"
-            d['last_push_attempt'] = self.last_push_attempt_at if self.last_push_attempt_at is not None else "never"
-            d['last_pull'] = self._last_pull_at if self._last_pull_at is not None else "never"
-            d['last_pull_attempt'] = self.last_pull_attempt_at if self.last_pull_attempt_at is not None else "never"
-
-        return d
 
     def state_ctx(self, user=None, version=None, locked=False):
         state = self.get_state(user=user, version=version)
@@ -495,14 +430,14 @@ class Client:
             # commit if there is any difference
             try:
                 commit = index.commit(msg)
-            except Exception:
-                print("[BinSync]: Internal Git Commit Error!")
+            except Exception as e:
+                l.warning(f"Internal Git Commit Error: {e}")
                 return
 
             master_user_branch.commit = commit
             state._dirty = False
 
-        self.push()
+            self.push()
 
     def sync_states(self, user=None):
         target_state = self.get_state(user)
@@ -591,3 +526,48 @@ class Client:
     def _get_stored_hash(self):
         branch = [ref for ref in self.repo.refs if ref.name.endswith(BINSYNC_ROOT_BRANCH)][0]
         return branch.commit.tree["binary_hash"].data_stream.read().decode().strip("\n")
+
+    def list_files_in_tree(self, base_tree: git.Tree):
+        """
+        Lists all the files in a repo at a given tree
+
+        :param commit: A gitpython Tree object
+        """
+        with self.commit_lock:
+            file_list = []
+            stack = [base_tree]
+            while len(stack) > 0:
+                tree = stack.pop()
+                # enumerate blobs (files) at this level
+                for b in tree.blobs:
+                    file_list.append(b.path)
+                for subtree in tree.trees:
+                    stack.append(subtree)
+
+        return file_list
+
+    def add_data(self, index: git.IndexFile, path: str, data: bytes):
+        """
+        Adds physical files to the database.
+
+        WARNING: this function touches physical files in the Git Repo which can result in a race
+        condition to modify a file while it is also being pushed. ONLY CALL THIS FUNCTION INSIDE
+        A COMMIT_LOCK.
+
+        @param index:
+        @param path:
+        @param data:
+        @return:
+        """
+        fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
+        pathlib.Path(fullpath).parent.mkdir(parents=True, exist_ok=True)
+        with open(fullpath, 'wb') as fp:
+            fp.write(data)
+        index.add([fullpath])
+
+    def remove_data(self, index: git.IndexFile, path: str):
+        with self.commit_lock:
+            fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
+            pathlib.Path(fullpath).parent.mkdir(parents=True, exist_ok=True)
+            index.remove([fullpath], working_tree=True)
+

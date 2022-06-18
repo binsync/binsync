@@ -28,10 +28,10 @@ class SyncConfig(QDialog):
     - cloning a remote
     - using a locally pulled remote repo
     """
-    def __init__(self, controller, parent=None):
+    def __init__(self, controller, open_magic_sync=True, parent=None):
         super().__init__(parent)
         self.controller = controller
-
+        self.open_magic_sync = open_magic_sync
         self.setWindowTitle("Configure BinSync")
 
         self._main_layout = QVBoxLayout()
@@ -167,12 +167,19 @@ class SyncConfig(QDialog):
             traceback.print_exc()
             return
 
+        #
+        # controller is now successfully connected to a real BinSync client. Everything from this point
+        # onwards assumes that all normal client properties and functions work.
+        #
+
+        # warn user of anything that might look off
         self._parse_and_display_connection_warnings(connection_warnings)
         l.info(f"Client has connected to sync repo with user: {user}.")
 
+        # create and save config if possible
         saved_config = self.save_config()
         if saved_config:
-            l.info(f"Configuration config was saved to {saved_config}.")
+            l.debug(f"Configuration config was saved to {saved_config}.")
 
         self.close()
 

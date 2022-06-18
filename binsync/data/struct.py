@@ -31,6 +31,16 @@ class StructMember(Artifact):
         sm.__setstate__(toml.loads(s))
         return sm
 
+    def copy(self):
+        sm = StructMember(
+            self.member_name,
+            self.offset,
+            self.type,
+            self.size
+        )
+
+        return sm
+
 
 class Struct(Artifact):
     """
@@ -44,7 +54,7 @@ class Struct(Artifact):
         "struct_members",
     )
 
-    def __init__(self, name: str, size: int, struct_members: List[StructMember], last_change=None):
+    def __init__(self, name: str, size: int, struct_members: Dict[int, StructMember], last_change=None):
         super(Struct, self).__init__(last_change=last_change)
         self.name = name
         self.size = size
@@ -56,7 +66,9 @@ class Struct(Artifact):
                 "name": self.name, "size": self.size, "last_change": self.last_change
             },
 
-            "members": {"%x" % member.offset: member.__getstate__() for member in self.struct_members}
+            "members": {
+                "%x" % offset: member.__getstate__() for offset, member in self.struct_members.items()
+            }
         }
 
     def __setstate__(self, state):
@@ -67,12 +79,12 @@ class Struct(Artifact):
         self.size = metadata["size"]
         self.last_change = metadata.get("last_change", None)
 
-        self.struct_members = [
-            StructMember.parse(toml.dumps(member)) for _, member in members.items()
-        ]
+        self.struct_members = {
+            int(off, 16): StructMember.parse(toml.dumps(member)) for off, member in members.items()
+        }
 
     def add_struct_member(self, mname, moff, mtype, size):
-        self.struct_members.append(StructMember(mname, moff, mtype, size))
+        self.struct_members[moff] = StructMember(mname, moff, mtype, size)
 
     def diff(self, other, **kwargs) -> Dict:
         diff_dict = {}
@@ -88,8 +100,26 @@ class Struct(Artifact):
                 "after": getattr(other, k)
             }
 
-        # TODO: fix struct members
+        # struct members
         diff_dict["struct_members"] = {}
+        for off, member in self.struct_members.items():
+            try:
+                other_mem = other.struct_members[off]
+            except KeyError:
+                other_mem = None
+
+            diff_dict["struct_members"][off] = member.diff(other_mem)
+
+        for off, other_mem in other.struct_members.items():
+            if off in diff_dict["struct_members"]:
+                continue
+
+            diff_dict["struct_members"][off] = self.invert_diff(other_mem.diff(None))
+
+    def copy(self):
+        struct_members = {offset: member.copy() for offset, member in self.struct_members.items()}
+        struct = Struct(self.name, self.size, struct_members, last_change=self.last_change)
+        return struct
 
     @classmethod
     def parse(cls, s):
@@ -103,10 +133,38 @@ class Struct(Artifact):
         s.__setstate__(struct_toml)
         return s
 
+    @classmethod
+    def from_nonconflicting_merge(cls, struct1: "Struct", struct2: "Struct") -> "Struct":
+        struct_diff = struct1.diff(struct2)
+        merge_struct = struct1.copy()
 
+        members_diff = struct_diff["struct_members"]
+        for off, mem in struct2.struct_members.items():
+            # no difference
+            if off not in members_diff:
+                continue
 
+            mem_diff = members_diff[off]
 
+            # struct member is newly created
+            if mem_diff["before"] is None:
+                # check for overlap
+                new_mem_size = mem.size
+                new_mem_offset = mem.offset
 
+                for off_check in range(new_mem_offset, new_mem_offset + new_mem_size):
+                    if off_check in merge_struct.struct_members:
+                        break
+                else:
+                    merge_struct.struct_members[off] = mem.copy()
 
+                continue
 
+            # member differs
+            merge_mem = merge_struct.struct_members[off].copy()
+            merge_mem = StructMember.from_nonconflicting_merge(merge_mem, mem)
 
+        # compute the new size
+        merge_struct.size = sum(mem.size for mem in merge_struct.struct_members.values())
+
+        return merge_struct

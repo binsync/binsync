@@ -381,11 +381,11 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
         # if deleted, finish early
         if deleted:
-            self.binsync_state_change(self.controller.push_struct, Struct(None, None, None), s_name)
+            self.binsync_state_change(self.controller.push_struct, Struct(None, None, {}), s_name)
             return 0
 
         # convert the ida_struct into a binsync_struct
-        binsync_struct = Struct(s_name, s_size, [])
+        binsync_struct = Struct(s_name, s_size, {})
         for mptr in sptr.members:
             mid = mptr.id
             m_name = ida_struct.get_member_name(mid)
