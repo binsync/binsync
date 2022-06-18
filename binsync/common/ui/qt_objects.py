@@ -23,6 +23,7 @@ if ui_version == "PySide2":
         QTabWidget,
         QVBoxLayout,
         QWidget,
+        QDialogButtonBox
     )
 elif ui_version == "PySide6":
     from PySide6.QtCore import QDir, Qt, Signal
@@ -47,6 +48,7 @@ elif ui_version == "PySide6":
         QTabWidget,
         QVBoxLayout,
         QWidget,
+        QDialogButtonBox,
     )
 else:
     from PyQt5.QtCore import QDir, Qt
@@ -72,4 +74,5 @@ else:
         QTabWidget,
         QVBoxLayout,
         QWidget,
+        QDialogButtonBox
     )
