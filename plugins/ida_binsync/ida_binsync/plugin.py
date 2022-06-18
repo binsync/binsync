@@ -135,7 +135,8 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         self.open_control_panel()
 
         if dialog.open_magic_sync:
-            display_magic_sync_dialog(controller)
+            #display_magic_sync_dialog(controller)
+            l.debug("Magic Sync is disabled on startup for now.")
 
     def open_control_panel(self):
         """
