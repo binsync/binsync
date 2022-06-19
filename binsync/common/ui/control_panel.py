@@ -110,8 +110,9 @@ class ControlPanel(QWidget):
         self._ctx_table.reload()
 
     def _reload_tables(self):
-        for _, table in self.tables.items():
-            table.reload()
+        with self.controller.sync_read_lock:
+            for _, table in self.tables.items():
+                table.reload()
 
     def _update_table_data(self):
         if self.controller.client.has_remote:

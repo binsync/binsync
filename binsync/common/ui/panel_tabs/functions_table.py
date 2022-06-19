@@ -112,7 +112,7 @@ class QFunctionTable(QTableWidget):
 
         # first check if any functions are unknown to the table
         for user in self.controller.users():
-            state = self.controller.client.get_state(user=user.name)
+            state = self.controller.client.get_state(user=user.name, readonly=True)
             user_funcs: Dict[int, Function] = state.functions
 
             for func_addr, sync_func in user_funcs.items():
@@ -135,7 +135,7 @@ class QFunctionTable(QTableWidget):
 
     def _get_valid_users_for_func(self, func_addr):
         for user in self.controller.users():
-            user_state: State = self.controller.client.get_state(user=user.name)
+            user_state: State = self.controller.client.get_state(user=user.name, readonly=True)
             user_func = user_state.get_function(func_addr)
 
             # function must be changed by this user

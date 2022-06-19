@@ -6,6 +6,7 @@ import re
 import subprocess
 import threading
 import time
+from functools import wraps
 from typing import Iterable, Optional
 
 import filelock
@@ -23,6 +24,16 @@ BINSYNC_ROOT_BRANCH = f'{BINSYNC_BRANCH_PREFIX}/__root__'
 
 class ConnectionWarnings:
     HASH_MISMATCH = 0
+
+
+def init_checker(f):
+    @wraps(f)
+    def initcheck(self, *args, **kwargs):
+        if not self.check_client():
+            raise RuntimeError("Please connect to a repo first.")
+        return f(self, *args, **kwargs)
+
+    return initcheck
 
 
 class StateContext(object):
@@ -74,7 +85,7 @@ class Client:
         self.repo_root = repo_root
         self.binary_hash = binary_hash
         self.remote = remote
-        self.repo = None
+        self.rw_repo = None
         self.repo_lock = None
 
         if master_user.endswith('/') or '__root__' in master_user:
@@ -85,16 +96,17 @@ class Client:
         self.ssh_auth_sock = ssh_auth_sock  # type: str
         self.connection_warnings = []
 
-        self.repo = self._get_binsync_repo(remote_url, init_repo)
+        self.rw_repo = self._get_or_init_binsync_repo(remote_url, init_repo)
+        self.ro_repo = git.Repo(self.repo_root)
 
         # check out the appropriate branch
         try:
-            branch = next(o for o in self.repo.branches if o.name.endswith(self.user_branch_name))
+            branch = next(o for o in self.rw_repo.branches if o.name.endswith(self.user_branch_name))
         except StopIteration:
-            branch = self.repo.create_head(self.user_branch_name, BINSYNC_ROOT_BRANCH)
+            branch = self.rw_repo.create_head(self.user_branch_name, BINSYNC_ROOT_BRANCH)
         else:
             if branch.is_remote():
-                branch = self.repo.create_head(self.user_branch_name)
+                branch = self.rw_repo.create_head(self.user_branch_name)
         branch.checkout()
 
         self._commit_interval = commit_interval
@@ -114,7 +126,7 @@ class Client:
         if self.repo_lock is not None:
             self.repo_lock.release()
 
-    def _get_binsync_repo(self, remote_url, init_repo):
+    def _get_or_init_binsync_repo(self, remote_url, init_repo):
         """
         Gets the BinSync repo from either a local or remote git location and then sets up the repo as well
         as checks that the repo is the right repo for the current binary.
@@ -138,28 +150,28 @@ class Client:
             if not self.repo_root:
                 self.repo_root = re.findall(r"/(.*)\.git", remote_url)[0]
 
-            self.repo: git.Repo = self.clone(remote_url, no_head_check=init_repo)
+            self.rw_repo: git.Repo = self.clone(remote_url, no_head_check=init_repo)
 
             if init_repo:
-                if any(b.name == BINSYNC_ROOT_BRANCH for b in self.repo.branches):
+                if any(b.name == BINSYNC_ROOT_BRANCH for b in self.rw_repo.branches):
                     raise Exception("Can't init this remote repo since a BinSync root already exists")
 
                 self._setup_repo()
         else:
             try:
-                self.repo = git.Repo(self.repo_root)
+                self.rw_repo = git.Repo(self.repo_root)
 
                 # update view of remote branches (which may be new)
                 self.update_remote_view()
 
                 if init_repo:
                     raise Exception("Could not initialize repository - it already exists!")
-                if not any(b.name == BINSYNC_ROOT_BRANCH for b in self.repo.branches):
+                if not any(b.name == BINSYNC_ROOT_BRANCH for b in self.rw_repo.branches):
                     raise Exception(f"This is not a BinSync repo - it must have a {BINSYNC_ROOT_BRANCH} branch.")
             except (git.NoSuchPathError, git.InvalidGitRepositoryError):
                 if init_repo:
                     # case 3
-                    self.repo = git.Repo.init(self.repo_root)
+                    self.rw_repo = git.Repo.init(self.repo_root)
                     self._setup_repo()
                 else:
                     raise Exception(f"Failed to connect or create a BinSync repo")
@@ -168,7 +180,7 @@ class Client:
         if stored != self.binary_hash:
             self.connection_warnings.append(ConnectionWarnings.HASH_MISMATCH)
 
-        assert not self.repo.bare, "it should not be a bare repo"
+        assert not self.rw_repo.bare, "it should not be a bare repo"
 
         self.repo_lock = filelock.FileLock(self.repo_root + "/.git/binsync.lock")
         try:
@@ -178,7 +190,7 @@ class Client:
                             "If the previous client crashed, you need to delete " + self.repo_root +
                             "/.git/binsync.lock") from e
 
-        return self.repo
+        return self.rw_repo
 
     def update_remote_view(self):
         """
@@ -187,7 +199,7 @@ class Client:
         """
         # get all remote branches
         try:
-            branches = self.repo.remote().refs
+            branches = self.rw_repo.remote().refs
         except ValueError:
             return
 
@@ -197,7 +209,7 @@ class Client:
                 continue
 
             try:
-                self.repo.git.checkout('--track', branch.name)
+                self.rw_repo.git.checkout('--track', branch.name)
             except git.GitCommandError as e:
                 pass
 
@@ -212,7 +224,18 @@ class Client:
 
         :return:    True if there is a remote, False otherwise.
         """
-        return self.remote and self.repo.remotes and any(r.name == self.remote for r in self.repo.remotes)
+
+        if self.remote and any(r.name == self.remote for r in self.rw_repo.remotes):
+            #try:
+            #    self.rw_repo.remote().fetch()
+            #except Exception:
+            #    l.info("Unable top connect to remote repo")
+            #    pass
+            #else:
+            #
+            return True
+
+        return False
 
     @property
     def last_update_timestamp(self):
@@ -237,7 +260,7 @@ class Client:
         :return:
         """
 
-        self.repo.create_remote(name, url=remote_url)
+        self.rw_repo.create_remote(name, url=remote_url)
 
     def clone(self, remote_url, no_head_check=False):
         """
@@ -266,7 +289,7 @@ class Client:
 
         :return: bool
         """
-        self.repo.git.checkout(self.user_branch_name)
+        self.rw_repo.git.checkout(self.user_branch_name)
 
     def pull(self, print_error=False):
         """
@@ -281,8 +304,8 @@ class Client:
             if self.has_remote:
                 try:
                     env = self.ssh_agent_env()
-                    with self.repo.git.custom_environment(**env):
-                        self.repo.remotes[self.remote].pull()
+                    with self.rw_repo.git.custom_environment(**env):
+                        self.rw_repo.remotes[self.remote].pull()
                     self._last_pull_at = datetime.datetime.now()
                     l.debug("Pull completed successfully at %s", self._last_pull_at)
                 except git.exc.GitCommandError as ex:
@@ -300,32 +323,32 @@ class Client:
 
         :return:    None
         """
-        self.last_push_attempt_at = datetime.datetime.now()
-
-        self.checkout_to_master_user()
-        if self.has_remote:
-            try:
-                env = self.ssh_agent_env()
-                with self.repo.git.custom_environment(**env):
-                    self.repo.remotes[self.remote].push(BINSYNC_ROOT_BRANCH)
-                    self.repo.remotes[self.remote].push(self.user_branch_name)
-                self._last_push_at = datetime.datetime.now()
-                l.debug("Push completed successfully at %s", self._last_push_at)
-            except git.exc.GitCommandError as ex:
-                if print_error:
-                    print("Failed to push to remote \"%s\".\n"
-                          "Did you setup %s/master as the upstream of the local master branch?\n"
-                          "\n"
-                          "Git error: %s." % (
-                        self.remote,
-                        self.remote,
-                        str(ex)
-                    ))
+        with self.commit_lock:
+            self.last_push_attempt_at = datetime.datetime.now()
+            self.checkout_to_master_user()
+            if self.has_remote:
+                try:
+                    env = self.ssh_agent_env()
+                    with self.rw_repo.git.custom_environment(**env):
+                        self.rw_repo.remotes[self.remote].push(BINSYNC_ROOT_BRANCH)
+                        self.rw_repo.remotes[self.remote].push(self.user_branch_name)
+                    self._last_push_at = datetime.datetime.now()
+                    l.debug("Push completed successfully at %s", self._last_push_at)
+                except git.exc.GitCommandError as ex:
+                    if print_error:
+                        print("Failed to push to remote \"%s\".\n"
+                              "Did you setup %s/master as the upstream of the local master branch?\n"
+                              "\n"
+                              "Git error: %s." % (
+                            self.remote,
+                            self.remote,
+                            str(ex)
+                        ))
 
     def users(self) -> Iterable[User]:
         for ref in self._get_best_refs():
             try:
-                metadata = State.load_metadata(ref.commit.tree)
+                metadata = State.load_toml_from_file("metadata.toml", client=self, tree=ref.commit.tree)
                 yield User.from_metadata(metadata)
             except Exception as e:
                 l.debug(f"Unable to load user {e}")
@@ -335,37 +358,32 @@ class Client:
         state = self.get_state(user=user, version=version)
         return StateContext(self, state, locked=locked)
 
-    def get_tree(self, user):
+    def get_state(self, user=None, version=None, readonly=False):
+        repo = self.rw_repo
         with self.commit_lock:
-            options = [ref for ref in self.repo.refs if ref.name.endswith(f"{BINSYNC_BRANCH_PREFIX}/{user}")]
-            if not options:
-                raise ValueError(f'No such user "{user}" found in repository')
-
-            # find the latest commit for the specified user!
-            best = max(options, key=lambda ref: ref.commit.authored_date)
-            bct = best.commit.tree
-
-        return bct
-
-    def get_state(self, user=None, version=None):
-        if user is None or user == self.master_user:
-            # local state
-            if self.state is None:
+            if user is None or user == self.master_user:
+                # local state
+                if self.state is None:
+                    try:
+                        self.state = State.parse(
+                            self.get_tree(self.master_user, repo),
+                            version=version,
+                            client=self,
+                        )  # Also need to check if user is none here???
+                    except MetadataNotFoundError:
+                        # we should return a new state
+                        self.state = State(user if user is not None else self.master_user, client=self)
+                return self.state
+            else:
                 try:
-                    self.state = State.parse(
-                        self.get_tree(user=self.master_user), version=version,
-                        client=self,
-                    )  # Also need to check if user is none here???
+                    state = State.parse(
+                        self.get_tree(user, repo),
+                        version=version,
+                        client=self
+                    )
+                    return state
                 except MetadataNotFoundError:
-                    # we should return a new state
-                    self.state = State(user if user is not None else self.master_user, client=self)
-            return self.state
-        else:
-            try:
-                state = State.parse(self.get_tree(user=user), version=version, client=self)
-                return state
-            except MetadataNotFoundError:
-                return None
+                    return None
 
     def get_locked_state(self, user=None, version=None):
         with self.commit_lock:
@@ -415,16 +433,16 @@ class Client:
 
             assert self.master_user == state.user
 
-            master_user_branch = next(o for o in self.repo.branches if o.name == self.user_branch_name)
-            index = self.repo.index
+            master_user_branch = next(o for o in self.rw_repo.branches if o.name == self.user_branch_name)
+            index = self.rw_repo.index
 
             # dump the state
             state.dump(index)
 
             # commit changes
-            self.repo.index.add([os.path.join(state.user, "*")])
+            self.rw_repo.index.add([os.path.join(state.user, "*")])
 
-            if not self.repo.index.diff("HEAD"):
+            if not self.rw_repo.index.diff("HEAD"):
                 return
 
             # commit if there is any difference
@@ -436,8 +454,6 @@ class Client:
 
             master_user_branch.commit = commit
             state._dirty = False
-
-            self.push()
 
     def sync_states(self, user=None):
         target_state = self.get_state(user)
@@ -496,12 +512,12 @@ class Client:
         return ssh_agent_pid, ssh_agent_sock
 
     def close(self):
-        self.repo.close()
-        del self.repo
+        self.rw_repo.close()
+        del self.rw_repo
 
     def _get_best_refs(self):
         candidates = {}
-        for ref in self.repo.refs:  # type: git.Reference
+        for ref in self.rw_repo.refs:  # type: git.Reference
             if f'{BINSYNC_BRANCH_PREFIX}/' not in ref.name:
                 continue
 
@@ -519,12 +535,12 @@ class Client:
             f.write(".git/*\n")
         with open(os.path.join(self.repo_root, "binary_hash"), "w") as f:
             f.write(self.binary_hash)
-        self.repo.index.add([".gitignore", "binary_hash"])
-        self.repo.index.commit("Root commit")
-        self.repo.create_head(BINSYNC_ROOT_BRANCH)
+        self.rw_repo.index.add([".gitignore", "binary_hash"])
+        self.rw_repo.index.commit("Root commit")
+        self.rw_repo.create_head(BINSYNC_ROOT_BRANCH)
 
     def _get_stored_hash(self):
-        branch = [ref for ref in self.repo.refs if ref.name.endswith(BINSYNC_ROOT_BRANCH)][0]
+        branch = [ref for ref in self.rw_repo.refs if ref.name.endswith(BINSYNC_ROOT_BRANCH)][0]
         return branch.commit.tree["binary_hash"].data_stream.read().decode().strip("\n")
 
     def list_files_in_tree(self, base_tree: git.Tree):
@@ -533,16 +549,15 @@ class Client:
 
         :param commit: A gitpython Tree object
         """
-        with self.commit_lock:
-            file_list = []
-            stack = [base_tree]
-            while len(stack) > 0:
-                tree = stack.pop()
-                # enumerate blobs (files) at this level
-                for b in tree.blobs:
-                    file_list.append(b.path)
-                for subtree in tree.trees:
-                    stack.append(subtree)
+        file_list = []
+        stack = [base_tree]
+        while len(stack) > 0:
+            tree = stack.pop()
+            # enumerate blobs (files) at this level
+            for b in tree.blobs:
+                file_list.append(b.path)
+            for subtree in tree.trees:
+                stack.append(subtree)
 
         return file_list
 
@@ -566,8 +581,21 @@ class Client:
         index.add([fullpath])
 
     def remove_data(self, index: git.IndexFile, path: str):
-        with self.commit_lock:
-            fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
-            pathlib.Path(fullpath).parent.mkdir(parents=True, exist_ok=True)
-            index.remove([fullpath], working_tree=True)
+        fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
+        pathlib.Path(fullpath).parent.mkdir(parents=True, exist_ok=True)
+        index.remove([fullpath], working_tree=True)
+
+    def load_file_from_tree(self, tree: git.Tree, filename):
+        return tree[filename].data_stream.read().decode()
+
+    def get_tree(self, user, repo: git.Repo):
+        options = [ref for ref in repo.refs if ref.name.endswith(f"{BINSYNC_BRANCH_PREFIX}/{user}")]
+        if not options:
+            raise ValueError(f'No such user "{user}" found in repository')
+
+        # find the latest commit for the specified user!
+        best = max(options, key=lambda ref: ref.commit.authored_date)
+        bct = best.commit.tree
+
+        return bct
 

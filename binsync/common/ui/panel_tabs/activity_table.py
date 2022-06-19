@@ -121,7 +121,7 @@ class QActivityTable(QTableWidget):
         # first check if any functions are unknown to the table
         for user in self.controller.users():
             changed_funcs = {}
-            state = self.controller.client.get_state(user=user.name)
+            state = self.controller.client.get_state(user=user.name, readonly=True)
             user_funcs: Dict[int, Function] = state.functions
 
             for func_addr, sync_func in user_funcs.items():
@@ -153,7 +153,7 @@ class QActivityTable(QTableWidget):
             )
 
     def _get_valid_funcs_for_user(self, username):
-        user_state: State = self.controller.client.get_state(user=username)
+        user_state: State = self.controller.client.get_state(user=username, readonly=True)
         func_addrs = [addr for addr in user_state.functions]
 
         func_addrs.sort()

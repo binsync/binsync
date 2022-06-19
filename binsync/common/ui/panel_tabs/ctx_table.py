@@ -117,7 +117,7 @@ class QCTXTable(QTableWidget):
         self.ctx = new_ctx or self.ctx
         self.items = []
         for user in self.controller.users():
-            state = self.controller.client.get_state(user=user.name)
+            state = self.controller.client.get_state(user=user.name, readonly=True)
 
             func = state.get_function(self.ctx)
 

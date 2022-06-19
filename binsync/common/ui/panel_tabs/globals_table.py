@@ -123,7 +123,7 @@ class QGlobalsTable(QTableWidget):
         known_globals = {}
 
         for user in self.controller.users():
-            state = self.controller.client.get_state(user=user.name)
+            state = self.controller.client.get_state(user=user.name, readonly=True)
             user_structs = state.structs
             user_gvars = state.global_vars
             user_enums = state.enums
@@ -160,7 +160,7 @@ class QGlobalsTable(QTableWidget):
             return
 
         for user in self.controller.users():
-            user_state: State = self.controller.client.get_state(user=user.name)
+            user_state: State = self.controller.client.get_state(user=user.name, readonly=True)
             get_global = getattr(user_state, global_getter)
             user_global = get_global(global_name)
 

@@ -24,7 +24,7 @@ class TestState(unittest.TestCase):
             client.state = state
 
             # dump to the current repo, current branch
-            state.dump(client.repo.index)
+            state.dump(client.rw_repo.index)
             metadata_path = os.path.join(tmpdir, "metadata.toml")
             self.assertTrue(os.path.isfile(metadata_path))
 
