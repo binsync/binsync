@@ -79,7 +79,7 @@ class IDAActionHandler(idaapi.action_handler_t):
 #
 
 class ControlPanelViewWrapper(object):
-    NAME = "BinSync: Info Panel"
+    NAME = "BinSync"
 
     def __init__(self, controller):
         # create a dockable view
@@ -97,6 +97,7 @@ class ControlPanelViewWrapper(object):
         self._w = ControlPanel(self._controller)
         layout = QVBoxLayout()
         layout.addWidget(self._w)
+        layout.setContentsMargins(0, 0, 0, 0)
         self.widget.setLayout(layout)
 
 #
@@ -142,6 +143,8 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         """
         Open the control panel view and attach it to IDA View-A or Pseudocode-A.
         """
+        #TODO: check if we can transfer focus when opening psuedocode views after syncing
+
 
         wrapper = ControlPanelViewWrapper(controller)
         if not wrapper.twidget:
@@ -151,19 +154,25 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         idaapi.display_widget(wrapper.twidget, flags)
         wrapper.widget.visible = True
 
-        # prioritize attaching the binsync panel to a decompilation window
-        target = "Pseudocode-A"
-        dwidget = idaapi.find_widget(target)
-        if not dwidget:
-            func_addr = next(idautils.Functions())
-            ida_hexrays.open_pseudocode(func_addr, 0)
+        target = "Functions"
+        fwidget = idaapi.find_widget(target)
+        if not fwidget:
+            # prioritize attaching the binsync panel to a decompilation window
+            target = "Pseudocode-A"
             dwidget = idaapi.find_widget(target)
-
             if not dwidget:
-                target = "IDA View-A"
+                func_addr = next(idautils.Functions())
+                ida_hexrays.open_pseudocode(func_addr, 0)
+                dwidget = idaapi.find_widget(target)
 
-        # attach the panel to the found target
-        idaapi.set_dock_pos(ControlPanelViewWrapper.NAME, target, idaapi.DP_RIGHT)
+                if not dwidget:
+                    target = "IDA View-A"
+
+        if target == "Functions":
+            idaapi.set_dock_pos(ControlPanelViewWrapper.NAME, target, idaapi.DP_INSIDE)
+        else:
+            # attach the panel to the found target
+            idaapi.set_dock_pos(ControlPanelViewWrapper.NAME, target, idaapi.DP_RIGHT)
 
     def install_actions(self):
         self.install_control_panel_action()

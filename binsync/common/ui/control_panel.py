@@ -71,12 +71,14 @@ class ControlPanel(QWidget):
         self._status_label.setText(self.controller.status_string())
         self._status_bar = QStatusBar(self)
         self._status_bar.addPermanentWidget(self._status_label)
+        self._status_bar.showMessage("No Context")
 
         # control box
         control_layout = QVBoxLayout()
 
         # tabs for panel_tabs
         self.tabView = QTabWidget()
+        self.tabView.setContentsMargins(0, 0, 0, 0)
 
         # add panel_tabs to tabs
         self._ctx_table = QCTXTable(self.controller)
@@ -100,13 +102,17 @@ class ControlPanel(QWidget):
         main_layout = QVBoxLayout()
         main_layout.addWidget(self.tabView)
         main_layout.addWidget(self._status_bar)
+        main_layout.setContentsMargins(0, 0, 0, 0)
 
         self.setLayout(main_layout)
 
     def _reload_ctx(self):
         ctx_name = self.controller.last_ctx.name or ""
         ctx_name = ctx_name[:12] + "..." if len(ctx_name) > 12 else ctx_name
-        self._status_bar.showMessage(f"{ctx_name}@{hex(self.controller.last_ctx.addr)}")
+        if ctx_name == "":
+            self._status_bar.showMessage("No Context")
+        else:
+            self._status_bar.showMessage(f"{ctx_name}@{hex(self.controller.last_ctx.addr)}")
         self._ctx_table.reload()
 
     def _reload_tables(self):

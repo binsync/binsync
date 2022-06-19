@@ -9,6 +9,8 @@ from binsync.common.ui.qt_objects import (
     Qt,
     QTableWidget,
     QTableWidgetItem,
+    QAction,
+    QFontDatabase
 )
 from binsync.common.ui.utils import QNumericItem, friendly_datetime
 from binsync.data import Function
@@ -16,6 +18,9 @@ from binsync.core.scheduler import SchedSpeed
 from binsync.core.state import State
 
 l = logging.getLogger(__name__)
+
+fixed_width_font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+fixed_width_font.setPixelSize(14)
 
 class QActivityItem:
     def __init__(self, user, activity, last_push):
@@ -45,6 +50,7 @@ class QActivityItem:
         ]
 
         for w in widgets:
+            w.setFont(fixed_width_font)
             w.setFlags(w.flags() & ~Qt.ItemIsEditable)
 
         return widgets
@@ -72,19 +78,28 @@ class QActivityTable(QTableWidget):
         self.items = []
 
         self.setColumnCount(len(self.HEADER))
+        self.column_visibility = [True for _ in range(len(self.HEADER))]
         self.setHorizontalHeaderLabels(self.HEADER)
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self.horizontalHeader().setHorizontalScrollMode(self.ScrollPerPixel)
         self.horizontalHeader().setDefaultAlignment(Qt.AlignHCenter | Qt.Alignment(Qt.TextWordWrap))
         self.horizontalHeader().setMinimumWidth(160)
+        self.horizontalHeader().setSortIndicator(2, Qt.DescendingOrder)
         self.setHorizontalScrollMode(self.ScrollPerPixel)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
         self.verticalHeader().setVisible(False)
         self.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-        self.verticalHeader().setDefaultSectionSize(24)
+        self.verticalHeader().setDefaultSectionSize(22)
 
         self.setSortingEnabled(True)
+
+        self.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.setShowGrid(False)
 
     def reload(self):
         self.setSortingEnabled(False)
@@ -97,23 +112,42 @@ class QActivityTable(QTableWidget):
         self.viewport().update()
         self.setSortingEnabled(True)
 
+    def _col_hide_handler(self, index):
+        self.column_visibility[index] = not self.column_visibility[index]
+        self.setColumnHidden(index, self.column_visibility[index])
+        if self.column_visibility[index]:
+            self.showColumn(index)
+        else:
+            self.hideColumn(index)
+
     def contextMenuEvent(self, event):
         menu = QMenu(self)
         menu.setObjectName("binsync_activity_table_context_menu")
-
+        valid_row = True
         selected_row = self.rowAt(event.pos().y())
         item = self.item(selected_row, 0)
         if item is None:
-            return
-        username = item.text()
-        menu.addAction("Sync", lambda: self.controller.fill_function(self.item(selected_row, 1).data(Qt.UserRole), user=username))
+            valid_row = False
 
-        menu.addAction("Sync-All", lambda: self.controller.fill_all(user=username))
+        col_hide_menu = menu.addMenu("Show Columns")
+        handler = lambda ind: lambda: self._col_hide_handler(ind)
+        for i, c in enumerate(self.HEADER):
+            act = QAction(c, parent=menu)
+            act.setCheckable(True)
+            act.setChecked(self.column_visibility[i])
+            act.triggered.connect(handler(i))
+            col_hide_menu.addAction(act)
+        if valid_row:
+            username = item.text()
+            menu.addSeparator()
+            menu.addAction("Sync", lambda: self.controller.fill_function(self.item(selected_row, 1).data(Qt.UserRole), user=username))
 
-        for_menu = menu.addMenu("Sync for...")
-        for func_addr_str in self._get_valid_funcs_for_user(username):
-            action = for_menu.addAction(func_addr_str)
-            action.triggered.connect(lambda chk, func=func_addr_str: self.controller.fill_function(int(func, 16), user=username))
+            menu.addAction("Sync-All", lambda: self.controller.fill_all(user=username))
+
+            for_menu = menu.addMenu("Sync for...")
+            for func_addr_str in self._get_valid_funcs_for_user(username):
+                action = for_menu.addAction(func_addr_str)
+                action.triggered.connect(lambda chk, func=func_addr_str: self.controller.fill_function(int(func_addr_str, 16), user=username))
 
         menu.popup(self.mapToGlobal(event.pos()))
 

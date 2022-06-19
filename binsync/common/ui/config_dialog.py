@@ -1,10 +1,12 @@
 import logging
 import os
-import time
 import traceback
 from typing import Optional
 
 import toml
+from PyQt5.QtCore import Qt, QEvent
+
+from binsync.client import ConnectionWarnings
 from binsync.core.client import ConnectionWarnings
 from binsync.common.ui.qt_objects import (
     QCheckBox,
@@ -29,6 +31,7 @@ class SyncConfig(QDialog):
     - cloning a remote
     - using a locally pulled remote repo
     """
+    #TODO: look into tab order, maybe force tab to put focus on okay button?
     def __init__(self, controller, open_magic_sync=True, parent=None):
         super().__init__(parent)
         self.controller = controller

@@ -18,13 +18,16 @@ if ui_version == "PySide2":
         QMessageBox,
         QPushButton,
         QStatusBar,
+        QStyledItemDelegate,
         QTableWidget,
         QTableWidgetItem,
         QTabWidget,
         QVBoxLayout,
         QWidget,
-        QDialogButtonBox
+        QDialogButtonBox,
+        QAction,
     )
+    from PySide2.QtGui import QFontDatabase
 elif ui_version == "PySide6":
     from PySide6.QtCore import QDir, Qt, Signal
     from PySide6.QtWidgets import (
@@ -43,13 +46,16 @@ elif ui_version == "PySide6":
         QMessageBox,
         QPushButton,
         QStatusBar,
+        QStyledItemDelegate,
         QTableWidget,
         QTableWidgetItem,
         QTabWidget,
         QVBoxLayout,
         QWidget,
         QDialogButtonBox,
+        QAction,
     )
+    from PySide6.QtGui import QFontDatabase
 else:
     from PyQt5.QtCore import QDir, Qt
     from PyQt5.QtCore import pyqtSignal as Signal
@@ -69,10 +75,13 @@ else:
         QMessageBox,
         QPushButton,
         QStatusBar,
+        QStyledItemDelegate,
         QTableWidget,
         QTableWidgetItem,
         QTabWidget,
         QVBoxLayout,
         QWidget,
-        QDialogButtonBox
+        QDialogButtonBox,
+        QAction
     )
+    from PyQt5.QtGui import QFontDatabase

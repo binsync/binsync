@@ -8,10 +8,15 @@ from binsync.common.ui.qt_objects import (
     Qt,
     QTableWidget,
     QTableWidgetItem,
+    QAction,
+    QFontDatabase
 )
 from binsync.common.ui.utils import QNumericItem, friendly_datetime
 
 l = logging.getLogger(__name__)
+
+fixed_width_font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+fixed_width_font.setPixelSize(14)
 
 class QCTXItem:
     """
@@ -47,6 +52,7 @@ class QCTXItem:
         ]
 
         for w in widgets:
+            w.setFont(fixed_width_font)
             w.setFlags(w.flags() & ~Qt.ItemIsEditable)
 
         return widgets
@@ -69,17 +75,27 @@ class QCTXTable(QTableWidget):
 
         # header
         self.setColumnCount(len(self.HEADER))
+        self.column_visibility = [True for _ in range(len(self.HEADER))]
         self.setHorizontalHeaderLabels(self.HEADER)
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+        self.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         self.horizontalHeader().setHorizontalScrollMode(self.ScrollPerPixel)
         self.horizontalHeader().setDefaultAlignment(Qt.AlignHCenter | Qt.Alignment(Qt.TextWordWrap))
         self.horizontalHeader().setMinimumWidth(160)
+        self.horizontalHeader().setSortIndicator(2, Qt.DescendingOrder)
         self.setHorizontalScrollMode(self.ScrollPerPixel)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
         self.verticalHeader().setVisible(False)
         self.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-        self.verticalHeader().setDefaultSectionSize(24)
+        self.verticalHeader().setDefaultSectionSize(22)
+        self.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.setShowGrid(False)
 
         self.setSortingEnabled(True)
 
@@ -94,17 +110,39 @@ class QCTXTable(QTableWidget):
         self.viewport().update()
         self.setSortingEnabled(True)
 
+    def _col_hide_handler(self, index):
+        self.column_visibility[index] = not self.column_visibility[index]
+        self.setColumnHidden(index, self.column_visibility[index])
+        if self.column_visibility[index]:
+            self.showColumn(index)
+        else:
+            self.hideColumn(index)
+
     def contextMenuEvent(self, event):
         menu = QMenu(self)
         menu.setObjectName("binsync_context_table_context_menu")
-        
+        valid_row = True
+
+
         func_addr = self.ctx if self.ctx else None
         selected_row = self.rowAt(event.pos().y())
         item = self.item(selected_row, 0)
         if item is None:
-            return
-        username = item.text()
-        menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=username))
+            valid_row = False
+
+        col_hide_menu = menu.addMenu("Show Columns")
+        handler = lambda ind: lambda: self._col_hide_handler(ind)
+        for i, c in enumerate(self.HEADER):
+            act = QAction(c, parent=menu)
+            act.setCheckable(True)
+            act.setChecked(self.column_visibility[i])
+            act.triggered.connect(handler(i))
+            col_hide_menu.addAction(act)
+
+        if valid_row:
+            username = item.text()
+            menu.addSeparator()
+            menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=username))
 
         menu.popup(self.mapToGlobal(event.pos()))
 
