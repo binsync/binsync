@@ -59,7 +59,7 @@ class MagicSyncDialog(QDialog):
         self._main_layout.addLayout(vertical_layout, 0, 0, 1, 1)
 
     def _get_users(self):
-        return ["None"] + list(self.controller.usernames())
+        return ["None"] + list(self.controller.usernames(priority=1))
 
     def _on_yes_clicked(self):
         self.should_sync = True

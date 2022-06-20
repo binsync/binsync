@@ -1,6 +1,5 @@
 import logging
 import os
-import pathlib
 import time
 from functools import wraps
 from typing import Dict, Iterable, Optional
@@ -19,7 +18,7 @@ from binsync.data import (
     StackVariable,
 )
 from binsync.data.struct import Struct
-from binsync.errors import MetadataNotFoundError
+from binsync.core.errors import MetadataNotFoundError
 
 l = logging.getLogger(__name__)
 

@@ -7,7 +7,7 @@ from functools import wraps
 from typing import Dict, Iterable, List, Optional
 
 import binsync.data
-from binsync.client import Client
+from binsync.core.client import Client
 from binsync.data import (Comment, Enum, Function, GlobalVariable,
                           StackVariable, Struct, User)
 
@@ -130,7 +130,7 @@ class BinSyncController:
     The client will be set on connection. The ctx_change_callback will be set by an outside UI
 
     """
-    def __init__(self, headless=False, reload_time=5):
+    def __init__(self, headless=False, reload_time=20):
         self.headless = headless
         self.reload_time = reload_time
 
@@ -149,7 +149,6 @@ class BinSyncController:
         # command locks
         self.queue_lock = threading.Lock()
         self.cmd_queue = OrderedDict()
-        self.sync_read_lock = threading.Lock()
 
         # create a pulling thread, but start on connection
         self.updater_thread = threading.Thread(target=self.updater_routine)
@@ -191,17 +190,12 @@ class BinSyncController:
             if not self.check_client():
                 continue
 
-            # validate no other thread is using Git right now
-            if self.sync_read_lock.locked():
-                continue
-
             # do git pull/push operations if a remote exist for the client
             if self.client.has_remote and (
-                    (self.client.last_pull_attempt_at is None) or
-                    (datetime.datetime.now() - self.client.last_pull_attempt_at).seconds > self.reload_time
+                    (self.client.last_pull_attempt_ts is None) or
+                    time.time() - self.client.last_pull_attempt_ts > self.reload_time
             ):
-                with self.sync_read_lock:
-                    self.client.update()
+                self.client.update()
 
             if not self.headless:
                 # update context knowledge every loop iteration
@@ -210,8 +204,8 @@ class BinSyncController:
 
                 # update the control panel with new info every BINSYNC_RELOAD_TIME seconds
                 if self._last_reload is None or \
-                        (datetime.datetime.now() - self._last_reload).seconds > self.reload_time:
-                    self._last_reload = datetime.datetime.now()
+                        time.time() - self._last_reload > self.reload_time:
+                    self._last_reload = time.time()
                     self._update_ui()
 
             # evaluate commands started by the user
@@ -245,6 +239,7 @@ class BinSyncController:
             user, path, binary_hash, init_repo=init_repo, remote_url=remote_url
         )
 
+        _l.info("Starting the updater thread in the controller")
         self.start_updater_routine()
         return self.client.connection_warnings
 
@@ -271,11 +266,11 @@ class BinSyncController:
         self.headless = not self.headless
 
     @init_checker
-    def users(self) -> Iterable[User]:
-        return self.client.users()
+    def users(self, priority=None) -> Iterable[User]:
+        return self.client.users(priority=priority)
 
-    def usernames(self) -> Iterable[str]:
-        for user in self.users():
+    def usernames(self, priority=None) -> Iterable[str]:
+        for user in self.users(priority=priority):
             yield user.name
 
     #
@@ -457,98 +452,97 @@ class BinSyncController:
         """
 
         _l.info(f"Staring a magic sync with a preference for {preference_user}")
-        with self.sync_read_lock:
-            # re-order users for the prefered user to be at the front of the queue (if they exist)
-            all_users = list(self.usernames())
-            preference_user = preference_user if preference_user else self.client.master_user
-            all_users.remove(preference_user)
-            master_state = self.client.get_state(self.client.master_user)
+        # re-order users for the prefered user to be at the front of the queue (if they exist)
+        all_users = list(self.usernames(priority=1))
+        preference_user = preference_user if preference_user else self.client.master_user
+        all_users.remove(preference_user)
+        master_state = self.client.get_state(self.client.master_user, priority=1)
 
-            #
-            # structs
-            #
+        #
+        # structs
+        #
 
-            _l.info(f"Magic Syncing Structs...")
-            pref_state = self.client.get_state(preference_user)
-            for struct_name in self.get_all_changed_structs():
-                pref_struct = pref_state.get_struct(struct_name)
-                for user in all_users:
-                    user_state = self.client.get_state(user)
-                    user_struct = user_state.get_struct(user)
+        _l.info(f"Magic Syncing Structs...")
+        pref_state = self.client.get_state(preference_user, priority=1)
+        for struct_name in self.get_all_changed_structs():
+            pref_struct = pref_state.get_struct(struct_name)
+            for user in all_users:
+                user_state = self.client.get_state(user, priority=1)
+                user_struct = user_state.get_struct(user)
 
-                    if not user_struct:
-                        continue
+                if not user_struct:
+                    continue
 
-                    if not pref_struct:
-                        pref_struct = user_struct.copy()
-                        continue
+                if not pref_struct:
+                    pref_struct = user_struct.copy()
+                    continue
 
-                    pref_struct = Struct.from_nonconflicting_merge(pref_struct, user_struct)
-                    pref_struct.last_change = None
+                pref_struct = Struct.from_nonconflicting_merge(pref_struct, user_struct)
+                pref_struct.last_change = None
 
-                if pref_struct:
-                    master_state.structs[struct_name] = pref_struct
+            if pref_struct:
+                master_state.structs[struct_name] = pref_struct
 
-                self.fill_struct(struct_name, state=master_state)
-            self.client.commit_state(state=master_state, msg="Magic Sync Structs Merged")
+            self.fill_struct(struct_name, state=master_state)
+        self.client.commit_state(state=master_state, msg="Magic Sync Structs Merged")
 
-            #
-            # functions
-            #
+        #
+        # functions
+        #
 
-            master_state = self.client.get_state(self.client.master_user)
+        master_state = self.client.get_state(self.client.master_user, priority=1)
 
-            _l.info(f"Magic Syncing Functions...")
-            pref_state = self.client.get_state(preference_user)
-            for func_addr in self.get_all_changed_funcs():
-                pref_func = pref_state.get_function(addr=func_addr)
-                for user in all_users:
-                    user_state = self.client.get_state(user)
-                    user_func = user_state.get_function(func_addr)
+        _l.info(f"Magic Syncing Functions...")
+        pref_state = self.client.get_state(preference_user, priority=1)
+        for func_addr in self.get_all_changed_funcs():
+            pref_func = pref_state.get_function(addr=func_addr)
+            for user in all_users:
+                user_state = self.client.get_state(user, priority=1)
+                user_func = user_state.get_function(func_addr)
 
-                    if not user_func:
-                        continue
+                if not user_func:
+                    continue
 
-                    if not pref_func:
-                        pref_func = user_func.copy()
-                        continue
+                if not pref_func:
+                    pref_func = user_func.copy()
+                    continue
 
-                    pref_func = Function.from_nonconflicting_merge(pref_func, user_func)
-                    pref_func.last_change = None
+                pref_func = Function.from_nonconflicting_merge(pref_func, user_func)
+                pref_func.last_change = None
 
-                master_state.functions[func_addr] = pref_func
-                self.fill_function(func_addr, state=master_state)
+            master_state.functions[func_addr] = pref_func
+            self.fill_function(func_addr, state=master_state)
 
-            self.client.commit_state(state=master_state, msg="Magic Sync Funcs Merged")
+        self.client.commit_state(state=master_state, msg="Magic Sync Funcs Merged")
 
-            #
-            # global vars
-            #
+        #
+        # global vars
+        #
 
-            _l.info(f"Magic Syncing Global Vars...")
-            master_state = self.client.get_state(self.client.master_user)
-            pref_state = self.client.get_state(preference_user)
-            for gvar_addr in self.get_all_changed_global_vars():
-                pref_gvar = pref_state.get_global_var(gvar_addr)
-                for user in all_users:
-                    user_state = self.client.get_state(user)
-                    user_gvar = user_state.get_global_var(gvar_addr)
+        _l.info(f"Magic Syncing Global Vars...")
+        master_state = self.client.get_state(self.client.master_user, priority=1)
+        pref_state = self.client.get_state(preference_user, priority=1)
+        for gvar_addr in self.get_all_changed_global_vars():
+            pref_gvar = pref_state.get_global_var(gvar_addr)
+            for user in all_users:
+                user_state = self.client.get_state(user, priority=1)
+                user_gvar = user_state.get_global_var(gvar_addr)
 
-                    if not user_gvar:
-                        continue
+                if not user_gvar:
+                    continue
 
-                    if not pref_gvar:
-                        pref_gvar = user_gvar.copy()
-                        continue
+                if not pref_gvar:
+                    pref_gvar = user_gvar.copy()
+                    continue
 
-                    pref_gvar = GlobalVariable.from_nonconflicting_merge(pref_gvar, user_gvar)
-                    pref_gvar.last_change = None
+                pref_gvar = GlobalVariable.from_nonconflicting_merge(pref_gvar, user_gvar)
+                pref_gvar.last_change = None
 
-                master_state.global_vars[gvar_addr] = pref_gvar
-                self.fill_global_var(gvar_addr, state=master_state)
+            master_state.global_vars[gvar_addr] = pref_gvar
+            self.fill_global_var(gvar_addr, state=master_state)
 
-            self.client.commit_state(state=master_state, msg="Magic Sync Global Vars Merged")
-            _l.info(f"Magic Syncing Completed!")
+        self.client.commit_state(state=master_state, msg="Magic Sync Global Vars Merged")
+        _l.info(f"Magic Syncing Completed!")
 
     #
     # Pushers
@@ -724,8 +718,8 @@ class BinSyncController:
 
     def get_all_changed_funcs(self):
         known_funcs = set()
-        for username in self.usernames():
-            state = self.client.get_state(username)
+        for username in self.usernames(priority=1):
+            state = self.client.get_state(username, priority=1)
             for func_addr in state.functions:
                 known_funcs.add(func_addr)
 
@@ -733,8 +727,8 @@ class BinSyncController:
 
     def get_all_changed_structs(self):
         known_structs = set()
-        for username in self.usernames():
-            state = self.client.get_state(username)
+        for username in self.usernames(priority=1):
+            state = self.client.get_state(username, priority=1)
             for struct_name in state.structs:
                 known_structs.add(struct_name)
 
@@ -742,8 +736,8 @@ class BinSyncController:
 
     def get_all_changed_global_vars(self):
         known_gvars = set()
-        for username in self.usernames():
-            state = self.client.get_state(username)
+        for username in self.usernames(priority=1):
+            state = self.client.get_state(username, priority=1)
             for offset in state.global_vars:
                 known_gvars.add(offset)
 

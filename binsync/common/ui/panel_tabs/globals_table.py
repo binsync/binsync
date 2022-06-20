@@ -11,7 +11,7 @@ from binsync.common.ui.qt_objects import (
     QTableWidgetItem,
 )
 from binsync.common.ui.utils import QNumericItem, friendly_datetime
-from binsync.state import State
+from binsync.core.state import State
 
 l = logging.getLogger(__name__)
 
@@ -123,7 +123,7 @@ class QGlobalsTable(QTableWidget):
         known_globals = {}
 
         for user in self.controller.users():
-            state = self.controller.client.get_state(user=user.name, readonly=True)
+            state = self.controller.client.get_state(user=user.name)
             user_structs = state.structs
             user_gvars = state.global_vars
             user_enums = state.enums
@@ -159,8 +159,8 @@ class QGlobalsTable(QTableWidget):
             l.warning("Failed to get a valid type for global type")
             return
 
-        for user in self.controller.users():
-            user_state: State = self.controller.client.get_state(user=user.name, readonly=True)
+        for user in self.controller.users(priority=1):
+            user_state: State = self.controller.client.get_state(user=user.name, priority=1)
             get_global = getattr(user_state, global_getter)
             user_global = get_global(global_name)
 

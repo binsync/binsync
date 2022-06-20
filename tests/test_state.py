@@ -6,7 +6,7 @@ import json
 import unittest
 
 import binsync
-from binsync.data import Function, FunctionHeader, StackVariable, FunctionArgument, Comment
+from binsync.data import Function, FunctionHeader, StackVariable, FunctionArgument
 
 
 class TestState(unittest.TestCase):
@@ -24,7 +24,7 @@ class TestState(unittest.TestCase):
             client.state = state
 
             # dump to the current repo, current branch
-            state.dump(client.rw_repo.index)
+            state.dump(client.repo.index)
             metadata_path = os.path.join(tmpdir, "metadata.toml")
             self.assertTrue(os.path.isfile(metadata_path))
 
@@ -45,7 +45,7 @@ class TestState(unittest.TestCase):
             client.commit_state(state)
 
             # load the state
-            state_tree = client.get_tree(state.user)
+            state_tree = client._get_tree(state.user)
             new_state = binsync.State.parse(state_tree, client=client)
 
             self.assertEqual(new_state.user, "user0")
@@ -71,7 +71,7 @@ class TestState(unittest.TestCase):
 
         self.assertNotEqual(state.last_push_time, None)
         self.assertEqual(state.last_push_artifact, "some_struct")
-        self.assertEqual(state.last_push_artifact_type, binsync.state.ArtifactType.STRUCT)
+        self.assertEqual(state.last_push_artifact_type, binsync.core.state.ArtifactType.STRUCT)
 
     def test_func_diffing(self):
         state1 = binsync.State("user1")

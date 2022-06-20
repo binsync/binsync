@@ -10,7 +10,7 @@ default_config = {
     "disable_existing_loggers": False,
     "formatters": {
         "console": {
-            "format": "%(levelname)s | %(asctime)s | %(name)-8s | %(message)s"
+            "format": "%(levelname)s | %(asctime)s | %(name)-8s | %(message)s [%(threadName)s]"
         },
         "logfile": {
             "format": "%(levelname)s | %(asctime)s | %(name)-8s | %(message)s"
@@ -81,7 +81,7 @@ class Loggers:
         if self.config_dict is not None:
             logging.config.dictConfig(self.config_dict)
         self.handler = logging.StreamHandler()
-        self.handler.setFormatter(logging.Formatter('%(levelname)-7s | %(asctime)-23s | %(name)-8s | %(message)s'))
+        self.handler.setFormatter(logging.Formatter('%(levelname)-7s | %(asctime)-23s | %(name)-8s | %(message)s [%(threadName)s]'))
 
     def load_all_loggers(self):
         for name, logger in logging.Logger.manager.loggerDict.items():

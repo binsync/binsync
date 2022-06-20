@@ -12,7 +12,7 @@ from binsync.common.ui.qt_objects import (
 )
 from binsync.common.ui.utils import QNumericItem, friendly_datetime
 from binsync.data import Function
-from binsync.state import State
+from binsync.core.state import State
 
 l = logging.getLogger(__name__)
 
@@ -121,7 +121,7 @@ class QActivityTable(QTableWidget):
         # first check if any functions are unknown to the table
         for user in self.controller.users():
             changed_funcs = {}
-            state = self.controller.client.get_state(user=user.name, readonly=True)
+            state = self.controller.client.get_state(user=user.name)
             user_funcs: Dict[int, Function] = state.functions
 
             for func_addr, sync_func in user_funcs.items():
@@ -153,7 +153,7 @@ class QActivityTable(QTableWidget):
             )
 
     def _get_valid_funcs_for_user(self, username):
-        user_state: State = self.controller.client.get_state(user=username, readonly=True)
+        user_state: State = self.controller.client.get_state(user=username, priority=1)
         func_addrs = [addr for addr in user_state.functions]
 
         func_addrs.sort()
