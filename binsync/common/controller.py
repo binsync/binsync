@@ -7,7 +7,7 @@ from functools import wraps
 from typing import Dict, Iterable, List, Optional
 
 import binsync.data
-from binsync.core.client import Client
+from binsync.core.client import Client, SchedSpeed
 from binsync.data import (Comment, Enum, Function, GlobalVariable,
                           StackVariable, Struct, User)
 
@@ -453,21 +453,21 @@ class BinSyncController:
 
         _l.info(f"Staring a magic sync with a preference for {preference_user}")
         # re-order users for the prefered user to be at the front of the queue (if they exist)
-        all_users = list(self.usernames(priority=1))
+        all_users = list(self.usernames(priority=SchedSpeed.FAST))
         preference_user = preference_user if preference_user else self.client.master_user
         all_users.remove(preference_user)
-        master_state = self.client.get_state(self.client.master_user, priority=1)
+        master_state = self.client.get_state(self.client.master_user, priority=SchedSpeed.FAST)
 
         #
         # structs
         #
 
         _l.info(f"Magic Syncing Structs...")
-        pref_state = self.client.get_state(preference_user, priority=1)
+        pref_state = self.client.get_state(preference_user, priority=SchedSpeed.FAST)
         for struct_name in self.get_all_changed_structs():
             pref_struct = pref_state.get_struct(struct_name)
             for user in all_users:
-                user_state = self.client.get_state(user, priority=1)
+                user_state = self.client.get_state(user, priority=SchedSpeed.FAST)
                 user_struct = user_state.get_struct(user)
 
                 if not user_struct:
@@ -490,14 +490,14 @@ class BinSyncController:
         # functions
         #
 
-        master_state = self.client.get_state(self.client.master_user, priority=1)
+        master_state = self.client.get_state(self.client.master_user, priority=SchedSpeed.FAST)
 
         _l.info(f"Magic Syncing Functions...")
-        pref_state = self.client.get_state(preference_user, priority=1)
+        pref_state = self.client.get_state(preference_user, priority=SchedSpeed.FAST)
         for func_addr in self.get_all_changed_funcs():
             pref_func = pref_state.get_function(addr=func_addr)
             for user in all_users:
-                user_state = self.client.get_state(user, priority=1)
+                user_state = self.client.get_state(user, priority=SchedSpeed.FAST)
                 user_func = user_state.get_function(func_addr)
 
                 if not user_func:
@@ -520,12 +520,12 @@ class BinSyncController:
         #
 
         _l.info(f"Magic Syncing Global Vars...")
-        master_state = self.client.get_state(self.client.master_user, priority=1)
-        pref_state = self.client.get_state(preference_user, priority=1)
+        master_state = self.client.get_state(self.client.master_user, priority=SchedSpeed.FAST)
+        pref_state = self.client.get_state(preference_user, priority=SchedSpeed.FAST)
         for gvar_addr in self.get_all_changed_global_vars():
             pref_gvar = pref_state.get_global_var(gvar_addr)
             for user in all_users:
-                user_state = self.client.get_state(user, priority=1)
+                user_state = self.client.get_state(user, priority=SchedSpeed.FAST)
                 user_gvar = user_state.get_global_var(gvar_addr)
 
                 if not user_gvar:
@@ -718,8 +718,8 @@ class BinSyncController:
 
     def get_all_changed_funcs(self):
         known_funcs = set()
-        for username in self.usernames(priority=1):
-            state = self.client.get_state(username, priority=1)
+        for username in self.usernames(priority=SchedSpeed.FAST):
+            state = self.client.get_state(username, priority=SchedSpeed.FAST)
             for func_addr in state.functions:
                 known_funcs.add(func_addr)
 
@@ -727,8 +727,8 @@ class BinSyncController:
 
     def get_all_changed_structs(self):
         known_structs = set()
-        for username in self.usernames(priority=1):
-            state = self.client.get_state(username, priority=1)
+        for username in self.usernames(priority=SchedSpeed.FAST):
+            state = self.client.get_state(username, priority=SchedSpeed.FAST)
             for struct_name in state.structs:
                 known_structs.add(struct_name)
 
@@ -736,8 +736,8 @@ class BinSyncController:
 
     def get_all_changed_global_vars(self):
         known_gvars = set()
-        for username in self.usernames(priority=1):
-            state = self.client.get_state(username, priority=1)
+        for username in self.usernames(priority=SchedSpeed.FAST):
+            state = self.client.get_state(username, priority=SchedSpeed.FAST)
             for offset in state.global_vars:
                 known_gvars.add(offset)
 

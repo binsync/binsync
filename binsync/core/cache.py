@@ -15,15 +15,15 @@ class Cache:
     def update_state_cache_commits(self, username_commit_dict: dict):
         for username, commit in username_commit_dict.items():
             with self.state_lock:
-                print(self)
                 if self.state_cache[username].commit != commit:
-                    l.info(f"Commit does not match {username} for {(self.state_cache[username].commit, commit)} ")
                     self.state_cache[username].state = None
+                    self.state_cache[username].commit = commit
 
-    def update_user_cache(self, users, timestamp):
+    def update_user_cache_branches(self, branch_set: set):
         with self.user_lock:
-            if self.user_cache.last_update_ts < timestamp:
-                self.user_cache.users = users
+            if branch_set != self.user_cache.known_branches:
+                self.user_cache.users = None
+                self.user_cache.known_branches = branch_set
 
     #
     # getters
@@ -33,12 +33,9 @@ class Cache:
         with self.state_lock:
             return self.state_cache[user].state
 
-    def users(self, last_pull_ts, **kwargs):
+    def users(self, **kwargs):
         with self.user_lock:
-            if self.user_cache.last_update_ts and last_pull_ts > self.user_cache.last_update_ts:
-                return self.user_cache.users
-            else:
-                return None
+            return self.user_cache.users
 
     #
     # setters
@@ -62,4 +59,4 @@ class StateCache:
 class UserCache:
     def __init__(self, users=None):
         self.users = users
-        self.last_update_ts = None
+        self.known_branches = set()

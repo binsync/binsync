@@ -14,6 +14,7 @@ from binsync.common.ui.qt_objects import (
 )
 from binsync.common.ui.magic_sync_dialog import MagicSyncDialog
 from binsync.common.controller import BinSyncController
+from binsync.core.scheduler import SchedSpeed
 
 l = logging.getLogger(__name__)
 

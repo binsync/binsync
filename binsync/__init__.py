@@ -12,5 +12,5 @@ del logging
 from binsync.data import *
 from binsync import common
 from binsync.core.state import ArtifactType, State
-from binsync.core.threads import Job, Scheduler
+from binsync.core.scheduler import Job, Scheduler
 from binsync.core import Client, State, ConnectionWarnings

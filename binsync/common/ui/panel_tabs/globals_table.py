@@ -12,6 +12,7 @@ from binsync.common.ui.qt_objects import (
 )
 from binsync.common.ui.utils import QNumericItem, friendly_datetime
 from binsync.core.state import State
+from binsync.core.scheduler import SchedSpeed
 
 l = logging.getLogger(__name__)
 
@@ -159,8 +160,8 @@ class QGlobalsTable(QTableWidget):
             l.warning("Failed to get a valid type for global type")
             return
 
-        for user in self.controller.users(priority=1):
-            user_state: State = self.controller.client.get_state(user=user.name, priority=1)
+        for user in self.controller.users(priority=SchedSpeed.FAST):
+            user_state: State = self.controller.client.get_state(user=user.name, priority=SchedSpeed.FAST)
             get_global = getattr(user_state, global_getter)
             user_global = get_global(global_name)
 

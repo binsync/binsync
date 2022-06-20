@@ -16,7 +16,7 @@ import git.exc
 from binsync.data import User
 from binsync.core.errors import ExternalUserCommitError, MetadataNotFoundError
 from binsync.core.state import State
-from binsync.core.threads import Scheduler, Job
+from binsync.core.scheduler import Scheduler, Job, SchedSpeed
 from binsync.core.cache import Cache
 
 
@@ -35,11 +35,10 @@ def atomic_git_action(f):
         # cache check
         cache_item = self._check_cache_(f, **kwargs)
         if cache_item is not None:
-            print(f"++++++++++++++CACHE HIT: {cache_item}")
             return cache_item
 
         # non cache available, queue it up!
-        priority = kwargs.get("priority", None) or 3
+        priority = kwargs.get("priority", None) or SchedSpeed.SLOW
         ret_val = self.scheduler.schedule_and_wait_job(
             Job(f, self, *args, **kwargs),
             priority=priority
@@ -270,18 +269,21 @@ class Client:
 
     @atomic_git_action
     def users(self, priority=None) -> Iterable[User]:
-        repo = git.Repo(self.repo_root) #self.scheduler.repo
+        repo = git.Repo(self.repo_root)
+        users = list()
         for ref in self._get_best_refs(repo):
             try:
                 metadata = State.load_toml_from_file("metadata.toml", client=self, tree=ref.commit.tree)
-                yield User.from_metadata(metadata)
+                user = User.from_metadata(metadata)
+                users.append(user)
             except Exception as e:
                 l.debug(f"Unable to load user {e}")
                 continue
 
+        return users
+
     @atomic_git_action
     def get_state(self, user=None, version=None, priority=None):
-        l.info(f"Getting state for {user}")
         repo = git.Repo(self.repo_root) #self.scheduler.repo
         if user is None or user == self.master_user:
             # local state
@@ -308,13 +310,12 @@ class Client:
                 return None
 
     @atomic_git_action
-    def pull(self, print_error=False, priority=2):
+    def pull(self, print_error=False, priority=SchedSpeed.AVERAGE):
         """
         Pull changes from the remote side.
 
         :return:    None
         """
-        l.info("Pulling now")
         self.last_pull_attempt_ts = time.time()
 
         self._checkout_to_master_user()
@@ -333,21 +334,15 @@ class Client:
                           str(ex)
                       ))
         self._update_remote_view()
-        # TODO:
-        # The problem is that self.cache is not actually the same across threads (it makes a new one each time).
-        # What we need to do to fix this is pass a reference of the same cache across all of them:
-        # scheduler(cache) -> execute(cache) -> get_state(cache=cache) -> update_cache(cache)
-        #
-        self.cache.update_state_cache_commits(self._get_commits_for_users(git.Repo(self.repo_root)))
+        self._update_cache()
 
     @atomic_git_action
-    def push(self, print_error=False, priority=2):
+    def push(self, print_error=False, priority=SchedSpeed.AVERAGE):
         """
         Push local changes to the remote side.
 
         :return:    None
         """
-        l.info("Pushing now!")
         self.last_push_attempt_ts = time.time()
         self._checkout_to_master_user()
         try:
@@ -370,7 +365,7 @@ class Client:
 
     @property
     @atomic_git_action
-    def has_remote(self, priority=1):
+    def has_remote(self, priority=SchedSpeed.FAST):
         """
         If there is a remote configured for our local repo.
 
@@ -607,7 +602,6 @@ class Client:
 
             commit_dict[username] = branch.commit.hexsha
 
-        l.info(f"Commit Dict {commit_dict}")
         return commit_dict
 
     def _check_cache_(self, f, **kwargs):
@@ -616,23 +610,33 @@ class Client:
             args = []
         elif f.__qualname__ == self.users.__qualname__:
             cache_func = self.cache.users
-            args = [self.last_pull_ts]
+            args = []
         else:
             return None
 
         item = cache_func(*args, **kwargs)
-        l.info(f"Checking cache on {cache_func} for {args} and {kwargs}")
 
         return item
 
     def _set_cache(self, f, ret_value, **kwargs):
-        set_func_map = {
-            self.get_state.__qualname__: self.cache.set_state,
-            self.users.__qualname__: self.cache.set_users,
-        }
+        if f.__qualname__ == self.get_state.__qualname__:
+            set_func = self.cache.set_state
+            args = []
+        elif f.__qualname__ == self.users.__qualname__:
+            set_func = self.cache.set_users
+            args = []
+        else:
+            return None
 
-        if f.__qualname__ not in set_func_map:
-            return
+        set_func(ret_value, *args, **kwargs)
 
-        set_func = set_func_map[f.__qualname__]
-        set_func(ret_value, **kwargs)
+    def _update_cache(self):
+        l.debug(f"Updating cache commits for State Cache...")
+        cache_dict = self._get_commits_for_users(git.Repo(self.repo_root))
+        self.cache.update_state_cache_commits(cache_dict)
+
+        l.debug(f"Updating branches on Users Cache...")
+        branch_set = set([key for key in cache_dict.keys()])
+        self.cache.update_user_cache_branches(branch_set)
+
+

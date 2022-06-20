@@ -1,11 +1,16 @@
 import threading
 import logging
 from queue import PriorityQueue
-from time import sleep
-import time
 from threading import Thread
 
 l = logging.getLogger(__name__)
+
+
+class SchedSpeed:
+    FAST = 1
+    AVERAGE = 2
+    SLOW = 3
+
 
 class FailedJob:
     def __init__(self, reason):
@@ -27,19 +32,11 @@ class Job:
 
 
 class Scheduler:
-    def __init__(self, cache, sleep_interval=0.05):
-        #Thread.__init__(self)
+    def __init__(self, sleep_interval=0.05):
         self.sleep_interval = sleep_interval
         self._worker = Thread(target=self._worker_thread)
         self._job_queue = PriorityQueue()
         self._work = False
-        self.cache = cache
-
-
-    #def run(self) -> None:
-    #    self._work = True
-    #    while self._work:
-    #        self._complete_a_job(block=True)
 
     def stop_worker_thread(self):
         self._work = False
@@ -53,12 +50,10 @@ class Scheduler:
         while self._work:
             self._complete_a_job(block=True)
 
-    def schedule_job(self, job: Job, priority=3):
-        if priority == 1:
-            l.info(f"Scheduled job for priority {priority}")
+    def schedule_job(self, job: Job, priority=SchedSpeed.SLOW):
         self._job_queue.put_nowait((priority, job,))
 
-    def schedule_and_wait_job(self, job: Job, priority=3, timeout=30):
+    def schedule_and_wait_job(self, job: Job, priority=SchedSpeed.SLOW, timeout=30):
         self.schedule_job(job, priority=priority)
         try:
             job.finish_event.wait(timeout=timeout)
