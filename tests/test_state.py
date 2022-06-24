@@ -45,7 +45,7 @@ class TestState(unittest.TestCase):
             client.commit_state(state)
 
             # load the state
-            state_tree = client._get_tree(state.user)
+            state_tree = client._get_tree(state.user, client.repo)
             new_state = binsync.State.parse(state_tree, client=client)
 
             self.assertEqual(new_state.user, "user0")

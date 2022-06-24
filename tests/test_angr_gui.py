@@ -16,7 +16,7 @@ from angrmanagement.ui.dialogs.rename_node import RenameNode
 from angrmanagement.ui.main_window import MainWindow
 from angrmanagement.config import Conf
 
-from binsync.common.controller import SyncControlStatus, BINSYNC_RELOAD_TIME
+from binsync.common.controller import SyncControlStatus
 from binsync.common.ui import utils
 from binsync.common.ui.version import set_ui_version
 set_ui_version("PySide2")
@@ -25,6 +25,8 @@ from binsync.common.ui.config_dialog import SyncConfig
 app = None
 test_location = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'binaries')
 logging.disable(logging.CRITICAL)
+
+BINSYNC_RELOAD_TIME = 10
 
 #
 # Test Utilities
