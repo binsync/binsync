@@ -130,7 +130,7 @@ class BinSyncController:
     The client will be set on connection. The ctx_change_callback will be set by an outside UI
 
     """
-    def __init__(self, headless=False, reload_time=20):
+    def __init__(self, headless=False, reload_time=10):
         self.headless = headless
         self.reload_time = reload_time
 
