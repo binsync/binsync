@@ -42,3 +42,10 @@ class Enum(Artifact):
         for name, enum in enums.items():
             enums_[name] = enum.__getstate__()
         return enums_
+
+    def copy(self):
+        return Enum(
+            self.name,
+            self.value_map.copy(),
+            last_change=self.last_change
+        )

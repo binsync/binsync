@@ -131,8 +131,8 @@ class State:
         # the client
         self.client = client  # type: Optional[Client]
 
-        # dirty bit
-        self._dirty = False  # type: bool
+        # state is dirty on creation (metadata)
+        self._dirty = True  # type: bool
 
         # data
         self.functions: Dict[int, Function] = {}
@@ -151,6 +151,19 @@ class State:
                    and other.global_vars == self.global_vars \
                    and other.enums == self.enums
         return False
+
+    def copy(self):
+        state = State(self.user, version=self.version, client=self.client)
+        state._dirty = False
+        artifacts = ["functions", "comments", "structs", "patches", "global_vars", "enums"]
+        for artifact in artifacts:
+            setattr(
+                state,
+                artifact,
+                {k: v.copy() for k, v in getattr(self, artifact).items()}
+            )
+
+        return state
 
     @property
     def dirty(self):

@@ -30,12 +30,26 @@ class ConnectionWarnings:
 
 
 def atomic_git_action(f):
+    """
+    Assures that any function called with this decorator will execute in-order, atomically, on a single thread.
+    This all assumes that the function you are passing is a member of the Client class, which will also have
+    a scheduler. This also means that this can only be called after the scheduler is started. This also requires a
+    Cache. Generally, just never call functions with this decorator until the Client is done initing.
+
+    This function will also attempt to check the cache for requested data on the same thread the original call
+    was made from. If not found, the atomic scheduling is done.
+
+    @param f:   A Client object function
+    @return:
+    """
     @wraps(f)
     def _atomic_git_action(self: "Client", *args, **kwargs):
-        # cache check
-        cache_item = self._check_cache_(f, **kwargs)
-        if cache_item is not None:
-            return cache_item
+        no_cache = kwargs.get("no_cache", False)
+        if not no_cache:
+            # cache check
+            cache_item = self._check_cache_(f, **kwargs)
+            if cache_item is not None:
+                return cache_item
 
         # non cache available, queue it up!
         priority = kwargs.get("priority", None) or SchedSpeed.SLOW
@@ -102,8 +116,8 @@ class Client:
 
         # create, init, and checkout Git repo
         self.repo = self._get_or_init_binsync_repo(remote_url, init_repo)
-        self._get_or_init_user_branch()
         self.scheduler.start_worker_thread()
+        self._get_or_init_user_branch()
 
         # timestamps
         self._commit_interval = commit_interval
@@ -125,6 +139,12 @@ class Client:
     #
 
     def _get_or_init_user_branch(self):
+        """
+        Creates a user branch if the user is new, otherwise it gets the branch of the same
+        name as the user
+
+        @return:
+        """
         try:
             branch = next(o for o in self.repo.branches if o.name.endswith(self.user_branch_name))
         except StopIteration:
@@ -149,9 +169,9 @@ class Client:
         4. Last case is what happens if a user wants to init a local folder that is not a Git folder. In this case,
            they will be offline but will have a local git repo.
 
-        :param remote_url:
-        :param init_repo:
-        :return:
+        @param remote_url:
+        @param init_repo:
+        @return:
         """
         if remote_url:
             # given a remove URL and no local folder, make it based on the URL name
@@ -170,7 +190,7 @@ class Client:
                 self.repo = git.Repo(self.repo_root)
 
                 # update view of remote branches (which may be new)
-                self._update_remote_view()
+                self._localize_remote_branches()
 
                 if init_repo:
                     raise Exception("Could not initialize repository - it already exists!")
@@ -201,6 +221,11 @@ class Client:
         return self.repo
 
     def _setup_repo(self):
+        """
+        For use in initializing folder that is not yet a Git repo.
+
+        @return:
+        """
         with open(os.path.join(self.repo_root, ".gitignore"), "w") as f:
             f.write(".git/*\n")
         with open(os.path.join(self.repo_root, "binary_hash"), "w") as f:
@@ -268,10 +293,10 @@ class Client:
         state._dirty = False
 
     @atomic_git_action
-    def users(self, priority=None) -> Iterable[User]:
-        repo = git.Repo(self.repo_root)
+    def users(self, priority=None, no_cache=False) -> Iterable[User]:
+        repo = self.repo
         users = list()
-        for ref in self._get_best_refs(repo):
+        for ref in self._get_best_refs(repo).values():
             try:
                 metadata = State.load_toml_from_file("metadata.toml", client=self, tree=ref.commit.tree)
                 user = User.from_metadata(metadata)
@@ -283,9 +308,12 @@ class Client:
         return users
 
     @atomic_git_action
-    def get_state(self, user=None, version=None, priority=None):
-        repo = git.Repo(self.repo_root) #self.scheduler.repo
-        if user is None or user == self.master_user:
+    def get_state(self, user=None, version=None, priority=None, no_cache=False):
+        if user is None:
+            user = self.master_user
+
+        repo = self.repo
+        if user == self.master_user:
             # local state
             if self.state is None:
                 try:
@@ -310,30 +338,40 @@ class Client:
                 return None
 
     @atomic_git_action
-    def pull(self, print_error=False, priority=SchedSpeed.AVERAGE):
+    def pull(self, priority=SchedSpeed.AVERAGE):
         """
         Pull changes from the remote side.
 
         :return:    None
         """
         self.last_pull_attempt_ts = time.time()
-
-        self._checkout_to_master_user()
         try:
             env = self.ssh_agent_env()
-            with self.repo.git.custom_environment(**env):
-                self.repo.remotes[self.remote].pull()
-            self._last_pull_ts = time.time()
-            l.debug("Pull completed successfully at %s", self._last_pull_ts)
-        except git.exc.GitCommandError as ex:
-            if print_error:
-                print("Failed to pull from remote \"%s\".\n"
-                      "\n"
-                      "Git error: %s." % (
-                          self.remote,
-                          str(ex)
-                      ))
-        self._update_remote_view()
+        except Exception:
+            return
+
+        with self.repo.git.custom_environment(**env):
+            # dangerous remote operations happen here
+            try:
+                self._localize_remote_branches()
+                self.repo.git.checkout(BINSYNC_ROOT_BRANCH)
+                self.repo.git.fetch("--all")
+                self.repo.git.pull("--all")
+                self._last_pull_ts = time.time()
+            except Exception as e:
+                l.debug(f"Pull exception {e}")
+
+        # preform a merge on each branch
+        for branch in self.repo.branches:
+            if "HEAD" in branch.name:
+                continue
+
+            self.repo.git.checkout(branch)
+            try:
+                self.repo.git.merge()
+            except Exception as e:
+                l.debug(f"Failed to merge on {branch} with {e}")
+
         self._update_cache()
 
     @atomic_git_action
@@ -353,15 +391,7 @@ class Client:
             self._last_push_ts = time.time()
             l.debug("Push completed successfully at %s", self._last_push_ts)
         except git.exc.GitCommandError as ex:
-            if print_error:
-                print("Failed to push to remote \"%s\".\n"
-                      "Did you setup %s/master as the upstream of the local master branch?\n"
-                      "\n"
-                      "Git error: %s." % (
-                          self.remote,
-                          self.remote,
-                          str(ex)
-                      ))
+            l.debug(f"Failed to push b/c {ex}")
 
     @property
     @atomic_git_action
@@ -381,19 +411,19 @@ class Client:
     # Non-Atomic Public API
     #
 
-    def update(self):
+    def update(self, commit_msg="Generic Change"):
         """
         Update both the local and remote repo knowledge of files through pushes/pulls and commits
         in the case of dirty files.
         """
+        # attempt to commit dirty files in a update phase
+        master_state = self.get_state(user=self.master_user, no_cache=True)
+        if master_state and master_state.dirty:
+            self.commit_state(msg=commit_msg)
 
         # do a pull if there is a remote repo connected
         if self.has_remote:
             self.pull()
-
-        # attempt to commit dirty files in a update phase
-        if self.get_state().dirty:
-            self.commit_state()
 
         if self.has_remote:
             self.push()
@@ -402,26 +432,45 @@ class Client:
     # Git Updates
     #
 
-    def _update_remote_view(self):
+    def _localize_remote_branches(self):
         """
-        Updates PyGits view of remote references in the repo by both trying to get remote references
-        and checking out local ones.
+        Looks up all the remote refrences on the server and attempts to make them a tracked local
+        branch.
+
+        @return:
         """
+
+
         # get all remote branches
         try:
-            branches = self.repo.remote().refs
+            remote_branches = self.repo.remote().refs
         except ValueError:
             return
 
         # track any remote we are not already tracking
-        for branch in branches:
+        local_branches = set(b.name for b in self.repo.branches)
+        for branch in remote_branches:
+            # exclude head commit
             if "HEAD" in branch.name:
+                continue
+
+            # attempt to localize the remote name
+            try:
+                local_name = re.findall(f"({self.remote}/)(.*)", branch.name)[0][1]
+            except IndexError:
+                print("INDEX ERROR")
+                continue
+
+            # never try to track things already tracked
+            if local_name in local_branches:
                 continue
 
             try:
                 self.repo.git.checkout('--track', branch.name)
             except git.GitCommandError as e:
-                pass
+                continue
+
+
 
     def ssh_agent_env(self):
         if self.ssh_agent_pid is not None and self.ssh_auth_sock is not None:
@@ -524,7 +573,7 @@ class Client:
                     continue
 
             candidates[branch_name] = ref
-        return candidates.values()
+        return candidates
 
     def _get_stored_hash(self):
         branch = [ref for ref in self.repo.refs if ref.name.endswith(BINSYNC_ROOT_BRANCH)][0]
@@ -586,28 +635,29 @@ class Client:
 
         return bct
 
+    #
+    # Caching Functions
+    #
+
     def _get_commits_for_users(self, repo: git.Repo):
-        commit_dict = {}
-        for branch in repo.branches:
-            if not branch.name.startswith(BINSYNC_BRANCH_PREFIX):
-                continue
+        ref_dict = self._get_best_refs(repo)
 
-            if branch.name.endswith(BINSYNC_ROOT_BRANCH):
-                continue
+        # ignore the _root_ branch
+        if BINSYNC_ROOT_BRANCH in ref_dict:
+            del ref_dict[BINSYNC_ROOT_BRANCH]
 
-            try:
-                username = branch.name.split("/")[1]
-            except Exception:
-                continue
-
-            commit_dict[username] = branch.commit.hexsha
-
+        commit_dict = {
+            branch_name: ref.commit.hexsha for branch_name, ref in ref_dict.items()
+        }
         return commit_dict
 
     def _check_cache_(self, f, **kwargs):
         if f.__qualname__ == self.get_state.__qualname__:
             cache_func = self.cache.get_state
             args = []
+            if kwargs.get("user", None) is None:
+                kwargs["user"] = self.master_user
+
         elif f.__qualname__ == self.users.__qualname__:
             cache_func = self.cache.users
             args = []
@@ -622,6 +672,8 @@ class Client:
         if f.__qualname__ == self.get_state.__qualname__:
             set_func = self.cache.set_state
             args = []
+            if kwargs.get("user", None) is None:
+                kwargs["user"] = self.master_user
         elif f.__qualname__ == self.users.__qualname__:
             set_func = self.cache.set_users
             args = []
@@ -635,8 +687,9 @@ class Client:
         cache_dict = self._get_commits_for_users(git.Repo(self.repo_root))
         self.cache.update_state_cache_commits(cache_dict)
 
+        cache_keys = [key for key in cache_dict.keys()]
         l.debug(f"Updating branches on Users Cache...")
-        branch_set = set([key for key in cache_dict.keys()])
+        branch_set = set(cache_keys)
         self.cache.update_user_cache_branches(branch_set)
 
 

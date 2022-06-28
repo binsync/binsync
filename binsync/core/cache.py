@@ -4,8 +4,8 @@ import logging
 
 l = logging.getLogger(__name__)
 
-class Cache:
 
+class Cache:
     def __init__(self):
         self.state_cache = defaultdict(StateCache)
         self.user_cache = UserCache()
@@ -31,7 +31,8 @@ class Cache:
 
     def get_state(self, user=None, **kwargs):
         with self.state_lock:
-            return self.state_cache[user].state
+            state = self.state_cache[user].state
+            return state.copy() if state else state
 
     def users(self, **kwargs):
         with self.user_lock:

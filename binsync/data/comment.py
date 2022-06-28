@@ -42,3 +42,11 @@ class Comment(Artifact):
         for v in sorted(comments.values(), key=lambda x: x.addr):
             comments_["%x" % v.addr] = v.__getstate__()
         return comments_
+
+    def copy(self):
+        return Comment(
+            self.addr,
+            self.comment,
+            decompiled=self.decompiled,
+            last_change=self.last_change
+        )

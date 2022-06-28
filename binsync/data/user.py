@@ -29,3 +29,13 @@ class User:
             last_push_artifact_type=metadata.get("last_push_artifact_type", -1)
         )
         return u
+
+    def copy(self):
+        return User(
+            self.name,
+            uid=self.uid,
+            client=self.client,
+            last_push_time=self.last_push_time,
+            last_push_artifact=self.last_push_artifact,
+            last_push_artifact_type=self.last_push_artifact_type
+        )

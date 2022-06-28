@@ -51,7 +51,8 @@ class Scheduler:
             self._complete_a_job(block=True)
 
     def schedule_job(self, job: Job, priority=SchedSpeed.SLOW):
-        self._job_queue.put_nowait((priority, job,))
+        sched_job = (priority, job,)
+        self._job_queue.put_nowait(sched_job)
 
     def schedule_and_wait_job(self, job: Job, priority=SchedSpeed.SLOW, timeout=30):
         self.schedule_job(job, priority=priority)
