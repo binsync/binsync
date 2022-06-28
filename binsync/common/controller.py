@@ -191,13 +191,11 @@ class BinSyncController:
                 continue
 
             # do git pull/push operations if a remote exist for the client
-            if self.client.has_remote:
-                if self.client.last_pull_attempt_ts is None:
-                    self.client.update(commit_msg="User created")
-
-                # update every reload_time
-                elif time.time() - self.client.last_pull_attempt_ts > self.reload_time:
-                    self.client.update()
+            if self.client.last_pull_attempt_ts is None:
+                self.client.update(commit_msg="User created")
+            # update every reload_time
+            elif time.time() - self.client.last_pull_attempt_ts > self.reload_time:
+                self.client.update()
 
             if not self.headless:
                 # update context knowledge every loop iteration

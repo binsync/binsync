@@ -6,6 +6,10 @@ from threading import Thread
 l = logging.getLogger(__name__)
 
 
+#
+# Description Classes
+#
+
 class SchedSpeed:
     FAST = 1
     AVERAGE = 2
@@ -15,6 +19,10 @@ class SchedSpeed:
 class FailedJob:
     def __init__(self, reason):
         self.reason = reason
+
+#
+# Jobs
+#
 
 
 class Job:
@@ -31,11 +39,29 @@ class Job:
         self.finish_event.set()
 
 
+class PriorityJob:
+    def __init__(self, job, priority):
+        self.job = job
+        self.priority = priority
+
+    def __lt__(self, other):
+        return self.priority < other.priority
+
+    def execute(self):
+        self.job.execute()
+
+
+#
+# Main Scheduler
+#
+
+
 class Scheduler:
     def __init__(self, sleep_interval=0.05):
         self.sleep_interval = sleep_interval
         self._worker = Thread(target=self._worker_thread)
         self._job_queue = PriorityQueue()
+        self.lock = threading.Lock()
         self._work = False
 
     def stop_worker_thread(self):
@@ -51,8 +77,9 @@ class Scheduler:
             self._complete_a_job(block=True)
 
     def schedule_job(self, job: Job, priority=SchedSpeed.SLOW):
-        sched_job = (priority, job,)
-        self._job_queue.put_nowait(sched_job)
+        self._job_queue.put(
+            PriorityJob(job, priority)
+        )
 
     def schedule_and_wait_job(self, job: Job, priority=SchedSpeed.SLOW, timeout=30):
         self.schedule_job(job, priority=priority)
@@ -65,10 +92,10 @@ class Scheduler:
 
     def _complete_a_job(self, block=False):
         if block:
-            _, job = self._job_queue.get()
-        elif self._job_queue.not_empty:
-            _, job = self._job_queue.get_nowait()
+            prio_job = self._job_queue.get()
+        elif not self._job_queue.empty():
+            prio_job = self._job_queue.get_nowait()
         else:
             return
 
-        job.execute()
+        prio_job.execute()
