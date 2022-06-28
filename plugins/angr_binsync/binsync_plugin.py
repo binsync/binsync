@@ -8,8 +8,8 @@ from binsync.common.ui.version import set_ui_version
 
 set_ui_version("PySide2")
 from binsync.common.ui.config_dialog import SyncConfig
-from angrmanagement.plugins.angr_binsync.control_panel_view import ControlPanelView
-from angrmanagement.plugins.angr_binsync.controller import AngrBinSyncController
+from .control_panel_view import ControlPanelView
+from .controller import AngrBinSyncController
 
 l = logging.getLogger(__name__)
 

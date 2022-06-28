@@ -9,7 +9,8 @@ loggers = Loggers()
 del Loggers
 del logging
 
-from binsync import common
-from binsync.client import Client, ConnectionWarnings, StateContext
 from binsync.data import *
-from binsync.state import ArtifactType, State
+from binsync import common
+from binsync.core.state import ArtifactType, State
+from binsync.core.scheduler import Job, Scheduler
+from binsync.core import Client, State, ConnectionWarnings

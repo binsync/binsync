@@ -1,4 +1,5 @@
 import logging
+import time
 
 import binsync.data
 from binsync.common.ui.panel_tabs.activity_table import QActivityTable
@@ -91,7 +92,6 @@ class ControlPanel(QWidget):
         self.tabView.addTab(self._utilities_panel, "Utilities")
 
         self.tables.update({
-            "context": self._ctx_table,
             "functions": self._func_table,
             "globals": self._global_table,
             "activity": self._activity_table
@@ -112,10 +112,10 @@ class ControlPanel(QWidget):
     def _reload_tables(self):
         for _, table in self.tables.items():
             table.reload()
+        self._ctx_table.reload()
 
     def _update_table_data(self):
-        if self.controller.client.has_remote:
-            self.controller.client.update_remote_view()
-
         for _, table in self.tables.items():
             table.update_table()
+
+        self._ctx_table.update_table()

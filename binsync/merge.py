@@ -1,6 +1,6 @@
 import logging
 
-from binsync.state import State
+from binsync.core.state import State
 
 l = logging.getLogger(__name__)
 

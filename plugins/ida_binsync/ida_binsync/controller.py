@@ -397,32 +397,6 @@ class IDABinSyncController(BinSyncController):
     #   Pullers
     #
 
-    @init_checker
-    def sync_all(self, user=None, state=None):
-        # copy the actual state from the other user
-        self.client.sync_states(user=user)
-        new_state = self.client.get_state(user=self.client.master_user)
-        func_addrs = new_state.functions.keys()
-        _l.info(f"Target Addrs for sync being cached: {[hex(x) for x in func_addrs]}")
-
-        # set the new stuff in the UI
-        for func_addr in func_addrs:
-            if func_addr:
-                try:
-                    target_func = new_state.get_function(func_addr)
-                    remote_name = target_func.name
-
-                    if remote_name != "" and remote_name:
-                        compat.set_ida_func_name(func_addr, remote_name)
-                except Exception:
-                    pass
-
-            update_task = UpdateTask(
-                self.fill_function,
-                func_addr, user=self.client.master_user
-            )
-            self.update_states[func_addr].add_update_task(update_task)
-
     #
     #   Pushers
     #

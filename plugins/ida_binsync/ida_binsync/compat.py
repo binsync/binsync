@@ -322,6 +322,10 @@ def set_func_header(ida_func_code_view, binsync_header: binsync.data.FunctionHea
 @execute_write
 def set_ida_comment(addr, cmt, decompiled=False):
     func = ida_funcs.get_func(addr)
+    if not func:
+        l.info(f"No function found at {addr}")
+        return False
+
     rpt = 1
 
     # function comment

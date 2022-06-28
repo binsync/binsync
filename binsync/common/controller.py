@@ -7,7 +7,7 @@ from functools import wraps
 from typing import Dict, Iterable, List, Optional
 
 import binsync.data
-from binsync.client import Client
+from binsync.core.client import Client, SchedSpeed
 from binsync.data import (Comment, Enum, Function, GlobalVariable,
                           StackVariable, Struct, User)
 
@@ -100,7 +100,8 @@ def make_ro_state(f):
 # Description Constants
 #
 
-BINSYNC_RELOAD_TIME = 10
+# https://stackoverflow.com/questions/10926328
+BUSY_LOOP_COOLDOWN = 0.5
 
 
 class SyncControlStatus:
@@ -129,8 +130,9 @@ class BinSyncController:
     The client will be set on connection. The ctx_change_callback will be set by an outside UI
 
     """
-    def __init__(self, headless=False):
+    def __init__(self, headless=False, reload_time=10):
         self.headless = headless
+        self.reload_time = reload_time
 
         # client created on connection
         self.client = None  # type: Optional[Client]
@@ -182,30 +184,31 @@ class BinSyncController:
 
     def updater_routine(self):
         while True:
-            time.sleep(1)
+            time.sleep(BUSY_LOOP_COOLDOWN)
 
-            # verify the client is connected
+            # validate a client is connected to this controller (may not have remote )
             if not self.check_client():
                 continue
 
-            # update client every BINSYNC_RELOAD_TIME seconds if it has a remote connection
-            if self.client.has_remote and (
-                    (self.client.last_pull_attempt_at is None) or
-                    (datetime.datetime.now() - self.client.last_pull_attempt_at).seconds > BINSYNC_RELOAD_TIME
-            ):
-                self.client.update()
+            # do git pull/push operations if a remote exist for the client
+            if self.client.has_remote:
+                if self.client.last_pull_attempt_ts is None:
+                    self.client.update(commit_msg="User created")
+
+                # update every reload_time
+                elif time.time() - self.client.last_pull_attempt_ts > self.reload_time:
+                    self.client.update()
 
             if not self.headless:
-                # update context knowledge every 1 second
+                # update context knowledge every loop iteration
                 if self.ctx_change_callback:
                     self._check_and_notify_ctx()
 
                 # update the control panel with new info every BINSYNC_RELOAD_TIME seconds
                 if self._last_reload is None or \
-                        (datetime.datetime.now() - self._last_reload).seconds > BINSYNC_RELOAD_TIME:
-                    self._last_reload = datetime.datetime.now()
+                        time.time() - self._last_reload > self.reload_time:
+                    self._last_reload = time.time()
                     self._update_ui()
-
 
             # evaluate commands started by the user
             self._eval_cmd_queue()
@@ -238,6 +241,7 @@ class BinSyncController:
             user, path, binary_hash, init_repo=init_repo, remote_url=remote_url
         )
 
+        _l.info("Starting the updater thread in the controller")
         self.start_updater_routine()
         return self.client.connection_warnings
 
@@ -264,11 +268,11 @@ class BinSyncController:
         self.headless = not self.headless
 
     @init_checker
-    def users(self) -> Iterable[User]:
-        return self.client.users()
+    def users(self, priority=None) -> Iterable[User]:
+        return self.client.users(priority=priority)
 
-    def usernames(self) -> Iterable[str]:
-        for user in self.users():
+    def usernames(self, priority=None) -> Iterable[str]:
+        for user in self.users(priority=priority):
             yield user.name
 
     #
@@ -450,23 +454,23 @@ class BinSyncController:
         """
 
         _l.info(f"Staring a magic sync with a preference for {preference_user}")
-
         # re-order users for the prefered user to be at the front of the queue (if they exist)
-        all_users = list(self.usernames())
+        all_users = list(self.usernames(priority=SchedSpeed.FAST))
         preference_user = preference_user if preference_user else self.client.master_user
         all_users.remove(preference_user)
-        master_state = self.client.get_state(self.client.master_user)
+        master_state = self.client.get_state(user=self.client.master_user, priority=SchedSpeed.FAST)
 
         #
         # structs
         #
 
         _l.info(f"Magic Syncing Structs...")
-        pref_state = self.client.get_state(preference_user)
+        pref_state = self.client.get_state(user=preference_user, priority=SchedSpeed.FAST)
         for struct_name in self.get_all_changed_structs():
+            _l.info(f"Looking at strunct {struct_name}")
             pref_struct = pref_state.get_struct(struct_name)
             for user in all_users:
-                user_state = self.client.get_state(user)
+                user_state = self.client.get_state(user=user, priority=SchedSpeed.FAST)
                 user_struct = user_state.get_struct(user)
 
                 if not user_struct:
@@ -489,14 +493,15 @@ class BinSyncController:
         # functions
         #
 
-        master_state = self.client.get_state(self.client.master_user)
+        master_state = self.client.get_state(user=self.client.master_user, priority=SchedSpeed.FAST)
 
         _l.info(f"Magic Syncing Functions...")
-        pref_state = self.client.get_state(preference_user)
+        pref_state = self.client.get_state(user=preference_user, priority=SchedSpeed.FAST)
         for func_addr in self.get_all_changed_funcs():
+            _l.info(f"Looking at func {hex(func_addr)}")
             pref_func = pref_state.get_function(addr=func_addr)
             for user in all_users:
-                user_state = self.client.get_state(user)
+                user_state = self.client.get_state(user=user, priority=SchedSpeed.FAST)
                 user_func = user_state.get_function(func_addr)
 
                 if not user_func:
@@ -519,12 +524,12 @@ class BinSyncController:
         #
 
         _l.info(f"Magic Syncing Global Vars...")
-        master_state = self.client.get_state(self.client.master_user)
-        pref_state = self.client.get_state(preference_user)
+        master_state = self.client.get_state(user=self.client.master_user, priority=SchedSpeed.FAST)
+        pref_state = self.client.get_state(user=preference_user, priority=SchedSpeed.FAST)
         for gvar_addr in self.get_all_changed_global_vars():
             pref_gvar = pref_state.get_global_var(gvar_addr)
             for user in all_users:
-                user_state = self.client.get_state(user)
+                user_state = self.client.get_state(user=user, priority=SchedSpeed.FAST)
                 user_gvar = user_state.get_global_var(gvar_addr)
 
                 if not user_gvar:
@@ -717,8 +722,8 @@ class BinSyncController:
 
     def get_all_changed_funcs(self):
         known_funcs = set()
-        for username in self.usernames():
-            state = self.client.get_state(username)
+        for username in self.usernames(priority=SchedSpeed.FAST):
+            state = self.client.get_state(user=username, priority=SchedSpeed.FAST)
             for func_addr in state.functions:
                 known_funcs.add(func_addr)
 
@@ -726,8 +731,8 @@ class BinSyncController:
 
     def get_all_changed_structs(self):
         known_structs = set()
-        for username in self.usernames():
-            state = self.client.get_state(username)
+        for username in self.usernames(priority=SchedSpeed.FAST):
+            state = self.client.get_state(user=username, priority=SchedSpeed.FAST)
             for struct_name in state.structs:
                 known_structs.add(struct_name)
 
@@ -735,8 +740,8 @@ class BinSyncController:
 
     def get_all_changed_global_vars(self):
         known_gvars = set()
-        for username in self.usernames():
-            state = self.client.get_state(username)
+        for username in self.usernames(priority=SchedSpeed.FAST):
+            state = self.client.get_state(user=username, priority=SchedSpeed.FAST)
             for offset in state.global_vars:
                 known_gvars.add(offset)
 

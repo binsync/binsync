@@ -19,12 +19,12 @@ class TestClient(unittest.TestCase):
 
             state = client.get_state()
             self.assertEqual(state.user, "user0")
-            # after create, state is not dirty
-            self.assertFalse(state.dirty)
+            # after create, state is dirty
+            self.assertTrue(state.dirty)
 
             func_header = binsync.data.FunctionHeader("some_name", 0x400080)
             state.set_function_header(func_header)
-            # it should be dirty now
+            # it should be dirty still (more edits)
             self.assertTrue(state.dirty)
 
             # commit changes so we clean it!

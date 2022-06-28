@@ -1,10 +1,11 @@
 import logging
 import os
+import time
 import traceback
 from typing import Optional
 
 import toml
-from binsync.client import ConnectionWarnings
+from binsync.core.client import ConnectionWarnings
 from binsync.common.ui.qt_objects import (
     QCheckBox,
     QDialog,
@@ -161,6 +162,7 @@ class SyncConfig(QDialog):
 
         try:
             connection_warnings = self.controller.connect(user, path, init_repo=init_repo, remote_url=remote_url)
+            pass
         except Exception as e:
             l.critical("Error connecting to specified repository!")
             QMessageBox(self).critical(None, "Error connecting to repository", str(e))

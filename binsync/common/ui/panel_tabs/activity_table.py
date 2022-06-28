@@ -12,7 +12,8 @@ from binsync.common.ui.qt_objects import (
 )
 from binsync.common.ui.utils import QNumericItem, friendly_datetime
 from binsync.data import Function
-from binsync.state import State
+from binsync.core.scheduler import SchedSpeed
+from binsync.core.state import State
 
 l = logging.getLogger(__name__)
 
@@ -153,7 +154,7 @@ class QActivityTable(QTableWidget):
             )
 
     def _get_valid_funcs_for_user(self, username):
-        user_state: State = self.controller.client.get_state(user=username)
+        user_state: State = self.controller.client.get_state(user=username, priority=SchedSpeed.FAST)
         func_addrs = [addr for addr in user_state.functions]
 
         func_addrs.sort()

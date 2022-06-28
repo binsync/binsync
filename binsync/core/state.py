@@ -1,6 +1,5 @@
 import logging
 import os
-import pathlib
 import time
 from functools import wraps
 from typing import Dict, Iterable, Optional
@@ -19,7 +18,7 @@ from binsync.data import (
     StackVariable,
 )
 from binsync.data.struct import Struct
-from binsync.errors import MetadataNotFoundError
+from binsync.core.errors import MetadataNotFoundError
 
 l = logging.getLogger(__name__)
 
@@ -132,8 +131,8 @@ class State:
         # the client
         self.client = client  # type: Optional[Client]
 
-        # dirty bit
-        self._dirty = False  # type: bool
+        # state is dirty on creation (metadata)
+        self._dirty = True  # type: bool
 
         # data
         self.functions: Dict[int, Function] = {}
@@ -152,6 +151,19 @@ class State:
                    and other.global_vars == self.global_vars \
                    and other.enums == self.enums
         return False
+
+    def copy(self):
+        state = State(self.user, version=self.version, client=self.client)
+        state._dirty = False
+        artifacts = ["functions", "comments", "structs", "patches", "global_vars", "enums"]
+        for artifact in artifacts:
+            setattr(
+                state,
+                artifact,
+                {k: v.copy() for k, v in getattr(self, artifact).items()}
+            )
+
+        return state
 
     @property
     def dirty(self):
@@ -200,8 +212,14 @@ class State:
         self.client.add_data(index, 'enums.toml', toml.dumps(Enum.dump_many(self.enums)).encode())
 
     @staticmethod
-    def load_metadata(tree):
-        return toml.loads(tree['metadata.toml'].data_stream.read().decode())
+    def load_toml_from_file(filename, client=None, tree=None):
+        if client:
+            file_data = client.load_file_from_tree(tree, filename)
+        else:
+            with open(filename, "r") as fp:
+                file_data = fp.read()
+
+        return toml.loads(file_data)
 
     @classmethod
     def parse(cls, tree: git.Tree, version=None, client=None):
@@ -209,7 +227,7 @@ class State:
 
         # load metadata
         try:
-            metadata = cls.load_metadata(tree)
+            metadata = cls.load_toml_from_file("metadata.toml", client=client, tree=tree)
         except:
             # metadata is not found
             raise MetadataNotFoundError()
@@ -222,8 +240,8 @@ class State:
         function_files = [name for name in tree_files if name.startswith("functions")]
         for func_file in function_files:
             try:
-                func_toml = toml.loads(tree[func_file].data_stream.read().decode())
-            except:
+                func_toml = cls.load_toml_from_file(func_file, client=client, tree=tree)
+            except Exception:
                 pass
             else:
                 func = Function.load(func_toml)
@@ -231,7 +249,7 @@ class State:
 
         # load comments
         try:
-            comments_toml = toml.loads(tree['comments.toml'].data_stream.read().decode())
+            comments_toml = cls.load_toml_from_file("comments.toml", client=client, tree=tree)
         except:
             pass
         else:
@@ -242,7 +260,7 @@ class State:
 
         # load patches
         try:
-            patches_toml = toml.loads(tree['patches.toml'].data_stream.read().decode())
+            patches_toml = cls.load_toml_from_file("patches.toml", client=client, tree=tree)
         except:
             pass
         else:
@@ -253,7 +271,7 @@ class State:
 
         # load global_vars
         try:
-            global_vars_toml = toml.loads(tree['global_vars.toml'].data_stream.read().decode())
+            global_vars_toml = cls.load_toml_from_file("global_vars.toml", client=client, tree=tree)
         except:
             pass
         else:
@@ -264,7 +282,7 @@ class State:
 
         # load enums
         try:
-            enums_toml = toml.loads(tree['enums.toml'].data_stream.read().decode())
+            enums_toml = cls.load_toml_from_file("enums.toml", client=client, tree=tree)
         except:
             pass
         else:
@@ -277,7 +295,7 @@ class State:
         struct_files = [name for name in tree_files if name.startswith("structs")]
         for struct_file in struct_files:
             try:
-                struct_toml = toml.loads(tree[struct_file].data_stream.read().decode())
+                struct_toml = cls.load_toml_from_file(struct_file, client=client, tree=tree)
             except:
                 pass
             else:

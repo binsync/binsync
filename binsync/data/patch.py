@@ -59,3 +59,11 @@ class Patch(Artifact):
         for v in patches.values():
             patches_["%s_%x" % (v.obj_name, v.offset)] = v.__getstate__()
         return patches_
+
+    def copy(self):
+        return Patch(
+            self.offset,
+            self.new_bytes,
+            obj_name=self.obj_name,
+            last_change=self.last_change
+        )

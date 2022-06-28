@@ -1,9 +1,10 @@
 import logging
 
-from angrmanagement.plugins.angr_binsync.controller import AngrBinSyncController
 from angrmanagement.ui.views.view import BaseView
 from binsync.common.ui.control_panel import ControlPanel
 from binsync.common.ui.qt_objects import QVBoxLayout
+
+from .controller import AngrBinSyncController
 
 
 l = logging.getLogger(__name__)
