@@ -26,7 +26,7 @@ Note: all types support user-created types like structs.
 - Binary Ninja: **>= 2.4**
 - angr-management: **>= 9.0**
 
-All versions require **Python >= 3.4** and **Git** installed on your system.
+All versions require **Python >= 3.4** and **Git** installed on your system. For Ghidra support, see the [ghidra-support](https://github.com/angr/binsync/tree/ghidra_support) branch which has minimal compatibility. 
 
 ## Installing
 ### Oneliner (IDA only)
@@ -73,7 +73,7 @@ cp binsync_example_repo/fauxware .
 
 2. Open the fauxware binary in your decompiler, verify it has loaded in the decompiler terminal
 ```
-[BinSync] 2.3.1 loaded
+[BinSync] 2.4.0 loaded
 ```
 
 If it does not show, it means the plugin is not in the plugins folder. 
