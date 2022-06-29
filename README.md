@@ -26,7 +26,7 @@ Note: all types support user-created types like structs.
 - Binary Ninja: **>= 2.4**
 - angr-management: **>= 9.0**
 
-All versions require **Python >= 3.4** and **Git** installed on your system.
+All versions require **Python >= 3.4** and **Git** installed on your system. For Ghidra support, see the [ghidra-support](https://github.com/angr/binsync/tree/ghidra_support) branch which has minimal compatibility. 
 
 ## Installing
 ### Oneliner (IDA only)
