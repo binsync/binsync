@@ -104,7 +104,8 @@ class QFunctionTable(QTableWidget):
 
         from_menu = menu.addMenu("Sync from...")
         for username in self._get_valid_users_for_func(func_addr):
-            from_menu.addAction(username, lambda: self.controller.fill_function(func_addr, user=username))
+            action = from_menu.addAction(username)
+            action.triggered.connect(lambda chck, name=username: self.controller.fill_function(func_addr, user=name))
 
         menu.popup(self.mapToGlobal(event.pos()))
 
