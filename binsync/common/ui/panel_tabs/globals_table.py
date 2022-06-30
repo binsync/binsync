@@ -16,7 +16,6 @@ from binsync.core.scheduler import SchedSpeed
 
 l = logging.getLogger(__name__)
 
-
 class QGlobalItem:
     def __init__(self, name, type_, user, last_push):
         self.name = name
@@ -85,10 +84,6 @@ class QGlobalsTable(QTableWidget):
 
         self.viewport().update()
         self.setSortingEnabled(True)
-
-
-
-
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
