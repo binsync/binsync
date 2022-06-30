@@ -4,7 +4,6 @@ from typing import Dict
 from binsync.common.controller import BinSyncController
 from binsync.common.ui.qt_objects import (
     QAbstractItemView,
-    QAction,
     QHeaderView,
     QMenu,
     Qt,
