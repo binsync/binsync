@@ -21,7 +21,6 @@ class TestState(unittest.TestCase):
             # create a client only for accurate git usage
             client = binsync.Client("user0", tmpdir, "fake_hash", init_repo=True)
             state = binsync.State("user0", client=client)
-            client.state = state
 
             # dump to the current repo, current branch
             state.dump(client.repo.index)
@@ -38,8 +37,6 @@ class TestState(unittest.TestCase):
             state.version = 1
             func_header = binsync.data.FunctionHeader("some_name", 0x400080)
             state.set_function_header(func_header)
-
-            client.state = state
 
             # dump and commit state to tree
             client.commit_state(state)

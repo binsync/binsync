@@ -28,11 +28,9 @@ class TestClient(unittest.TestCase):
             self.assertTrue(state.dirty)
 
             # commit changes so we clean it!
-            client.commit_state()
+            client.commit_state(state)
             self.assertFalse(state.dirty)
 
-            # destroy the old state to see if data persits
-            client.state = None
             state = client.get_state(user="user0")
             self.assertTrue(len(state.functions), 1)
             self.assertTrue(state.functions[0x400080].header, func_header)

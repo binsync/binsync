@@ -127,7 +127,6 @@ class Client:
         self.last_pull_attempt_ts = None  # type: Optional[float]
         self._last_commit_ts = None # type: Optional[float]
 
-        self.state = None
         self.active_remote = True
 
     def __del__(self):
@@ -259,16 +258,11 @@ class Client:
     #
 
     @atomic_git_action
-    def commit_state(self, state=None, msg="Generic Change", priority=None):
-        self._checkout_to_master_user()
-        if state is None:
-            state = self.state
-
+    def commit_state(self, state, msg="Generic Change", priority=None):
         if self.master_user != state.user:
             raise ExternalUserCommitError(f"User {self.master_user} is not allowed to commit to user {state.user}")
 
-        assert self.master_user == state.user
-
+        self._checkout_to_master_user()
         master_user_branch = next(o for o in self.repo.branches if o.name == self.user_branch_name)
         index = self.repo.index
 
@@ -313,29 +307,18 @@ class Client:
             user = self.master_user
 
         repo = self.repo
-        if user == self.master_user:
-            # local state
-            if self.state is None:
-                try:
-                    self.state = State.parse(
-                        self._get_tree(self.master_user, repo),
-                        version=version,
-                        client=self,
-                    )  # Also need to check if user is none here???
-                except MetadataNotFoundError:
-                    # we should return a new state
-                    self.state = State(user if user is not None else self.master_user, client=self)
-            return self.state
-        else:
-            try:
-                state = State.parse(
-                    self._get_tree(user, repo),
-                    version=version,
-                    client=self
-                )
-                return state
-            except MetadataNotFoundError:
-                return None
+        state = None
+        try:
+            state = State.parse(
+                self._get_tree(user, repo),
+                version=version,
+                client=self
+            )
+        except MetadataNotFoundError:
+            if user == self.master_user:
+                state = State(self.master_user, client=self)
+
+        return state
 
     @atomic_git_action
     def pull(self, priority=SchedSpeed.AVERAGE):
@@ -419,7 +402,7 @@ class Client:
         # attempt to commit dirty files in a update phase
         master_state = self.get_state(user=self.master_user, no_cache=True)
         if master_state and master_state.dirty:
-            self.commit_state(msg=commit_msg)
+            self.commit_state(master_state, msg=commit_msg)
 
         # do a pull if there is a remote repo connected
         if self.has_remote:

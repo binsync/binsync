@@ -44,7 +44,7 @@ def make_state(f):
 
         kwargs['state'] = state
         r = f(self, *args, **kwargs)
-        self.client.commit_state(msg=self._generate_commit_message(f, *args, **kwargs))
+        self.client.commit_state(state, msg=self._generate_commit_message(f, *args, **kwargs))
         return r
 
     return state_check
@@ -71,7 +71,7 @@ def make_state_with_func(f):
 
         kwargs['state'] = state
         r = f(self, *args, **kwargs)
-        self.client.commit_state(msg=self._generate_commit_message(f, *args, **kwargs))
+        self.client.commit_state(state, msg=self._generate_commit_message(f, *args, **kwargs))
         return r
 
     return _make_state_with_func
@@ -241,7 +241,6 @@ class BinSyncController:
             user, path, binary_hash, init_repo=init_repo, remote_url=remote_url
         )
 
-        _l.info("Starting the updater thread in the controller")
         self.start_updater_routine()
         return self.client.connection_warnings
 
@@ -467,7 +466,6 @@ class BinSyncController:
         _l.info(f"Magic Syncing Structs...")
         pref_state = self.client.get_state(user=preference_user, priority=SchedSpeed.FAST)
         for struct_name in self.get_all_changed_structs():
-            _l.info(f"Looking at strunct {struct_name}")
             pref_struct = pref_state.get_struct(struct_name)
             for user in all_users:
                 user_state = self.client.get_state(user=user, priority=SchedSpeed.FAST)
@@ -487,7 +485,7 @@ class BinSyncController:
                 master_state.structs[struct_name] = pref_struct
 
             self.fill_struct(struct_name, state=master_state)
-        self.client.commit_state(state=master_state, msg="Magic Sync Structs Merged")
+        self.client.commit_state(master_state, msg="Magic Sync Structs Merged")
 
         #
         # functions
@@ -498,7 +496,6 @@ class BinSyncController:
         _l.info(f"Magic Syncing Functions...")
         pref_state = self.client.get_state(user=preference_user, priority=SchedSpeed.FAST)
         for func_addr in self.get_all_changed_funcs():
-            _l.info(f"Looking at func {hex(func_addr)}")
             pref_func = pref_state.get_function(addr=func_addr)
             for user in all_users:
                 user_state = self.client.get_state(user=user, priority=SchedSpeed.FAST)
@@ -517,7 +514,7 @@ class BinSyncController:
             master_state.functions[func_addr] = pref_func
             self.fill_function(func_addr, state=master_state)
 
-        self.client.commit_state(state=master_state, msg="Magic Sync Funcs Merged")
+        self.client.commit_state(master_state, msg="Magic Sync Funcs Merged")
 
         #
         # global vars
@@ -545,7 +542,7 @@ class BinSyncController:
             master_state.global_vars[gvar_addr] = pref_gvar
             self.fill_global_var(gvar_addr, state=master_state)
 
-        self.client.commit_state(state=master_state, msg="Magic Sync Global Vars Merged")
+        self.client.commit_state(master_state, msg="Magic Sync Global Vars Merged")
         _l.info(f"Magic Syncing Completed!")
 
     #
