@@ -62,7 +62,7 @@ class QFunctionTable(QTableWidget):
         super(QFunctionTable, self).__init__(parent)
         self.controller = controller
         self.items = []
-        
+
         self.setColumnCount(len(self.HEADER))
         self.setHorizontalHeaderLabels(self.HEADER)
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
