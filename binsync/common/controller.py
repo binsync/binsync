@@ -44,7 +44,7 @@ def make_state(f):
 
         kwargs['state'] = state
         r = f(self, *args, **kwargs)
-        self.client.commit_state(msg=self._generate_commit_message(f, *args, **kwargs))
+        self.client.commit_state(state, msg=self._generate_commit_message(f, *args, **kwargs))
         return r
 
     return state_check
@@ -71,7 +71,7 @@ def make_state_with_func(f):
 
         kwargs['state'] = state
         r = f(self, *args, **kwargs)
-        self.client.commit_state(msg=self._generate_commit_message(f, *args, **kwargs))
+        self.client.commit_state(state, msg=self._generate_commit_message(f, *args, **kwargs))
         return r
 
     return _make_state_with_func
@@ -487,7 +487,7 @@ class BinSyncController:
                 master_state.structs[struct_name] = pref_struct
 
             self.fill_struct(struct_name, state=master_state)
-        self.client.commit_state(state=master_state, msg="Magic Sync Structs Merged")
+        self.client.commit_state(master_state, msg="Magic Sync Structs Merged")
 
         #
         # functions
@@ -517,7 +517,7 @@ class BinSyncController:
             master_state.functions[func_addr] = pref_func
             self.fill_function(func_addr, state=master_state)
 
-        self.client.commit_state(state=master_state, msg="Magic Sync Funcs Merged")
+        self.client.commit_state(master_state, msg="Magic Sync Funcs Merged")
 
         #
         # global vars
@@ -545,7 +545,7 @@ class BinSyncController:
             master_state.global_vars[gvar_addr] = pref_gvar
             self.fill_global_var(gvar_addr, state=master_state)
 
-        self.client.commit_state(state=master_state, msg="Magic Sync Global Vars Merged")
+        self.client.commit_state(master_state, msg="Magic Sync Global Vars Merged")
         _l.info(f"Magic Syncing Completed!")
 
     #

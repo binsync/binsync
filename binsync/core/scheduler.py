@@ -30,6 +30,9 @@ class Job:
         self.ret_value = self.function(*self.args, **self.kwargs)
         self.finish_event.set()
 
+    def __lt__(self, other):
+        return True
+
 
 class Scheduler:
     def __init__(self, sleep_interval=0.05):
@@ -51,8 +54,9 @@ class Scheduler:
             self._complete_a_job(block=True)
 
     def schedule_job(self, job: Job, priority=SchedSpeed.SLOW):
-        sched_job = (priority, job,)
-        self._job_queue.put_nowait(sched_job)
+        self._job_queue.put_nowait(
+            (priority, job,)
+        )
 
     def schedule_and_wait_job(self, job: Job, priority=SchedSpeed.SLOW, timeout=30):
         self.schedule_job(job, priority=priority)
