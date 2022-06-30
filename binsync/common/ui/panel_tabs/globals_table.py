@@ -86,6 +86,10 @@ class QGlobalsTable(QTableWidget):
         self.viewport().update()
         self.setSortingEnabled(True)
 
+
+
+
+
     def contextMenuEvent(self, event):
         menu = QMenu(self)
         menu.setObjectName("binsync_global_table_context_menu")
@@ -102,21 +106,22 @@ class QGlobalsTable(QTableWidget):
         user_name = item2.text()
 
         if global_type == "Struct":
-            filler_func = lambda: self.controller.fill_struct(global_name, user=user_name)
+            filler_func = lambda username: lambda chk: self.controller.fill_struct(global_name, user=username)
         elif global_type == "Variable":
             var_addr = int(re.findall(r'0x[a-f,0-9]+', global_name.split(" ")[1])[0], 16)
             global_name = var_addr
-            filler_func = lambda: self.controller.fill_global_var(global_name, user=user_name)
+            filler_func = lambda username: lambda chk: self.controller.fill_global_var(global_name, user=username)
         elif global_type == "Enum":
-            filler_func = lambda: self.controller.fill_enum(global_name, user=user_name)
+            filler_func = lambda username: lambda chk: self.controller.fill_enum(global_name, user=username)
         else:
             l.warning(f"Invalid global table sync option: {global_type}")
             return
 
-        menu.addAction("Sync", filler_func)
+        menu.addAction("Sync", filler_func(user_name))
         from_menu = menu.addMenu("Sync from...")
         for username in self._get_valid_users_for_global(global_name, global_type):
-            from_menu.addAction(username, filler_func)
+            action = from_menu.addAction(username)
+            action.triggered.connect(filler_func(username))
 
         menu.popup(self.mapToGlobal(event.pos()))
 

@@ -4,6 +4,7 @@ from typing import Dict
 from binsync.common.controller import BinSyncController
 from binsync.common.ui.qt_objects import (
     QAbstractItemView,
+    QAction,
     QHeaderView,
     QMenu,
     Qt,
@@ -62,7 +63,7 @@ class QFunctionTable(QTableWidget):
         super(QFunctionTable, self).__init__(parent)
         self.controller = controller
         self.items = []
-
+        
         self.setColumnCount(len(self.HEADER))
         self.setHorizontalHeaderLabels(self.HEADER)
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -100,12 +101,13 @@ class QFunctionTable(QTableWidget):
         if item is None:
             return
         func_addr = item.data(Qt.UserRole)
+        
         menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=self.item(selected_row, 2).text()))
-
         from_menu = menu.addMenu("Sync from...")
+        
         for username in self._get_valid_users_for_func(func_addr):
             action = from_menu.addAction(username)
-            action.triggered.connect(lambda chck, name=username: self.controller.fill_function(func_addr, user=name))
+            action.triggered.connect(lambda chck, name=username: self.controller.fill_function(func_addr, user=name))  
 
         menu.popup(self.mapToGlobal(event.pos()))
 

@@ -111,8 +111,10 @@ class QActivityTable(QTableWidget):
         menu.addAction("Sync-All", lambda: self.controller.fill_all(user=username))
 
         for_menu = menu.addMenu("Sync for...")
+        
         for func_addr_str in self._get_valid_funcs_for_user(username):
-            for_menu.addAction(func_addr_str, lambda: self.controller.fill_function(int(func_addr_str, 16), user=username))
+            action = for_menu.addAction(func_addr_str)
+            action.triggered.connect(lambda chk, func=func_addr_str: self.controller.fill_function(int(func, 16), user=username))
 
         menu.popup(self.mapToGlobal(event.pos()))
 
