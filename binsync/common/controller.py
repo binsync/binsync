@@ -241,6 +241,7 @@ class BinSyncController:
             user, path, binary_hash, init_repo=init_repo, remote_url=remote_url
         )
 
+        _l.info("Starting the updater thread in the controller")
         self.start_updater_routine()
         return self.client.connection_warnings
 
@@ -466,6 +467,7 @@ class BinSyncController:
         _l.info(f"Magic Syncing Structs...")
         pref_state = self.client.get_state(user=preference_user, priority=SchedSpeed.FAST)
         for struct_name in self.get_all_changed_structs():
+            _l.info(f"Looking at strunct {struct_name}")
             pref_struct = pref_state.get_struct(struct_name)
             for user in all_users:
                 user_state = self.client.get_state(user=user, priority=SchedSpeed.FAST)
@@ -496,6 +498,7 @@ class BinSyncController:
         _l.info(f"Magic Syncing Functions...")
         pref_state = self.client.get_state(user=preference_user, priority=SchedSpeed.FAST)
         for func_addr in self.get_all_changed_funcs():
+            _l.info(f"Looking at func {hex(func_addr)}")
             pref_func = pref_state.get_function(addr=func_addr)
             for user in all_users:
                 user_state = self.client.get_state(user=user, priority=SchedSpeed.FAST)
