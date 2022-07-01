@@ -154,13 +154,13 @@ class QGlobalsTable(QTableWidget):
             user_name = item2.text()
 
             if global_type == "Struct" or global_type == "S":
-                filler_func = lambda username: lambda chk: self.controller.fill_struct(global_name, user=username)
+                filler_func = lambda username: lambda chk: self.controller.fill_struct(global_name, user=user_name)
             elif global_type == "Variable" or global_type == "V":
                 var_addr = int(re.findall(r'0x[a-f,0-9]+', global_name.split(" ")[1])[0], 16)
                 global_name = var_addr
-                filler_func = lambda username: lambda chk: self.controller.fill_global_var(global_name, user=username)
+                filler_func = lambda username: lambda chk: self.controller.fill_global_var(global_name, user=user_name)
             elif global_type == "Enum" or global_type == "E":
-                filler_func = lambda username: lambda chk: self.controller.fill_enum(global_name, user=username)
+                filler_func = lambda username: lambda chk: self.controller.fill_enum(global_name, user=user_name)
             else:
                 l.warning(f"Invalid global table sync option: {global_type}")
                 menu.popup(self.mapToGlobal(event.pos()))

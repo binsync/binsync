@@ -125,7 +125,7 @@ class QFunctionTable(QTableWidget):
         selected_row = self.rowAt(event.pos().y())
         item = self.item(selected_row, 0)
         if item is None:
-            return
+            valid_row = False
         col_hide_menu = menu.addMenu("Show Columns")
         handler = lambda ind: lambda: self._col_hide_handler(ind)
         for i, c in enumerate(self.HEADER):
@@ -134,15 +134,18 @@ class QFunctionTable(QTableWidget):
             act.setChecked(self.column_visibility[i])
             act.triggered.connect(handler(i))
             col_hide_menu.addAction(act)
+
         if valid_row:
             func_addr = item.data(Qt.UserRole)
             menu.addSeparator()
-            menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=self.item(selected_row, 2).text()))
+            menu.addAction("Sync",
+                           lambda: self.controller.fill_function(func_addr, user=self.item(selected_row, 2).text()))
             from_menu = menu.addMenu("Sync from...")
 
             for username in self._get_valid_users_for_func(func_addr):
                 action = from_menu.addAction(username)
-                action.triggered.connect(lambda chck, name=username: self.controller.fill_function(func_addr, user=name))
+                action.triggered.connect(
+                    lambda chck, name=username: self.controller.fill_function(func_addr, user=name))
 
         menu.popup(self.mapToGlobal(event.pos()))
 
