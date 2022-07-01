@@ -154,16 +154,25 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         idaapi.display_widget(wrapper.twidget, flags)
         wrapper.widget.visible = True
 
+        # casually open a pseudocode window, this prevents magic sync from breaking upon initial run
+        func_addr = next(idautils.Functions())
+        ida_hexrays.open_pseudocode(func_addr, ida_hexrays.OPF_NO_WAIT | ida_hexrays.OPF_REUSE)
+        # then attempt to flip back to IDA View-A
+        twidget = idaapi.find_widget("IDA View-A")
+        if twidget is not None:
+            ida_kernwin.activate_widget(twidget, True)
+
         target = "Functions"
         fwidget = idaapi.find_widget(target)
+
         if not fwidget:
             # prioritize attaching the binsync panel to a decompilation window
             target = "Pseudocode-A"
             dwidget = idaapi.find_widget(target)
             if not dwidget:
-                func_addr = next(idautils.Functions())
-                ida_hexrays.open_pseudocode(func_addr, 0)
-                dwidget = idaapi.find_widget(target)
+                # func_addr = next(idautils.Functions())
+                # ida_hexrays.open_pseudocode(func_addr, ida_hexrays.OPF_NO_WAIT | ida_hexrays.OPF_REUSE)
+                # dwidget = idaapi.find_widget(target)
 
                 if not dwidget:
                     target = "IDA View-A"

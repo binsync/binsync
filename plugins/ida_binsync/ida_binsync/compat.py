@@ -559,8 +559,12 @@ def acquire_pseudocode_vdui(addr):
         vu = ida_hexrays.get_widget_vdui(widget)
         break
     else:
-        vu = ida_hexrays.open_pseudocode(func.start_ea, False)
+        dwidget = idaapi.find_widget("IDA View-A")
+        if dwidget is not None:
+            ida_kernwin.activate_widget(dwidget, True)
+            twidget = ida_kernwin.get_current_widget()
 
+        vu = ida_hexrays.open_pseudocode(func.start_ea, ida_hexrays.OPF_NO_WAIT | ida_hexrays.OPF_REUSE)
     if func.start_ea != vu.cfunc.entry_ea:
         target_cfunc = idaapi.decompile(func.start_ea)
         vu.switch_to(target_cfunc, False)
@@ -588,7 +592,7 @@ def refresh_pseudocode_view(ea, set_focus=True):
 class IDAViewCTX:
     @execute_ui
     def __init__(self, func_addr):
-        self.view = ida_hexrays.open_pseudocode(func_addr, 0)
+        self.view = ida_hexrays.open_pseudocode(func_addr, ida_hexrays.OPF_NO_WAIT | ida_hexrays.OPF_REUSE)
 
     def __enter__(self):
         return self.view
