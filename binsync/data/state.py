@@ -6,7 +6,6 @@ from functools import wraps
 from typing import Dict, Iterable, Optional, Union, List
 
 import git
-import glob
 import toml
 from sortedcontainers import SortedDict
 
@@ -125,7 +124,7 @@ def list_files_in_dir(src: Union[pathlib.Path, git.Tree], dir_name, client=None)
 
     # load from filesystem
     if not src:
-        src = pathlib.Path(".")
+        src = pathlib.Path("../core")
 
     if not src.joinpath(pathlib.Path(dir_name)).exists():
         return []
@@ -142,7 +141,7 @@ def load_toml_from_file(src: Union[pathlib.Path, git.Tree], filename, client=Non
         file_data = client.load_file_from_tree(src, filename)
     else:
         if not src:
-            src = pathlib.Path(".")
+            src = pathlib.Path("../core")
 
         with open(src.joinpath(filename), "r") as fp:
             file_data = fp.read()
@@ -219,7 +218,7 @@ class State:
 
         # dump using filesystem
         if not dst:
-            dst = pathlib.Path(".")
+            dst = pathlib.Path("../core")
 
         out_path = dst.joinpath(filename)
         pathlib.Path(out_path).parent.mkdir(parents=True, exist_ok=True)

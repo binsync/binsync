@@ -11,7 +11,7 @@ from binsync.common.ui.qt_objects import (
     QTableWidgetItem,
 )
 from binsync.common.ui.utils import QNumericItem, friendly_datetime
-from binsync.core.state import State
+from binsync.data.state import State
 from binsync.core.scheduler import SchedSpeed
 
 l = logging.getLogger(__name__)

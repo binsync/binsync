@@ -7,3 +7,4 @@ from binsync.data.stack_variable import StackVariable, StackOffsetType
 from binsync.data.struct import StructMember, Struct
 from binsync.data.global_variable import GlobalVariable
 from binsync.data.enum import Enum
+from binsync.data.state import State

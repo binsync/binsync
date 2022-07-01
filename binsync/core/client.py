@@ -1,10 +1,8 @@
-import datetime
 import logging
 import pathlib
 import os
 import re
 import subprocess
-import threading
 import time
 from functools import wraps
 from typing import Iterable, Optional
@@ -15,7 +13,7 @@ import git.exc
 
 from binsync.data import User
 from binsync.core.errors import ExternalUserCommitError, MetadataNotFoundError
-from binsync.core.state import State, load_toml_from_file
+from binsync.data.state import State, load_toml_from_file
 from binsync.core.scheduler import Scheduler, Job, SchedSpeed
 from binsync.core.cache import Cache
 

@@ -68,7 +68,7 @@ class TestState(unittest.TestCase):
 
         self.assertNotEqual(state.last_push_time, None)
         self.assertEqual(state.last_push_artifact, "some_struct")
-        self.assertEqual(state.last_push_artifact_type, binsync.core.state.ArtifactType.STRUCT)
+        self.assertEqual(state.last_push_artifact_type, binsync.data.state.ArtifactType.STRUCT)
 
     def test_func_diffing(self):
         state1 = binsync.State("user1")
