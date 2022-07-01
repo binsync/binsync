@@ -9,12 +9,19 @@ from binsync.common.ui.qt_objects import (
     Qt,
     QTableWidget,
     QTableWidgetItem,
+    QStyledItemDelegate,
+    QFontDatabase,
+    QAction,
+    QEvent
 )
 from binsync.common.ui.utils import QNumericItem, friendly_datetime
 from binsync.data.state import State
 from binsync.core.scheduler import SchedSpeed
 
 l = logging.getLogger(__name__)
+
+fixed_width_font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+fixed_width_font.setPixelSize(14)
 
 class QGlobalItem:
     def __init__(self, name, type_, user, last_push):
@@ -34,22 +41,28 @@ class QGlobalItem:
         last_push.setData(Qt.UserRole, self.last_push)
 
         widgets = [
-            name,
             type_,
+            name,
             user,
             last_push
         ]
 
         for w in widgets:
+            w.setFont(fixed_width_font)
             w.setFlags(w.flags() & ~Qt.ItemIsEditable)
 
         return widgets
 
+class QGlobalsTableCenterAlignDelegate(QStyledItemDelegate):
+    def initStyleOption(self, option, index):
+        super(QGlobalsTableCenterAlignDelegate, self).initStyleOption(option, index)
+        option.displayAlignment = Qt.AlignCenter
+
 
 class QGlobalsTable(QTableWidget):
     HEADER = [
+        'T',
         'Name',
-        'Type',
         'User',
         'Last Push'
     ]
@@ -60,19 +73,37 @@ class QGlobalsTable(QTableWidget):
         self.items = []
 
         self.setColumnCount(len(self.HEADER))
+        self.column_visibility = [True for _ in range(len(self.HEADER))]
         self.setHorizontalHeaderLabels(self.HEADER)
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+        self.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
+        self.setColumnWidth(0, 16)
+        self.setItemDelegateForColumn(0, QGlobalsTableCenterAlignDelegate(self))
+        self.horizontalHeaderItem(0).setToolTip("Type")
+
+        self.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+
         self.horizontalHeader().setHorizontalScrollMode(self.ScrollPerPixel)
         self.horizontalHeader().setDefaultAlignment(Qt.AlignHCenter | Qt.Alignment(Qt.TextWordWrap))
         self.horizontalHeader().setMinimumWidth(160)
+        self.horizontalHeader().setSortIndicator(3, Qt.AscendingOrder)
         self.setHorizontalScrollMode(self.ScrollPerPixel)
+
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
+
         self.verticalHeader().setVisible(False)
         self.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-        self.verticalHeader().setDefaultSectionSize(24)
+        self.verticalHeader().setDefaultSectionSize(22)
+
 
         self.setSortingEnabled(True)
+        self.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.setShowGrid(False)
 
     def reload(self):
         self.setSortingEnabled(False)
@@ -85,38 +116,59 @@ class QGlobalsTable(QTableWidget):
         self.viewport().update()
         self.setSortingEnabled(True)
 
-    def contextMenuEvent(self, event):
+    def _col_hide_handler(self, index):
+        self.column_visibility[index] = not self.column_visibility[index]
+        self.setColumnHidden(index, self.column_visibility[index])
+        if self.column_visibility[index]:
+            self.showColumn(index)
+        else:
+            self.hideColumn(index)
+
+    def contextMenuEvent(self, event: QEvent):
         menu = QMenu(self)
         menu.setObjectName("binsync_global_table_context_menu")
-
         # create a nested menu
+        valid_row = True
         selected_row = self.rowAt(event.pos().y())
         item0 = self.item(selected_row, 0)
         item1 = self.item(selected_row, 1)
         item2 = self.item(selected_row, 2)
         if any(x is None for x in [item0, item1, item2]):
-            return
-        global_name = item0.text()
-        global_type = item1.text()
-        user_name = item2.text()
+            valid_row = False
 
-        if global_type == "Struct":
-            filler_func = lambda username: lambda chk: self.controller.fill_struct(global_name, user=username)
-        elif global_type == "Variable":
-            var_addr = int(re.findall(r'0x[a-f,0-9]+', global_name.split(" ")[1])[0], 16)
-            global_name = var_addr
-            filler_func = lambda username: lambda chk: self.controller.fill_global_var(global_name, user=username)
-        elif global_type == "Enum":
-            filler_func = lambda username: lambda chk: self.controller.fill_enum(global_name, user=username)
-        else:
-            l.warning(f"Invalid global table sync option: {global_type}")
-            return
+        col_hide_menu = menu.addMenu("Show Columns")
+        handler = lambda ind: lambda: self._col_hide_handler(ind)
+        for i, c in enumerate(['Type', 'Name', 'User', 'Last Push']):
+            act = QAction(c, parent=menu)
+            act.setCheckable(True)
+            act.setChecked(self.column_visibility[i])
+            act.triggered.connect(handler(i))
+            col_hide_menu.addAction(act)
+        
+        if valid_row:
+            global_type = item0.text()
+            global_name = item1.text()
+            user_name = item2.text()
 
-        menu.addAction("Sync", filler_func(user_name))
-        from_menu = menu.addMenu("Sync from...")
-        for username in self._get_valid_users_for_global(global_name, global_type):
-            action = from_menu.addAction(username)
-            action.triggered.connect(filler_func(username))
+            if global_type == "Struct" or global_type == "S":
+                filler_func = lambda username: lambda chk: self.controller.fill_struct(global_name, user=user_name)
+            elif global_type == "Variable" or global_type == "V":
+                var_addr = int(re.findall(r'0x[a-f,0-9]+', global_name.split(" ")[1])[0], 16)
+                global_name = var_addr
+                filler_func = lambda username: lambda chk: self.controller.fill_global_var(global_name, user=user_name)
+            elif global_type == "Enum" or global_type == "E":
+                filler_func = lambda username: lambda chk: self.controller.fill_enum(global_name, user=user_name)
+            else:
+                l.warning(f"Invalid global table sync option: {global_type}")
+                menu.popup(self.mapToGlobal(event.pos()))
+                return
+
+            menu.addSeparator()
+            menu.addAction("Sync", filler_func(user_name))
+            from_menu = menu.addMenu("Sync from...")
+            for username in self._get_valid_users_for_global(global_name, global_type):
+                action = from_menu.addAction(username)
+                action.triggered.connect(filler_func(username))
 
         menu.popup(self.mapToGlobal(event.pos()))
 
@@ -145,16 +197,16 @@ class QGlobalsTable(QTableWidget):
                     artifact_name = artifact.name if global_type != "Variable" \
                         else f"{artifact.name} ({hex(artifact.addr)})"
 
-                    known_globals[artifact_name] = (artifact_name, global_type, user.name, change_time)
+                    known_globals[artifact_name] = (artifact_name, global_type[:1], user.name, change_time)
 
         self.items = [QGlobalItem(*row) for row in known_globals.values()]
 
     def _get_valid_users_for_global(self, global_name, global_type):
-        if global_type == "Struct":
+        if global_type == "Struct" or global_type == "S":
             global_getter = "get_struct"
-        elif global_type == "Variable":
+        elif global_type == "Variable" or global_type == "V":
             global_getter = "get_global_var"
-        elif global_type == "Enum":
+        elif global_type == "Enum" or global_type == "E":
             global_getter = "get_enum"
         else:
             l.warning("Failed to get a valid type for global type")

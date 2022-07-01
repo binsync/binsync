@@ -114,8 +114,8 @@ class QUtilPanel(QWidget):
         #
 
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(10, 20, 10, 20)
-        main_layout.setSpacing(18)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(14)
         main_layout.setAlignment(Qt.AlignTop)
         main_layout.addWidget(sync_options_group)
         main_layout.addWidget(dev_options_group)

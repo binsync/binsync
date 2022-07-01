@@ -9,6 +9,8 @@ from binsync.common.ui.qt_objects import (
     Qt,
     QTableWidget,
     QTableWidgetItem,
+    QAction,
+    QFontDatabase
 )
 from binsync.common.ui.utils import QNumericItem, friendly_datetime
 from binsync.data import Function
@@ -16,6 +18,9 @@ from binsync.data.state import State
 from binsync.core.scheduler import SchedSpeed
 
 l = logging.getLogger(__name__)
+
+fixed_width_font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+fixed_width_font.setPixelSize(14)
 
 class QFunctionItem:
     def __init__(self, addr, name, user, last_push):
@@ -44,6 +49,7 @@ class QFunctionItem:
         ]
 
         for w in widgets:
+            w.setFont(fixed_width_font)
             w.setFlags(w.flags() & ~Qt.ItemIsEditable)
 
         return widgets
@@ -64,19 +70,30 @@ class QFunctionTable(QTableWidget):
         self.items = []
 
         self.setColumnCount(len(self.HEADER))
+        self.column_visibility = [True for _ in range(len(self.HEADER))]
         self.setHorizontalHeaderLabels(self.HEADER)
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+
         self.horizontalHeader().setHorizontalScrollMode(self.ScrollPerPixel)
         self.horizontalHeader().setDefaultAlignment(Qt.AlignHCenter | Qt.Alignment(Qt.TextWordWrap))
         self.horizontalHeader().setMinimumWidth(160)
+        self.horizontalHeader().setSortIndicator(0, Qt.AscendingOrder)
+
         self.setHorizontalScrollMode(self.ScrollPerPixel)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
         self.verticalHeader().setVisible(False)
         self.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-        self.verticalHeader().setDefaultSectionSize(24)
+        self.verticalHeader().setDefaultSectionSize(22)
 
         self.setSortingEnabled(True)
+        self.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.setShowGrid(False)
 
         self.doubleClicked.connect(self._doubleclick_handler)
 
@@ -90,23 +107,41 @@ class QFunctionTable(QTableWidget):
 
         self.viewport().update()
         self.setSortingEnabled(True)
+    
+    def _col_hide_handler(self, index):
+        self.column_visibility[index] = not self.column_visibility[index]
+        self.setColumnHidden(index, self.column_visibility[index])
+        if self.column_visibility[index]:
+            self.showColumn(index)
+        else:
+            self.hideColumn(index)
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
         menu.setObjectName("binsync_function_table_context_menu")
-
+        valid_row = True
         selected_row = self.rowAt(event.pos().y())
         item = self.item(selected_row, 0)
         if item is None:
-            return
-        func_addr = item.data(Qt.UserRole)
-        
-        menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=self.item(selected_row, 2).text()))
-        from_menu = menu.addMenu("Sync from...")
-        
-        for username in self._get_valid_users_for_func(func_addr):
-            action = from_menu.addAction(username)
-            action.triggered.connect(lambda chck, name=username: self.controller.fill_function(func_addr, user=name))  
+            valid_row = False
+        col_hide_menu = menu.addMenu("Show Columns")
+        handler = lambda ind: lambda: self._col_hide_handler(ind)
+        for i, c in enumerate(self.HEADER):
+            act = QAction(c, parent=menu)
+            act.setCheckable(True)
+            act.setChecked(self.column_visibility[i])
+            act.triggered.connect(handler(i))
+            col_hide_menu.addAction(act)
+
+        if valid_row:
+            func_addr = item.data(Qt.UserRole)
+            menu.addSeparator()
+            menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=self.item(selected_row, 2).text()))
+
+            from_menu = menu.addMenu("Sync from...")
+            for username in self._get_valid_users_for_func(func_addr):
+                action = from_menu.addAction(username)
+                action.triggered.connect(lambda chck, name=username: self.controller.fill_function(func_addr, user=name))  
 
         menu.popup(self.mapToGlobal(event.pos()))
 

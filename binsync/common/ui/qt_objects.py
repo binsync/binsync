@@ -1,7 +1,7 @@
 from binsync.common.ui.version import ui_version
 
 if ui_version == "PySide2":
-    from PySide2.QtCore import QDir, Qt, Signal
+    from PySide2.QtCore import QDir, Qt, Signal, QEvent
     from PySide2.QtWidgets import (
         QAbstractItemView,
         QCheckBox,
@@ -23,10 +23,13 @@ if ui_version == "PySide2":
         QTabWidget,
         QVBoxLayout,
         QWidget,
-        QDialogButtonBox
+        QDialogButtonBox,
+        QAction,
+        QStyledItemDelegate
     )
+    from PySide2.QtGui import QFontDatabase
 elif ui_version == "PySide6":
-    from PySide6.QtCore import QDir, Qt, Signal
+    from PySide6.QtCore import QDir, Qt, Signal, QEvent
     from PySide6.QtWidgets import (
         QAbstractItemView,
         QCheckBox,
@@ -49,9 +52,12 @@ elif ui_version == "PySide6":
         QVBoxLayout,
         QWidget,
         QDialogButtonBox,
+        QAction,
+        QStyledItemDelegate
     )
+    from PySide6.QtGui import QFontDatabase
 else:
-    from PyQt5.QtCore import QDir, Qt
+    from PyQt5.QtCore import QDir, Qt, QEvent
     from PyQt5.QtCore import pyqtSignal as Signal
     from PyQt5.QtWidgets import (
         QAbstractItemView,
@@ -74,5 +80,8 @@ else:
         QTabWidget,
         QVBoxLayout,
         QWidget,
-        QDialogButtonBox
+        QDialogButtonBox,
+        QAction,
+        QStyledItemDelegate
     )
+    from PyQt5.QtGui import QFontDatabase
