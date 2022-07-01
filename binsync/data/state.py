@@ -1,8 +1,9 @@
 import logging
 import os
+import pathlib
 import time
 from functools import wraps
-from typing import Dict, Iterable, Optional
+from typing import Dict, Iterable, Optional, Union, List
 
 import git
 import toml
@@ -16,9 +17,10 @@ from binsync.data import (
     GlobalVariable,
     Patch,
     StackVariable,
+    Struct
 )
-from binsync.data.struct import Struct
 from binsync.core.errors import MetadataNotFoundError
+
 
 l = logging.getLogger(__name__)
 
@@ -32,6 +34,10 @@ class ArtifactType:
     GLOBAL_VAR = "global variable"
     ENUM = "enum"
 
+
+#
+# Helper Funcs
+#
 
 def dirty_checker(f):
     @wraps(f)
@@ -111,6 +117,41 @@ def update_last_change(f):
     return _update_last_change
 
 
+def list_files_in_dir(src: Union[pathlib.Path, git.Tree], dir_name, client=None) -> List[str]:
+    if client and isinstance(src, git.Tree):
+        files = client.list_files_in_tree(src)
+        return [name for name in files if name.startswith(dir_name)]
+
+    # load from filesystem
+    if not src:
+        src = pathlib.Path("../core")
+
+    if not src.joinpath(pathlib.Path(dir_name)).exists():
+        return []
+
+    dir_name_path = pathlib.Path(dir_name)
+    dir_path = src.joinpath(dir_name)
+    return [
+        str(dir_name_path.joinpath(pathlib.Path(name))) for name in os.listdir(dir_path)
+    ]
+
+
+def load_toml_from_file(src: Union[pathlib.Path, git.Tree], filename, client=None):
+    if client and isinstance(src, git.Tree):
+        file_data = client.load_file_from_tree(src, filename)
+    else:
+        if not src:
+            src = pathlib.Path("../core")
+
+        with open(src.joinpath(filename), "r") as fp:
+            file_data = fp.read()
+
+    return toml.loads(file_data)
+
+
+#
+# State Defn & Operators
+#
 
 class State:
     """
@@ -131,9 +172,6 @@ class State:
         # the client
         self.client = client  # type: Optional[Client]
 
-        # state is dirty on creation (metadata)
-        self._dirty = True  # type: bool
-
         # data
         self.functions: Dict[int, Function] = {}
         self.comments: Dict[int, Comment] = {}
@@ -141,6 +179,9 @@ class State:
         self.patches: Dict[int, Patch] = SortedDict()
         self.global_vars: Dict[int, GlobalVariable] = {}
         self.enums: Dict[str, Enum] = {}
+
+        # state is dirty on creation (metadata)
+        self._dirty = True  # type: bool
 
     def __eq__(self, other):
         if isinstance(other, State):
@@ -169,13 +210,22 @@ class State:
     def dirty(self):
         return self._dirty
 
-    def ensure_dir_exists(self, dir_name):
-        if not os.path.exists(dir_name):
-            os.mkdir(dir_name)
-        if not os.path.isdir(dir_name):
-            raise RuntimeError("Cannot create directory %s. Maybe it conflicts with an existing file?" % dir_name)
+    def _dump_data(self, dst: Union[pathlib.Path, git.IndexFile], filename, data):
+        # dump using Git files
+        if self.client and isinstance(dst, git.IndexFile):
+            self.client.add_data(dst, filename, data)
+            return
 
-    def dump_metadata(self, index):
+        # dump using filesystem
+        if not dst:
+            dst = pathlib.Path("../core")
+
+        out_path = dst.joinpath(filename)
+        pathlib.Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "wb") as fp:
+            fp.write(data)
+
+    def dump_metadata(self, dst: Union[pathlib.Path, git.IndexFile]):
         d = {
             "user": self.user,
             "version": self.version,
@@ -183,146 +233,121 @@ class State:
             "last_push_artifact": self.last_push_artifact,
             "last_push_artifact_type": self.last_push_artifact_type,
         }
-        self.client.add_data(index, 'metadata.toml', toml.dumps(d).encode())
+        self._dump_data(dst, 'metadata.toml', toml.dumps(d).encode())
 
-    def dump(self, index: git.IndexFile):
+    def dump(self, dst: Union[pathlib.Path, git.IndexFile]):
+        if isinstance(dst, str):
+            dst = pathlib.Path(dst)
+
         # dump metadata
-        self.dump_metadata(index)
+        self.dump_metadata(dst)
 
         # dump functions, one file per function in ./functions/
         for addr, func in self.functions.items():
-            path = os.path.join('functions', "%08x.toml" % addr)
-            self.client.add_data(index, path, func.dump().encode())
+            path = pathlib.Path('functions').joinpath("%08x.toml" % addr)
+            self._dump_data(dst, path, func.dump().encode())
 
         # dump structs, one file per struct in ./structs/
         for s_name, struct in self.structs.items():
-            path = os.path.join('structs', f"{s_name}.toml")
-            self.client.add_data(index, path, struct.dump().encode())
+            path = pathlib.Path('structs').joinpath(f"{s_name}.toml")
+            self._dump_data(dst, path, struct.dump().encode())
 
         # dump comments
-        self.client.add_data(index, 'comments.toml', toml.dumps(Comment.dump_many(self.comments)).encode())
+        self._dump_data(dst, 'comments.toml', toml.dumps(Comment.dump_many(self.comments)).encode())
 
         # dump patches
-        self.client.add_data(index, 'patches.toml', toml.dumps(Patch.dump_many(self.patches)).encode())
+        self._dump_data(dst, 'patches.toml', toml.dumps(Patch.dump_many(self.patches)).encode())
 
         # dump global vars
-        self.client.add_data(index, 'global_vars.toml', toml.dumps(GlobalVariable.dump_many(self.global_vars)).encode())
+        self._dump_data(dst, 'global_vars.toml', toml.dumps(GlobalVariable.dump_many(self.global_vars)).encode())
 
         # dump enums
-        self.client.add_data(index, 'enums.toml', toml.dumps(Enum.dump_many(self.enums)).encode())
-
-    @staticmethod
-    def load_toml_from_file(filename, client=None, tree=None):
-        if client:
-            file_data = client.load_file_from_tree(tree, filename)
-        else:
-            with open(filename, "r") as fp:
-                file_data = fp.read()
-
-        return toml.loads(file_data)
+        self._dump_data(dst, 'enums.toml', toml.dumps(Enum.dump_many(self.enums)).encode())
 
     @classmethod
-    def parse(cls, tree: git.Tree, version=None, client=None):
-        s = cls(None, client=client)
+    def parse(cls, src: Union[pathlib.Path, git.Tree], version=None, client=None):
+        if isinstance(src, str):
+            src = pathlib.Path(src)
+
+        state = cls(None, version=version, client=client)
 
         # load metadata
         try:
-            metadata = cls.load_toml_from_file("metadata.toml", client=client, tree=tree)
+            metadata = load_toml_from_file(src, "metadata.toml", client=client)
         except:
             # metadata is not found
             raise MetadataNotFoundError()
-        s.user = metadata["user"]
-
-        s.version = version if version is not None else metadata["version"]
+        state.user = metadata["user"]
+        state.version = version if version is not None else metadata["version"]
 
         # load functions
-        tree_files = client.list_files_in_tree(tree)
-        function_files = [name for name in tree_files if name.startswith("functions")]
+        function_files = list_files_in_dir(src, "functions", client=client)
         for func_file in function_files:
             try:
-                func_toml = cls.load_toml_from_file(func_file, client=client, tree=tree)
-            except Exception:
+                func_toml = load_toml_from_file(src, func_file, client=client)
+            except:
                 pass
             else:
                 func = Function.load(func_toml)
-                s.functions[func.addr] = func
+                state.functions[func.addr] = func
 
         # load comments
         try:
-            comments_toml = cls.load_toml_from_file("comments.toml", client=client, tree=tree)
+            comments_toml = load_toml_from_file(src, "comments.toml", client=client)
         except:
             pass
         else:
             comments = {}
             for comment in Comment.load_many(comments_toml):
                 comments[comment.addr] = comment
-            s.comments = comments
+            state.comments = comments
 
         # load patches
         try:
-            patches_toml = cls.load_toml_from_file("patches.toml", client=client, tree=tree)
+            patches_toml = load_toml_from_file(src, "patches.toml", client=client)
         except:
             pass
         else:
             patches = {}
             for patch in Patch.load_many(patches_toml):
                 patches[patch.offset] = patch
-            s.patches = SortedDict(patches)
+            state.patches = SortedDict(patches)
 
         # load global_vars
         try:
-            global_vars_toml = cls.load_toml_from_file("global_vars.toml", client=client, tree=tree)
+            global_vars_toml = load_toml_from_file(src, "global_vars.toml", client=client)
         except:
             pass
         else:
             global_vars = {}
             for global_var in GlobalVariable.load_many(global_vars_toml):
                 global_vars[global_var.addr] = global_var
-            s.global_vars = SortedDict(global_vars)
+            state.global_vars = SortedDict(global_vars)
 
         # load enums
         try:
-            enums_toml = cls.load_toml_from_file("enums.toml", client=client, tree=tree)
+            enums_toml = load_toml_from_file(src, "enums.toml", client=client)
         except:
             pass
         else:
-            s.enums = {
+            state.enums = {
                 enum.name: enum for enum in Enum.load_many(enums_toml)
             }
 
         # load structs
-        tree_files = client.list_files_in_tree(tree)
-        struct_files = [name for name in tree_files if name.startswith("structs")]
+        struct_files = list_files_in_dir(src, "structs", client=client)
         for struct_file in struct_files:
             try:
-                struct_toml = cls.load_toml_from_file(struct_file, client=client, tree=tree)
+                struct_toml = load_toml_from_file(src, struct_file, client=client)
             except:
                 pass
             else:
                 struct = Struct.load(struct_toml)
-                s.structs[struct.name] = struct
+                state.structs[struct.name] = struct
 
         # clear the dirty bit
-        s._dirty = False
-
-        return s
-
-    def copy_state(self, target_state=None):
-        if target_state is None:
-            l.warning("Cannot copy an empty state (state == None)")
-            return
-
-        self.functions = target_state.functions.copy()
-        self.comments = target_state.comments.copy()
-        self.patches = target_state.patches.copy()
-        self.structs = target_state.structs.copy()
-        self.global_vars = target_state.global_vars.copy()
-        self.enums = target_state.enums.copy()
-        
-    def save(self):
-        if self.client is None:
-            raise RuntimeError("save(): State.client is None.")
-        self.client.commit_state(self)
+        state._dirty = False
+        return state
 
     #
     # Setters
