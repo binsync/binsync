@@ -592,7 +592,7 @@ def refresh_pseudocode_view(ea, set_focus=True):
 class IDAViewCTX:
     @execute_ui
     def __init__(self, func_addr):
-        self.view = ida_hexrays.open_pseudocode(func_addr, 0)
+        self.view = ida_hexrays.open_pseudocode(func_addr, ida_hexrays.OPF_NO_WAIT | ida_hexrays.OPF_REUSE)
 
     def __enter__(self):
         return self.view
