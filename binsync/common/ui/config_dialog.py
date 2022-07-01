@@ -4,7 +4,6 @@ import traceback
 from typing import Optional
 
 import toml
-from PyQt5.QtCore import Qt, QEvent
 from binsync.core.client import ConnectionWarnings
 from binsync.common.ui.qt_objects import (
     QCheckBox,

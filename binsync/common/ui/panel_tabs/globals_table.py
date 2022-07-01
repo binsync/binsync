@@ -1,11 +1,6 @@
 import logging
 import re
 
-from PyQt5.QtCore import QEvent
-
-from PyQt5.QtWidgets import QAction
-from PyQt5.QtGui import QFontDatabase
-
 from binsync.common.controller import BinSyncController
 from binsync.common.ui.qt_objects import (
     QAbstractItemView,
@@ -14,7 +9,10 @@ from binsync.common.ui.qt_objects import (
     Qt,
     QTableWidget,
     QTableWidgetItem,
-    QStyledItemDelegate
+    QStyledItemDelegate,
+    QFontDatabase,
+    QAction,
+    QEvent
 )
 from binsync.common.ui.utils import QNumericItem, friendly_datetime
 from binsync.core.state import State
