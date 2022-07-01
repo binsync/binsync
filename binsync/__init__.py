@@ -11,5 +11,4 @@ del logging
 
 from binsync.data import *
 from binsync import common
-from binsync.core.scheduler import Job, Scheduler
-from binsync.core import Client, ConnectionWarnings
+from binsync.core.client import Client, ConnectionWarnings
