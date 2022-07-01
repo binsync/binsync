@@ -16,7 +16,7 @@ from binsync.common.ui.utils import QNumericItem, friendly_datetime
 l = logging.getLogger(__name__)
 
 fixed_width_font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
-fixed_width_font.setPixelSize(14)
+fixed_width_font.setPointSize(11)
 
 class QCTXItem:
     """

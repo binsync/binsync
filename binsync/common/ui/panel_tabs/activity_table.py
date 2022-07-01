@@ -20,7 +20,7 @@ from binsync.data.state import State
 l = logging.getLogger(__name__)
 
 fixed_width_font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
-fixed_width_font.setPixelSize(14)
+fixed_width_font.setPointSize(11)
 
 class QActivityItem:
     def __init__(self, user, activity, last_push):

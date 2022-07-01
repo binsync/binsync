@@ -21,7 +21,7 @@ from binsync.core.scheduler import SchedSpeed
 l = logging.getLogger(__name__)
 
 fixed_width_font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
-fixed_width_font.setPixelSize(14)
+fixed_width_font.setPointSize(11)
 
 class QGlobalItem:
     def __init__(self, name, type_, user, last_push):
