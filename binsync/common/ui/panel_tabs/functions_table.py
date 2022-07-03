@@ -28,7 +28,9 @@ from binsync.core.scheduler import SchedSpeed
 
 l = logging.getLogger(__name__)
 
+
 class FunctionTableModel(QAbstractTableModel):
+    """Table model that controls backend behavior of the function table"""
     HEADER = [
         'Addr',
         'Remote Name',
@@ -36,11 +38,14 @@ class FunctionTableModel(QAbstractTableModel):
         'Last Push'
     ]
 
+    # This is *most likely* alright, definitely works on linux, could use a macos/windows pass.
+    # Custom defined role for sorting (since we shouldn't sort hex numbers alphabetically)
     SortRole = Qt.UserRole + 1000
-    #COLORING_TIME_WINDOW = 2 * 60 * 60 # 2 hours in seconds
-    COLORING_TIME_WINDOW = 90 * 24 * 60 * 60 # 90 days in seconds
 
-    # max color for most recently updated, fades out over COLORING_TIME_WINDOW
+    # Time window of changes to color, e.g. a 2 hour window will color new updates and fade the color over 2 hours
+    COLORING_TIME_WINDOW = 90 * 24 * 60 * 60  # 90 days in seconds
+
+    # Color for most recently updated, the alpha value decreases linearly over COLORING_TIME_WINDOW
     ACTIVE_FUNCTION_COLOR = (100, 255, 100, 70)
 
     def __init__(self, controller: BinSyncController, data=None, parent=None):
@@ -103,18 +108,18 @@ class FunctionTableModel(QAbstractTableModel):
         return None
 
     def insertRows(self, position, rows=1, index=QModelIndex()):
-        """ Insert a row into the model. """
+        """ Insert N (default=1) rows into the model at a desired position. """
         self.beginInsertRows(QModelIndex(), position, position + rows - 1)
 
         for row in range(rows):
             self.data.insert(position + row, [0, "LOADING", "USER", datetime.now()])
-            self.colordata.insert(position + row, [QColor(0,0,0,0)])
+            self.colordata.insert(position + row, [QColor(0, 0, 0, 0)])
 
         self.endInsertRows()
         return True
 
     def removeRows(self, position, rows=1, index=QModelIndex()):
-        """ Remove a row from the model. """
+        """ Remove N (default=1) rows from the model at a desired position. """
         self.beginRemoveRows(QModelIndex(), position, position + rows - 1)
 
         del self.data[position:position + rows]
@@ -136,7 +141,7 @@ class FunctionTableModel(QAbstractTableModel):
                 address[index.column()] = value
             else:
                 return False
-            # TODO: Check for compatibility issues with pyqt6 here, they add an extra parameter.
+            # TODO: Check for compatibility issues with pyqt6 here, function prototype changes between versions
             self.dataChanged.emit(index, index)
             return True
 
@@ -154,7 +159,6 @@ class FunctionTableModel(QAbstractTableModel):
 
     def update_table(self):
         """ Updates the table using the controller's information """
-        new_rows = 0
         # for each user, iterate over all of their functions
         for user in self.controller.users():
             state = self.controller.client.get_state(user=user.name)
@@ -177,22 +181,16 @@ class FunctionTableModel(QAbstractTableModel):
                 # insert a new row if necessary
                 if not exists:
                     self.insertRows(0)
-                    new_rows += 1
                 # get its index to use and set the data for all 4 columns
                 row_data = [func_addr, sync_func.name if sync_func.name else "", user.name, func_change_time]
                 for i in range(4):
                     idx = self.index(tab_idx, i, QModelIndex())
                     self.setData(idx, row_data[i], role=Qt.EditRole)
 
-        # update table coloring
+        # update table coloring, this might need to be checked for robustness
         now = datetime.now()
-        if isinstance(now, int):
-            if now == -1:
-                self.colordata[i] = None
-            t_upd = datetime.fromtimestamp(now)
         for i in range(len(self.data)):
-            row = self.data[i]
-            t_upd = row[3]
+            t_upd = self.data[i][3]
             if isinstance(t_upd, int):
                 if t_upd == -1:
                     self.colordata[i] = None
@@ -200,18 +198,18 @@ class FunctionTableModel(QAbstractTableModel):
             duration = (now - t_upd).total_seconds()
             if 0 <= duration <= self.COLORING_TIME_WINDOW:
                 alpha = self.ACTIVE_FUNCTION_COLOR[3]
-                recency_percent = (self.COLORING_TIME_WINDOW-duration) / self.COLORING_TIME_WINDOW
+                recency_percent = (self.COLORING_TIME_WINDOW - duration) / self.COLORING_TIME_WINDOW
                 self.colordata[i] = QColor(self.ACTIVE_FUNCTION_COLOR[0], self.ACTIVE_FUNCTION_COLOR[1],
                                            self.ACTIVE_FUNCTION_COLOR[2], int(alpha * recency_percent))
             else:
                 self.colordata[i] = None
 
         if len(self.data) != len(self.colordata):
+            # *Should* probably never happen but putting an error message here so if it does we can see it
             l.error("ERROR CALCULATING COLOR DATA!")
 
-        return new_rows
-
 class FunctionTableFilterLineEdit(QLineEdit):
+    """ Basic class for the filter line edit, clears itself whenever focus is lost. """
     def __init__(self, parent=None):
         super(FunctionTableFilterLineEdit, self).__init__(parent=parent)
         self.user_unfocused = False
@@ -231,7 +229,9 @@ class FunctionTableFilterLineEdit(QLineEdit):
             self.user_unfocused = True
         super(FunctionTableFilterLineEdit, self).focusOutEvent(event)
 
+
 class FunctionTableView(QTableView):
+    """ Table view for the data, this is the front end "container" for our model. """
     def __init__(self, controller: BinSyncController, filteredit: FunctionTableFilterLineEdit, parent=None):
         super().__init__(parent=parent)
 
@@ -240,28 +240,31 @@ class FunctionTableView(QTableView):
         self.filteredit = filteredit
         self.filteredit.textChanged.connect(self.handle_filteredit_change)
 
+        # Create a SortFilterProxyModel to allow for sorting/filtering
         self.proxymodel = QSortFilterProxyModel()
+        # Set the sort role/column to filter by
         self.proxymodel.setSortRole(FunctionTableModel.SortRole)
         self.proxymodel.setFilterKeyColumn(1)
 
+        # Connect our model to the proxy model
         self.model = FunctionTableModel(controller)
         self.proxymodel.setSourceModel(self.model)
         self.setModel(self.proxymodel)
 
         self.doubleClicked.connect(self._doubleclick_handler)
-
         self.column_visibility = []
 
         self._init_settings()
 
     def _doubleclick_handler(self):
-        # Doubleclick only allows for a single item select so just take first one from list
+        """ Handler for double clicking on a row, jumps to the respective function. """
         row_idx = self.selectionModel().selectedIndexes()[0]
         tls_row_idx = self.proxymodel.mapToSource(row_idx)
         row = self.model.data[tls_row_idx.row()]
         self.controller.goto_address(row[0])
 
     def _get_valid_users_for_func(self, func_addr):
+        """ Helper function for getting users that have changes in a given function """
         for user in self.controller.users(priority=SchedSpeed.FAST):
             user_state: State = self.controller.client.get_state(user=user.name, priority=SchedSpeed.FAST)
             user_func = user_state.get_function(func_addr)
@@ -273,6 +276,7 @@ class FunctionTableView(QTableView):
             yield user.name
 
     def _col_hide_handler(self, index):
+        """ Helper function to hide/show columns from context menu """
         self.column_visibility[index] = not self.column_visibility[index]
         self.setColumnHidden(index, self.column_visibility[index])
         if self.column_visibility[index]:
@@ -281,6 +285,7 @@ class FunctionTableView(QTableView):
             self.hideColumn(index)
 
     def update_table(self):
+        """ Update the model of the table with new data from the controller """
         self.model.update_table()
 
     def reload(self):
@@ -316,7 +321,8 @@ class FunctionTableView(QTableView):
 
             for username in self._get_valid_users_for_func(func_addr):
                 action = from_menu.addAction(username)
-                action.triggered.connect(lambda chck, name=username: self.controller.fill_function(func_addr, user=name))
+                action.triggered.connect(
+                    lambda chck, name=username: self.controller.fill_function(func_addr, user=name))
 
         menu.popup(self.mapToGlobal(event.pos()))
 
@@ -351,9 +357,12 @@ class FunctionTableView(QTableView):
         self.setFocusProxy(self.filteredit)
 
     def handle_filteredit_change(self, text):
+        """ Handle text changes in the filter box, filters the table by the arg. """
         self.proxymodel.setFilterFixedString(text)
 
+
 class QFunctionTable(QWidget):
+    """ Wrapper widget to contain the function table classes in one file (prevents bulking up control_panel.py) """
     def __init__(self, controller: BinSyncController, parent=None):
         super().__init__(parent)
         self.controller = controller
@@ -367,7 +376,7 @@ class QFunctionTable(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.table)
         layout.addWidget(self.filteredit)
-        self.setContentsMargins(0,0,0,0)
+        self.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
     def update_table(self):
