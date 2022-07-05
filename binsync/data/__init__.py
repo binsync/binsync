@@ -8,3 +8,4 @@ from binsync.data.struct import StructMember, Struct
 from binsync.data.global_variable import GlobalVariable
 from binsync.data.enum import Enum
 from binsync.data.state import State
+from binsync.data.configuration import ProjectConfig, GlobalConfig
