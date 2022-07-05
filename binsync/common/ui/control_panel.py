@@ -48,7 +48,7 @@ class ControlPanel(QWidget):
 
     def ctx_callback(self):
         if isinstance(self.controller.last_ctx, binsync.data.Function):
-            self._ctx_table.update_table(new_ctx=self.controller.last_ctx.addr)
+            self._ctx_table.model.update_table(new_ctx=self.controller.last_ctx.addr)
 
         self.ctx_change.emit()
 
@@ -107,12 +107,10 @@ class ControlPanel(QWidget):
         ctx_name = self.controller.last_ctx.name or ""
         ctx_name = ctx_name[:12] + "..." if len(ctx_name) > 12 else ctx_name
         self._status_bar.showMessage(f"{ctx_name}@{hex(self.controller.last_ctx.addr)}")
-        self._ctx_table.reload()
 
     def _reload_tables(self):
         for _, table in self.tables.items():
             table.reload()
-        self._ctx_table.reload()
 
     def _update_table_data(self):
         for _, table in self.tables.items():

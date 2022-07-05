@@ -21,7 +21,7 @@ from binsync.common.ui.qt_objects import (
     QWidget,
     QVBoxLayout
 )
-from binsync.common.ui.utils import QNumericItem, friendly_datetime
+from binsync.common.ui.utils import friendly_datetime
 from binsync.data import Function
 from binsync.data.state import State
 from binsync.core.scheduler import SchedSpeed
@@ -56,7 +56,7 @@ class FunctionTableModel(QAbstractTableModel):
         else:
             self.data = data
 
-        self.colordata = []
+        self.data_bgcolors = []
 
     def rowCount(self, index=QModelIndex()):
         """ Returns number of rows the model holds. """
@@ -74,7 +74,7 @@ class FunctionTableModel(QAbstractTableModel):
 
         if role == Qt.DisplayRole:
             if index.column() == 0:
-                return f"{self.data[index.row()][0]:#6x}"
+                return f"{self.data[index.row()][0]:#x}"
             elif index.column() == 1:
                 return self.data[index.row()][1]
             elif index.column() == 2:
@@ -88,12 +88,13 @@ class FunctionTableModel(QAbstractTableModel):
                 return self.data[index.row()][1]
             elif index.column() == 2:
                 return self.data[index.row()][2]
-            elif index.column() == 3:
-                return self.data[index.row()][3]
-        elif role == Qt.BackgroundRole:
-            if len(self.data) != len(self.colordata):
+            elif index.column() == 3:  # dont filter based on time
                 return None
-            return self.colordata[index.row()]
+        elif role == Qt.BackgroundRole:
+            if len(self.data) != len(self.data_bgcolors) or not (0 <= index.row() < len(self.data_bgcolors)):
+                return None
+            return self.data_bgcolors[index.row()]
+
         return None
 
     def headerData(self, section, orientation, role=Qt.DisplayRole):
@@ -113,20 +114,21 @@ class FunctionTableModel(QAbstractTableModel):
 
         for row in range(rows):
             self.data.insert(position + row, [0, "LOADING", "USER", datetime.now()])
-            self.colordata.insert(position + row, [QColor(0, 0, 0, 0)])
+            self.data_bgcolors.insert(position + row, [QColor(0, 0, 0, 0)])
 
         self.endInsertRows()
         return True
 
     def removeRows(self, position, rows=1, index=QModelIndex()):
         """ Remove N (default=1) rows from the model at a desired position. """
-        self.beginRemoveRows(QModelIndex(), position, position + rows - 1)
+        if 0 <= position < len(self.data) and 0 <= position + rows < len(self.data):
+            self.beginRemoveRows(QModelIndex(), position, position + rows - 1)
+            del self.data[position:position + rows]
+            del self.data_bgcolors[position:position + rows]
+            self.endRemoveRows()
 
-        del self.data[position:position + rows]
-        del self.colordata[position:position + rows]
-
-        self.endRemoveRows()
-        return True
+            return True
+        return False
 
     def setData(self, index, value, role=Qt.EditRole):
         """ Adjust the data (set it to <value>) depending on the given
@@ -193,23 +195,23 @@ class FunctionTableModel(QAbstractTableModel):
             t_upd = self.data[i][3]
             if isinstance(t_upd, int):
                 if t_upd == -1:
-                    self.colordata[i] = None
+                    self.data_bgcolors[i] = None
                 t_upd = datetime.fromtimestamp(t_upd)
+
             duration = (now - t_upd).total_seconds()
+
             if 0 <= duration <= self.COLORING_TIME_WINDOW:
                 alpha = self.ACTIVE_FUNCTION_COLOR[3]
                 recency_percent = (self.COLORING_TIME_WINDOW - duration) / self.COLORING_TIME_WINDOW
-                self.colordata[i] = QColor(self.ACTIVE_FUNCTION_COLOR[0], self.ACTIVE_FUNCTION_COLOR[1],
-                                           self.ACTIVE_FUNCTION_COLOR[2], int(alpha * recency_percent))
+                self.data_bgcolors[i] = QColor(self.ACTIVE_FUNCTION_COLOR[0], self.ACTIVE_FUNCTION_COLOR[1],
+                                               self.ACTIVE_FUNCTION_COLOR[2], int(alpha * recency_percent))
             else:
-                self.colordata[i] = None
+                self.data_bgcolors[i] = None  # None will just cause no color changes from the default
 
-        if len(self.data) != len(self.colordata):
-            # *Should* probably never happen but putting an error message here so if it does we can see it
-            l.error("ERROR CALCULATING COLOR DATA!")
 
 class FunctionTableFilterLineEdit(QLineEdit):
     """ Basic class for the filter line edit, clears itself whenever focus is lost. """
+
     def __init__(self, parent=None):
         super(FunctionTableFilterLineEdit, self).__init__(parent=parent)
         self.user_unfocused = False
@@ -232,6 +234,7 @@ class FunctionTableFilterLineEdit(QLineEdit):
 
 class FunctionTableView(QTableView):
     """ Table view for the data, this is the front end "container" for our model. """
+
     def __init__(self, controller: BinSyncController, filteredit: FunctionTableFilterLineEdit, parent=None):
         super().__init__(parent=parent)
 
@@ -244,7 +247,8 @@ class FunctionTableView(QTableView):
         self.proxymodel = QSortFilterProxyModel()
         # Set the sort role/column to filter by
         self.proxymodel.setSortRole(FunctionTableModel.SortRole)
-        self.proxymodel.setFilterKeyColumn(1)
+        self.proxymodel.setFilterRole(Qt.DisplayRole)
+        self.proxymodel.setFilterKeyColumn(-1)
 
         # Connect our model to the proxy model
         self.model = FunctionTableModel(controller)
@@ -330,7 +334,6 @@ class FunctionTableView(QTableView):
         self.setShowGrid(False)
 
         header = self.horizontalHeader()
-        header.setSectionResizeMode(2, QHeaderView.Stretch)
         header.setSortIndicator(0, Qt.AscendingOrder)
         self.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
@@ -356,6 +359,7 @@ class FunctionTableView(QTableView):
 
         self.setFocusProxy(self.filteredit)
 
+    # This entire function might be replaceable with a lambda
     def handle_filteredit_change(self, text):
         """ Handle text changes in the filter box, filters the table by the arg. """
         self.proxymodel.setFilterFixedString(text)
@@ -363,6 +367,7 @@ class FunctionTableView(QTableView):
 
 class QFunctionTable(QWidget):
     """ Wrapper widget to contain the function table classes in one file (prevents bulking up control_panel.py) """
+
     def __init__(self, controller: BinSyncController, parent=None):
         super().__init__(parent)
         self.controller = controller
