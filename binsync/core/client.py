@@ -11,7 +11,7 @@ import filelock
 import git
 import git.exc
 
-from binsync.data import User
+from binsync.data import User, GlobalConfig
 from binsync.core.errors import ExternalUserCommitError, MetadataNotFoundError
 from binsync.data.state import State, load_toml_from_file
 from binsync.core.scheduler import Scheduler, Job, SchedSpeed
@@ -125,6 +125,9 @@ class Client:
         self.last_pull_attempt_ts = None  # type: Optional[float]
         self._last_commit_ts = None # type: Optional[float]
 
+        # load or update the global binsync config
+        self.global_config = self._load_or_update_config()
+
         self.active_remote = True
 
     def __del__(self):
@@ -134,6 +137,12 @@ class Client:
     #
     # Initializers
     #
+
+    def _load_or_update_config(self):
+        config = GlobalConfig.load_from_file(None) or GlobalConfig(None)
+        config.last_bs_repo_path = self.repo_root
+        config.save()
+        return config
 
     def _get_or_init_user_branch(self):
         """

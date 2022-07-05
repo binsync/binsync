@@ -1,4 +1,5 @@
 import pathlib
+import os
 import toml
 
 BINSYNC_CONFIG_POSTFIX = "bsconf"
@@ -84,6 +85,9 @@ class GlobalConfig(Config):
         self.last_bs_repo_path = last_bs_repo_path
 
     def _correct_path(self, path):
+        if path is None:
+            path = os.getenv("HOME") or "."
+
         path = pathlib.Path(path)
         name = pathlib.Path(f".global.{BINSYNC_CONFIG_POSTFIX}")
         return str(path.joinpath(name))
