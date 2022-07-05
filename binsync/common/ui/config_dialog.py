@@ -1,11 +1,13 @@
 import logging
 import os
 import time
+import pathlib
 import traceback
 from typing import Optional
 
 import toml
 from binsync.core.client import ConnectionWarnings
+from binsync.data.configuration import ProjectConfig
 from binsync.common.ui.qt_objects import (
     QCheckBox,
     QDialog,
@@ -90,7 +92,7 @@ class SyncConfig(QDialog):
 
         # initialize repo checkbox
         self._initrepo_checkbox = QCheckBox(self)
-        self._initrepo_checkbox.setText("Create repository")
+        self._initrepo_checkbox.setText("Init Remote")
         self._initrepo_checkbox.setToolTip("I'm the first user of this binsync project and I'd "
                                            "like to initialize it as a sync repo.")
         self._initrepo_checkbox.setChecked(False)
@@ -181,7 +183,7 @@ class SyncConfig(QDialog):
         # create and save config if possible
         saved_config = self.save_config()
         if saved_config:
-            l.debug(f"Configuration config was saved to {saved_config}.")
+            l.debug(f"Configuration file was saved to {saved_config}.")
 
         self.close()
 
@@ -212,46 +214,35 @@ class SyncConfig(QDialog):
     # Utils
     #
 
-    def _get_config_path(self):
-        binary_path = self.controller.binary_path()
-        if not binary_path:
-            return None
-
-        # example config: /path/to/fauxware_files/.fauxware.conf.toml
-        config_name = "." + os.path.basename(self.controller.binary_path()) + ".conf.toml"
-        config_path = os.path.join(os.path.dirname(self.controller.binary_path()), config_name)
-        return config_path
-
     def load_saved_config(self) -> bool:
-        config_path = self._get_config_path()
-        if not config_path or not os.path.exists(config_path):
+        config = ProjectConfig.load_from_file(self.controller.binary_path())
+        if not config:
             return False
 
-        with open(config_path, "r") as fp:
-            config = toml.load(fp)
+        user = config.user or ""
+        repo = config.repo_path or ""
+        remote = config.remote if config.remote and not config.repo_path else ""
 
-        self._user_edit.setText(config.get("username", ""))
-        self._repo_edit.setText(config.get("repo", ""))
-        self._remote_edit.setText(config.get("remote", ""))
+        self._user_edit.setText(user)
+        self._repo_edit.setText(repo)
+        self._remote_edit.setText(remote)
         return True
 
     def save_config(self) -> Optional[str]:
-        config_path = self._get_config_path()
-        if not config_path:
-            return None
+        user = self._user_edit.text()
+        remote = self._remote_edit.text()
+        repo = self._repo_edit.text()
 
-        if os.path.exists(config_path):
-            os.unlink(config_path)
+        if remote and not repo:
+            repo = str(pathlib.Path(self.controller.client.repo_root).absolute())
 
-        config = {
-            "username": self._user_edit.text(),
-            "repo": self._repo_edit.text(),
-            "remote": self._remote_edit.text()
-        }
-        with open(config_path, "w") as fp:
-            toml.dump(config, fp)
-
-        return config_path
+        config = ProjectConfig(
+            self.controller.binary_path(),
+            user=user,
+            repo_path=repo,
+            remote=remote
+        )
+        return config.save()
 
 
     #
