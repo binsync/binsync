@@ -58,15 +58,25 @@ class QUtilPanel(QWidget):
 
         self.controller.magic_fill(preference_user=dialog.preferred_user)
 
-    def _handle_coloring_window_change(self):
+    def _handle_save_button(self):
+        # handle table_coloring_window
         text = self._table_coloring_window_editor.text()
         if not text:
             return
         newval = int(text)
         self.controller.table_coloring_window = newval
-        #setattr(self.controller.config, "table_coloring_window", newval)
-        #then save config ideally, might need a way to limit this function though.
+        self.controller.config.table_coloring_window = newval
 
+        # handle sync_level
+        self.controller.config.sync_level = self.controller.sync_level
+
+        # handle log_level
+        if self._debug_log_toggle.isChecked():
+            self.controller.config.log_level = "DEBUG"
+        else:
+            self.controller.config.log_level = "INFO"
+
+        self.controller.config.save()
 
     def _init_widgets(self):
 
@@ -104,10 +114,17 @@ class QUtilPanel(QWidget):
             </p>
             </html>
             """)
+        sync_level_opts = ["Non-Conflicting", "Overwrite", "Merge"]
         self._sync_level_label.setTextFormat(Qt.RichText)
         self._sync_level_combobox = QComboBox()
-        self._sync_level_combobox.addItems(["Non-Conflicting", "Overwrite", "Merge"])
+        self._sync_level_combobox.addItems(sync_level_opts)
         self._sync_level_combobox.currentIndexChanged.connect(self._handle_sync_level_change)
+        if self.controller.sync_level == SyncLevel.NON_CONFLICTING:
+            self._sync_level_combobox.setCurrentIndex(sync_level_opts.index("Non-Conflicting"))
+        elif self.controller.sync_level == SyncLevel.OVERWRITE:
+            self._sync_level_combobox.setCurrentIndex(sync_level_opts.index("Overwrite"))
+        elif self.controller.sync_level == SyncLevel.MERGE:
+            self._sync_level_combobox.setCurrentIndex(sync_level_opts.index("Merge"))
 
         sync_level_layout = QHBoxLayout()
         #sync_level_group.layout().setContentsMargins(0, 0, 0, 0)
@@ -115,7 +132,7 @@ class QUtilPanel(QWidget):
         sync_level_layout.addWidget(self._sync_level_combobox)
 
         self._magic_sync_button = QPushButton("Initiate Magic Sync")
-        self._magic_sync_button.clicked.connect(self._handle_magic_sync_button)
+        self._magic_sync_button.pressed.connect(self._handle_magic_sync_button)
         self._magic_sync_button.setToolTip("Performs a best effort merge of all existing user data to your state, but won't affect your existing state (this uses a non-conflicting merge).")
 
         sync_options_layout.addLayout(sync_level_layout)
@@ -139,7 +156,6 @@ class QUtilPanel(QWidget):
         validator.setTop(20*365*24*60*60)
         self._table_coloring_window_editor = QLineEdit()
         self._table_coloring_window_editor.setText(str(self.controller.table_coloring_window))
-        self._table_coloring_window_editor.textChanged.connect(self._handle_coloring_window_change)
         self._table_coloring_window_editor.setValidator(validator)
         self._table_coloring_window_editor.setAlignment(Qt.AlignRight)
         self._table_coloring_window_editor.setMinimumWidth(50)
@@ -147,6 +163,9 @@ class QUtilPanel(QWidget):
         table_options_layout.addWidget(self._table_coloring_window_label)
         table_options_layout.addStretch(100)
         table_options_layout.addWidget(self._table_coloring_window_editor)
+
+        self._save_button = QPushButton("Save Configuration")
+        self._save_button.pressed.connect(self._handle_save_button)
 
 
 
@@ -161,4 +180,6 @@ class QUtilPanel(QWidget):
         main_layout.addWidget(sync_options_group)
         main_layout.addWidget(dev_options_group)
         main_layout.addWidget(table_options_group)
+        main_layout.addStretch()
+        main_layout.addWidget(self._save_button)
         self.setLayout(main_layout)

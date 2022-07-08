@@ -1,7 +1,9 @@
 import pathlib
 import os
 import toml
+import logging
 
+l = logging.getLogger(__name__)
 BINSYNC_CONFIG_POSTFIX = "bsconf"
 
 
@@ -14,6 +16,7 @@ class Config:
         self.path = path
 
     def save(self):
+        l.debug(f"Saving Configuration File: '{self.path}'")
         dump_dict = {
             attr: getattr(self, attr) for attr in self.__slots__
         }
@@ -48,13 +51,19 @@ class ProjectConfig(Config):
         "user",
         "repo_path",
         "remote",
+        "table_coloring_window",
+        "sync_level",
+        "log_level"
     )
 
     def __init__(self,
                  binary_path,
                  user=None,
                  repo_path=None,
-                 remote=None
+                 remote=None,
+                 table_coloring_window=None,
+                 sync_level=None,
+                 log_level=None
                  ):
         super(ProjectConfig, self).__init__(self._correct_path(binary_path))
 
@@ -62,6 +71,9 @@ class ProjectConfig(Config):
         self.user = user
         self.repo_path = repo_path
         self.remote = remote
+        self.table_coloring_window = table_coloring_window
+        self.sync_level = sync_level
+        self.log_level = log_level
 
     def _correct_path(self, binary_path):
         # example config: /path/to/fauxware_files/.fauxware.bsconf

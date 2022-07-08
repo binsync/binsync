@@ -753,12 +753,22 @@ class BinSyncController:
         return known_gvars
 
     def load_saved_config(self):
-        config = ProjectConfig.load_from_file(self.binary_path())
-        if not config:
+        self.config = ProjectConfig.load_from_file(self.binary_path())
+        if not self.config:
             return None
-        if hasattr(config, "table_coloring_window"):
-            self.table_coloring_window = self.config.table_coloring_window
-        return config
 
-    def save_config(self) -> Optional[str]:
-        return self.config.save()
+        if hasattr(self.config, "table_coloring_window") and self.config.table_coloring_window is not None:
+            self.table_coloring_window = self.config.table_coloring_window
+        if hasattr(self.config, "sync_level") and self.config.sync_level is not None:
+            self.sync_level = self.config.sync_level
+        if hasattr(self.config, "log_level") and self.config.log_level is not None:
+            if self.config.log_level == "DEBUG":
+                logging.getLogger("binsync").setLevel("DEBUG")
+                logging.getLogger("ida_binsync").setLevel("DEBUG")
+                _l.info("Logger has been set to level: DEBUG")
+            elif self.config.log_level == "INFO":
+                logging.getLogger("binsync").setLevel("INFO")
+                logging.getLogger("ida_binsync").setLevel("INFO")
+                _l.info("Logger has been set to level: INFO")
+
+        return self.config
