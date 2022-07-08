@@ -215,13 +215,13 @@ class SyncConfig(QDialog):
     #
 
     def load_saved_config(self) -> bool:
-        config = ProjectConfig.load_from_file(self.controller.binary_path())
-        if not config:
+        self.controller.config = self.controller.load_saved_config()
+        if not self.controller.config:
             return False
 
-        user = config.user or ""
-        repo = config.repo_path or ""
-        remote = config.remote if config.remote and not config.repo_path else ""
+        user = self.controller.config.user or ""
+        repo = self.controller.config.repo_path or ""
+        remote = self.controller.config.remote if self.controller.config.remote and not self.controller.config.repo_path else ""
 
         self._user_edit.setText(user)
         self._repo_edit.setText(repo)
@@ -236,13 +236,19 @@ class SyncConfig(QDialog):
         if remote and not repo:
             repo = str(pathlib.Path(self.controller.client.repo_root).absolute())
 
-        config = ProjectConfig(
-            self.controller.binary_path(),
-            user=user,
-            repo_path=repo,
-            remote=remote
-        )
-        return config.save()
+        if not self.controller.config:
+            self.controller.config = ProjectConfig(
+                self.controller.binary_path(),
+                user=user,
+                repo_path=repo,
+                remote=remote
+            )
+        else:
+            self.controller.config.user = user
+            self.controller.config.repo_path = repo
+            self.controller.config.remote = remote
+
+        return self.controller.config.save()
 
 
     #

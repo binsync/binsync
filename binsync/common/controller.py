@@ -7,6 +7,7 @@ from functools import wraps
 from typing import Dict, Iterable, List, Optional
 
 import binsync.data
+from binsync import ProjectConfig
 from binsync.core.client import Client, SchedSpeed
 from binsync.data import (Comment, Enum, Function, GlobalVariable,
                           StackVariable, Struct, User)
@@ -130,6 +131,7 @@ class BinSyncController:
     The client will be set on connection. The ctx_change_callback will be set by an outside UI
 
     """
+
     def __init__(self, headless=False, reload_time=10):
         self.headless = headless
         self.reload_time = reload_time
@@ -145,6 +147,9 @@ class BinSyncController:
 
         # settings
         self.sync_level: int = SyncLevel.NON_CONFLICTING
+        self.table_coloring_window = 2 * 60 * 60  # 2 hours in seconds
+
+        self.config = None
 
         # command locks
         self.queue_lock = threading.Lock()
@@ -746,3 +751,14 @@ class BinSyncController:
                 known_gvars.add(offset)
 
         return known_gvars
+
+    def load_saved_config(self):
+        config = ProjectConfig.load_from_file(self.binary_path())
+        if not config:
+            return None
+        if hasattr(config, "table_coloring_window"):
+            self.table_coloring_window = self.config.table_coloring_window
+        return config
+
+    def save_config(self) -> Optional[str]:
+        return self.config.save()

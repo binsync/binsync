@@ -25,13 +25,15 @@ if ui_version == "PySide2":
         QWidget,
         QDialogButtonBox,
         QTableView,
-        QAction
+        QAction,
+        QFontDialog
     )
     from PySide2.QtGui import (
         QFontDatabase,
         QColor,
         QKeyEvent,
-        QFocusEvent
+        QFocusEvent,
+        QIntValidator
     )
 elif ui_version == "PySide6":
     from PySide6.QtCore import QDir, Qt, Signal, QAbstractTableModel, QModelIndex, QSortFilterProxyModel
@@ -58,13 +60,15 @@ elif ui_version == "PySide6":
         QWidget,
         QDialogButtonBox,
         QTableView,
-        QAction
+        QAction,
+        QFontDialog
     )
     from PySide6.QtGui import (
         QFontDatabase,
         QColor,
         QKeyEvent,
-        QFocusEvent
+        QFocusEvent,
+        QIntValidator
     )
 else:
     from PyQt5.QtCore import QDir, Qt, QAbstractTableModel, QModelIndex, QSortFilterProxyModel
@@ -92,11 +96,13 @@ else:
         QWidget,
         QDialogButtonBox,
         QTableView,
-        QAction
+        QAction,
+        QFontDialog
     )
     from PyQt5.QtGui import (
         QFontDatabase,
         QColor,
         QKeyEvent,
-        QFocusEvent
+        QFocusEvent,
+        QIntValidator
     )

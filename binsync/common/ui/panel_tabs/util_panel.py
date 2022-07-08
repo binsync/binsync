@@ -11,6 +11,8 @@ from binsync.common.ui.qt_objects import (
     Qt,
     QVBoxLayout,
     QWidget,
+    QLineEdit,
+    QIntValidator
 )
 from binsync.common.ui.magic_sync_dialog import MagicSyncDialog
 from binsync.common.controller import BinSyncController
@@ -55,6 +57,16 @@ class QUtilPanel(QWidget):
             return
 
         self.controller.magic_fill(preference_user=dialog.preferred_user)
+
+    def _handle_coloring_window_change(self):
+        text = self._table_coloring_window_editor.text()
+        if not text:
+            return
+        newval = int(text)
+        self.controller.table_coloring_window = newval
+        #setattr(self.controller.config, "table_coloring_window", newval)
+        #then save config ideally, might need a way to limit this function though.
+
 
     def _init_widgets(self):
 
@@ -109,6 +121,35 @@ class QUtilPanel(QWidget):
         sync_options_layout.addLayout(sync_level_layout)
         sync_options_group.layout().addWidget(self._magic_sync_button)
 
+        table_options_layout = QHBoxLayout()
+        table_options_group = QGroupBox()
+        table_options_group.setTitle("Table Options")
+        table_options_group.setLayout(table_options_layout)
+
+        self._table_coloring_window_label = QLabel("Table Coloring Window (seconds)")
+        self._table_coloring_window_label.setToolTip("""<html>
+            <p>
+            The time period in which updates to the table are colored in seconds (default: 2 hours aka 7200s)
+            </p>
+            </html>
+            """)
+
+        validator = QIntValidator()
+        validator.setBottom(0)
+        validator.setTop(20*365*24*60*60)
+        self._table_coloring_window_editor = QLineEdit()
+        self._table_coloring_window_editor.setText(str(self.controller.table_coloring_window))
+        self._table_coloring_window_editor.textChanged.connect(self._handle_coloring_window_change)
+        self._table_coloring_window_editor.setValidator(validator)
+        self._table_coloring_window_editor.setAlignment(Qt.AlignRight)
+        self._table_coloring_window_editor.setMinimumWidth(50)
+
+        table_options_layout.addWidget(self._table_coloring_window_label)
+        table_options_layout.addStretch(100)
+        table_options_layout.addWidget(self._table_coloring_window_editor)
+
+
+
         #
         # Final Layout
         #
@@ -119,4 +160,5 @@ class QUtilPanel(QWidget):
         main_layout.setAlignment(Qt.AlignTop)
         main_layout.addWidget(sync_options_group)
         main_layout.addWidget(dev_options_group)
+        main_layout.addWidget(table_options_group)
         self.setLayout(main_layout)

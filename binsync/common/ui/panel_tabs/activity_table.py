@@ -42,10 +42,7 @@ class ActivityTableModel(QAbstractTableModel):
     # Custom defined role for sorting (since we shouldn't sort hex numbers alphabetically)
     SortRole = Qt.UserRole + 1000
 
-    # Time window of changes to color, e.g. a 2 hour window will color new updates and fade the color over 2 hours
-    COLORING_TIME_WINDOW = 90 * 24 * 60 * 60  # 90 days in seconds
-
-    # Color for most recently updated, the alpha value decreases linearly over COLORING_TIME_WINDOW
+    # Color for most recently updated, the alpha value decreases linearly over controller.table_coloring_window
     ACTIVE_USER_COLOR = (100, 255, 100, 70)
 
     def __init__(self, controller: BinSyncController, data=None, parent=None):
@@ -209,9 +206,9 @@ class ActivityTableModel(QAbstractTableModel):
 
             duration = (now - t_upd).total_seconds()
 
-            if 0 <= duration <= self.COLORING_TIME_WINDOW:
+            if 0 <= duration <= self.controller.table_coloring_window:
                 alpha = self.ACTIVE_USER_COLOR[3]
-                recency_percent = (self.COLORING_TIME_WINDOW - duration) / self.COLORING_TIME_WINDOW
+                recency_percent = (self.controller.table_coloring_window - duration) / self.controller.table_coloring_window
                 self.data_bgcolors[i] = QColor(self.ACTIVE_USER_COLOR[0], self.ACTIVE_USER_COLOR[1],
                                                self.ACTIVE_USER_COLOR[2], int(alpha * recency_percent))
             else:
