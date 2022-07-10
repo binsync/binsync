@@ -117,3 +117,4 @@ class ControlPanel(QWidget):
             table.update_table()
 
         self._ctx_table.update_table()
+        self._func_table.update_table()

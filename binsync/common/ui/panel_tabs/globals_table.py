@@ -47,16 +47,14 @@ class GlobalTableModel(QAbstractTableModel):
     def __init__(self, controller: BinSyncController, data=None, parent=None):
         super().__init__(parent)
         self.controller = controller
-        if data is None:
-            self.data = []  # holds sublists of form: (addr, name, user_name, push_time)
-        else:
-            self.data = data
+        # holds sublists of form: (type, remote name, user, last push)
+        self.row_data = data if data else []
 
         self.data_bgcolors = []
 
     def rowCount(self, index=QModelIndex()):
         """ Returns number of rows the model holds. """
-        return len(self.data)
+        return len(self.row_data)
 
     def columnCount(self, index=QModelIndex()):
         """ Returns number of columns the model holds. """
@@ -70,25 +68,25 @@ class GlobalTableModel(QAbstractTableModel):
 
         if role == Qt.DisplayRole:
             if index.column() == 0:
-                if self.data[index.row()][0]:
-                    return f"{self.data[index.row()][0][0]}"
+                if self.row_data[index.row()][0]:
+                    return f"{self.row_data[index.row()][0][0]}"
             elif index.column() == 1:
-                return self.data[index.row()][1]
+                return self.row_data[index.row()][1]
             elif index.column() == 2:
-                return self.data[index.row()][2]
+                return self.row_data[index.row()][2]
             elif index.column() == 3:
-                return friendly_datetime(self.data[index.row()][3])
+                return friendly_datetime(self.row_data[index.row()][3])
         elif role == GlobalTableModel.SortRole:
             if index.column() == 0:
-                return self.data[index.row()][0]
+                return self.row_data[index.row()][0]
             elif index.column() == 1:
-                return self.data[index.row()][1]
+                return self.row_data[index.row()][1]
             elif index.column() == 2:
-                return self.data[index.row()][2]
+                return self.row_data[index.row()][2]
             elif index.column() == 3:  # dont filter based on time
                 return None
         elif role == Qt.BackgroundRole:
-            if len(self.data) != len(self.data_bgcolors) or not (0 <= index.row() < len(self.data_bgcolors)):
+            if len(self.row_data) != len(self.data_bgcolors) or not (0 <= index.row() < len(self.data_bgcolors)):
                 return None
             return self.data_bgcolors[index.row()]
 
@@ -110,7 +108,7 @@ class GlobalTableModel(QAbstractTableModel):
         self.beginInsertRows(QModelIndex(), position, position + rows - 1)
 
         for row in range(rows):
-            self.data.insert(position + row, [None, "LOADING", "USER", datetime.now()])
+            self.row_data.insert(position + row, [None, "LOADING", "USER", datetime.now()])
             self.data_bgcolors.insert(position + row, [QColor(0, 0, 0, 0)])
 
         self.endInsertRows()
@@ -118,9 +116,9 @@ class GlobalTableModel(QAbstractTableModel):
 
     def removeRows(self, position, rows=1, index=QModelIndex()):
         """ Remove N (default=1) rows from the model at a desired position. """
-        if 0 <= position < len(self.data) and 0 <= position + rows < len(self.data):
+        if 0 <= position < len(self.row_data) and 0 <= position + rows < len(self.row_data):
             self.beginRemoveRows(QModelIndex(), position, position + rows - 1)
-            del self.data[position:position + rows]
+            del self.row_data[position:position + rows]
             del self.data_bgcolors[position:position + rows]
             self.endRemoveRows()
 
@@ -134,8 +132,8 @@ class GlobalTableModel(QAbstractTableModel):
         if role != Qt.EditRole:
             return False
 
-        if index.isValid() and 0 <= index.row() < len(self.data):
-            address = self.data[index.row()]
+        if index.isValid() and 0 <= index.row() < len(self.row_data):
+            address = self.row_data[index.row()]
             if 0 <= index.column() < len(address):
                 address[index.column()] = value
             else:
@@ -154,7 +152,7 @@ class GlobalTableModel(QAbstractTableModel):
 
     def entry_exists(self, name):
         """ Quick way to determine if an entry already exists via artifact name """
-        return name in [i[1] for i in self.data]
+        return name in [i[1] for i in self.row_data]
 
     def update_table(self):
         """ Updates the table using the controller's information """
@@ -187,7 +185,7 @@ class GlobalTableModel(QAbstractTableModel):
         for name, row in known_globals.items():
             tab_idx = 0
             if self.entry_exists(row[1]):
-                tab_idx = [i[1] for i in self.data].index(row[1])
+                tab_idx = [i[1] for i in self.row_data].index(row[1])
             else:
                 self.insertRows(0)
             for i in range(4):
@@ -196,8 +194,8 @@ class GlobalTableModel(QAbstractTableModel):
 
         # update table coloring, this might need to be checked for robustness
         now = datetime.now()
-        for i in range(len(self.data)):
-            t_upd = self.data[i][3]
+        for i in range(len(self.row_data)):
+            t_upd = self.row_data[i][3]
             if isinstance(t_upd, int):
                 if t_upd == -1:
                     self.data_bgcolors[i] = None
@@ -309,9 +307,14 @@ class GlobalTableView(QTableView):
 
         valid_row = True
         selected_row = self.rowAt(event.pos().y())
+        selected_row = self.rowAt(event.pos().y())
         idx = self.proxymodel.index(selected_row, 0)
         idx = self.proxymodel.mapToSource(idx)
-        if not (0 <= selected_row < len(self.model.data)) or not idx.isValid():
+        if event.pos().y() == -1 and event.pos().x() == -1:
+            selected_row = 0
+            idx = self.proxymodel.index(0, 0)
+            idx = self.proxymodel.mapToSource(idx)
+        elif not (0 <= selected_row < len(self.model.row_data)) or not idx.isValid():
             valid_row = False
 
         col_hide_menu = menu.addMenu("Show Columns")
@@ -324,9 +327,9 @@ class GlobalTableView(QTableView):
             col_hide_menu.addAction(act)
 
         if valid_row:
-            global_type = self.model.data[idx.row()][0]
-            global_name = self.model.data[idx.row()][1]
-            user_name = self.model.data[idx.row()][2]
+            global_type = self.model.row_data[idx.row()][0]
+            global_name = self.model.row_data[idx.row()][1]
+            user_name = self.model.row_data[idx.row()][2]
             if any(x is None for x in [global_type, global_name, user_name]):
                 menu.popup(self.mapToGlobal(event.pos()))
                 return

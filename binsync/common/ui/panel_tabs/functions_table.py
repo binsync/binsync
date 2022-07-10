@@ -48,16 +48,14 @@ class FunctionTableModel(QAbstractTableModel):
     def __init__(self, controller: BinSyncController, data=None, parent=None):
         super().__init__(parent)
         self.controller = controller
-        if data is None:
-            self.data = []  # holds sublists of form: (addr, name, user_name, push_time)
-        else:
-            self.data = data
+        # holds sublists of form: (addr, remote name, user, last push)
+        self.row_data = data if data else []
 
         self.data_bgcolors = []
 
     def rowCount(self, index=QModelIndex()):
         """ Returns number of rows the model holds. """
-        return len(self.data)
+        return len(self.row_data)
 
     def columnCount(self, index=QModelIndex()):
         """ Returns number of columns the model holds. """
@@ -71,24 +69,24 @@ class FunctionTableModel(QAbstractTableModel):
 
         if role == Qt.DisplayRole:
             if index.column() == 0:
-                return f"{self.data[index.row()][0]:#x}"
+                return f"{self.row_data[index.row()][0]:#x}"
             elif index.column() == 1:
-                return self.data[index.row()][1]
+                return self.row_data[index.row()][1]
             elif index.column() == 2:
-                return self.data[index.row()][2]
+                return self.row_data[index.row()][2]
             elif index.column() == 3:
-                return friendly_datetime(self.data[index.row()][3])
+                return friendly_datetime(self.row_data[index.row()][3])
         elif role == FunctionTableModel.SortRole:
             if index.column() == 0:
-                return self.data[index.row()][0]
+                return self.row_data[index.row()][0]
             elif index.column() == 1:
-                return self.data[index.row()][1]
+                return self.row_data[index.row()][1]
             elif index.column() == 2:
-                return self.data[index.row()][2]
+                return self.row_data[index.row()][2]
             elif index.column() == 3:  # dont filter based on time
                 return None
         elif role == Qt.BackgroundRole:
-            if len(self.data) != len(self.data_bgcolors) or not (0 <= index.row() < len(self.data_bgcolors)):
+            if len(self.row_data) != len(self.data_bgcolors) or not (0 <= index.row() < len(self.data_bgcolors)):
                 return None
             return self.data_bgcolors[index.row()]
 
@@ -110,7 +108,7 @@ class FunctionTableModel(QAbstractTableModel):
         self.beginInsertRows(QModelIndex(), position, position + rows - 1)
 
         for row in range(rows):
-            self.data.insert(position + row, [0, "LOADING", "USER", datetime.now()])
+            self.row_data.insert(position + row, [0, "LOADING", "USER", datetime.now()])
             self.data_bgcolors.insert(position + row, [QColor(0, 0, 0, 0)])
 
         self.endInsertRows()
@@ -118,9 +116,9 @@ class FunctionTableModel(QAbstractTableModel):
 
     def removeRows(self, position, rows=1, index=QModelIndex()):
         """ Remove N (default=1) rows from the model at a desired position. """
-        if 0 <= position < len(self.data) and 0 <= position + rows < len(self.data):
+        if 0 <= position < len(self.row_data) and 0 <= position + rows < len(self.row_data):
             self.beginRemoveRows(QModelIndex(), position, position + rows - 1)
-            del self.data[position:position + rows]
+            del self.row_data[position:position + rows]
             del self.data_bgcolors[position:position + rows]
             self.endRemoveRows()
 
@@ -134,8 +132,8 @@ class FunctionTableModel(QAbstractTableModel):
         if role != Qt.EditRole:
             return False
 
-        if index.isValid() and 0 <= index.row() < len(self.data):
-            address = self.data[index.row()]
+        if index.isValid() and 0 <= index.row() < len(self.row_data):
+            address = self.row_data[index.row()]
             if 0 <= index.column() < len(address):
                 address[index.column()] = value
             else:
@@ -154,7 +152,7 @@ class FunctionTableModel(QAbstractTableModel):
 
     def entry_exists(self, addr):
         """ Quick way to determine if an entry already exists via addr """
-        return addr in [i[0] for i in self.data]
+        return addr in [i[0] for i in self.row_data]
 
     def update_table(self):
         """ Updates the table using the controller's information """
@@ -174,8 +172,8 @@ class FunctionTableModel(QAbstractTableModel):
                 exists = self.entry_exists(func_addr)
                 if exists:
                     # compare this users change time to the store change time
-                    tab_idx = [i[0] for i in self.data].index(func_addr)
-                    if not func_change_time or func_change_time < self.data[tab_idx][3]:
+                    tab_idx = [i[0] for i in self.row_data].index(func_addr)
+                    if not func_change_time or func_change_time < self.row_data[tab_idx][3]:
                         continue
                 # insert a new row if necessary
                 if not exists:
@@ -188,8 +186,8 @@ class FunctionTableModel(QAbstractTableModel):
 
         # update table coloring, this might need to be checked for robustness
         now = datetime.now()
-        for i in range(len(self.data)):
-            t_upd = self.data[i][3]
+        for i in range(len(self.row_data)):
+            t_upd = self.row_data[i][3]
             if isinstance(t_upd, int):
                 if t_upd == -1:
                     self.data_bgcolors[i] = None
@@ -261,7 +259,7 @@ class FunctionTableView(QTableView):
         """ Handler for double clicking on a row, jumps to the respective function. """
         row_idx = self.selectionModel().selectedIndexes()[0]
         tls_row_idx = self.proxymodel.mapToSource(row_idx)
-        row = self.model.data[tls_row_idx.row()]
+        row = self.model.row_data[tls_row_idx.row()]
         self.controller.goto_address(row[0])
 
     def _get_valid_users_for_func(self, func_addr):
@@ -295,12 +293,15 @@ class FunctionTableView(QTableView):
     def contextMenuEvent(self, event):
         menu = QMenu(self)
         menu.setObjectName("binsync_function_table_context_menu")
-
         valid_row = True
         selected_row = self.rowAt(event.pos().y())
         idx = self.proxymodel.index(selected_row, 0)
         idx = self.proxymodel.mapToSource(idx)
-        if not (0 <= selected_row < len(self.model.data)) or not idx.isValid():
+        if event.pos().y() == -1 and event.pos().x() == -1:
+            selected_row = 0
+            idx = self.proxymodel.index(0, 0)
+            idx = self.proxymodel.mapToSource(idx)
+        elif not (0 <= selected_row < len(self.model.row_data)) or not idx.isValid():
             valid_row = False
 
         col_hide_menu = menu.addMenu("Show Columns")
@@ -313,8 +314,10 @@ class FunctionTableView(QTableView):
             col_hide_menu.addAction(act)
 
         if valid_row:
-            func_addr = self.model.data[idx.row()][0]
-            user_name = self.model.data[idx.row()][2]
+            func_addr = self.model.row_data[idx.row()][0]
+            user_name = self.model.row_data[idx.row()][2]
+            print(f"func_addr {func_addr:#x}")
+            print(f"user_name {user_name}")
 
             menu.addSeparator()
             menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=user_name))

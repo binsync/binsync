@@ -48,16 +48,16 @@ class ActivityTableModel(QAbstractTableModel):
     def __init__(self, controller: BinSyncController, data=None, parent=None):
         super().__init__(parent)
         self.controller = controller
-        if data is None:
-            self.data = []  # holds sublists of form: (addr, name, user_name, push_time)
-        else:
-            self.data = data
+
+
+        # holds sublists of form: (user, activity, push_time)
+        self.row_data = data if data else []
 
         self.data_bgcolors = []
 
     def rowCount(self, index=QModelIndex()):
         """ Returns number of rows the model holds. """
-        return len(self.data)
+        return len(self.row_data)
 
     def columnCount(self, index=QModelIndex()):
         """ Returns number of columns the model holds. """
@@ -71,20 +71,20 @@ class ActivityTableModel(QAbstractTableModel):
 
         if role == Qt.DisplayRole:
             if index.column() == 0:
-                return self.data[index.row()][0]
+                return self.row_data[index.row()][0]
             elif index.column() == 1:
-                return f"{self.data[index.row()][1]:#x}"
+                return f"{self.row_data[index.row()][1]:#x}"
             elif index.column() == 2:
-                return friendly_datetime(self.data[index.row()][2])
+                return friendly_datetime(self.row_data[index.row()][2])
         elif role == ActivityTableModel.SortRole:
             if index.column() == 0:
-                return self.data[index.row()][0]
+                return self.row_data[index.row()][0]
             elif index.column() == 1:
-                return self.data[index.row()][1]
+                return self.row_data[index.row()][1]
             elif index.column() == 2:
-                return self.data[index.row()][2]
+                return self.row_data[index.row()][2]
         elif role == Qt.BackgroundRole:
-            if len(self.data) != len(self.data_bgcolors) or not (0 <= index.row() < len(self.data_bgcolors)):
+            if len(self.row_data) != len(self.data_bgcolors) or not (0 <= index.row() < len(self.data_bgcolors)):
                 return None
             return self.data_bgcolors[index.row()]
 
@@ -106,7 +106,7 @@ class ActivityTableModel(QAbstractTableModel):
         self.beginInsertRows(QModelIndex(), position, position + rows - 1)
 
         for row in range(rows):
-            self.data.insert(position + row, ["USER", "LOADING", datetime.now()])
+            self.row_data.insert(position + row, ["USER", "LOADING", datetime.now()])
             self.data_bgcolors.insert(position + row, [QColor(0, 0, 0, 0)])
 
         self.endInsertRows()
@@ -114,9 +114,9 @@ class ActivityTableModel(QAbstractTableModel):
 
     def removeRows(self, position, rows=1, index=QModelIndex()):
         """ Remove N (default=1) rows from the model at a desired position. """
-        if 0 <= position < len(self.data) and 0 <= position + rows < len(self.data):
+        if 0 <= position < len(self.row_data) and 0 <= position + rows < len(self.row_data):
             self.beginRemoveRows(QModelIndex(), position, position + rows - 1)
-            del self.data[position:position + rows]
+            del self.row_data[position:position + rows]
             del self.data_bgcolors[position:position + rows]
             self.endRemoveRows()
 
@@ -130,8 +130,8 @@ class ActivityTableModel(QAbstractTableModel):
         if role != Qt.EditRole:
             return False
 
-        if index.isValid() and 0 <= index.row() < len(self.data):
-            address = self.data[index.row()]
+        if index.isValid() and 0 <= index.row() < len(self.row_data):
+            address = self.row_data[index.row()]
             if 0 <= index.column() < len(address):
                 address[index.column()] = value
             else:
@@ -150,7 +150,7 @@ class ActivityTableModel(QAbstractTableModel):
 
     def entry_exists(self, user):
         """ Quick way to determine if an entry already exists via user """
-        return user in [i[0] for i in self.data]
+        return user in [i[0] for i in self.row_data]
 
     def update_table(self):
         """ Updates the table using the controller's information """
@@ -179,7 +179,7 @@ class ActivityTableModel(QAbstractTableModel):
             if not self.entry_exists(user.name):
                 self.insertRows(0)
             else:
-                tab_idx = [i[0] for i in self.data].index(user.name)
+                tab_idx = [i[0] for i in self.row_data].index(user.name)
 
             if len(changed_funcs) > 0:
                 most_recent_func = list(changed_funcs)[0]
@@ -197,8 +197,8 @@ class ActivityTableModel(QAbstractTableModel):
 
         # update table coloring, this might need to be checked for robustness
         now = datetime.now()
-        for i in range(len(self.data)):
-            t_upd = self.data[i][2]
+        for i in range(len(self.row_data)):
+            t_upd = self.row_data[i][2]
             if isinstance(t_upd, int):
                 if t_upd == -1:
                     self.data_bgcolors[i] = None
@@ -268,7 +268,11 @@ class ActivityTableView(QTableView):
         selected_row = self.rowAt(event.pos().y())
         idx = self.proxymodel.index(selected_row, 0)
         idx = self.proxymodel.mapToSource(idx)
-        if not (0 <= selected_row < len(self.model.data)) or not idx.isValid():
+        if event.pos().y() == -1 and event.pos().x() == -1:
+            selected_row = 0
+            idx = self.proxymodel.index(0, 0)
+            idx = self.proxymodel.mapToSource(idx)
+        elif not (0 <= selected_row < len(self.model.row_data)) or not idx.isValid():
             valid_row = False
 
         col_hide_menu = menu.addMenu("Show Columns")
@@ -281,8 +285,8 @@ class ActivityTableView(QTableView):
             col_hide_menu.addAction(act)
 
         if valid_row:
-            func_addr = self.model.data[idx.row()][1]
-            user_name = self.model.data[idx.row()][0]
+            func_addr = self.model.row_data[idx.row()][1]
+            user_name = self.model.row_data[idx.row()][0]
 
             menu.addSeparator()
             menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=user_name))

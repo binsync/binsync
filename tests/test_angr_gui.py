@@ -147,7 +147,7 @@ class TestBinSyncPluginGUI(unittest.TestCase):
         """
         Syncs from the first entry in a context menu for a given table and menu object name
         """
-        table.contextMenuEvent(QContextMenuEvent(QContextMenuEvent.Mouse, QPoint(0, 0)))
+        table.contextMenuEvent(QContextMenuEvent(QContextMenuEvent.Mouse, QPoint(-1, -1)))
         context_menu = next(
             filter(lambda x: isinstance(x, QMenu) and x.objectName() == obj_name,
                    QApplication.topLevelWidgets()))
@@ -162,14 +162,20 @@ class TestBinSyncPluginGUI(unittest.TestCase):
         """
         time.sleep(BINSYNC_RELOAD_TIME + BINSYNC_RELOAD_TIME // 2)
         control_panel = binsync_plugin.control_panel_view.control_panel
-        top_change_func = control_panel._func_table.items[0]
-        top_change_activity = control_panel._activity_table.items[0]
-        self.assertEqual(top_change_func.user, user)
+        state = binsync_plugin.controller.client.get_state(user=user)
+        row = control_panel._func_table.table.model.row_data[0]
+        if not func_addr:
+            table_func_addr = row[0]
+            func = state.get_function(table_func_addr)
+        else:
+            func = state.get_function(func_addr)
+
+        self.assertEqual(row[2], user)
         if func_name is not None:
-            self.assertEqual(top_change_func.name, func_name)
+            self.assertEqual(func.name, func_name)
         if func_addr is not None:
-            self.assertEqual(top_change_activity.activity, func_addr)
-        self.assertIsNot(top_change_func.last_push, None)
+            self.assertEqual(func.addr, func_addr)
+        self.assertEqual(func.last_change, row[3])
     #
     # Tests
     #
@@ -218,7 +224,7 @@ class TestBinSyncPluginGUI(unittest.TestCase):
             control_panel.reload()
 
             # make a click event to sync new data from the first row in the table
-            self.click_sync_menu(control_panel._func_table, "binsync_function_table_context_menu")
+            self.click_sync_menu(control_panel._func_table.table, "binsync_function_table_context_menu")
 
             # check to ensure function name synced properly
             self.assertEqual(func.name, new_function_name)
@@ -278,13 +284,13 @@ class TestBinSyncPluginGUI(unittest.TestCase):
 
             # assure functions did not change
             func_table = control_panel._func_table
-            self.assertIsNotNone(func_table.items[0].name)
+            self.assertIsNotNone(func_table.table.model.row_data[0][1])
 
             # make a click event to sync new data from the first row in the table
-            self.click_sync_menu(control_panel._activity_table, "binsync_activity_table_context_menu")
+            self.click_sync_menu(control_panel._activity_table.table, "binsync_activity_table_context_menu")
 
             # assure function name did not change
-            self.assertEqual(func_table.items[0].name, "")
+            self.assertEqual(func_table.table.model.row_data[0][1], "")
             self.assertEqual(func.name, old_name)
 
             # assure stack variable synced properly
