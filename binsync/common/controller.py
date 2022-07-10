@@ -746,3 +746,7 @@ class BinSyncController:
                 known_gvars.add(offset)
 
         return known_gvars
+
+    @init_checker
+    def get_all_functions(self):
+        raise NotImplementedError
