@@ -23,6 +23,7 @@ import ida_bytes
 import ida_struct
 import ida_idaapi
 import ida_typeinf
+import idautils
 
 import binsync
 from binsync.data import Struct
@@ -651,3 +652,11 @@ def jumpto(addr):
     @return:
     """
     idaapi.jumpto(addr)
+
+@execute_read
+def get_all_functions():
+    funcs = {}
+    func_addrs = list(idautils.Functions())
+    for addr in func_addrs:
+        funcs[addr] = idc.get_func_name(addr)
+    return funcs

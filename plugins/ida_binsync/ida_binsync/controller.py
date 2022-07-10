@@ -480,3 +480,7 @@ class IDABinSyncController(BinSyncController):
                 return True
 
         return False
+
+    @init_checker
+    def get_all_functions(self):
+        return compat.get_all_functions()
