@@ -73,7 +73,10 @@ class ActivityTableModel(QAbstractTableModel):
             if index.column() == 0:
                 return self.row_data[index.row()][0]
             elif index.column() == 1:
-                return f"{self.row_data[index.row()][1]:#x}"
+                if isinstance(self.row_data[index.row()][1], int):
+                    return f"{self.row_data[index.row()][1]:#x}"
+                else:
+                    return self.row_data[index.row()][1]
             elif index.column() == 2:
                 return friendly_datetime(self.row_data[index.row()][2])
         elif role == ActivityTableModel.SortRole:

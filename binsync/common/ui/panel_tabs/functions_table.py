@@ -69,7 +69,10 @@ class FunctionTableModel(QAbstractTableModel):
 
         if role == Qt.DisplayRole:
             if index.column() == 0:
-                return f"{self.row_data[index.row()][0]:#x}"
+                if isinstance(self.row_data[index.row()][0], int):
+                    return f"{self.row_data[index.row()][0]:#x}"
+                else:
+                    return self.row_data[index.row()][0]
             elif index.column() == 1:
                 return self.row_data[index.row()][1]
             elif index.column() == 2:
@@ -316,8 +319,6 @@ class FunctionTableView(QTableView):
         if valid_row:
             func_addr = self.model.row_data[idx.row()][0]
             user_name = self.model.row_data[idx.row()][2]
-            print(f"func_addr {func_addr:#x}")
-            print(f"user_name {user_name}")
 
             menu.addSeparator()
             menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=user_name))
