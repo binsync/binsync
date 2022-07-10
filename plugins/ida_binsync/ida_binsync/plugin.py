@@ -145,7 +145,8 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
 
         wrapper = ControlPanelViewWrapper(controller)
         if not wrapper.twidget:
-            raise RuntimeError("Unexpected: twidget does not exist.")
+            l.info("BinSync is unable to find a widget to attach to. You are likely running headlessly") 
+            return None
 
         flags = idaapi.PluginForm.WOPN_TAB | idaapi.PluginForm.WOPN_RESTORE | idaapi.PluginForm.WOPN_PERSIST
         idaapi.display_widget(wrapper.twidget, flags)
@@ -179,7 +180,8 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         )
         result = idaapi.register_action(action_desc)
         if not result:
-            raise RuntimeError("Failed to register the control panel action.")
+            l.info("BinSync is unable to find a widget to attach to. You are likely running headlessly") 
+            return None
 
         result = idaapi.attach_action_to_menu(
             "View/Open subviews/Hex dump",
@@ -187,7 +189,8 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
             idaapi.SETMENU_INS,
         )
         if not result:
-            raise RuntimeError("Failed to attach the menu item for the control panel action.")
+            l.info("BinSync is unable to find a widget to attach to. You are likely running headlessly") 
+            return None
 
     def _init_hooks(self):
         # Hook UI Startup in IDA
