@@ -248,7 +248,7 @@ class BinjaBinSyncController(BinSyncController):
         state.set_function_header(bs_func_header, set_last_change=not api_set)
 
     @init_checker
-    @make_state
+    @make_and_commit_state
     def push_patch(self, patch, user=None, state=None):
         state.set_patch(patch.offset, patch)
 
@@ -266,7 +266,7 @@ class BinjaBinSyncController(BinSyncController):
         state.set_stack_variable(v, stack_offset, addr)
 
     @init_checker
-    @make_state
+    @make_and_commit_state
     def push_stack_variables(self, bn_func, user=None, state=None):
         for stack_var in bn_func.stack_layout:
             # ignore all unnamed variables

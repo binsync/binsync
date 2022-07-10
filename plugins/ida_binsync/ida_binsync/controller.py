@@ -35,9 +35,9 @@ import ida_funcs
 import ida_kernwin
 
 import binsync
-from binsync.common.controller import BinSyncController, make_state, make_ro_state, init_checker, make_state_with_func
+from binsync.common.controller import BinSyncController, make_and_commit_state, make_ro_state, init_checker, make_state_with_func
 from binsync import Client, ConnectionWarnings
-from binsync.data import StackVariable, StackOffsetType, Function, FunctionHeader, Struct, Comment, GlobalVariable, Enum
+from binsync.data import StackVariable, StackOffsetType, Function, FunctionHeader, Struct, Comment, GlobalVariable, Enum, State
 from . import compat
 
 _l = logging.getLogger(name=__name__)
@@ -346,8 +346,8 @@ class IDABinSyncController(BinSyncController):
 
         # collect and covert the info of each stack variable
         existing_stack_vars = {}
-        for offset, ida_var in compat.get_func_stack_var_info(ida_func.start_ea).items():
-            existing_stack_vars[compat.ida_to_angr_stack_offset(ida_func.start_ea, offset)] = ida_var
+        for offset, var in compat.get_func_stack_var_info(ida_func.start_ea).items():
+            existing_stack_vars[compat.ida_to_angr_stack_offset(ida_func.start_ea, offset)] = var
 
         stack_vars_to_set = {}
         # only try to set stack vars that actually exist
@@ -356,11 +356,11 @@ class IDABinSyncController(BinSyncController):
                 # change the variable's name
                 if stack_var.name != existing_stack_vars[offset].name:
                     self.inc_api_count()
-                    if ida_struct.set_member_name(frame, existing_stack_vars[offset].offset, stack_var.name):
+                    if ida_struct.set_member_name(frame, existing_stack_vars[offset].stack_offset, stack_var.name):
                         data_changed |= True
 
                 # check if the variables type should be changed
-                if ida_code_view and stack_var.type != existing_stack_vars[offset].type_str:
+                if ida_code_view and stack_var.type != existing_stack_vars[offset].type:
                     # validate the type is convertible
                     ida_type = compat.convert_type_str_to_ida_type(stack_var.type)
                     if ida_type is None:
@@ -374,12 +374,12 @@ class IDABinSyncController(BinSyncController):
                         # it really is just a bad type
                         if ida_type is None:
                             _l.debug(f"Failed to parse stack variable stored type at offset"
-                                     f" {hex(existing_stack_vars[offset].offset)} with type {stack_var.type}"
+                                     f" {hex(existing_stack_vars[offset].stack_offset)} with type {stack_var.type}"
                                      f" on function {hex(ida_func.start_ea)}.")
                             continue
 
                     # queue up the change!
-                    stack_vars_to_set[existing_stack_vars[offset].offset] = ida_type
+                    stack_vars_to_set[existing_stack_vars[offset].stack_offset] = ida_type
 
             # change the type of all vars that need to be changed
             # NOTE: api_count is incremented inside the function
@@ -392,10 +392,6 @@ class IDABinSyncController(BinSyncController):
             _l.info(f"No new data was set either by failure or lack of differences.")
 
         return data_changed
-
-    #
-    #   Pullers
-    #
 
     #
     #   Pushers
@@ -450,23 +446,66 @@ class IDABinSyncController(BinSyncController):
         state.set_stack_variable(v, stack_offset, func_addr, set_last_change=not api_set)
 
     @init_checker
-    @make_state
+    @make_and_commit_state
     def push_struct(self, struct, old_name,
                     user=None, state=None, api_set=False):
         old_name = None if old_name == "" else old_name
         state.set_struct(struct, old_name, set_last_change=not api_set)
 
     @init_checker
-    @make_state
+    @make_and_commit_state
     def push_global_var(self, addr, name, type_str=None, size=0, user=None, state=None, api_set=False):
         gvar = GlobalVariable(addr, name, type_str=type_str, size=size)
         state.set_global_var(gvar, set_last_change=not api_set)
 
     @init_checker
-    @make_state
+    @make_and_commit_state
     def push_enum(self, name, value_map, user=None, state=None, api_set=False):
         enum = Enum(name, value_map)
         state.set_enum(enum, set_last_change=not api_set)
+
+    #
+    # Artifact API
+    #
+
+    def function(self, addr):
+        ida_func = ida_funcs.get_func(addr)
+        if ida_func is None:
+            _l.warning(f"IDA function does not exist for {hex(addr)}.")
+            return False
+
+        func_addr = ida_func.start_ea
+        ida_cfunc = idaapi.decompile(func_addr)
+        if not ida_cfunc:
+            _l.warning(f"IDA function {hex(func_addr)} is not decompilable")
+
+        func = Function(func_addr, self.get_func_size(func_addr))
+        func_header: FunctionHeader = compat.get_func_header_info(ida_cfunc)
+
+        stack_vars = {
+            offset: var
+            for offset, var in compat.get_func_stack_var_info(ida_func.start_ea).items()
+        }
+        func.header = func_header
+        func.stack_vars = stack_vars
+
+        return func
+
+    #
+    # Force Push
+    #
+
+    @init_checker
+    def force_push_function(self, addr):
+        master_state: State = self.client.get_state()
+        func = self.function(addr)
+        if not func:
+            return False
+
+        master_state.functions[addr] = func
+        self.client.commit_state(master_state)
+        return True
+
 
     #
     # Utils

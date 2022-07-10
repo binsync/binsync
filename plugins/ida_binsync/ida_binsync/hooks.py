@@ -207,9 +207,9 @@ class IDBHooks(ida_idp.IDB_Hooks):
                 return 0
 
             # find the properties of the changed stack var
-            angr_offset = compat.ida_to_angr_stack_offset(func_addr, stack_var_info.offset)
+            angr_offset = compat.ida_to_angr_stack_offset(func_addr, stack_var_info.stack_offset)
             size = stack_var_info.size
-            type_str = stack_var_info.type_str
+            type_str = stack_var_info.type
 
             # TODO: correct this fix in the get_func_stack_var_info
             new_name = ida_struct.get_member_name(mptr.id)
@@ -240,9 +240,9 @@ class IDBHooks(ida_idp.IDB_Hooks):
                 return 0
 
             # find the properties of the changed stack var
-            angr_offset = compat.ida_to_angr_stack_offset(func_addr, stack_var_info.offset)
+            angr_offset = compat.ida_to_angr_stack_offset(func_addr, stack_var_info.stack_offset)
             size = stack_var_info.size
-            type_str = stack_var_info.type_str
+            type_str = stack_var_info.type
 
             new_name = stack_var_info.name #ida_struct.get_member_name(mptr.id)
 
@@ -490,15 +490,15 @@ class HexRaysHooks:
             # convert to binsync type
             cur_func_header = compat.get_func_header_info(ida_cfunc)
             binsync_args = {}
-            for idx, arg in cur_func_header.func_args.items():
+            for idx, arg in cur_func_header.args.items():
                 binsync_args[idx] = FunctionArgument(idx, arg.name, arg.type_str, arg.size)
 
             # send the change
             self.binsync_state_change(
                 self.controller.push_function_header,
-                cur_func_header.func_addr,
+                cur_func_header.addr,
                 cur_func_header.name,
-                ret_type=cur_func_header.ret_type_str,
+                ret_type=cur_func_header.ret_type,
                 args=binsync_args
             )
 

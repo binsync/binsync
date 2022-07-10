@@ -25,40 +25,10 @@ import ida_idaapi
 import ida_typeinf
 
 import binsync
-from binsync.data import Struct
+from binsync.data import Struct, FunctionHeader, FunctionArgument, StackVariable, StackOffsetType
 from .controller import IDABinSyncController
 
 l = logging.getLogger(__name__)
-
-#
-#   Helper classes for wrapping data
-#
-
-
-class IDAStackVar:
-    def __init__(self, func_addr, offset, name, type_str, size):
-        self.func_addr = func_addr
-        self.offset = offset
-        self.name = name
-        self.type_str = type_str
-        self.size = size
-
-
-class IDAFunctionArg:
-    def __init__(self, idx, name, type_str, size):
-        self.idx = idx
-        self.name = name
-        self.type_str = type_str
-        self.size = size
-
-
-class IDAFunction:
-    def __init__(self, func_addr, name, ret_type_str, func_args: typing.Dict[int, IDAFunctionArg]):
-        self.func_addr = func_addr
-        self.name = name
-        self.ret_type_str = ret_type_str
-        self.func_args = func_args
-
 
 #
 #   Wrappers for IDA Main thread r/w operations
@@ -205,7 +175,7 @@ def set_ida_func_name(func_addr, new_name):
 
 
 @execute_read
-def get_func_header_info(ida_cfunc) -> IDAFunction:
+def get_func_header_info(ida_cfunc) -> FunctionHeader:
     func_addr = ida_cfunc.entry_ea
 
     # collect the function arguments
@@ -214,7 +184,7 @@ def get_func_header_info(ida_cfunc) -> IDAFunction:
         size = arg.width
         name = arg.name
         type_str = str(arg.type())
-        func_args[idx] = IDAFunctionArg(idx, name, type_str, size)
+        func_args[idx] = FunctionArgument(idx, name, type_str, size)
 
     # collect the header ret_type and name
     func_name = get_func_name(func_addr)
@@ -223,7 +193,7 @@ def get_func_header_info(ida_cfunc) -> IDAFunction:
     except Exception:
         ret_type_str = ""
 
-    ida_function_info = IDAFunction(func_addr, func_name, ret_type_str, func_args)
+    ida_function_info = FunctionHeader(func_name, func_addr, ret_type=ret_type_str, args=func_args)
     return ida_function_info
 
 
@@ -269,10 +239,10 @@ def set_func_header(ida_func_code_view, binsync_header: binsync.data.FunctionHea
 
     types_to_change = {}
     for idx, binsync_arg in binsync_header.args.items():
-        if idx >= len(cur_ida_func.func_args):
+        if idx >= len(cur_ida_func.args):
             break
 
-        cur_ida_arg = cur_ida_func.func_args[idx]
+        cur_ida_arg = cur_ida_func.args[idx]
 
         # change the name
         if binsync_arg.name and binsync_arg.name != cur_ida_arg.name:
@@ -292,7 +262,7 @@ def set_func_header(ida_func_code_view, binsync_header: binsync.data.FunctionHea
     arg_strs = proto_body.split(",")
 
     # update prototype body from left to right
-    for idx in range(len(cur_ida_func.func_args)):
+    for idx in range(len(cur_ida_func.args)):
         try:
             old_t, new_t = types_to_change[idx]
         except KeyError:
@@ -383,7 +353,7 @@ def set_decomp_comments(func_addr, cmt_dict: typing.Dict[int, str]):
 #
 
 @execute_read
-def get_func_stack_var_info(func_addr) -> typing.Dict[int, IDAStackVar]:
+def get_func_stack_var_info(func_addr) -> typing.Dict[int, StackVariable]:
     try:
         decompilation = ida_hexrays.decompile(func_addr)
     except ida_hexrays.DecompilationFailure:
@@ -400,7 +370,9 @@ def get_func_stack_var_info(func_addr) -> typing.Dict[int, IDAStackVar]:
         name = var.name
         offset = var.location.stkoff() - decompilation.get_stkoff_delta()
         type_str = str(var.type())
-        stack_var_info[offset] = IDAStackVar(func_addr, offset, name, type_str, size)
+        stack_var_info[offset] = StackVariable(
+            offset, StackOffsetType.IDA, name, type_str, size, func_addr
+        )
 
     return stack_var_info
 

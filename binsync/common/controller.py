@@ -21,22 +21,23 @@ _l = logging.getLogger(name=__name__)
 
 def init_checker(f):
     @wraps(f)
-    def initcheck(self, *args, **kwargs):
+    def _init_check(self, *args, **kwargs):
         if not self.check_client():
             raise RuntimeError("Please connect to a repo first.")
         return f(self, *args, **kwargs)
 
-    return initcheck
+    return _init_check
 
 
-def make_state(f):
+def make_and_commit_state(f):
     """
     Build a writeable State instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
-    Function `f` should have have at least two kwargs, `user` and `state`.
+    Function `f` should have at least two kwargs, `user` and `state`. After executing `f`, the `state`
+    will be commited to the BS repo.
     """
 
     @wraps(f)
-    def state_check(self, *args, **kwargs):
+    def _make_and_commit_check(self, *args, **kwargs):
         state = kwargs.pop('state', None)
         user = kwargs.pop('user', None)
         if state is None:
@@ -47,7 +48,7 @@ def make_state(f):
         self.client.commit_state(state, msg=self._generate_commit_message(f, *args, **kwargs))
         return r
 
-    return state_check
+    return _make_and_commit_check
 
 
 def make_state_with_func(f):
@@ -276,7 +277,10 @@ class BinSyncController:
             yield user.name
 
     #
-    # Override Mandatory Functions
+    # Override Mandatory Functions:
+    # These functions create a public API for things that hold a reference to the Controller from either another
+    # thread or object. This is most useful for use in the UI, which can use this API to make general requests from
+    # the decompiler regardless of internal decompiler API.
     #
 
     def binary_hash(self) -> str:
@@ -324,7 +328,12 @@ class BinSyncController:
         raise NotImplementedError
 
     #
-    # Fillers
+    # Fillers:
+    # A filler function is generally responsible for pulling down data from a specific user state
+    # and reflecting those changes in decompiler view (like the text on the screen). Normally, these changes
+    # will also be accompanied by a Git commit to the master users state to save the changes from pull and
+    # fill into their BS database. In special cases, a filler may only update the decompiler UI but not directly
+    # cause a save of the BS state.
     #
 
     @init_checker
@@ -553,7 +562,7 @@ class BinSyncController:
     #
 
     @init_checker
-    @make_state
+    @make_and_commit_state
     def push_comment(self, *args, user=None, state=None, **kwargs):
         raise NotImplementedError
 
@@ -568,18 +577,38 @@ class BinSyncController:
         raise NotImplementedError
 
     @init_checker
-    @make_state
+    @make_and_commit_state
     def push_struct(self, *args, user=None, state=None, **kwargs):
         raise NotImplementedError
 
     @init_checker
-    @make_state
+    @make_and_commit_state
     def push_global_var(self, *args, user=None, state=None, **kwargs):
         raise NotImplementedError
 
     @init_checker
-    @make_state
+    @make_and_commit_state
     def push_enum(self, *args, user=None, state=None, **kwargs):
+        raise NotImplementedError
+
+    #
+    # Force Push
+    #
+
+    @init_checker
+    def force_push_function(self, addr):
+        raise NotImplementedError
+
+    @init_checker
+    def force_push_struct(self, struct_name):
+        raise NotImplementedError
+
+    @init_checker
+    def force_push_global_far(self, addr):
+        raise NotImplementedError
+
+    @init_checker
+    def force_push_enum(self, enum_name):
         raise NotImplementedError
 
     #
@@ -627,13 +656,6 @@ class BinSyncController:
     @init_checker
     @make_ro_state
     def pull_structs(self, user=None, state=None) -> List[Struct]:
-        """
-        Pull structs downwards.
-
-        @param user:
-        @param state:
-        @return:
-        """
         return state.get_structs()
 
     @init_checker
