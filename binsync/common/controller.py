@@ -4,12 +4,14 @@ import threading
 import time
 from collections import OrderedDict
 from functools import wraps
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Union
 
 import binsync.data
 from binsync.core.client import Client, SchedSpeed
-from binsync.data import (Comment, Enum, Function, GlobalVariable,
-                          StackVariable, Struct, User)
+from binsync.data import (
+    Comment, Enum, Function, GlobalVariable, State,
+    StackVariable, Struct, User, Patch
+)
 
 _l = logging.getLogger(name=__name__)
 
@@ -277,7 +279,7 @@ class BinSyncController:
             yield user.name
 
     #
-    # Override Mandatory Functions:
+    # Override Mandatory API:
     # These functions create a public API for things that hold a reference to the Controller from either another
     # thread or object. This is most useful for use in the UI, which can use this API to make general requests from
     # the decompiler regardless of internal decompiler API.
@@ -326,6 +328,112 @@ class BinSyncController:
         @return:
         """
         raise NotImplementedError
+
+    #
+    # Optional Artifact API:
+    # A series of functions that allow public access to live artifacts in the decompiler. As an example,
+    # `function(addr)` will return the current Function at addr that the user would be seeing. This is useful
+    # for having a common interface of reading data from other decompilers.
+    #
+
+    def functions(self) -> Dict[int, Function]:
+        """
+        Returns a dict of binsync.Functions that contain the addr, name, and size of each function in the decompiler.
+        Note: this does not contain the live data of the Artifact, only the minimum knowledge to that the Artifact
+        exists. To get live data, use the singleton function of the same name.
+
+        @return:
+        """
+        return {}
+
+    def function(self, addr) -> Optional[Function]:
+        return None
+
+    def global_vars(self) -> Dict[int, GlobalVariable]:
+        """
+        Returns a dict of binsync.GlobalVariable that contain the addr and size of each global var.
+        Note: this does not contain the live data of the Artifact, only the minimum knowledge to that the Artifact
+        exists. To get live data, use the singleton function of the same name.
+
+        @return:
+        """
+        return {}
+
+    def global_var(self, addr) -> Optional[GlobalVariable]:
+        return None
+
+    def structs(self) -> Dict[str, Struct]:
+        """
+        Returns a dict of binsync.Structs that contain the name and size of each struct in the decompiler.
+        Note: this does not contain the live data of the Artifact, only the minimum knowledge to that the Artifact
+        exists. To get live data, use the singleton function of the same name.
+
+        @return:
+        """
+        return {}
+
+    def struct(self, name) -> Optional[Struct]:
+        return None
+
+    def enums(self) -> Dict[str, Enum]:
+        """
+        Returns a dict of binsync.Enum that contain the name of the enums in the decompiler.
+        Note: this does not contain the live data of the Artifact, only the minimum knowledge to that the Artifact
+        exists. To get live data, use the singleton function of the same name.
+
+        @return:
+        """
+        return {}
+
+    def enum(self, name) -> Optional[Enum]:
+        return None
+
+    def patches(self) -> Dict[int, Patch]:
+        """
+        Returns a dict of binsync.Patch that contain the addr of each Patch and the bytes.
+        Note: this does not contain the live data of the Artifact, only the minimum knowledge to that the Artifact
+        exists. To get live data, use the singleton function of the same name.
+
+        @return:
+        """
+        return {}
+
+    def patch(self, addr) -> Optional[Patch]:
+        return None
+
+    def global_artifacts(self):
+        """
+        Returns a light version of all artifacts that are global (non function associated):
+        - structs, gvars, enums
+
+        @return:
+        """
+        g_artifacts = {}
+        for f in [self.structs, self.global_vars, self.enums]:
+            g_artifacts.update(f())
+
+        return g_artifacts
+
+    def global_artifact(self, lookup_item: Union[str, int]):
+        """
+        Returns a live binsync.data version of the Artifact located at the lookup_item location, which can
+        lookup any artifact supported in `global_artifacts`
+
+        @param lookup_item:
+        @return:
+        """
+
+        if isinstance(lookup_item, int):
+            return self.global_var(lookup_item)
+        elif isinstance(lookup_item, str):
+            artifact = self.struct(lookup_item)
+            if artifact:
+                return artifact
+
+            artifact = self.enum(lookup_item)
+            return artifact
+
+        return None
 
     #
     # Fillers:
@@ -393,6 +501,7 @@ class BinSyncController:
         @param state:
         @return:
         """
+        pass
 
     @init_checker
     @make_ro_state
@@ -404,6 +513,7 @@ class BinSyncController:
         @param state:
         @return:
         """
+        pass
 
     @init_checker
     @make_ro_state
@@ -596,20 +706,51 @@ class BinSyncController:
     #
 
     @init_checker
-    def force_push_function(self, addr):
-        raise NotImplementedError
+    def force_push_function(self, addr: int) -> bool:
+        """
+        Collects the function currently stored in the decompiler, not the BS State, and commits it to
+        the master users BS Database.
+
+        TODO: push the comments and custom types that are associated with each stack var
+        TODO: refactor to use internal push_function for correct commit message
+
+        @param addr:
+        @return: Success of committing the Function
+        """
+        func = self.function(addr)
+        if not func:
+            return False
+
+        master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
+        master_state.functions[addr] = func
+        self.client.commit_state(master_state)
+        return True
 
     @init_checker
-    def force_push_struct(self, struct_name):
-        raise NotImplementedError
+    def force_push_global_artifact(self, lookup_item):
+        """
+        Collects the global artifact (struct, gvar, enum) currently stored in the decompiler, not the BS State,
+        and commits it to the master users BS Database.
 
-    @init_checker
-    def force_push_global_far(self, addr):
-        raise NotImplementedError
+        @param lookup_item:
+        @return: Success of committing the Artifact
+        """
+        global_art = self.global_artifact(lookup_item)
+        if not global_art:
+            return False
 
-    @init_checker
-    def force_push_enum(self, enum_name):
-        raise NotImplementedError
+        master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
+        if isinstance(global_art, GlobalVariable):
+            master_state.global_vars[global_art.addr] = global_art
+        elif isinstance(global_art, Struct):
+            master_state.structs[global_art.name] = global_art
+        elif isinstance(global_art, Enum):
+            master_state.enums[global_art.name] = global_art
+        else:
+            return False
+
+        self.client.commit_state(master_state)
+        return True
 
     #
     # Pullers

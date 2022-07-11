@@ -348,8 +348,13 @@ class Client:
                 self.repo.git.fetch("--all")
                 self.repo.git.pull("--all")
                 self._last_pull_ts = time.time()
+                self.active_remote = True
             except Exception as e:
                 l.debug(f"Pull exception {e}")
+                self.active_remote = False
+
+        if not self.active_remote:
+            return
 
         # preform a merge on each branch
         for branch in self.repo.branches:
@@ -380,7 +385,9 @@ class Client:
                 self.repo.remotes[self.remote].push(self.user_branch_name)
             self._last_push_ts = time.time()
             l.debug("Push completed successfully at %s", self._last_push_ts)
+            self.active_remote = True
         except git.exc.GitCommandError as ex:
+            self.active_remote = False
             l.debug(f"Failed to push b/c {ex}")
 
     @property

@@ -14,31 +14,23 @@ import threading
 import typing
 import logging
 
-import idc
-import idaapi
-import ida_kernwin
-import ida_hexrays
-import ida_funcs
-import ida_bytes
-import ida_struct
-import ida_idaapi
-import ida_typeinf
+import idc, idaapi, ida_kernwin, ida_hexrays, ida_funcs, ida_bytes, ida_struct, ida_idaapi, ida_typeinf, idautils
 
 import binsync
-from binsync.data import Struct, FunctionHeader, FunctionArgument, StackVariable, StackOffsetType
+from binsync.data import (
+    Struct, FunctionHeader, FunctionArgument, StackVariable, StackOffsetType, Function, GlobalVariable
+)
 from .controller import IDABinSyncController
 
 l = logging.getLogger(__name__)
 
 #
-#   Wrappers for IDA Main thread r/w operations
-#
-
+# Wrappers for IDA Main thread r/w operations
 # a special note about these functions:
 # Any operation that needs to do some type of write to the ida db (idb), needs to be in the main thread due to
 # some ida constraints. Sometimes reads also need to be in the main thread. To make things efficient, most heavy
 # things are done in the controller and just setters and getters are done here.
-
+#
 
 def is_mainthread():
     """
@@ -175,7 +167,45 @@ def set_ida_func_name(func_addr, new_name):
 
 
 @execute_read
-def get_func_header_info(ida_cfunc) -> FunctionHeader:
+def functions():
+    func_addrs = list(idautils.Functions())
+    funcs = {}
+    for func_addr in func_addrs:
+        func_name = get_func_name(func_addr)
+        func_size = get_func_size(func_addr)
+        func = Function(func_addr, func_size)
+        func.name = func_name
+        funcs[func_addr] = func
+
+    return funcs
+
+@execute_read
+def function(addr):
+    ida_func = ida_funcs.get_func(addr)
+    if ida_func is None:
+        l.warning(f"IDA function does not exist for {hex(addr)}.")
+        return None
+
+    func_addr = ida_func.start_ea
+    ida_cfunc = idaapi.decompile(func_addr)
+    if not ida_cfunc:
+        l.warning(f"IDA function {hex(func_addr)} is not decompilable")
+        return None
+
+    func = Function(func_addr, get_func_size(func_addr))
+    func_header: FunctionHeader = function_header(ida_cfunc)
+
+    stack_vars = {
+        offset: var
+        for offset, var in get_func_stack_var_info(ida_func.start_ea).items()
+    }
+    func.header = func_header
+    func.stack_vars = stack_vars
+
+    return func
+
+@execute_read
+def function_header(ida_cfunc) -> FunctionHeader:
     func_addr = ida_cfunc.entry_ea
 
     # collect the function arguments
@@ -198,13 +228,13 @@ def get_func_header_info(ida_cfunc) -> FunctionHeader:
 
 
 @execute_write
-def set_func_header(ida_func_code_view, binsync_header: binsync.data.FunctionHeader,
-                    controller, exit_on_bad_type=False):
+def set_function_header(ida_func_code_view, binsync_header: binsync.data.FunctionHeader,
+                        controller, exit_on_bad_type=False):
     data_changed = False
     ida_cfunc = ida_func_code_view.cfunc
     func_addr = ida_cfunc.entry_ea
 
-    cur_ida_func = get_func_header_info(ida_cfunc)
+    cur_ida_func = function_header(ida_cfunc)
 
     #
     # FUNCTION NAME
@@ -421,6 +451,37 @@ def ida_get_frame(func_addr):
 #
 #   IDA Struct r/w
 #
+
+@execute_read
+def structs():
+    _structs = {}
+    for struct_item in idautils.Structs():
+        idx, sid, name = struct_item[:]
+        sptr = ida_struct.get_struc(sid)
+        size = ida_struct.get_struc_size(sptr)
+        _structs[name] = Struct(name, size, {})
+        
+    return _structs
+
+@execute_read
+def struct(name):
+    sid = ida_struct.get_struc_id(name)
+    if sid == 0xffffffffffffffff:
+        return None
+    
+    sptr = ida_struct.get_struc(sid)
+    size = ida_struct.get_struc_size(sptr)
+    _struct = Struct(name, size, {})
+    for mptr in sptr.members:
+        mid = mptr.id
+        m_name = ida_struct.get_member_name(mid)
+        m_off = mptr.soff
+        m_type = ida_typeinf.idc_get_type(mptr.id) if mptr.has_ti() else ""
+        m_size = ida_struct.get_member_size(mptr)
+        _struct.add_struct_member(m_name, m_off, m_type, m_size)
+
+    return _struct
+
 @execute_write
 def set_struct_member_name(ida_struct, frame, offset, name):
     ida_struct.set_member_name(frame, offset, name)
@@ -497,8 +558,44 @@ def set_ida_struct_member_types(struct: Struct, controller) -> bool:
     return data_changed
 
 #
-# Other Globals
+# Global Vars
 #
+
+
+@execute_read
+def global_vars():
+    gvars = {}
+    known_segs = [".data", ".bss"]
+    for seg_name in known_segs:
+        seg = idaapi.get_segm_by_name(seg_name)
+        if not seg:
+            continue
+
+        for seg_ea in range(seg.start_ea, seg.end_ea):
+            xrefs = idautils.XrefsTo(seg_ea)
+            try:
+                next(xrefs)
+            except StopIteration:
+                continue
+
+            name = idaapi.get_name(seg_ea)
+            if not name:
+                continue
+
+            gvars[seg_ea] = GlobalVariable(seg_ea, name)
+
+    return gvars
+
+
+@execute_read
+def global_var(addr):
+    name = idaapi.get_name(addr)
+    if not name:
+        return None
+
+    size = idaapi.get_item_size(addr)
+    return GlobalVariable(addr, name, size=size)
+
 
 @execute_write
 def set_global_var_name(var_addr, name):

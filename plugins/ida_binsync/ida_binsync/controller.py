@@ -35,9 +35,12 @@ import ida_funcs
 import ida_kernwin
 
 import binsync
-from binsync.common.controller import BinSyncController, make_and_commit_state, make_ro_state, init_checker, make_state_with_func
-from binsync import Client, ConnectionWarnings
-from binsync.data import StackVariable, StackOffsetType, Function, FunctionHeader, Struct, Comment, GlobalVariable, Enum, State
+from binsync.common.controller import (
+    BinSyncController, make_and_commit_state, make_ro_state, init_checker, make_state_with_func
+)
+from binsync import (
+    StackVariable, StackOffsetType, Function, FunctionHeader, Struct, Comment, GlobalVariable, Enum, State, Patch
+)
 from . import compat
 
 _l = logging.getLogger(name=__name__)
@@ -305,7 +308,7 @@ class IDABinSyncController(BinSyncController):
             updated_header = False
             try:
                 # allow set_func_header to return None to let us know a type is missing
-                updated_header = compat.set_func_header(ida_code_view, binsync_func.header, self, exit_on_bad_type=True)
+                updated_header = compat.set_function_header(ida_code_view, binsync_func.header, self, exit_on_bad_type=True)
             except Exception as e:
                 _l.warning(f"Header filling failed with exception {e}")
                 self.reset_api_count()
@@ -315,7 +318,7 @@ class IDABinSyncController(BinSyncController):
                 # we likely are missing a custom type. Try again!
                 data_changed |= self.fill_structs(user=user, state=state)
                 try:
-                    updated_header = compat.set_func_header(ida_code_view, binsync_func.header, self)
+                    updated_header = compat.set_function_header(ida_code_view, binsync_func.header, self)
                 except Exception as e:
                     _l.warning(f"Header filling failed with exception {e}, even after pulling custom types.")
                     self.reset_api_count()
@@ -468,43 +471,27 @@ class IDABinSyncController(BinSyncController):
     # Artifact API
     #
 
-    def function(self, addr):
-        ida_func = ida_funcs.get_func(addr)
-        if ida_func is None:
-            _l.warning(f"IDA function does not exist for {hex(addr)}.")
-            return False
+    def functions(self) -> Dict[int, Function]:
+        return compat.functions()
 
-        func_addr = ida_func.start_ea
-        ida_cfunc = idaapi.decompile(func_addr)
-        if not ida_cfunc:
-            _l.warning(f"IDA function {hex(func_addr)} is not decompilable")
+    def function(self, addr) -> Optional[Function]:
+        return compat.functions()
 
-        func = Function(func_addr, self.get_func_size(func_addr))
-        func_header: FunctionHeader = compat.get_func_header_info(ida_cfunc)
+    def global_vars(self) -> Dict[int, GlobalVariable]:
+        return compat.global_vars()
 
-        stack_vars = {
-            offset: var
-            for offset, var in compat.get_func_stack_var_info(ida_func.start_ea).items()
-        }
-        func.header = func_header
-        func.stack_vars = stack_vars
+    def global_var(self, addr) -> Optional[GlobalVariable]:
+        return compat.global_var(addr)
 
-        return func
+    def structs(self) -> Dict[str, Struct]:
+        return compat.structs()
+
+    def struct(self, name) -> Optional[Struct]:
+        return compat.struct(name)
 
     #
     # Force Push
     #
-
-    @init_checker
-    def force_push_function(self, addr):
-        master_state: State = self.client.get_state()
-        func = self.function(addr)
-        if not func:
-            return False
-
-        master_state.functions[addr] = func
-        self.client.commit_state(master_state)
-        return True
 
 
     #
