@@ -244,10 +244,15 @@ class BinjaBinSyncController(BinSyncController):
     #
 
     def functions(self) -> Dict[int, Function]:
-        return {
-            func.start: Function(func.start, func.total_bytes) for func in self.bv.functions
-            if func.symbol.type == SymbolType.FunctionSymbol
-        }
+        funcs = {}
+        for bn_func in self.bv.functions:
+            if bn_func.symbol.type != SymbolType.FunctionSymbol:
+                continue
+
+            funcs[bn_func.start] = Function(bn_func.start, bn_func.total_bytes)
+            funcs[bn_func.start].name = bn_func.name
+
+        return funcs
 
     def function(self, addr) -> Optional[Function]:
         """

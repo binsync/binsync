@@ -1,11 +1,13 @@
 import logging
 import os
-from typing import Optional
+from typing import Optional, Dict
 
 import angr
 import binsync
 from angr.analyses.decompiler.structured_codegen import DummyStructuredCodeGenerator
 from angrmanagement.ui.views import CodeView
+
+from binsync import Function
 from binsync.common.controller import (
     BinSyncController,
     init_checker,
@@ -172,6 +174,37 @@ class AngrBinSyncController(BinSyncController):
     def push_comment(self, addr, cmt, decompiled, func_addr=None, user=None, state=None):
         sync_cmt = binsync.data.Comment(addr, cmt, decompiled=decompiled)
         return state.set_comment(sync_cmt)
+
+    #
+    # Artifact
+    #
+
+    def functions(self) -> Dict[int, Function]:
+        funcs = {}
+        for addr, func in self._instance.kb.functions.items():
+            funcs[addr] = Function(addr, func.size)
+            funcs[addr].name = func.name
+
+        return funcs
+
+    def function(self, addr) -> Optional[Function]:
+        """
+        TODO: add support for stack variables and function args
+
+        @param addr:
+        @return:
+        """
+        try:
+            _func = self._instance.kb.functions[addr]
+        except KeyError:
+            return None
+
+        func = Function(_func.addr, _func.size)
+        func_header = FunctionHeader(_func.name, _func.addr, ret_type=_func.prototype.c_repr())
+
+        func.header = func_header
+        return func
+
 
     #
     #   Utils
