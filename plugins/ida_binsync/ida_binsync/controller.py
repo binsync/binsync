@@ -35,9 +35,12 @@ import ida_funcs
 import ida_kernwin
 
 import binsync
-from binsync.common.controller import BinSyncController, make_state, make_ro_state, init_checker, make_state_with_func
-from binsync import Client, ConnectionWarnings
-from binsync.data import StackVariable, StackOffsetType, Function, FunctionHeader, Struct, Comment, GlobalVariable, Enum
+from binsync.common.controller import (
+    BinSyncController, make_and_commit_state, make_ro_state, init_checker, make_state_with_func
+)
+from binsync import (
+    StackVariable, StackOffsetType, Function, FunctionHeader, Struct, Comment, GlobalVariable, Enum, State, Patch
+)
 from . import compat
 
 _l = logging.getLogger(name=__name__)
@@ -305,7 +308,7 @@ class IDABinSyncController(BinSyncController):
             updated_header = False
             try:
                 # allow set_func_header to return None to let us know a type is missing
-                updated_header = compat.set_func_header(ida_code_view, binsync_func.header, self, exit_on_bad_type=True)
+                updated_header = compat.set_function_header(ida_code_view, binsync_func.header, self, exit_on_bad_type=True)
             except Exception as e:
                 _l.warning(f"Header filling failed with exception {e}")
                 self.reset_api_count()
@@ -315,7 +318,7 @@ class IDABinSyncController(BinSyncController):
                 # we likely are missing a custom type. Try again!
                 data_changed |= self.fill_structs(user=user, state=state)
                 try:
-                    updated_header = compat.set_func_header(ida_code_view, binsync_func.header, self)
+                    updated_header = compat.set_function_header(ida_code_view, binsync_func.header, self)
                 except Exception as e:
                     _l.warning(f"Header filling failed with exception {e}, even after pulling custom types.")
                     self.reset_api_count()
@@ -346,8 +349,8 @@ class IDABinSyncController(BinSyncController):
 
         # collect and covert the info of each stack variable
         existing_stack_vars = {}
-        for offset, ida_var in compat.get_func_stack_var_info(ida_func.start_ea).items():
-            existing_stack_vars[compat.ida_to_angr_stack_offset(ida_func.start_ea, offset)] = ida_var
+        for offset, var in compat.get_func_stack_var_info(ida_func.start_ea).items():
+            existing_stack_vars[compat.ida_to_angr_stack_offset(ida_func.start_ea, offset)] = var
 
         stack_vars_to_set = {}
         # only try to set stack vars that actually exist
@@ -356,11 +359,11 @@ class IDABinSyncController(BinSyncController):
                 # change the variable's name
                 if stack_var.name != existing_stack_vars[offset].name:
                     self.inc_api_count()
-                    if ida_struct.set_member_name(frame, existing_stack_vars[offset].offset, stack_var.name):
+                    if ida_struct.set_member_name(frame, existing_stack_vars[offset].stack_offset, stack_var.name):
                         data_changed |= True
 
                 # check if the variables type should be changed
-                if ida_code_view and stack_var.type != existing_stack_vars[offset].type_str:
+                if ida_code_view and stack_var.type != existing_stack_vars[offset].type:
                     # validate the type is convertible
                     ida_type = compat.convert_type_str_to_ida_type(stack_var.type)
                     if ida_type is None:
@@ -374,12 +377,12 @@ class IDABinSyncController(BinSyncController):
                         # it really is just a bad type
                         if ida_type is None:
                             _l.debug(f"Failed to parse stack variable stored type at offset"
-                                     f" {hex(existing_stack_vars[offset].offset)} with type {stack_var.type}"
+                                     f" {hex(existing_stack_vars[offset].stack_offset)} with type {stack_var.type}"
                                      f" on function {hex(ida_func.start_ea)}.")
                             continue
 
                     # queue up the change!
-                    stack_vars_to_set[existing_stack_vars[offset].offset] = ida_type
+                    stack_vars_to_set[existing_stack_vars[offset].stack_offset] = ida_type
 
             # change the type of all vars that need to be changed
             # NOTE: api_count is incremented inside the function
@@ -392,10 +395,6 @@ class IDABinSyncController(BinSyncController):
             _l.info(f"No new data was set either by failure or lack of differences.")
 
         return data_changed
-
-    #
-    #   Pullers
-    #
 
     #
     #   Pushers
@@ -450,23 +449,50 @@ class IDABinSyncController(BinSyncController):
         state.set_stack_variable(v, stack_offset, func_addr, set_last_change=not api_set)
 
     @init_checker
-    @make_state
+    @make_and_commit_state
     def push_struct(self, struct, old_name,
                     user=None, state=None, api_set=False):
         old_name = None if old_name == "" else old_name
         state.set_struct(struct, old_name, set_last_change=not api_set)
 
     @init_checker
-    @make_state
+    @make_and_commit_state
     def push_global_var(self, addr, name, type_str=None, size=0, user=None, state=None, api_set=False):
         gvar = GlobalVariable(addr, name, type_str=type_str, size=size)
         state.set_global_var(gvar, set_last_change=not api_set)
 
     @init_checker
-    @make_state
+    @make_and_commit_state
     def push_enum(self, name, value_map, user=None, state=None, api_set=False):
         enum = Enum(name, value_map)
         state.set_enum(enum, set_last_change=not api_set)
+
+    #
+    # Artifact API
+    #
+
+    def functions(self) -> Dict[int, Function]:
+        return compat.functions()
+
+    def function(self, addr) -> Optional[Function]:
+        return compat.functions()
+
+    def global_vars(self) -> Dict[int, GlobalVariable]:
+        return compat.global_vars()
+
+    def global_var(self, addr) -> Optional[GlobalVariable]:
+        return compat.global_var(addr)
+
+    def structs(self) -> Dict[str, Struct]:
+        return compat.structs()
+
+    def struct(self, name) -> Optional[Struct]:
+        return compat.struct(name)
+
+    #
+    # Force Push
+    #
+
 
     #
     # Utils

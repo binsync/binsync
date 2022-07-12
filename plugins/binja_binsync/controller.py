@@ -23,6 +23,8 @@ import functools
 from typing import Dict, List, Tuple, Optional, Iterable, Any
 import hashlib
 import logging
+
+from binaryninja import SymbolType
 from binaryninjaui import (
     UIContext,
     DockHandler,
@@ -36,7 +38,7 @@ from binaryninja.mainthread import execute_on_main_thread, is_main_thread
 
 
 from binsync.common.controller import *
-from binsync.data import StackOffsetType, FunctionHeader
+from binsync.data import StackOffsetType, FunctionHeader, FunctionArgument
 import binsync
 
 l = logging.getLogger(__name__)
@@ -238,7 +240,69 @@ class BinjaBinSyncController(BinSyncController):
         return updates
 
     #
-    #   Pushers
+    # Artifact API
+    #
+
+    def functions(self) -> Dict[int, Function]:
+        funcs = {}
+        for bn_func in self.bv.functions:
+            if bn_func.symbol.type != SymbolType.FunctionSymbol:
+                continue
+
+            funcs[bn_func.start] = Function(bn_func.start, bn_func.total_bytes)
+            funcs[bn_func.start].name = bn_func.name
+
+        return funcs
+
+    def function(self, addr) -> Optional[Function]:
+        """
+        TODO: fix how types and offsets are set
+
+        @param addr:
+        @return:
+        """
+        bn_func = self.bv.get_function_at(addr)
+        if not bn_func:
+            return None
+
+        func = Function(bn_func.start, bn_func.total_bytes)
+        func_header = FunctionHeader(
+            bn_func.name,
+            func.addr,
+            ret_type=bn_func.return_type.get_string_before_name(),
+            args={
+                idx: FunctionArgument(idx, param.name, str(param.type), param.type.width)
+                for idx, param in enumerate(bn_func.function_type.parameters)
+            }
+        )
+        stack_vars = {
+            v.storage: StackVariable(v.storage, StackOffsetType.BINJA, v.name, str(v.type), v.type.width, func.addr)
+            for v in bn_func.stack_layout if v.source_type == VariableSourceType.StackVariableSourceType
+        }
+        func.header = func_header
+        func.stack_vars = stack_vars
+
+        return func
+
+    def global_vars(self) -> Dict[int, GlobalVariable]:
+        return {
+            addr: GlobalVariable(addr, self.bv.get_symbol_at(addr) or f"data_{addr:x}")
+            for addr, var in self.bv.data_vars.items()
+        }
+    
+    def global_var(self, addr) -> Optional[GlobalVariable]:
+        try:
+            var = self.bv.data_vars[addr]
+        except KeyError:
+            return None 
+            
+        gvar = GlobalVariable(
+            addr, self.bv.get_symbol_at(addr) or f"data_{addr:x}", type_str=str(var.type), size=var.type.width
+        )
+        return gvar
+
+    #
+    # Pushers
     #
 
     @init_checker
@@ -248,7 +312,7 @@ class BinjaBinSyncController(BinSyncController):
         state.set_function_header(bs_func_header, set_last_change=not api_set)
 
     @init_checker
-    @make_state
+    @make_and_commit_state
     def push_patch(self, patch, user=None, state=None):
         state.set_patch(patch.offset, patch)
 
@@ -266,7 +330,7 @@ class BinjaBinSyncController(BinSyncController):
         state.set_stack_variable(v, stack_offset, addr)
 
     @init_checker
-    @make_state
+    @make_and_commit_state
     def push_stack_variables(self, bn_func, user=None, state=None):
         for stack_var in bn_func.stack_layout:
             # ignore all unnamed variables

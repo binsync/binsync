@@ -4,12 +4,14 @@ import threading
 import time
 from collections import OrderedDict
 from functools import wraps
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Union
 
 import binsync.data
 from binsync.core.client import Client, SchedSpeed
-from binsync.data import (Comment, Enum, Function, GlobalVariable,
-                          StackVariable, Struct, User)
+from binsync.data import (
+    Comment, Enum, Function, GlobalVariable, State,
+    StackVariable, Struct, User, Patch
+)
 
 _l = logging.getLogger(name=__name__)
 
@@ -21,22 +23,23 @@ _l = logging.getLogger(name=__name__)
 
 def init_checker(f):
     @wraps(f)
-    def initcheck(self, *args, **kwargs):
+    def _init_check(self, *args, **kwargs):
         if not self.check_client():
             raise RuntimeError("Please connect to a repo first.")
         return f(self, *args, **kwargs)
 
-    return initcheck
+    return _init_check
 
 
-def make_state(f):
+def make_and_commit_state(f):
     """
     Build a writeable State instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
-    Function `f` should have have at least two kwargs, `user` and `state`.
+    Function `f` should have at least two kwargs, `user` and `state`. After executing `f`, the `state`
+    will be commited to the BS repo.
     """
 
     @wraps(f)
-    def state_check(self, *args, **kwargs):
+    def _make_and_commit_check(self, *args, **kwargs):
         state = kwargs.pop('state', None)
         user = kwargs.pop('user', None)
         if state is None:
@@ -47,7 +50,7 @@ def make_state(f):
         self.client.commit_state(state, msg=self._generate_commit_message(f, *args, **kwargs))
         return r
 
-    return state_check
+    return _make_and_commit_check
 
 
 def make_state_with_func(f):
@@ -250,7 +253,7 @@ class BinSyncController:
 
     def status(self):
         if self.check_client():
-            if self.client.has_remote:
+            if self.client.has_remote and self.client.active_remote:
                 return SyncControlStatus.CONNECTED
             return SyncControlStatus.CONNECTED_NO_REMOTE
         return SyncControlStatus.DISCONNECTED
@@ -276,7 +279,10 @@ class BinSyncController:
             yield user.name
 
     #
-    # Override Mandatory Functions
+    # Override Mandatory API:
+    # These functions create a public API for things that hold a reference to the Controller from either another
+    # thread or object. This is most useful for use in the UI, which can use this API to make general requests from
+    # the decompiler regardless of internal decompiler API.
     #
 
     def binary_hash(self) -> str:
@@ -324,7 +330,118 @@ class BinSyncController:
         raise NotImplementedError
 
     #
-    # Fillers
+    # Optional Artifact API:
+    # A series of functions that allow public access to live artifacts in the decompiler. As an example,
+    # `function(addr)` will return the current Function at addr that the user would be seeing. This is useful
+    # for having a common interface of reading data from other decompilers.
+    #
+
+    def functions(self) -> Dict[int, Function]:
+        """
+        Returns a dict of binsync.Functions that contain the addr, name, and size of each function in the decompiler.
+        Note: this does not contain the live data of the Artifact, only the minimum knowledge to that the Artifact
+        exists. To get live data, use the singleton function of the same name.
+
+        @return:
+        """
+        return {}
+
+    def function(self, addr) -> Optional[Function]:
+        return None
+
+    def global_vars(self) -> Dict[int, GlobalVariable]:
+        """
+        Returns a dict of binsync.GlobalVariable that contain the addr and size of each global var.
+        Note: this does not contain the live data of the Artifact, only the minimum knowledge to that the Artifact
+        exists. To get live data, use the singleton function of the same name.
+
+        @return:
+        """
+        return {}
+
+    def global_var(self, addr) -> Optional[GlobalVariable]:
+        return None
+
+    def structs(self) -> Dict[str, Struct]:
+        """
+        Returns a dict of binsync.Structs that contain the name and size of each struct in the decompiler.
+        Note: this does not contain the live data of the Artifact, only the minimum knowledge to that the Artifact
+        exists. To get live data, use the singleton function of the same name.
+
+        @return:
+        """
+        return {}
+
+    def struct(self, name) -> Optional[Struct]:
+        return None
+
+    def enums(self) -> Dict[str, Enum]:
+        """
+        Returns a dict of binsync.Enum that contain the name of the enums in the decompiler.
+        Note: this does not contain the live data of the Artifact, only the minimum knowledge to that the Artifact
+        exists. To get live data, use the singleton function of the same name.
+
+        @return:
+        """
+        return {}
+
+    def enum(self, name) -> Optional[Enum]:
+        return None
+
+    def patches(self) -> Dict[int, Patch]:
+        """
+        Returns a dict of binsync.Patch that contain the addr of each Patch and the bytes.
+        Note: this does not contain the live data of the Artifact, only the minimum knowledge to that the Artifact
+        exists. To get live data, use the singleton function of the same name.
+
+        @return:
+        """
+        return {}
+
+    def patch(self, addr) -> Optional[Patch]:
+        return None
+
+    def global_artifacts(self):
+        """
+        Returns a light version of all artifacts that are global (non function associated):
+        - structs, gvars, enums
+
+        @return:
+        """
+        g_artifacts = {}
+        for f in [self.structs, self.global_vars, self.enums]:
+            g_artifacts.update(f())
+
+        return g_artifacts
+
+    def global_artifact(self, lookup_item: Union[str, int]):
+        """
+        Returns a live binsync.data version of the Artifact located at the lookup_item location, which can
+        lookup any artifact supported in `global_artifacts`
+
+        @param lookup_item:
+        @return:
+        """
+
+        if isinstance(lookup_item, int):
+            return self.global_var(lookup_item)
+        elif isinstance(lookup_item, str):
+            artifact = self.struct(lookup_item)
+            if artifact:
+                return artifact
+
+            artifact = self.enum(lookup_item)
+            return artifact
+
+        return None
+
+    #
+    # Fillers:
+    # A filler function is generally responsible for pulling down data from a specific user state
+    # and reflecting those changes in decompiler view (like the text on the screen). Normally, these changes
+    # will also be accompanied by a Git commit to the master users state to save the changes from pull and
+    # fill into their BS database. In special cases, a filler may only update the decompiler UI but not directly
+    # cause a save of the BS state.
     #
 
     @init_checker
@@ -384,6 +501,7 @@ class BinSyncController:
         @param state:
         @return:
         """
+        pass
 
     @init_checker
     @make_ro_state
@@ -395,6 +513,7 @@ class BinSyncController:
         @param state:
         @return:
         """
+        pass
 
     @init_checker
     @make_ro_state
@@ -553,7 +672,7 @@ class BinSyncController:
     #
 
     @init_checker
-    @make_state
+    @make_and_commit_state
     def push_comment(self, *args, user=None, state=None, **kwargs):
         raise NotImplementedError
 
@@ -568,19 +687,70 @@ class BinSyncController:
         raise NotImplementedError
 
     @init_checker
-    @make_state
+    @make_and_commit_state
     def push_struct(self, *args, user=None, state=None, **kwargs):
         raise NotImplementedError
 
     @init_checker
-    @make_state
+    @make_and_commit_state
     def push_global_var(self, *args, user=None, state=None, **kwargs):
         raise NotImplementedError
 
     @init_checker
-    @make_state
+    @make_and_commit_state
     def push_enum(self, *args, user=None, state=None, **kwargs):
         raise NotImplementedError
+
+    #
+    # Force Push
+    #
+
+    @init_checker
+    def force_push_function(self, addr: int) -> bool:
+        """
+        Collects the function currently stored in the decompiler, not the BS State, and commits it to
+        the master users BS Database.
+
+        TODO: push the comments and custom types that are associated with each stack var
+        TODO: refactor to use internal push_function for correct commit message
+
+        @param addr:
+        @return: Success of committing the Function
+        """
+        func = self.function(addr)
+        if not func:
+            return False
+
+        master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
+        master_state.functions[addr] = func
+        self.client.commit_state(master_state)
+        return True
+
+    @init_checker
+    def force_push_global_artifact(self, lookup_item):
+        """
+        Collects the global artifact (struct, gvar, enum) currently stored in the decompiler, not the BS State,
+        and commits it to the master users BS Database.
+
+        @param lookup_item:
+        @return: Success of committing the Artifact
+        """
+        global_art = self.global_artifact(lookup_item)
+        if not global_art:
+            return False
+
+        master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
+        if isinstance(global_art, GlobalVariable):
+            master_state.global_vars[global_art.addr] = global_art
+        elif isinstance(global_art, Struct):
+            master_state.structs[global_art.name] = global_art
+        elif isinstance(global_art, Enum):
+            master_state.enums[global_art.name] = global_art
+        else:
+            return False
+
+        self.client.commit_state(master_state)
+        return True
 
     #
     # Pullers
@@ -627,13 +797,6 @@ class BinSyncController:
     @init_checker
     @make_ro_state
     def pull_structs(self, user=None, state=None) -> List[Struct]:
-        """
-        Pull structs downwards.
-
-        @param user:
-        @param state:
-        @return:
-        """
         return state.get_structs()
 
     @init_checker
