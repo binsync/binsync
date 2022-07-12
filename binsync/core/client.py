@@ -398,11 +398,7 @@ class Client:
 
         :return:    True if there is a remote, False otherwise.
         """
-
-        if self.remote and any(r.name == self.remote for r in self.repo.remotes):
-            return self.active_remote
-
-        return False
+        return self.remote and any(r.name == self.remote for r in self.repo.remotes)
 
     #
     # Non-Atomic Public API

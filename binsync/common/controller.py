@@ -253,7 +253,7 @@ class BinSyncController:
 
     def status(self):
         if self.check_client():
-            if self.client.has_remote:
+            if self.client.has_remote and self.client.active_remote:
                 return SyncControlStatus.CONNECTED
             return SyncControlStatus.CONNECTED_NO_REMOTE
         return SyncControlStatus.DISCONNECTED
