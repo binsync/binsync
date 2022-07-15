@@ -1,16 +1,10 @@
 import logging
-import time
 
 import binsync.data
-from binsync.common.ui.force_push.force_push import ForcePushUI
-from binsync.common.ui.panel_tabs.activity_table import QActivityTable
-from binsync.common.ui.panel_tabs.ctx_table import QCTXTable
-from binsync.common.ui.panel_tabs.functions_table import QFunctionTable
-from binsync.common.ui.panel_tabs.globals_table import QGlobalsTable
-from binsync.common.ui.panel_tabs.util_panel import QUtilPanel
+from binsync.common.ui.force_push.panels.functions_table import QFunctionTable
+from binsync.common.ui.force_push.panels.global_panel import QGlobalsTable
 from binsync.common.ui.qt_objects import (
     QLabel,
-    QPushButton,
     QStatusBar,
     QTabWidget,
     QVBoxLayout,
@@ -20,12 +14,10 @@ from binsync.common.ui.qt_objects import (
 
 l = logging.getLogger(__name__)
 
-class ControlPanel(QWidget):
+class ForcePushUI(QWidget):
     update_ready = Signal()
-    ctx_change = Signal()
-
     def __init__(self, controller, parent=None):
-        super(ControlPanel, self).__init__(parent)
+        super(ForcePushUI, self).__init__(parent)
         self.controller = controller
 
         self.tables = {}
@@ -35,24 +27,14 @@ class ControlPanel(QWidget):
         self.update_ready.connect(self.reload)
         self.controller.ui_callback = self.update_callback
 
-        self.ctx_change.connect(self._reload_ctx)
-        self.controller.ctx_change_callback = self.ctx_callback
-
     def update_callback(self):
         """
         This function will be called in another thread, so the work
         done here is guaranteed to be thread safe.
-
         @return:
         """
         self._update_table_data()
         self.update_ready.emit()
-
-    def ctx_callback(self):
-        if isinstance(self.controller.last_ctx, binsync.data.Function):
-            self._ctx_table.update_table(new_ctx=self.controller.last_ctx.addr)
-
-        self.ctx_change.emit()
 
     def reload(self):
         # check if connected
@@ -67,10 +49,6 @@ class ControlPanel(QWidget):
         if self.controller is not None:
             self.controller.client_init_callback = None
 
-    def open_force_push_ui(self):
-        self.popup = ForcePushUI(self.controller)
-        self.popup.show()
-
     def _init_widgets(self):
         # status bar
         self._status_label = QLabel(self)
@@ -83,50 +61,31 @@ class ControlPanel(QWidget):
 
         # tabs for panel_tabs
         self.tabView = QTabWidget()
+        self.tabView.setContentsMargins(0, 0, 0, 0)
 
         # add panel_tabs to tabs
-        self._ctx_table = QCTXTable(self.controller)
-        self._func_table = QFunctionTable(self.controller)
-        self._global_table = QGlobalsTable(self.controller)
-        self._activity_table = QActivityTable(self.controller)
-        self._utilities_panel = QUtilPanel(self.controller)
+        self._func_table = QFunctionTable(self.controller, load_from = "decompiler")
+        self._global_table = QGlobalsTable(self.controller, load_from = "decompiler")
 
-        self.tabView.addTab(self._ctx_table, "Context")
         self.tabView.addTab(self._func_table, "Functions")
         self.tabView.addTab(self._global_table, "Globals")
-        self.tabView.addTab(self._activity_table, "Activity")
-        self.tabView.addTab(self._utilities_panel, "Utilities")
 
         self.tables.update({
             "functions": self._func_table,
-            "globals": self._global_table,
-            "activity": self._activity_table
+            "globals": self._global_table
         })
 
         main_layout = QVBoxLayout()
         main_layout.addWidget(self.tabView)
         main_layout.addWidget(self._status_bar)
-
-        self.force_push_button = QPushButton()
-        self.force_push_button.setText("Force Push")
-        self.force_push_button.clicked.connect(self.open_force_push_ui)
-        main_layout.addWidget(self.force_push_button)
+        main_layout.setContentsMargins(0, 0, 0, 0)
 
         self.setLayout(main_layout)
-
-    def _reload_ctx(self):
-        ctx_name = self.controller.last_ctx.name or ""
-        ctx_name = ctx_name[:12] + "..." if len(ctx_name) > 12 else ctx_name
-        self._status_bar.showMessage(f"{ctx_name}@{hex(self.controller.last_ctx.addr)}")
-        self._ctx_table.reload()
 
     def _reload_tables(self):
         for _, table in self.tables.items():
             table.reload()
-        self._ctx_table.reload()
 
     def _update_table_data(self):
         for _, table in self.tables.items():
             table.update_table()
-
-        self._ctx_table.update_table()
