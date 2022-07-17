@@ -475,7 +475,7 @@ class IDABinSyncController(BinSyncController):
         return compat.functions()
 
     def function(self, addr) -> Optional[Function]:
-        return compat.functions()
+        return compat.function(addr)
 
     def global_vars(self) -> Dict[int, GlobalVariable]:
         return compat.global_vars()
