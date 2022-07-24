@@ -33,3 +33,4 @@ dist
 .eggs
 .vscode/
 *.db
+.DS_Store
