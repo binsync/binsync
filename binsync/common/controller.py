@@ -723,7 +723,7 @@ class BinSyncController:
 
         master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
         master_state.functions[addr] = func
-        self.client.commit_state(master_state)
+        self.client.commit_state(master_state, msg=f"Force pushed function {hex(addr)}")
         return True
 
     @init_checker
@@ -749,7 +749,9 @@ class BinSyncController:
         else:
             return False
 
-        self.client.commit_state(master_state)
+        self.client.commit_state(
+            master_state, msg=f"Force pushed global artifact {global_art.name or hex(global_art.addr)}"
+        )
         return True
 
     #

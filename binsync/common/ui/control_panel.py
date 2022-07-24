@@ -67,10 +67,6 @@ class ControlPanel(QWidget):
         if self.controller is not None:
             self.controller.client_init_callback = None
 
-    def open_force_push_ui(self):
-        self.popup = ForcePushUI(self.controller)
-        self.popup.show()
-
     def _init_widgets(self):
         # status bar
         self._status_label = QLabel(self)
@@ -107,10 +103,6 @@ class ControlPanel(QWidget):
         main_layout.addWidget(self.tabView)
         main_layout.addWidget(self._status_bar)
 
-        self.force_push_button = QPushButton()
-        self.force_push_button.setText("Force Push")
-        self.force_push_button.clicked.connect(self.open_force_push_ui)
-        main_layout.addWidget(self.force_push_button)
 
         self.setLayout(main_layout)
 

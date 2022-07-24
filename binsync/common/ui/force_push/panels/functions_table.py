@@ -1,23 +1,19 @@
 import logging
 from datetime import datetime
-from typing import Dict
 
 from binsync.common.controller import BinSyncController
 from binsync.common.ui.qt_objects import (
     QAbstractItemView,
     QAbstractTableModel,
     QHeaderView,
-    QMenu,
     Qt,
     QModelIndex,
     QSortFilterProxyModel,
-    QColor,
     QFocusEvent,
     QKeyEvent,
     QLineEdit,
     QTableView,
     QFontDatabase,
-    QAction,
     QWidget,
     QVBoxLayout,
     QPushButton,
@@ -25,7 +21,6 @@ from binsync.common.ui.qt_objects import (
     QCheckBox
 )
 from binsync.common.ui.utils import friendly_datetime
-from binsync.data import Function
 from binsync.data.state import State
 from binsync.core.scheduler import SchedSpeed
 
@@ -48,17 +43,13 @@ class FunctionTableModel(QAbstractTableModel):
     # Color for most recently updated, the alpha value decreases linearly over controller.table_coloring_window
     ACTIVE_FUNCTION_COLOR = (100, 255, 100, 70)
 
-    def __init__(self, controller: BinSyncController, data=None, parent=None, load_from="bs"):
+    def __init__(self, controller: BinSyncController, data=None, parent=None):
         super().__init__(parent)
         self.controller = controller
         self.row_data = data if data else []
         
-        self.load_from = load_from
-        if load_from == "bs":
-            self.data_bgcolors = []
-        else:
-            self.checks = {}
-            self.HEADER[1] = 'Name'
+        self.checks = {}
+        self.HEADER[1] = 'Name'
 
     def rowCount(self, index=QModelIndex()):
         """ Returns number of rows the model holds. """
@@ -66,7 +57,7 @@ class FunctionTableModel(QAbstractTableModel):
 
     def columnCount(self, index=QModelIndex()):
         """ Returns number of columns the model holds. """
-        return 4
+        return len(self.HEADER)
 
     def checkState(self, index):
         return self.checks.get(index, Qt.Unchecked)
@@ -98,11 +89,7 @@ class FunctionTableModel(QAbstractTableModel):
                 return self.row_data[index.row()][2]
             elif index.column() == 3:
                 return None
-        elif self.load_from == "bs" and role == Qt.BackgroundRole:
-            if len(self.row_data) != len(self.data_bgcolors) or not (0 <= index.row() < len(self.data_bgcolors)):
-                return None
-            return self.data_bgcolors[index.row()]
-        elif self.load_from == "decompiler" and role == Qt.CheckStateRole and index.column() == 0:
+        elif role == Qt.CheckStateRole and index.column() == 0:
             return self.checkState(QPersistentModelIndex(index))
         return None
 
@@ -123,7 +110,6 @@ class FunctionTableModel(QAbstractTableModel):
 
         for row in range(rows):
             self.row_data.insert(position + row, [0, "LOADING", "USER", datetime.now()])
-            if self.load_from == "bs": self.data_bgcolors.insert(position + row, [QColor(0, 0, 0, 0)])
 
         self.endInsertRows()
         return True
@@ -134,8 +120,6 @@ class FunctionTableModel(QAbstractTableModel):
             self.beginRemoveRows(QModelIndex(), position, position + rows - 1)
 
             del self.row_data[position:position + rows]
-            if self.load_from == "bs": del self.colordata[position:position + rows]
-
             self.endRemoveRows()
             return True
         return False
@@ -165,88 +149,25 @@ class FunctionTableModel(QAbstractTableModel):
         """ Set the item flags at the given index. """
         if not index.isValid():
             return Qt.ItemIsEnabled
-        if self.load_from == "decompiler" and index.column()==0: fl = Qt.ItemIsUserCheckable | Qt.ItemIsSelectable | Qt.ItemIsEnabled
-        else: fl = Qt.ItemFlags(QAbstractTableModel.flags(self, index))
-        return fl
-
-    def entry_exists(self, addr):
-        """ Quick way to determine if an entry already exists via addr """
-        return addr in [i[0] for i in self.row_data]
+        if index.column() == 0:
+            return Qt.ItemIsUserCheckable | Qt.ItemIsSelectable | Qt.ItemIsEnabled
+        else:
+            return Qt.ItemFlags(QAbstractTableModel.flags(self, index))
 
     def update_checks(self):
         for i in range(self.rowCount()):
             idx = self.index(i, 0, QModelIndex())
             self.checks[QPersistentModelIndex(idx)] = self.checks.get(QPersistentModelIndex(idx), 0)
 
-    def update_table_colors(self):
-        # update table coloring, this might need to be checked for robustness
-        now = datetime.now()
-        for i in range(len(self.row_data)):
-            t_upd = self.row_data[i][3]
-            if isinstance(t_upd, int):
-                if t_upd == -1:
-                    self.data_bgcolors[i] = None
-                t_upd = datetime.fromtimestamp(t_upd)
-
-            duration = (now - t_upd).total_seconds()
-
-            if 0 <= duration <= self.controller.table_coloring_window:
-                alpha = self.ACTIVE_FUNCTION_COLOR[3]
-                recency_percent = (self.controller.table_coloring_window - duration) / self.controller.table_coloring_window
-                self.data_bgcolors[i] = QColor(self.ACTIVE_FUNCTION_COLOR[0], self.ACTIVE_FUNCTION_COLOR[1],
-                                               self.ACTIVE_FUNCTION_COLOR[2], int(alpha * recency_percent))
-            else:
-                self.data_bgcolors[i] = None  # None will just cause no color changes from the default
-
-    def update_table_from_bs(self):
-        # for each user, iterate over all of their functions
-        for user in self.controller.users():
-            state = self.controller.client.get_state(user=user.name)
-            user_funcs: Dict[int, Function] = state.functions
-
-            for func_addr, sync_func in user_funcs.items():
-                func_change_time = sync_func.last_change
-
-                # don't add functions that were never changed by the user
-                if not sync_func.last_change:
-                    continue
-
-                tab_idx = 0
-                exists = self.entry_exists(func_addr)
-                if exists:
-                    # compare this users change time to the store change time
-                    tab_idx = [i[0] for i in self.row_data].index(func_addr)
-                    if not func_change_time or func_change_time < self.row_data[tab_idx][3]:
-                        continue
-                # insert a new row if necessary
-                if not exists:
-                    self.insertRows(0)
-                # get its index to use and set the data for all 4 columns
-                row_data = [func_addr, sync_func.name if sync_func.name else "", user.name, func_change_time]
-                for i in range(4):
-                    idx = self.index(tab_idx, i, QModelIndex())
-                    self.setData(idx, row_data[i], role=Qt.EditRole)
-
-    def update_table_from_decompiler(self):
+    def update_table(self):
         for address, function in self.controller.functions().items():
-            if self.entry_exists(address):
-                func_index = list(map(lambda x: x[0], self.row_data)).index(address)
-                func_name_idx = self.index(func_index, 1, QModelIndex())
-                self.setData(func_name_idx, function.name, role=Qt.EditRole)
-                continue
- 
             self.insertRows(0)
             row_data = [address, function.name, "", -1]
-            for i in range(4):
+            for i in range(len(self.HEADER)):
                 idx = self.index(0, i, QModelIndex())
                 self.setData(idx, row_data[i], role=Qt.EditRole)
         self.update_checks()
 
-    def update_table(self):
-        """ Updates the table using the controller's information """
-        self.update_table_from_bs()
-        if self.load_from == "decompiler": self.update_table_from_decompiler()
-        else: self.update_table_colors()
 
 class FunctionTableFilterLineEdit(QLineEdit):
     """ Basic class for the filter line edit, clears itself whenever focus is lost. """
@@ -273,9 +194,8 @@ class FunctionTableFilterLineEdit(QLineEdit):
 class FunctionTableView(QTableView):
     """ Table view for the data, this is the front end "container" for our model. """
 
-    def __init__(self, controller: BinSyncController, filteredit: FunctionTableFilterLineEdit, parent=None, load_from="bs"):
+    def __init__(self, controller: BinSyncController, filteredit: FunctionTableFilterLineEdit, parent=None):
         super().__init__(parent=parent)
-        self.load_from = load_from
         self.controller = controller
 
         self.filteredit = filteredit
@@ -289,13 +209,10 @@ class FunctionTableView(QTableView):
         self.proxymodel.setFilterKeyColumn(-1)
 
         # Connect our model to the proxy model
-        self.model = FunctionTableModel(controller, load_from=self.load_from)
+        self.model = FunctionTableModel(controller)
         self.proxymodel.setSourceModel(self.model)
         self.setModel(self.proxymodel)
         self.column_visibility = []
-
-        if self.load_from == "bs":
-            self.doubleClicked.connect(self._doubleclick_handler)
 
         self._init_settings()
 
@@ -331,49 +248,6 @@ class FunctionTableView(QTableView):
         """ Update the model of the table with new data from the controller """
         self.model.update_table()
 
-    def reload(self):
-        pass
-
-    def contextMenuEvent(self, event):
-        if self.load_from == "bs":
-            menu = QMenu(self)
-            menu.setObjectName("binsync_function_table_context_menu")
-            valid_row = True
-            selected_row = self.rowAt(event.pos().y())
-            idx = self.proxymodel.index(selected_row, 0)
-            idx = self.proxymodel.mapToSource(idx)
-            if event.pos().y() == -1 and event.pos().x() == -1:
-                selected_row = 0
-                idx = self.proxymodel.index(0, 0)
-                idx = self.proxymodel.mapToSource(idx)
-            elif not (0 <= selected_row < len(self.model.row_data)) or not idx.isValid():
-                valid_row = False
-
-            col_hide_menu = menu.addMenu("Show Columns")
-            handler = lambda ind: lambda: self._col_hide_handler(ind)
-            for i, c in enumerate(self.model.HEADER):
-                act = QAction(c, parent=menu)
-                act.setCheckable(True)
-                act.setChecked(self.column_visibility[i])
-                act.triggered.connect(handler(i))
-                col_hide_menu.addAction(act)
-
-            if valid_row:
-                func_addr = self.model.row_data[idx.row()][0]
-                user_name = self.model.row_data[idx.row()][2]
-
-                menu.addSeparator()
-                menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=user_name))
-                from_menu = menu.addMenu("Sync from...")
-
-                for username in self._get_valid_users_for_func(func_addr):
-                    action = from_menu.addAction(username)
-                    action.triggered.connect(
-                        lambda chck, name=username: self.controller.fill_function(func_addr, user=name))
-
-            menu.popup(self.mapToGlobal(event.pos()))
-        else: pass
-
     def _init_settings(self):
         self.setShowGrid(False)
 
@@ -391,11 +265,7 @@ class FunctionTableView(QTableView):
         self.setFont(fixed_width_font)
 
         self.setSortingEnabled(True)
-        if self.load_from == "bs":
-            self.setSelectionMode(QAbstractItemView.SingleSelection)
-            self.setSelectionBehavior(QAbstractItemView.SelectRows)
-        else: 
-            self.setSelectionMode(QAbstractItemView.NoSelection)
+        self.setSelectionMode(QAbstractItemView.NoSelection)
 
         self.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
@@ -410,14 +280,17 @@ class FunctionTableView(QTableView):
     def handle_filteredit_change(self, text):
         """ Handle text changes in the filter box, filters the table by the arg. """
         self.proxymodel.setFilterFixedString(text)
-        if self.load_from == "decompiler": self.select_all.setChecked(False)
+        self.select_all.setChecked(False)
 
     def push(self):
-        functions = self.controller.functions()
         for qpmi, state in self.model.checks.items():
-            if state:
-                func_addr = int(self.model.data(qpmi), 16)
-                self.controller.force_push_function(func_addr) 
+            if not state:
+                continue
+
+            func_addr = int(self.model.data(qpmi), 16)
+            success = self.controller.force_push_function(func_addr)
+            l.info(f"Pushing function {hex(func_addr)} was {'Successful' if success else 'Failed'}")
+
 
     def connect_select_all(self, checkbox):
         self.select_all = checkbox
@@ -440,9 +313,8 @@ class FunctionTableView(QTableView):
 
 class QFunctionTable(QWidget):
     """ Wrapper widget to contain the function table classes in one file (prevents bulking up control_panel.py) """
-    def __init__(self, controller: BinSyncController, parent=None, load_from="bs"):
+    def __init__(self, controller: BinSyncController, parent=None):
         super().__init__(parent)
-        self.load_from = load_from
         self.controller = controller
         self._init_widgets()
 
@@ -454,30 +326,23 @@ class QFunctionTable(QWidget):
 
     def _init_widgets(self):
         self.filteredit = FunctionTableFilterLineEdit(parent=self)
-        self.table = FunctionTableView(self.controller, self.filteredit, parent=self, load_from=self.load_from)
+        self.table = FunctionTableView(self.controller, self.filteredit, parent=self)
         layout = QVBoxLayout()
         layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)
         
-        if self.load_from=="bs":
-            layout.addWidget(self.table)
-            layout.addWidget(self.filteredit)
-        else: 
-            self.checkbox = QCheckBox("select all")
-            self.checkbox.clicked.connect(self.toggle_select_all)
-            self.table.connect_select_all(self.checkbox)
-            layout.addWidget(self.checkbox)
-            layout.addWidget(self.table)
-            layout.addWidget(self.filteredit)
-            push_button = QPushButton("PUSH")
-            push_button.clicked.connect(self.table.push)
-            layout.addWidget(push_button)
+        self.checkbox = QCheckBox("select all")
+        self.checkbox.clicked.connect(self.toggle_select_all)
+        self.table.connect_select_all(self.checkbox)
+        layout.addWidget(self.checkbox)
+        layout.addWidget(self.table)
+        layout.addWidget(self.filteredit)
+        push_button = QPushButton("PUSH")
+        push_button.clicked.connect(self.table.push)
+        layout.addWidget(push_button)
 
         self.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
     def update_table(self):
         self.table.update_table()
-
-    def reload(self):
-        pass

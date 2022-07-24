@@ -490,11 +490,6 @@ class IDABinSyncController(BinSyncController):
         return compat.struct(name)
 
     #
-    # Force Push
-    #
-
-
-    #
     # Utils
     #
 

@@ -1,5 +1,4 @@
 import logging
-import re
 from datetime import datetime
 
 from binsync.common.controller import BinSyncController
@@ -7,17 +6,14 @@ from binsync.common.ui.qt_objects import (
     QAbstractItemView,
     QAbstractTableModel,
     QHeaderView,
-    QMenu,
     Qt,
     QModelIndex,
     QSortFilterProxyModel,
-    QColor,
     QFocusEvent,
     QKeyEvent,
     QLineEdit,
     QTableView,
     QFontDatabase,
-    QAction,
     QWidget,
     QVBoxLayout,
     QPersistentModelIndex,
@@ -25,8 +21,6 @@ from binsync.common.ui.qt_objects import (
     QPushButton
 )
 from binsync.common.ui.utils import friendly_datetime
-from binsync.data.state import State
-from binsync.core.scheduler import SchedSpeed
 
 l = logging.getLogger(__name__)
 
@@ -47,16 +41,13 @@ class GlobalTableModel(QAbstractTableModel):
     # Color for most recently updated, the alpha value decreases linearly over controller.table_coloring_window
     ACTIVE_GLOBAL_COLOR = (100, 255, 100, 70)
 
-    def __init__(self, controller: BinSyncController, data=None, parent=None, load_from="bs"):
+    def __init__(self, controller: BinSyncController, data=None, parent=None):
         super().__init__(parent)
-        self.load_from = load_from
         self.controller = controller
         # holds sublists of form: (type, remote name, user, last push)
         self.row_data = data if data else []
-        if self.load_from == "bs":
-            self.data_bgcolors = []
-        else: 
-            self.checks = {}
+        self.checks = {}
+        self.gvar_name_to_addr_map = {}
 
     def rowCount(self, index=QModelIndex()):
         """ Returns number of rows the model holds. """
@@ -64,7 +55,7 @@ class GlobalTableModel(QAbstractTableModel):
 
     def columnCount(self, index=QModelIndex()):
         """ Returns number of columns the model holds. """
-        return 4
+        return len(self.HEADER)
 
     def checkState(self, index):
         return self.checks.get(index, Qt.Unchecked)
@@ -96,11 +87,7 @@ class GlobalTableModel(QAbstractTableModel):
                 return self.row_data[index.row()][2]
             elif index.column() == 3:  # dont filter based on time
                 return None
-        elif self.load_from == "bs" and role == Qt.BackgroundRole:
-            if len(self.row_data) != len(self.data_bgcolors) or not (0 <= index.row() < len(self.data_bgcolors)):
-                return None
-            return self.data_bgcolors[index.row()]
-        elif self.load_from == "decompiler" and role == Qt.CheckStateRole and index.column() == 0:
+        elif role == Qt.CheckStateRole and index.column() == 0:
             return self.checkState(QPersistentModelIndex(index))
         return None
 
@@ -121,7 +108,6 @@ class GlobalTableModel(QAbstractTableModel):
 
         for row in range(rows):
             self.row_data.insert(position + row, [None, "LOADING", "USER", datetime.now()])
-            if self.load_from == "bs": self.data_bgcolors.insert(position + row, [QColor(0, 0, 0, 0)])
 
         self.endInsertRows()
         return True
@@ -131,7 +117,6 @@ class GlobalTableModel(QAbstractTableModel):
         if 0 <= position < len(self.row_data) and 0 <= position + rows < len(self.row_data):
             self.beginRemoveRows(QModelIndex(), position, position + rows - 1)
             del self.row_data[position:position + rows]
-            if self.load_from=="bs": del self.data_bgcolors[position:position + rows]
             self.endRemoveRows()
 
             return True
@@ -162,101 +147,32 @@ class GlobalTableModel(QAbstractTableModel):
         """ Set the item flags at the given index. """
         if not index.isValid():
             return Qt.ItemIsEnabled
-        if self.load_from == "decompiler" and index.column()==0: fl = Qt.ItemIsUserCheckable | Qt.ItemIsSelectable | Qt.ItemIsEnabled
-        else: fl = Qt.ItemFlags(QAbstractTableModel.flags(self, index))
-        return fl
-
-    def entry_exists(self, name):
-        """ Quick way to determine if an entry already exists via artifact name """
-        return name in [i[1] for i in self.row_data]
+        if index.column() == 0:
+            return Qt.ItemIsUserCheckable | Qt.ItemIsSelectable | Qt.ItemIsEnabled
+        else:
+            return Qt.ItemFlags(QAbstractTableModel.flags(self, index))
 
     def update_checks(self):
         for i in range(self.rowCount()):
             idx = self.index(i, 0, QModelIndex())
             self.checks[QPersistentModelIndex(idx)] = self.checks.get(QPersistentModelIndex(idx), 0)
 
-    def update_table_colors(self):
-        # update table coloring, this might need to be checked for robustness
-        now = datetime.now()
-        for i in range(len(self.row_data)):
-            t_upd = self.row_data[i][3]
-            if isinstance(t_upd, int):
-                if t_upd == -1:
-                    self.data_bgcolors[i] = None
-                t_upd = datetime.fromtimestamp(t_upd)
-
-            duration = (now - t_upd).total_seconds()
-
-            if 0 <= duration <= self.controller.table_coloring_window:
-                alpha = self.ACTIVE_GLOBAL_COLOR[3]
-                recency_percent = (self.controller.table_coloring_window - duration) / self.controller.table_coloring_window
-                self.data_bgcolors[i] = QColor(self.ACTIVE_GLOBAL_COLOR[0], self.ACTIVE_GLOBAL_COLOR[1],
-                                               self.ACTIVE_GLOBAL_COLOR[2], int(alpha * recency_percent))
-            else:
-                self.data_bgcolors[i] = None  # None will just cause no color changes from the default
-
-
-    def update_table_from_bs(self):
-        """ Updates the table using the controller's information """
-        known_globals = {}
-
-        for user in self.controller.users():
-            state = self.controller.client.get_state(user=user.name)
-            user_structs = state.structs
-            user_gvars = state.global_vars
-            user_enums = state.enums
-
-            all_artifacts = ((user_enums, "Enum"), (user_structs, "Struct"), (user_gvars, "Variable"))
-            for user_artifacts, global_type in all_artifacts:
-                for _, artifact in user_artifacts.items():
-                    change_time = artifact.last_change
-
-                    if not change_time:
-                        continue
-
-                    if artifact.name in known_globals:
-                        # change_time < artifact_stored_change_time
-                        if not change_time or change_time < known_globals[artifact.name][3]:
-                            continue
-
-                    artifact_name = artifact.name if global_type != "Variable" \
-                        else f"{artifact.name} ({hex(artifact.addr)})"
-
-                    known_globals[artifact_name] = (global_type, artifact_name, user.name, change_time)
-
-        for name, row in known_globals.items():
-            tab_idx = 0
-            if self.entry_exists(row[1]):
-                tab_idx = [i[1] for i in self.row_data].index(row[1])
-            else:
-                self.insertRows(0)
-            for i in range(4):
-                idx = self.index(tab_idx, i, QModelIndex())
-                self.setData(idx, row[i], role=Qt.EditRole)
-
-    def update_table_from_decompiler(self):
+    def update_table(self):
         decompiler_structs = self.controller.structs()
         decompiler_gvars = self.controller.global_vars()
+        self.gvar_name_to_addr_map = {gvar.name: addr for addr, gvar in decompiler_gvars.items()}
         all_artifacts = [(decompiler_structs, "Struct"), (decompiler_gvars, "Variable")]
         
-        for type_artifacts, type in all_artifacts:
+        for type_artifacts, type_ in all_artifacts:
             for _, artifact in type_artifacts.items():                      
-                row = [type, artifact.name, "", -1]
+                row = [type_, artifact.name or artifact.addr, "", -1]
                 tab_idx = 0
-                if self.entry_exists(row[1]):
-                    tab_idx = [i[1] for i in self.row_data].index(row[1])
-                else:
-                    self.insertRows(0)
-                for i in range(4):
+                self.insertRows(0)
+                for i in range(self.columnCount()):
                     idx = self.index(tab_idx, i, QModelIndex())
                     self.setData(idx, row[i], role=Qt.EditRole)
         self.update_checks()
 
-    def update_table(self):
-        if self.load_from=="decompiler":self.update_table_from_decompiler()
-        else:
-            self.update_table_from_bs() 
-            self.update_table_colors()
 
 class GlobalTableFilterLineEdit(QLineEdit):
     """ Basic class for the filter line edit, clears itself whenever focus is lost. """
@@ -284,9 +200,8 @@ class GlobalTableFilterLineEdit(QLineEdit):
 class GlobalTableView(QTableView):
     """ Table view for the data, this is the front end "container" for our model. """
 
-    def __init__(self, controller: BinSyncController, filteredit: GlobalTableFilterLineEdit, parent=None, load_from="bs"):
+    def __init__(self, controller: BinSyncController, filteredit: GlobalTableFilterLineEdit, parent=None):
         super().__init__(parent=parent)
-        self.load_from = load_from
         self.controller = controller
 
         self.filteredit = filteredit
@@ -300,36 +215,13 @@ class GlobalTableView(QTableView):
         self.proxymodel.setFilterKeyColumn(-1)
 
         # Connect our model to the proxy model
-        self.model = GlobalTableModel(controller, load_from=self.load_from)
+        self.model = GlobalTableModel(controller)
         self.proxymodel.setSourceModel(self.model)
         self.setModel(self.proxymodel)
 
         self.column_visibility = []
 
         self._init_settings()
-
-    def _get_valid_users_for_global(self, global_name, global_type):
-        """ Helper function for getting all valid users for a given global """
-        if global_type == "Struct":
-            global_getter = "get_struct"
-        elif global_type == "Variable":
-            global_getter = "get_global_var"
-        elif global_type == "Enum":
-            global_getter = "get_enum"
-        else:
-            l.warning("Failed to get a valid type for global type")
-            return
-
-        for user in self.controller.users(priority=SchedSpeed.FAST):
-            user_state: State = self.controller.client.get_state(user=user.name, priority=SchedSpeed.FAST)
-            get_global = getattr(user_state, global_getter)
-            user_global = get_global(global_name)
-
-            # function must be changed by this user
-            if not user_global or not user_global.last_change:
-                continue
-
-            yield user.name
 
     def _col_hide_handler(self, index):
         """ Helper function to hide/show columns from context menu """
@@ -344,64 +236,6 @@ class GlobalTableView(QTableView):
         """ Update the model of the table with new data from the controller """
         self.model.update_table()
 
-    def reload(self):
-        pass
-
-    def contextMenuEvent(self, event):
-        if self.load_from=="bs":
-            menu = QMenu(self)
-            menu.setObjectName("binsync_global_table_context_menu")
-
-            valid_row = True
-            selected_row = self.rowAt(event.pos().y())
-            selected_row = self.rowAt(event.pos().y())
-            idx = self.proxymodel.index(selected_row, 0)
-            idx = self.proxymodel.mapToSource(idx)
-            if event.pos().y() == -1 and event.pos().x() == -1:
-                selected_row = 0
-                idx = self.proxymodel.index(0, 0)
-                idx = self.proxymodel.mapToSource(idx)
-            elif not (0 <= selected_row < len(self.model.row_data)) or not idx.isValid():
-                valid_row = False
-
-            col_hide_menu = menu.addMenu("Show Columns")
-            handler = lambda ind: lambda: self._col_hide_handler(ind)
-            for i, c in enumerate(self.model.HEADER):
-                act = QAction(c, parent=menu)
-                act.setCheckable(True)
-                act.setChecked(self.column_visibility[i])
-                act.triggered.connect(handler(i))
-                col_hide_menu.addAction(act)
-
-            if valid_row:
-                global_type = self.model.row_data[idx.row()][0]
-                global_name = self.model.row_data[idx.row()][1]
-                user_name = self.model.row_data[idx.row()][2]
-                if any(x is None for x in [global_type, global_name, user_name]):
-                    menu.popup(self.mapToGlobal(event.pos()))
-                    return
-
-                if global_type == "Struct":
-                    filler_func = lambda username: lambda chk: self.controller.fill_struct(global_name, user=username)
-                elif global_type == "Variable":
-                    var_addr = int(re.findall(r'0x[a-f,0-9]+', global_name.split(" ")[1])[0], 16)
-                    global_name = var_addr
-                    filler_func = lambda username: lambda chk: self.controller.fill_global_var(global_name, user=username)
-                elif global_type == "Enum":
-                    filler_func = lambda username: lambda chk: self.controller.fill_enum(global_name, user=username)
-                else:
-                    l.warning(f"Invalid global table sync option: {global_type}")
-                    return
-
-                menu.addSeparator()
-                menu.addAction("Sync", filler_func(user_name))
-                from_menu = menu.addMenu("Sync from...")
-                for username in self._get_valid_users_for_global(global_name, global_type):
-                    action = from_menu.addAction(username)
-                    action.triggered.connect(filler_func(username))
-
-            menu.popup(self.mapToGlobal(event.pos()))
-        else: pass
     def _init_settings(self):
         self.setShowGrid(False)
 
@@ -419,11 +253,7 @@ class GlobalTableView(QTableView):
         self.setFont(fixed_width_font)
 
         self.setSortingEnabled(True)
-        if self.load_from == "bs":
-            self.setSelectionMode(QAbstractItemView.SingleSelection)
-            self.setSelectionBehavior(QAbstractItemView.SelectRows)
-        else: 
-            self.setSelectionMode(QAbstractItemView.NoSelection)
+        self.setSelectionMode(QAbstractItemView.NoSelection)
         self.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
         self.setWordWrap(False)
@@ -438,24 +268,24 @@ class GlobalTableView(QTableView):
     def handle_filteredit_change(self, text):
         """ Handle text changes in the filter box, filters the table by the arg. """
         self.proxymodel.setFilterFixedString(text)
-        if self.load_from == "decompiler": self.select_all.setChecked(False)
+        self.select_all.setChecked(False)
+
+    def _lookup_addr_for_gvar(self, name):
+        return self.model.gvar_name_to_addr_map[name]
 
     def push(self):
-        decompiler_structs = self.controller.structs()
-        decompiler_gvars = self.controller.global_vars()
         for qpmi, state in self.model.checks.items():
-            if state:
-                type = self.model.data(qpmi)
-                name_qpmi = qpmi.sibling(qpmi.row(), 1)
-                name = self.model.data(name_qpmi)
-            else: continue
-            
-            if type=="Struct":
-                self.controller.force_push_global_artifact(name)
-            elif type=="Variable":
-                for addr, gvar in decompiler_gvars.items():
-                    if gvar.name == name: 
-                        self.controller.force_push_global_artifact(addr)
+            if not state:
+                continue
+
+            type_ = self.model.data(qpmi)
+            name = self.model.data(qpmi.sibling(qpmi.row(), 1))
+            lookup_item = self._lookup_addr_for_gvar(name) if type_ == "Variable" else name
+            success = self.controller.force_push_global_artifact(lookup_item)
+            l.info(
+                f"Pushing global {lookup_item if isinstance(lookup_item, str) else hex(lookup_item)} "
+                f"was {'Successful' if success else 'Failed'}"
+            )
 
     def connect_select_all(self, checkbox):
         self.select_all = checkbox
@@ -480,9 +310,8 @@ class GlobalTableView(QTableView):
 class QGlobalsTable(QWidget):
     """ Wrapper widget to contain the globals table classes in one file (prevents bulking up control_panel.py) """
 
-    def __init__(self, controller: BinSyncController, parent=None, load_from="bs"):
+    def __init__(self, controller: BinSyncController, parent=None):
         super().__init__(parent)
-        self.load_from = load_from
         self.controller = controller
         self._init_widgets()
 
@@ -494,29 +323,22 @@ class QGlobalsTable(QWidget):
 
     def _init_widgets(self):
         self.filteredit = GlobalTableFilterLineEdit(parent=self)
-        self.table = GlobalTableView(self.controller, self.filteredit, parent=self, load_from=self.load_from)
+        self.table = GlobalTableView(self.controller, self.filteredit, parent=self)
         layout = QVBoxLayout()
         layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)
-        if self.load_from == "bs":
-            layout.addWidget(self.table)
-            layout.addWidget(self.filteredit)
-        else:        
-            self.checkbox = QCheckBox("select all")
-            self.checkbox.clicked.connect(self.toggle_select_all)
-            self.table.connect_select_all(self.checkbox)
-            layout.addWidget(self.checkbox)
-            layout.addWidget(self.table)
-            layout.addWidget(self.filteredit)
-            push_button = QPushButton("PUSH")
-            push_button.clicked.connect(self.table.push)
-            layout.addWidget(push_button)
+        self.checkbox = QCheckBox("select all")
+        self.checkbox.clicked.connect(self.toggle_select_all)
+        self.table.connect_select_all(self.checkbox)
+        layout.addWidget(self.checkbox)
+        layout.addWidget(self.table)
+        layout.addWidget(self.filteredit)
+        push_button = QPushButton("Push")
+        push_button.clicked.connect(self.table.push)
+        layout.addWidget(push_button)
 
         self.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
     def update_table(self):
         self.table.update_table()
-
-    def reload(self):
-        pass

@@ -13,6 +13,7 @@ from binsync.common.ui.qt_objects import (
     QWidget,
 )
 from binsync.common.ui.magic_sync_dialog import MagicSyncDialog
+from binsync.common.ui.force_push import ForcePushUI
 from binsync.common.controller import BinSyncController
 from binsync.core.scheduler import SchedSpeed
 
@@ -24,37 +25,6 @@ class QUtilPanel(QWidget):
         super().__init__(parent)
         self.controller = controller
         self._init_widgets()
-
-    def _handle_debug_toggle(self):
-        if self._debug_log_toggle.isChecked():
-            logging.getLogger("binsync").setLevel("DEBUG")
-            logging.getLogger("ida_binsync").setLevel("DEBUG")
-            l.info("Logger has been set to level: DEBUG")
-        else:
-            logging.getLogger("binsync").setLevel("INFO")
-            logging.getLogger("ida_binsync").setLevel("INFO")
-            l.info("Logger has been set to level: INFO")
-
-    def _handle_sync_level_change(self, index):
-        selected_opt = self._sync_level_combobox.itemText(index)
-        if selected_opt == "Non-Conflicting":
-            self.controller.sync_level = SyncLevel.NON_CONFLICTING
-        elif selected_opt == "Overwrite":
-            self.controller.sync_level = SyncLevel.OVERWRITE
-        elif selected_opt == "Merge":
-            self.controller.sync_level = SyncLevel.MERGE
-        else:
-            return
-        l.debug(f"Sync level changed to: {selected_opt}")
-
-    def _handle_magic_sync_button(self):
-        dialog = MagicSyncDialog(self.controller)
-        dialog.exec_()
-
-        if not dialog.should_sync:
-            return
-
-        self.controller.magic_fill(preference_user=dialog.preferred_user)
 
     def _init_widgets(self):
 
@@ -104,10 +74,17 @@ class QUtilPanel(QWidget):
 
         self._magic_sync_button = QPushButton("Initiate Magic Sync")
         self._magic_sync_button.clicked.connect(self._handle_magic_sync_button)
-        self._magic_sync_button.setToolTip("Performs a best effort merge of all existing user data to your state, but won't affect your existing state (this uses a non-conflicting merge).")
+        self._magic_sync_button.setToolTip("Performs a best effort merge of all existing user data to your state, "
+                                           "but won't affect your existing state (this uses a non-conflicting merge).")
+
+        self._force_push_button = QPushButton("Force Push...")
+        self._force_push_button.clicked.connect(self._handle_force_push_button)
+        self._force_push_button.setToolTip("Manually select function and globals you would like to be force committed "
+                                           "and pushed to your user branch on Git.")
 
         sync_options_layout.addLayout(sync_level_layout)
         sync_options_group.layout().addWidget(self._magic_sync_button)
+        sync_options_group.layout().addWidget(self._force_push_button)
 
         #
         # Final Layout
@@ -120,3 +97,42 @@ class QUtilPanel(QWidget):
         main_layout.addWidget(sync_options_group)
         main_layout.addWidget(dev_options_group)
         self.setLayout(main_layout)
+
+    #
+    # Event Handlers
+    #
+
+    def _handle_debug_toggle(self):
+        if self._debug_log_toggle.isChecked():
+            logging.getLogger("binsync").setLevel("DEBUG")
+            logging.getLogger("ida_binsync").setLevel("DEBUG")
+            l.info("Logger has been set to level: DEBUG")
+        else:
+            logging.getLogger("binsync").setLevel("INFO")
+            logging.getLogger("ida_binsync").setLevel("INFO")
+            l.info("Logger has been set to level: INFO")
+
+    def _handle_sync_level_change(self, index):
+        selected_opt = self._sync_level_combobox.itemText(index)
+        if selected_opt == "Non-Conflicting":
+            self.controller.sync_level = SyncLevel.NON_CONFLICTING
+        elif selected_opt == "Overwrite":
+            self.controller.sync_level = SyncLevel.OVERWRITE
+        elif selected_opt == "Merge":
+            self.controller.sync_level = SyncLevel.MERGE
+        else:
+            return
+        l.debug(f"Sync level changed to: {selected_opt}")
+
+    def _handle_magic_sync_button(self):
+        dialog = MagicSyncDialog(self.controller)
+        dialog.exec_()
+
+        if not dialog.should_sync:
+            return
+
+        self.controller.magic_fill(preference_user=dialog.preferred_user)
+
+    def _handle_force_push_button(self):
+        self.popup = ForcePushUI(self.controller)
+        self.popup.show()
