@@ -45,6 +45,12 @@ class StackVariable(Artifact):
                    and other.addr == self.addr
         return False
 
+    def __str__(self):
+        return f"<StackVar: {self.name} {self.type}; {hex(self.stack_offset)}@{hex(self.addr)}>"
+
+    def __repr__(self):
+        return self.__str__()
+
     def get_offset(self, offset_type):
         if offset_type == self.stack_offset_type:
             return self.stack_offset

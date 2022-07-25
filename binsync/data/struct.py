@@ -25,6 +25,12 @@ class StructMember(Artifact):
         self.type: str = type_
         self.size: int = size
 
+    def __str__(self):
+        return f"<StructMember: {self.type} {self.member_name}; @{hex(self.offset)}>"
+
+    def __repr__(self):
+        self.__str__()
+
     @classmethod
     def parse(cls, s):
         sm = StructMember(None, None, None, None)
@@ -59,6 +65,12 @@ class Struct(Artifact):
         self.name = name
         self.size = size
         self.struct_members = struct_members
+
+    def __str__(self):
+        return f"<Struct: {self.name}[{len(self.struct_members)} ({hex(self.size)})>"
+
+    def __repr__(self):
+        return self.__str__()
 
     def __getstate__(self):
         return {
