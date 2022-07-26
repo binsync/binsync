@@ -18,6 +18,12 @@ class Comment(Artifact):
         self.decompiled = decompiled  # TODO: use this in other places!
         self.addr = addr  # type: int
 
+    def __str__(self):
+        return f"<Comment: @{hex(self.addr)} len={len(self.comment)}>"
+
+    def __repr__(self):
+        return self.__str__()
+
     @classmethod
     def parse(cls, s):
         comm = Comment(None, None)

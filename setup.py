@@ -17,6 +17,7 @@ setup(
         "toml",
         "GitPython",
         "filelock",
+        "pycparser"
     ],
     description='Collaboration framework for binary analysis tasks.',
     long_description='Collaboration framework for binary analysis tasks.',

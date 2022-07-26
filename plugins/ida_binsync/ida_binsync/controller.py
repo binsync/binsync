@@ -42,6 +42,7 @@ from binsync import (
     StackVariable, StackOffsetType, Function, FunctionHeader, Struct, Comment, GlobalVariable, Enum, State, Patch
 )
 from . import compat
+from .artifact_lifter import IDAArtifactLifter
 
 _l = logging.getLogger(name=__name__)
 
@@ -133,7 +134,7 @@ class UpdateTaskState:
 
 class IDABinSyncController(BinSyncController):
     def __init__(self):
-        super(IDABinSyncController, self).__init__()
+        super(IDABinSyncController, self).__init__(IDAArtifactLifter(self))
 
         # view change callback
         self._updated_ctx = None
@@ -404,12 +405,14 @@ class IDABinSyncController(BinSyncController):
     @make_state_with_func
     def push_comment(self, addr, comment, decompiled=False, func_addr=None, user=None, state=None, api_set=False):
         sync_cmt = binsync.data.Comment(addr, comment, decompiled=decompiled)
+        sync_cmt = self.artifact_lifer.lift(sync_cmt)
         state.set_comment(sync_cmt, set_last_change=not api_set)
 
     @init_checker
     @make_state_with_func
     def push_comments(self, cmt_list: List[Comment], func_addr=None, user=None, state=None, api_set=False):
         for cmt in cmt_list:
+            cmt = self.artifact_lifer.lift(cmt)
             state.set_comment(cmt)
 
     '''
@@ -430,6 +433,8 @@ class IDABinSyncController(BinSyncController):
     @make_state_with_func
     def push_function_header(self, addr, new_name, ret_type=None, args=None, user=None, state=None, api_set=False):
         func_header = FunctionHeader(new_name, addr, ret_type=ret_type, args=args)
+        func_header = self.artifact_lifer.lift(func_header)
+        _l.info(f"Setting {func_header}")
         state.set_function_header(func_header, set_last_change=not api_set)
 
     @init_checker
@@ -446,6 +451,8 @@ class IDABinSyncController(BinSyncController):
                           type_str,
                           size,
                           func_addr)
+
+        v = self.artifact_lifer.lift(v)
         state.set_stack_variable(v, stack_offset, func_addr, set_last_change=not api_set)
 
     @init_checker
@@ -453,18 +460,21 @@ class IDABinSyncController(BinSyncController):
     def push_struct(self, struct, old_name,
                     user=None, state=None, api_set=False):
         old_name = None if old_name == "" else old_name
+        struct = self.artifact_lifer.lift(struct)
         state.set_struct(struct, old_name, set_last_change=not api_set)
 
     @init_checker
     @make_and_commit_state
     def push_global_var(self, addr, name, type_str=None, size=0, user=None, state=None, api_set=False):
         gvar = GlobalVariable(addr, name, type_str=type_str, size=size)
+        gvar = self.artifact_lifer.lift(gvar)
         state.set_global_var(gvar, set_last_change=not api_set)
 
     @init_checker
     @make_and_commit_state
     def push_enum(self, name, value_map, user=None, state=None, api_set=False):
         enum = Enum(name, value_map)
+        enum = self.artifact_lifer.lift(enum)
         state.set_enum(enum, set_last_change=not api_set)
 
     #

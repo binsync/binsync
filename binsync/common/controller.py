@@ -7,10 +7,11 @@ from functools import wraps
 from typing import Dict, Iterable, List, Optional, Union
 
 import binsync.data
+from binsync.common.artifact_lifter import ArtifactLifter
 from binsync.core.client import Client, SchedSpeed
 from binsync.data import (
     Comment, Enum, Function, GlobalVariable, State,
-    StackVariable, Struct, User, Patch
+    StackVariable, Struct, User, Patch,
 )
 
 _l = logging.getLogger(name=__name__)
@@ -19,6 +20,16 @@ _l = logging.getLogger(name=__name__)
 #
 # State Checking Decorators
 #
+
+def lift_artifact(f):
+    @wraps(f)
+    def _lift_artifact(self: BinSyncController, *args, **kwargs):
+        artifact = args[0]
+        lifted_art = self.artifact_lifer.lift(artifact)
+        args = (lifted_art, ) + args[1:]
+        return f(self, *args, **kwargs)
+
+    return _lift_artifact
 
 
 def init_checker(f):
@@ -133,9 +144,10 @@ class BinSyncController:
     The client will be set on connection. The ctx_change_callback will be set by an outside UI
 
     """
-    def __init__(self, headless=False, reload_time=10):
+    def __init__(self, artifact_lifter, headless=False, reload_time=10):
         self.headless = headless
         self.reload_time = reload_time
+        self.artifact_lifer: ArtifactLifter = artifact_lifter
 
         # client created on connection
         self.client = None  # type: Optional[Client]

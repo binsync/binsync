@@ -25,6 +25,12 @@ class FunctionArgument(Artifact):
         self.type_str = type_str
         self.size = size
 
+    def __str__(self):
+        return f"<FuncArg: {self.type_str} {self.name}; @{self.idx}>"
+
+    def __repr__(self):
+        return self.__str__()
+
     @classmethod
     def parse(cls, s):
         fa = FunctionArgument(None, None, None, None)
@@ -50,6 +56,12 @@ class FunctionHeader(Artifact):
         self.addr = addr
         self.ret_type = ret_type
         self.args = args or {}
+
+    def __str__(self):
+        return f"<FuncHeader: {self.ret_type} {self.name}(args={len(self.args)}); @{hex(self.addr)}>"
+
+    def __repr__(self):
+        return self.__str__()
 
     def __getstate__(self):
         args = {str(idx): arg.__getstate__() for idx, arg in self.args.items()} if self.args else {}
@@ -156,6 +168,16 @@ class Function(Artifact):
         self.size: int = size
         self.header: Optional[FunctionHeader] = header
         self.stack_vars: Dict[int, StackVariable] = stack_vars or {}
+
+    def __str__(self):
+        if self.header:
+            return f"<Function: {self.header.ret_type} {self.name}(args={len(self.args)}); @{hex(self.addr)} " \
+                   f"vars={len(self.stack_vars)} len={hex(self.size)}>"
+
+        return f"<Function: @{hex(self.addr)} len={hex(self.size)}>"
+
+    def __repr__(self):
+        return self.__str__()
 
     def __getstate__(self):
         header = self.header.__getstate__() if self.header else None

@@ -36,10 +36,11 @@ from binaryninjaui import (
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourceType
 from binaryninja.mainthread import execute_on_main_thread, is_main_thread
 
-
 from binsync.common.controller import *
 from binsync.data import StackOffsetType, FunctionHeader, FunctionArgument
 import binsync
+
+from .artifact_lifter import BinjaArtifactLifter
 
 l = logging.getLogger(__name__)
 
@@ -71,7 +72,7 @@ def background_and_wait(func):
 
 class BinjaBinSyncController(BinSyncController):
     def __init__(self):
-        super(BinjaBinSyncController, self).__init__()
+        super(BinjaBinSyncController, self).__init__(BinjaArtifactLifter(self))
         self.bv = None
         self.sync_lock = False
 
@@ -309,15 +310,18 @@ class BinjaBinSyncController(BinSyncController):
     @make_state_with_func
     def push_function_header(self, addr, bs_func_header: binsync.data.FunctionHeader, user=None, state=None, api_set=False):
         # Push function header
+        bs_func_header = self.artifact_lifer.lift(bs_func_header)
         state.set_function_header(bs_func_header, set_last_change=not api_set)
 
     @init_checker
     @make_and_commit_state
     def push_patch(self, patch, user=None, state=None):
+        patch = self.artifact_lifer.lift(patch)
         state.set_patch(patch.offset, patch)
 
     @init_checker
     @make_state_with_func
+    @lift_artifact
     def push_stack_variable(self, addr, stack_offset, name, type_str, size, user=None, state=None, api_set=False):
         v = StackVariable(
             stack_offset,
@@ -327,6 +331,7 @@ class BinjaBinSyncController(BinSyncController):
             size,
             addr
         )
+        v = self.artifact_lifer.lift(v)
         state.set_stack_variable(v, stack_offset, addr)
 
     @init_checker
@@ -350,4 +355,5 @@ class BinjaBinSyncController(BinSyncController):
         # Push comments
         for addr, comment in comments.items():
             cmt = binsync.data.Comment(addr, comment, decompiled=True)
+            cmt = self.artifact_lifer.lift(cmt)
             state.set_comment(cmt)
