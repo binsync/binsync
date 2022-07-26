@@ -24,7 +24,7 @@ l = logging.getLogger(__name__)
 class AngrBinSyncController(BinSyncController):
     """
     The class used for all pushing/pulling and merging based actions with BinSync data.
-    This class is resposible for handling callbacks that are done by changes from the local user
+    This class is responsible for handling callbacks that are done by changes from the local user
     and responsible for running a thread to get new changes from other users.
     """
 
