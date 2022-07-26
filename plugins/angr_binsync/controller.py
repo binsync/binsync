@@ -16,6 +16,8 @@ from binsync.common.controller import (
 )
 from binsync.data import FunctionHeader, StackOffsetType
 
+from .artifact_lifter import AngrArtifactLifter
+
 l = logging.getLogger(__name__)
 
 
@@ -27,7 +29,7 @@ class AngrBinSyncController(BinSyncController):
     """
 
     def __init__(self, workspace):
-        super().__init__()
+        super().__init__(AngrArtifactLifter(self))
         self._workspace = workspace
         self._instance = workspace.instance
 
