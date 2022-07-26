@@ -1,5 +1,6 @@
 from binsync.common import ArtifactLifter
 
+
 class AngrArtifactLifter(ArtifactLifter):
     """
     TODO: fix me

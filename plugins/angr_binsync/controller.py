@@ -29,7 +29,7 @@ class AngrBinSyncController(BinSyncController):
     """
 
     def __init__(self, workspace):
-        super().__init__(AngrArtifactLifter(self))
+        super(AngrBinSyncController, self).__init__(AngrArtifactLifter(self))
         self._workspace = workspace
         self._instance = workspace.instance
 
