@@ -18,6 +18,12 @@ class Enum(Artifact):
         # sorts map by the int value
         self.value_map = OrderedDict(sorted(value_map.items(), key=lambda kv: kv[1]))
 
+    def __str__(self):
+        return f"<Enum: {self.name} values={len(self.value_map)}>"
+
+    def __repr__(self):
+        return self.__str__()
+
     @classmethod
     def parse(cls, s):
         en = Enum(None, {})

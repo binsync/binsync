@@ -16,18 +16,20 @@ from binsync.common.controller import (
 )
 from binsync.data import FunctionHeader, StackOffsetType
 
+from .artifact_lifter import AngrArtifactLifter
+
 l = logging.getLogger(__name__)
 
 
 class AngrBinSyncController(BinSyncController):
     """
     The class used for all pushing/pulling and merging based actions with BinSync data.
-    This class is resposible for handling callbacks that are done by changes from the local user
+    This class is responsible for handling callbacks that are done by changes from the local user
     and responsible for running a thread to get new changes from other users.
     """
 
     def __init__(self, workspace):
-        super().__init__()
+        super(AngrBinSyncController, self).__init__(AngrArtifactLifter(self))
         self._workspace = workspace
         self._instance = workspace.instance
 

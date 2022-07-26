@@ -206,6 +206,16 @@ class State:
 
         return state
 
+    def __str__(self):
+        return f"<State: {self.user} " \
+               f"funcs={len(self.functions)} " \
+               f"cmts={len(self.comments)} " \
+               f"globals={len(self.structs) + len(self.global_vars) + len(self.enums)}" \
+               f">"
+
+    def __repr__(self):
+        return self.__str__()
+
     @property
     def dirty(self):
         return self._dirty

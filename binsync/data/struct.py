@@ -67,7 +67,7 @@ class Struct(Artifact):
         self.struct_members = struct_members
 
     def __str__(self):
-        return f"<Struct: {self.name}[{len(self.struct_members)} ({hex(self.size)})>"
+        return f"<Struct: {self.name} membs={len(self.struct_members)} ({hex(self.size)})>"
 
     def __repr__(self):
         return self.__str__()

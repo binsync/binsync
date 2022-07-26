@@ -18,6 +18,12 @@ class GlobalVariable(Artifact):
         self.type_str = type_str
         self.size = size
 
+    def __str__(self):
+        return f"<GlobalVar: {self.type_str} {self.name}; @{self.addr} len={self.size}>"
+
+    def __repr__(self):
+        return self.__str__()
+
     @classmethod
     def parse(cls, s):
         gv = GlobalVariable(None, None)

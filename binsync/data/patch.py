@@ -22,6 +22,12 @@ class Patch(Artifact):
         self.obj_name = obj_name
         self.new_bytes = new_bytes
 
+    def __str__(self):
+        return f"<Patch: {self.obj_name}@{hex(self.offset)} len={len(self.new_bytes)}>"
+
+    def __repr__(self):
+        return self.__str__()
+
     def __getstate__(self):
         return {
             "obj_name": self.obj_name,
