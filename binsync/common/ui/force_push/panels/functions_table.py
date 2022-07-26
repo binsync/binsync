@@ -284,11 +284,9 @@ class FunctionTableView(QTableView):
         else:
             self.select_all.setChecked(True)
 
-
     def push(self):
         self.proxymodel.setFilterFixedString("")
         for i in range(self.proxymodel.rowCount()):
-
             proxyIndex = self.proxymodel.index(i, 0, QModelIndex())
             mappedIndex = self.proxymodel.mapToSource(proxyIndex)
             if self.model.checkState(mappedIndex):
