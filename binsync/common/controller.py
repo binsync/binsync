@@ -256,7 +256,6 @@ class BinSyncController:
             user, path, binary_hash, init_repo=init_repo, remote_url=remote_url
         )
 
-        _l.info("Starting the updater thread in the controller")
         self.start_updater_routine()
         return self.client.connection_warnings
 
@@ -615,6 +614,7 @@ class BinSyncController:
                 pref_struct.last_change = None
 
             if pref_struct:
+                pref_struct = self.artifact_lifer.lift(pref_struct)
                 master_state.structs[struct_name] = pref_struct
 
             self.fill_struct(struct_name, state=master_state)
@@ -645,8 +645,9 @@ class BinSyncController:
                 pref_func = Function.from_nonconflicting_merge(pref_func, user_func)
                 pref_func.last_change = None
 
-            master_state.functions[func_addr] = pref_func
-            self.fill_function(func_addr, state=master_state)
+            pref_func = self.artifact_lifer.lift(pref_func)
+            master_state.functions[pref_func.addr] = pref_func
+            self.fill_function(pref_func.addr, state=master_state)
 
         self.client.commit_state(master_state, msg="Magic Sync Funcs Merged")
 
@@ -673,8 +674,9 @@ class BinSyncController:
                 pref_gvar = GlobalVariable.from_nonconflicting_merge(pref_gvar, user_gvar)
                 pref_gvar.last_change = None
 
-            master_state.global_vars[gvar_addr] = pref_gvar
-            self.fill_global_var(gvar_addr, state=master_state)
+            pref_gvar = self.artifact_lifer.lift(pref_gvar)
+            master_state.global_vars[pref_gvar.addr] = pref_gvar
+            self.fill_global_var(pref_gvar.addr, state=master_state)
 
         self.client.commit_state(master_state, msg="Magic Sync Global Vars Merged")
         _l.info(f"Magic Syncing Completed!")
@@ -734,8 +736,9 @@ class BinSyncController:
             return False
 
         master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
-        master_state.functions[addr] = func
-        self.client.commit_state(master_state, msg=f"Force pushed function {hex(addr)}")
+        func = self.artifact_lifer.lift(func)
+        master_state.functions[func.addr] = func
+        self.client.commit_state(master_state, msg=f"Force pushed function {hex(func.addr)}")
         return True
 
     @init_checker
@@ -752,6 +755,7 @@ class BinSyncController:
             return False
 
         master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
+        global_art = self.artifact_lifer.lift(global_art)
         if isinstance(global_art, GlobalVariable):
             master_state.global_vars[global_art.addr] = global_art
         elif isinstance(global_art, Struct):

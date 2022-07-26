@@ -434,7 +434,6 @@ class IDABinSyncController(BinSyncController):
     def push_function_header(self, addr, new_name, ret_type=None, args=None, user=None, state=None, api_set=False):
         func_header = FunctionHeader(new_name, addr, ret_type=ret_type, args=args)
         func_header = self.artifact_lifer.lift(func_header)
-        _l.info(f"Setting {func_header}")
         state.set_function_header(func_header, set_last_change=not api_set)
 
     @init_checker

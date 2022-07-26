@@ -20,11 +20,9 @@ class IDAArtifactLifter(ArtifactLifter):
         return addr
 
     def lift_type(self, type_str: str) -> str:
-        l.info(f"Lifting {type_str} now...")
         for ida_t, bs_t in self.lift_map.items():
             type_str = type_str.replace(ida_t, bs_t)
 
-        l.info(f"=> final type: {type_str}")
         return type_str
 
     def lift_stack_offset(self, offset: int) -> int:
