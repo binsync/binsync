@@ -46,7 +46,7 @@ class GlobalTableModel(QAbstractTableModel):
         self.controller = controller
         # holds sublists of form: (type, remote name, user, last push)
         self.row_data = data if data else []
-        self.checks = {}
+        self.checks = [False for _ in self.row_data]
         self.gvar_name_to_addr_map = {}
 
     def rowCount(self, index=QModelIndex()):
@@ -58,7 +58,7 @@ class GlobalTableModel(QAbstractTableModel):
         return len(self.HEADER)
 
     def checkState(self, index):
-        return self.checks.get(index, Qt.Unchecked)
+        return Qt.Checked if self.checks[index.row()] else Qt.Unchecked
 
     def data(self, index, role=Qt.DisplayRole):
         """ Returns information about the data at a specified index based
@@ -88,7 +88,7 @@ class GlobalTableModel(QAbstractTableModel):
             elif index.column() == 3:  # dont filter based on time
                 return None
         elif role == Qt.CheckStateRole and index.column() == 0:
-            return self.checkState(QPersistentModelIndex(index))
+            return self.checkState(index)
         return None
 
     def headerData(self, section, orientation, role=Qt.DisplayRole):
@@ -108,6 +108,7 @@ class GlobalTableModel(QAbstractTableModel):
 
         for row in range(rows):
             self.row_data.insert(position + row, [None, "LOADING", "USER", datetime.now()])
+            self.checks.insert(position + row, False)
 
         self.endInsertRows()
         return True
@@ -117,6 +118,7 @@ class GlobalTableModel(QAbstractTableModel):
         if 0 <= position < len(self.row_data) and 0 <= position + rows < len(self.row_data):
             self.beginRemoveRows(QModelIndex(), position, position + rows - 1)
             del self.row_data[position:position + rows]
+            del self.checks[position:position+rows]
             self.endRemoveRows()
 
             return True
@@ -131,8 +133,8 @@ class GlobalTableModel(QAbstractTableModel):
 
         if index.isValid() and 0 <= index.row() < len(self.row_data):
             address = self.row_data[index.row()]
-            if 0==index.column() and role == Qt.CheckStateRole:
-                self.checks[QPersistentModelIndex(index)] = value
+            if 0 == index.column() and role == Qt.CheckStateRole:
+                self.checks[index.row()] = value
             elif 0 <= index.column() < len(address):
                 address[index.column()] = value
             else:
@@ -152,11 +154,6 @@ class GlobalTableModel(QAbstractTableModel):
         else:
             return Qt.ItemFlags(QAbstractTableModel.flags(self, index))
 
-    def update_checks(self):
-        for i in range(self.rowCount()):
-            idx = self.index(i, 0, QModelIndex())
-            self.checks[QPersistentModelIndex(idx)] = self.checks.get(QPersistentModelIndex(idx), 0)
-
     def update_table(self):
         decompiler_structs = self.controller.structs()
         decompiler_gvars = self.controller.global_vars()
@@ -171,7 +168,6 @@ class GlobalTableModel(QAbstractTableModel):
                 for i in range(self.columnCount()):
                     idx = self.index(tab_idx, i, QModelIndex())
                     self.setData(idx, row[i], role=Qt.EditRole)
-        self.update_checks()
 
 
 class GlobalTableFilterLineEdit(QLineEdit):
@@ -274,18 +270,19 @@ class GlobalTableView(QTableView):
         return self.model.gvar_name_to_addr_map[name]
 
     def push(self):
-        for qpmi, state in self.model.checks.items():
-            if not state:
-                continue
-
-            type_ = self.model.data(qpmi)
-            name = self.model.data(qpmi.sibling(qpmi.row(), 1))
-            lookup_item = self._lookup_addr_for_gvar(name) if type_ == "Variable" else name
-            success = self.controller.force_push_global_artifact(lookup_item)
-            l.info(
-                f"Pushing global {lookup_item if isinstance(lookup_item, str) else hex(lookup_item)} "
-                f"was {'Successful' if success else 'Failed'}"
-            )
+        self.proxymodel.setFilterFixedString("")
+        for i in range(self.proxymodel.rowCount()):
+            proxyIndex = self.proxymodel.index(i, 0, QModelIndex())
+            mappedIndex = self.proxymodel.mapToSource(proxyIndex)
+            if self.model.checkState(mappedIndex):
+                type_ = self.model.data(mappedIndex)
+                name = self.model.data(mappedIndex.sibling(mappedIndex.row(), 1))
+                lookup_item = self._lookup_addr_for_gvar(name) if type_ == "Variable" else name
+                success = self.controller.force_push_global_artifact(lookup_item)
+                l.info(
+                    f"Pushing global {lookup_item if isinstance(lookup_item, str) else hex(lookup_item)} "
+                    f"was {'Successful' if success else 'Failed'}"
+                )
 
     def connect_select_all(self, checkbox):
         self.select_all = checkbox
@@ -294,17 +291,13 @@ class GlobalTableView(QTableView):
         for i in range(self.proxymodel.rowCount()):
             proxyIndex = self.proxymodel.index(i, 0, QModelIndex())
             mappedIndex = self.proxymodel.mapToSource(proxyIndex)
-            qpmi = QPersistentModelIndex(mappedIndex)
-            self.model.checks[qpmi] = 2
-        self.update_table()
+            self.model.setData(mappedIndex, True, Qt.CheckStateRole)
 
     def uncheck_all(self):
         for i in range(self.proxymodel.rowCount()):
             proxyIndex = self.proxymodel.index(i, 0, QModelIndex())
             mappedIndex = self.proxymodel.mapToSource(proxyIndex)
-            qpmi = QPersistentModelIndex(mappedIndex)
-            self.model.checks[qpmi] = 0
-        self.update_table()
+            self.model.setData(mappedIndex, False, Qt.CheckStateRole)
 
 
 class QGlobalsTable(QWidget):
@@ -327,15 +320,15 @@ class QGlobalsTable(QWidget):
         layout = QVBoxLayout()
         layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)
-        self.checkbox = QCheckBox("select all")
+        self.checkbox = QCheckBox("Select All")
         self.checkbox.clicked.connect(self.toggle_select_all)
         self.table.connect_select_all(self.checkbox)
         layout.addWidget(self.checkbox)
         layout.addWidget(self.table)
         layout.addWidget(self.filteredit)
-        push_button = QPushButton("Push")
-        push_button.clicked.connect(self.table.push)
-        layout.addWidget(push_button)
+        self.push_button = QPushButton("Push")
+        self.push_button.clicked.connect(self.table.push)
+        layout.addWidget(self.push_button)
 
         self.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)

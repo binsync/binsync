@@ -65,7 +65,8 @@ class QFunctionTable(QTableWidget):
 
         self.setColumnCount(len(self.HEADER))
         self.setHorizontalHeaderLabels(self.HEADER)
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.horizontalHeader().setHorizontalScrollMode(self.ScrollPerPixel)
         self.horizontalHeader().setDefaultAlignment(Qt.AlignHCenter | Qt.Alignment(Qt.TextWordWrap))
         self.horizontalHeader().setMinimumWidth(160)
@@ -130,7 +131,6 @@ class QFunctionTable(QTableWidget):
                     # compare this users change time to the store change time
                     if not func_change_time or func_change_time < known_funcs[func_addr][3]:
                         continue
-
                 remote_func_name = sync_func.name if sync_func.name else ""
                 known_funcs[func_addr] = [func_addr, remote_func_name, user.name, func_change_time]
 

@@ -168,9 +168,14 @@ def set_ida_func_name(func_addr, new_name):
 
 @execute_read
 def functions():
+    blacklisted_segs = ["extern", ".plt", ".plt.sec"]
     func_addrs = list(idautils.Functions())
     funcs = {}
     for func_addr in func_addrs:
+        # skip non-text segments
+        if idc.get_segm_name(func_addr) in blacklisted_segs:
+            continue
+
         func_name = get_func_name(func_addr)
         func_size = get_func_size(func_addr)
         func = Function(func_addr, func_size)

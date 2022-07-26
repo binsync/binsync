@@ -97,6 +97,7 @@ class ControlPanelViewWrapper(object):
         self._w = ControlPanel(self._controller)
         layout = QVBoxLayout()
         layout.addWidget(self._w)
+        layout.setContentsMargins(2,2,2,2)
         self.widget.setLayout(layout)
 
 #

@@ -48,7 +48,7 @@ class FunctionTableModel(QAbstractTableModel):
         self.controller = controller
         self.row_data = data if data else []
         
-        self.checks = {}
+        self.checks = [False for _ in self.row_data]
         self.HEADER[1] = 'Name'
 
     def rowCount(self, index=QModelIndex()):
@@ -60,7 +60,7 @@ class FunctionTableModel(QAbstractTableModel):
         return len(self.HEADER)
 
     def checkState(self, index):
-        return self.checks.get(index, Qt.Unchecked)
+        return Qt.Checked if self.checks[index.row()] else Qt.Unchecked
 
     def data(self, index, role=Qt.DisplayRole):
         """ Returns information about the data at a specified index based
@@ -90,7 +90,7 @@ class FunctionTableModel(QAbstractTableModel):
             elif index.column() == 3:
                 return None
         elif role == Qt.CheckStateRole and index.column() == 0:
-            return self.checkState(QPersistentModelIndex(index))
+            return self.checkState(index)
         return None
 
     def headerData(self, section, orientation, role=Qt.DisplayRole):
@@ -110,6 +110,7 @@ class FunctionTableModel(QAbstractTableModel):
 
         for row in range(rows):
             self.row_data.insert(position + row, [0, "LOADING", "USER", datetime.now()])
+            self.checks.insert(position+row, False)
 
         self.endInsertRows()
         return True
@@ -134,7 +135,7 @@ class FunctionTableModel(QAbstractTableModel):
         if index.isValid() and 0 <= index.row() < len(self.row_data):
             address = self.row_data[index.row()]
             if 0 == index.column() and role == Qt.CheckStateRole:
-                self.checks[QPersistentModelIndex(index)] = value 
+                self.checks[index.row()] = value
             elif 0 <= index.column() < len(address):
                 address[index.column()] = value
             else:
@@ -154,11 +155,6 @@ class FunctionTableModel(QAbstractTableModel):
         else:
             return Qt.ItemFlags(QAbstractTableModel.flags(self, index))
 
-    def update_checks(self):
-        for i in range(self.rowCount()):
-            idx = self.index(i, 0, QModelIndex())
-            self.checks[QPersistentModelIndex(idx)] = self.checks.get(QPersistentModelIndex(idx), 0)
-
     def update_table(self):
         for address, function in self.controller.functions().items():
             self.insertRows(0)
@@ -166,7 +162,6 @@ class FunctionTableModel(QAbstractTableModel):
             for i in range(len(self.HEADER)):
                 idx = self.index(0, i, QModelIndex())
                 self.setData(idx, row_data[i], role=Qt.EditRole)
-        self.update_checks()
 
 
 class FunctionTableFilterLineEdit(QLineEdit):
@@ -281,15 +276,25 @@ class FunctionTableView(QTableView):
         """ Handle text changes in the filter box, filters the table by the arg. """
         self.proxymodel.setFilterFixedString(text)
         self.select_all.setChecked(False)
+        for i in range(self.proxymodel.rowCount()):
+            proxyIndex = self.proxymodel.index(i, 0, QModelIndex())
+            mappedIndex = self.proxymodel.mapToSource(proxyIndex)
+            if not self.model.data(mappedIndex, Qt.CheckStateRole):
+                break
+        else:
+            self.select_all.setChecked(True)
+
 
     def push(self):
-        for qpmi, state in self.model.checks.items():
-            if not state:
-                continue
+        self.proxymodel.setFilterFixedString("")
+        for i in range(self.proxymodel.rowCount()):
 
-            func_addr = int(self.model.data(qpmi), 16)
-            success = self.controller.force_push_function(func_addr)
-            l.info(f"Pushing function {hex(func_addr)} was {'Successful' if success else 'Failed'}")
+            proxyIndex = self.proxymodel.index(i, 0, QModelIndex())
+            mappedIndex = self.proxymodel.mapToSource(proxyIndex)
+            if self.model.checkState(mappedIndex):
+                func_addr = int(self.model.data(mappedIndex), 16)
+                success = self.controller.force_push_function(func_addr)
+                l.info(f"Pushing function {hex(func_addr)} {'was Successful' if success else 'Failed'}")
 
 
     def connect_select_all(self, checkbox):
@@ -299,17 +304,13 @@ class FunctionTableView(QTableView):
         for i in range(self.proxymodel.rowCount()):
             proxyIndex = self.proxymodel.index(i, 0, QModelIndex())
             mappedIndex = self.proxymodel.mapToSource(proxyIndex)
-            qpmi = QPersistentModelIndex(mappedIndex)
-            self.model.checks[qpmi] = 2
-        self.update_table()
+            self.model.setData(mappedIndex, True, Qt.CheckStateRole)
 
     def uncheck_all(self):
         for i in range(self.proxymodel.rowCount()):
             proxyIndex = self.proxymodel.index(i, 0, QModelIndex())
             mappedIndex = self.proxymodel.mapToSource(proxyIndex)
-            qpmi = QPersistentModelIndex(mappedIndex)
-            self.model.checks[qpmi] = 0
-        self.update_table()
+            self.model.setData(mappedIndex, False, Qt.CheckStateRole)
 
 class QFunctionTable(QWidget):
     """ Wrapper widget to contain the function table classes in one file (prevents bulking up control_panel.py) """
@@ -331,15 +332,15 @@ class QFunctionTable(QWidget):
         layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)
         
-        self.checkbox = QCheckBox("select all")
+        self.checkbox = QCheckBox("Select All")
         self.checkbox.clicked.connect(self.toggle_select_all)
         self.table.connect_select_all(self.checkbox)
         layout.addWidget(self.checkbox)
         layout.addWidget(self.table)
         layout.addWidget(self.filteredit)
-        push_button = QPushButton("PUSH")
-        push_button.clicked.connect(self.table.push)
-        layout.addWidget(push_button)
+        self.push_button = QPushButton("Push")
+        self.push_button.clicked.connect(self.table.push)
+        layout.addWidget(self.push_button)
 
         self.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
