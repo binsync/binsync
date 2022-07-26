@@ -102,6 +102,8 @@ class ControlPanel(QWidget):
         main_layout = QVBoxLayout()
         main_layout.addWidget(self.tabView)
         main_layout.addWidget(self._status_bar)
+        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(0,0,0,0)
 
 
         self.setLayout(main_layout)
