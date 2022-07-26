@@ -10,6 +10,7 @@ from binsync.common.ui.panel_tabs.globals_table import QGlobalsTable
 from binsync.common.ui.panel_tabs.util_panel import QUtilPanel
 from binsync.common.ui.qt_objects import (
     QLabel,
+    QMenu,
     QPushButton,
     QStatusBar,
     QTabWidget,
@@ -19,6 +20,20 @@ from binsync.common.ui.qt_objects import (
 )
 
 l = logging.getLogger(__name__)
+
+class QContextStatusBar(QStatusBar):
+    def __init__(self, controller, parent = None):
+        QLabel.__init__(self, parent)
+        self.controller = controller
+
+    def contextMenuEvent(self, event):
+        menu = QMenu(self)
+        menu.setObjectName("binsync_context_context_menu")
+        if self.controller.last_ctx:
+            ctx_name = self.controller.last_ctx.name
+            ctx_addr = self.controller.last_ctx.addr
+            menu.addAction(f"Force Push {ctx_name}@{hex(ctx_addr)}", lambda : self.controller.force_push_function(ctx_addr))
+            menu.popup(self.mapToGlobal(event.pos()))
 
 class ControlPanel(QWidget):
     update_ready = Signal()
@@ -71,7 +86,7 @@ class ControlPanel(QWidget):
         # status bar
         self._status_label = QLabel(self)
         self._status_label.setText(self.controller.status_string())
-        self._status_bar = QStatusBar(self)
+        self._status_bar = QContextStatusBar(self.controller, self)
         self._status_bar.addPermanentWidget(self._status_label)
 
         # control box

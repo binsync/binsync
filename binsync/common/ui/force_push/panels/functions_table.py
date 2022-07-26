@@ -293,9 +293,7 @@ class FunctionTableView(QTableView):
             mappedIndex = self.proxymodel.mapToSource(proxyIndex)
             if self.model.checkState(mappedIndex):
                 func_addr = int(self.model.data(mappedIndex), 16)
-                success = self.controller.force_push_function(func_addr)
-                l.info(f"Pushing function {hex(func_addr)} {'was Successful' if success else 'Failed'}")
-
+                self.controller.force_push_function(func_addr)
 
     def connect_select_all(self, checkbox):
         self.select_all = checkbox

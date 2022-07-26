@@ -278,11 +278,7 @@ class GlobalTableView(QTableView):
                 type_ = self.model.data(mappedIndex)
                 name = self.model.data(mappedIndex.sibling(mappedIndex.row(), 1))
                 lookup_item = self._lookup_addr_for_gvar(name) if type_ == "Variable" else name
-                success = self.controller.force_push_global_artifact(lookup_item)
-                l.info(
-                    f"Pushing global {lookup_item if isinstance(lookup_item, str) else hex(lookup_item)} "
-                    f"was {'Successful' if success else 'Failed'}"
-                )
+                self.controller.force_push_global_artifact(lookup_item)
 
     def connect_select_all(self, checkbox):
         self.select_all = checkbox
