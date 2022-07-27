@@ -27,7 +27,9 @@ if ui_version == "PySide2":
         QTableView,
         QAction,
         QFontDialog,
-        QCheckBox
+        QCheckBox,
+        QMainWindow,
+        QApplication
     )
     from PySide2.QtGui import (
         QFontDatabase,
@@ -63,7 +65,9 @@ elif ui_version == "PySide6":
         QTableView,
         QAction,
         QFontDialog,
-        QCheckBox
+        QCheckBox,
+        QMainWindow,
+        QApplication
     )
     from PySide6.QtGui import (
         QFontDatabase,
@@ -100,7 +104,9 @@ else:
         QTableView,
         QAction,
         QFontDialog,
-        QCheckBox
+        QCheckBox,
+        QMainWindow,
+        QApplication
     )
     from PyQt5.QtGui import (
         QFontDatabase,
