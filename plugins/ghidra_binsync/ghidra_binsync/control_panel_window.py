@@ -19,20 +19,12 @@ class ControlPanelWindow(QMainWindow):
     def __init__(self):
         super(ControlPanelWindow, self).__init__()
         self.setWindowTitle("BinSync")
+        self.width_hint = 300
 
         self.controller: GhidraBinSyncController = GhidraBinSyncController()
         self.control_panel = ControlPanel(self.controller)
+
         self._init_widgets()
-
-        self.width_hint = 300
-
-    def configure(self):
-        config = SyncConfig(self.controller)
-        config.show()
-        config.exec_()
-
-        #if self.controller.check_client():
-        print("Connected!")
 
     #
     # Private methods
@@ -42,13 +34,36 @@ class ControlPanelWindow(QMainWindow):
         self.control_panel.show()
         self.setCentralWidget(self.control_panel)
 
+    #
+    # handlers
+    #
+
+    def configure(self):
+        config = SyncConfig(self.controller)
+        config.show()
+        config.exec_()
+        client_connected = self.controller.check_client()
+
+        # setup bridge and alert it we are configuring
+        self.controller.connect_ghidra_bridge()
+        self.controller.bridge.set_controller_status(client_connected)
+
+        return client_connected
+
+    def closeEvent(self, event):
+        self.controller.bridge.server.shutdown()
+
 
 def start_ui():
     app = QApplication()
     cp_window = ControlPanelWindow()
-    cp_window.hide()
 
-    cp_window.configure()
-    cp_window.show()
+    # control panel should stay hidden until a good config happens
+    cp_window.hide()
+    connected = cp_window.configure()
+    if connected:
+        cp_window.show()
+    else:
+        exit(1)
 
     app.exec_()

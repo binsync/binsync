@@ -47,6 +47,11 @@ default_config = {
             'level': 'INFO',
             'propagate': False
         },
+        'ghidra_binsync': {
+            'handlers': ["console", "local_file_handler"],
+            'level': 'INFO',
+            'propagate': False
+        },
         'angr_binsync': {
             'handlers': ["console", "local_file_handler"],
             'level': 'INFO',

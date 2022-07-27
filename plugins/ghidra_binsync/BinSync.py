@@ -22,6 +22,7 @@ from ghidra.util import Msg
 
 from java.lang import IllegalArgumentException
 """
+from ghidra.program.model.symbol import SourceType
 
 BUSY_LOOP_SLEEPTIME = 0.05
 
@@ -32,28 +33,109 @@ class BSBridgeAPI:
 
     def shutdown(self):
         self.server.should_work = False
+        del self.server.server
 
     def ping(self):
         return True
 
-    def bs_connected(self):
-        self.server.binsync_connected = True
+    def set_controller_status(self, status):
+        self.server.binsync_ready = status
+
+    #
+    # decompiler private api
+    #
+
+    def _find_ProgramPlugin(self, tool):
+        """ Use the provided tool (probably something like CodeBrowser) to find any loaded plugin that extends ProgramPlugin,
+            which gives access to useful state like the current address, etc
+        """
+        plugins = tool.getManagedPlugins()
+        plugin = None
+        for i in range(0, plugins.size()):
+            plugin = plugins.get(i)
+            if "getProgramLocation" in dir(plugin):
+                # it's a program plugin! that'll work just fine
+                return plugin
+
+    def _get_real_current_addr(self):
+        tool = getState().getTool()
+        prog_plugin = self._find_ProgramPlugin(tool)
+        loc = prog_plugin.getProgramLocation()
+        return loc.address
+
+    def _get_real_current_program(self):
+        tool = getState().getTool()
+        prog_plugin = self._find_ProgramPlugin(tool)
+        return prog_plugin.getCurrentProgram()
+
+    def _make_addr(self, addr):
+        address = currentProgram.getAddressFactory().getAddress(hex(addr))
+        return address
+
+    def _get_function(self, addr):
+        addr = self._make_addr(addr + 0x100000)
+        curr_prog = self._get_real_current_program()
+        fm = curr_prog.getFunctionManager()
+        func = fm.getFunctionAt(addr)
+        return func
+
+    def _get_nearest_function(self, addr):
+        fm = currentProgram.getFunctionManager()
+        func = fm.getFunctionContaining(addr)
+        return func
+
+
+    #
+    # decompiler api
+    #
+
+    def context(self):
+        addr = self._get_real_current_addr()
+        func = self._get_nearest_function(addr)
+
+        if func is None:
+            return {}
+
+        size = int(func.getBody().getNumAddresses())
+        name = str(func.getName())
+        func_addr = int(func.entryPoint.toString(), 16)
+
+        return {
+            "name": name,
+            "size": size,
+            "func_addr": func_addr - 0x100000
+        }
+
+    def get_func_size(self, addr):
+        func = self._get_function(addr)
+        return int(func.getBody().getNumAddresses()) 
+
+    def set_func_name(self, addr, name):
+        func = self._get_function(addr)
+        if func is None:
+            return
+
+        func.setName(str(name), SourceType.USER_DEFINED)
+
+    def get_func_name(self, addr):
+        func = self._get_function(addr)
+        return str(func.getName())
 
 
 class BSBridgeServer:
-    def __init__(self, ip='localhost', port=9466):
-        self.ip = ip
+    def __init__(self, host='localhost', port=9466):
+        self.host = host
         self.port = port
 
         self.api = BSBridgeAPI(self)
         self.server_thread = Thread(target=self._worker_thread)
         self.server = None
 
-        self.binsync_connected = False
+        self.binsync_ready = None
         self.should_work = False
 
     def _worker_thread(self):
-        self.server = SimpleXMLRPCServer((self.ip, self.port), logRequests=False, allow_none=True)
+        self.server = SimpleXMLRPCServer((self.host, self.port), logRequests=False, allow_none=True)
         self.server.register_introspection_functions()
         self.server.register_multicall_functions()
         self.server.register_instance(self.api)
@@ -68,23 +150,26 @@ class BSBridgeServer:
 
     def stop(self):
         self.should_work = False
-        self.server_thread.join()
+        self.wait_for_shutdown()
         self.server = None
 
     def wait_for_shutdown(self):
         while True:
             time.sleep(BUSY_LOOP_SLEEPTIME)
             if not self.should_work:
-                return
+                try:
+                    self.server.ping()
+                except Exception:
+                    break
 
     def wait_for_bs_connection(self, timeout=60*5):
         start_time = time.time()
         while time.time() - start_time < timeout:
             time.sleep(BUSY_LOOP_SLEEPTIME)
-            if self.binsync_connected:
-                return True
+            if self.binsync_ready is not None:
+                break
 
-        return False
+        return self.binsync_ready
 
 
 class BinSyncUI:
@@ -95,10 +180,9 @@ class BinSyncUI:
         self.bs_entry_path = self._get_bs_entry_script_path()
 
         self.ui_proc = None
-        
-    def _get_bs_entry_script_path(self):
-        dirname = os.path.dirname(self.running_path)
-        return os.path.join(dirname, self.ENTRY_SCRIPT_NAME)
+    #
+    # public api
+    #
 
     def start(self):
         python_version = "python3"
@@ -106,7 +190,7 @@ class BinSyncUI:
 
         self.ui_proc = subprocess.Popen([python_version] + python_flags + [self.bs_entry_path])
 
-    def kill(self):
+    def stop(self):
         if self.ui_proc.poll() is None:
             self.ui_proc.kill()
 
@@ -116,6 +200,11 @@ class BinSyncUI:
 
         return False
 
+    def _get_bs_entry_script_path(self):
+        #dirname = os.path.dirname(self.running_path)
+        dirname = os.path.join(os.getenv("HOME"), "ghidra_scripts")
+        return os.path.join(dirname, self.ENTRY_SCRIPT_NAME)
+
 
 if __name__ == "__main__":
     # 1. start bridge service as a new thread
@@ -123,17 +212,19 @@ if __name__ == "__main__":
     # 3. wait, with a timeout, for  python3 ui
     #   - if success msg recieved, let the thread keep running as a daemon
     #   - if failure or timeout
-    #
-    print(abspath(getsourcefile(lambda:0)))
-    
-     
-    """
+    print("[+] Starting configuration...")
     bridge = BSBridgeServer()
     bridge.start()
+    print("[+] Starting UI...")
     binsync_ui = BinSyncUI()
+    binsync_ui.start()
+    print("[+] Waiting for connection...")
+    print("Process is", binsync_ui.is_alive())
     connection = bridge.wait_for_bs_connection()
     if connection:
-        print("Someone has connected with BinSync")
+        print("[+] BinSync Configuration was Successful!")
+        bridge.wait_for_shutdown()
     else:
-        print("Timeout before connection")
-    """
+        print("[-] BinSync Configuration failed")
+        bridge.stop()
+
