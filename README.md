@@ -16,6 +16,7 @@ center of BinSync's syncing ability. Here are the supported REAs:
 - Comments
 
 Note: all types support user-created types like structs. 
+**DISCLAIMER**: The current version of BinSync is highly developmental. If you are looking for a highly stable version with full support for the listed decompilers, check back in a few months.
 
 **Join our discord below for more online help**:
 
@@ -25,8 +26,9 @@ Note: all types support user-created types like structs.
 - IDA Pro: **>= 7.3**
 - Binary Ninja: **>= 2.4**
 - angr-management: **>= 9.0**
+- Ghidra: **>= 10.1**
 
-All versions require **Python >= 3.4** and **Git** installed on your system. For Ghidra support, see the [ghidra-support](https://github.com/angr/binsync/tree/ghidra_support) branch which has minimal compatibility. 
+All versions require **Python >= 3.4** and **Git** installed on your system. Ghidra support is stil very much in early stage, so only expect the minimal features like artifact name syncing and comments.  
 
 ## Installing
 ### Oneliner (IDA only)
