@@ -63,7 +63,6 @@ elif ui_version == "PySide6":
         QWidget,
         QDialogButtonBox,
         QTableView,
-        QAction,
         QFontDialog,
         QCheckBox,
         QMainWindow,
@@ -74,7 +73,8 @@ elif ui_version == "PySide6":
         QColor,
         QKeyEvent,
         QFocusEvent,
-        QIntValidator
+        QIntValidator,
+        QAction
     )
 else:
     from PyQt5.QtCore import QDir, Qt, QAbstractTableModel, QModelIndex, QSortFilterProxyModel, QPersistentModelIndex
