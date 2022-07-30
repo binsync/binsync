@@ -27,7 +27,9 @@ if ui_version == "PySide2":
         QTableView,
         QAction,
         QFontDialog,
-        QCheckBox
+        QCheckBox,
+        QMainWindow,
+        QApplication
     )
     from PySide2.QtGui import (
         QFontDatabase,
@@ -61,16 +63,18 @@ elif ui_version == "PySide6":
         QWidget,
         QDialogButtonBox,
         QTableView,
-        QAction,
         QFontDialog,
-        QCheckBox
+        QCheckBox,
+        QMainWindow,
+        QApplication
     )
     from PySide6.QtGui import (
         QFontDatabase,
         QColor,
         QKeyEvent,
         QFocusEvent,
-        QIntValidator
+        QIntValidator,
+        QAction
     )
 else:
     from PyQt5.QtCore import QDir, Qt, QAbstractTableModel, QModelIndex, QSortFilterProxyModel, QPersistentModelIndex
@@ -100,7 +104,9 @@ else:
         QTableView,
         QAction,
         QFontDialog,
-        QCheckBox
+        QCheckBox,
+        QMainWindow,
+        QApplication
     )
     from PyQt5.QtGui import (
         QFontDatabase,

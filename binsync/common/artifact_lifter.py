@@ -74,6 +74,8 @@ class ArtifactLifter:
         if mode not in ("lower", "lift"):
             return None
 
+        if not isinstance(artifact, Artifact):
+            return artifact
         lifted_art = artifact.copy()
 
         # correct simple properties in the artifact

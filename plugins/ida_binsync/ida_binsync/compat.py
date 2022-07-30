@@ -13,6 +13,7 @@ import functools
 import threading
 import typing
 import logging
+from time import time
 
 import idc, idaapi, ida_kernwin, ida_hexrays, ida_funcs, ida_bytes, ida_struct, ida_idaapi, ida_typeinf, idautils
 
@@ -197,7 +198,7 @@ def function(addr):
         l.warning(f"IDA function {hex(func_addr)} is not decompilable")
         return None
 
-    func = Function(func_addr, get_func_size(func_addr))
+    func = Function(func_addr, get_func_size(func_addr), last_change=int(time()))
     func_header: FunctionHeader = function_header(ida_cfunc)
 
     stack_vars = {
@@ -228,7 +229,7 @@ def function_header(ida_cfunc) -> FunctionHeader:
     except Exception:
         ret_type_str = ""
 
-    ida_function_info = FunctionHeader(func_name, func_addr, ret_type=ret_type_str, args=func_args)
+    ida_function_info = FunctionHeader(func_name, func_addr, ret_type=ret_type_str, args=func_args, last_change=int(time()))
     return ida_function_info
 
 
@@ -476,7 +477,7 @@ def struct(name):
     
     sptr = ida_struct.get_struc(sid)
     size = ida_struct.get_struc_size(sptr)
-    _struct = Struct(name, size, {})
+    _struct = Struct(name, size, {}, last_change=int(time()))
     for mptr in sptr.members:
         mid = mptr.id
         m_name = ida_struct.get_member_name(mid)
@@ -599,7 +600,7 @@ def global_var(addr):
         return None
 
     size = idaapi.get_item_size(addr)
-    return GlobalVariable(addr, name, size=size)
+    return GlobalVariable(addr, name, size=size, last_change=int(time()))
 
 
 @execute_write

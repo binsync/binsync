@@ -321,7 +321,6 @@ class BinjaBinSyncController(BinSyncController):
 
     @init_checker
     @make_state_with_func
-    @lift_artifact
     def push_stack_variable(self, addr, stack_offset, name, type_str, size, user=None, state=None, api_set=False):
         v = StackVariable(
             stack_offset,
