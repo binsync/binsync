@@ -1,4 +1,3 @@
-import datetime
 import logging
 import threading
 import time
@@ -10,8 +9,10 @@ import binsync.data
 from binsync.common.artifact_lifter import ArtifactLifter
 from binsync.core.client import Client, SchedSpeed
 from binsync.data import (
-    Comment, Enum, Function, GlobalVariable, State,
-    StackVariable, Struct, User, Patch,
+    State, User, Artifact,
+    Function, FunctionHeader, FunctionArgument, StackVariable,
+    Comment, GlobalVariable, Patch,
+    Enum, Struct
 )
 
 _l = logging.getLogger(name=__name__)
@@ -21,17 +22,6 @@ _l = logging.getLogger(name=__name__)
 # State Checking Decorators
 #
 
-def lift_artifact(f):
-    @wraps(f)
-    def _lift_artifact(self: BinSyncController, *args, **kwargs):
-        artifact = args[0]
-        lifted_art = self.artifact_lifer.lift(artifact)
-        args = (lifted_art, ) + args[1:]
-        return f(self, *args, **kwargs)
-
-    return _lift_artifact
-
-
 def init_checker(f):
     @wraps(f)
     def _init_check(self, *args, **kwargs):
@@ -40,55 +30,6 @@ def init_checker(f):
         return f(self, *args, **kwargs)
 
     return _init_check
-
-
-def make_and_commit_state(f):
-    """
-    Build a writeable State instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
-    Function `f` should have at least two kwargs, `user` and `state`. After executing `f`, the `state`
-    will be commited to the BS repo.
-    """
-
-    @wraps(f)
-    def _make_and_commit_check(self, *args, **kwargs):
-        state = kwargs.pop('state', None)
-        user = kwargs.pop('user', None)
-        if state is None:
-            state = self.client.get_state(user=user)
-
-        kwargs['state'] = state
-        r = f(self, *args, **kwargs)
-        self.client.commit_state(state, msg=self._generate_commit_message(f, *args, **kwargs))
-        return r
-
-    return _make_and_commit_check
-
-
-def make_state_with_func(f):
-    @wraps(f)
-    def _make_state_with_func(self, *args, **kwargs):
-        state: binsync.State = kwargs.pop('state', None)
-        user = kwargs.pop('user', None)
-        if state is None:
-            state = self.client.get_state(user=user)
-
-        # a comment
-        if "func_addr" in kwargs:
-            func_addr = kwargs["func_addr"]
-            if func_addr and not state.get_function(func_addr):
-                state.functions[func_addr] = Function(func_addr, self.get_func_size(func_addr))
-        # a func_header or stack_var
-        else:
-            func_addr = args[0]
-            if not state.get_function(func_addr):
-                state.functions[func_addr] = Function(func_addr, self.get_func_size(func_addr))
-
-        kwargs['state'] = state
-        r = f(self, *args, **kwargs)
-        self.client.commit_state(state, msg=self._generate_commit_message(f, *args, **kwargs))
-        return r
-
-    return _make_state_with_func
 
 
 def make_ro_state(f):
@@ -135,6 +76,25 @@ class SyncLevel:
 #
 
 class BinSyncController:
+    ARTIFACT_SET_MAP = {
+        Function: State.set_function,
+        FunctionHeader: State.set_function_header,
+        StackVariable: State.set_stack_variable,
+        Comment: State.set_comment,
+        GlobalVariable: State.set_global_var,
+        Struct: State.set_struct,
+        Enum: State.set_enum
+    }
+
+    ARTIFACT_GET_MAP = {
+        Function: State.get_function,
+        StackVariable: State.get_stack_variable,
+        Comment: State.get_comment,
+        GlobalVariable: State.get_global_var,
+        Struct: State.get_struct,
+        Enum: State.get_enum
+    }
+
     """
     The BinSync Controller is the main interface for syncing with the BinSync Client which preforms git tasks
     such as pull and push. In the Controller higher-level tasks are done such as updating UI with changes
@@ -447,6 +407,81 @@ class BinSyncController:
         return None
 
     #
+    # Client API & Shortcuts
+    #
+
+    def lift_artifact(self, artifact: Artifact) -> Artifact:
+        return self.artifact_lifer.lift(artifact)
+
+    def lower_artifact(self, artifact: Artifact) -> Artifact:
+        return self.artifact_lifer.lower(artifact)
+
+    def get_state(self, user=None, version=None, priority=None, no_cache=False) -> State:
+        return self.client.get_state(user=user, version=version, priority=priority, no_cache=no_cache)
+
+    @init_checker
+    def pull_artifact(self, type_: Artifact, *identifiers, user=None, state=None) -> Optional[Artifact]:
+        if not identifiers:
+            return None
+
+        try:
+            get_artifact_func = self.ARTIFACT_GET_MAP[type_]
+        except KeyError:
+            _l.info(f"Attempting to pull an unsupported Artifact of type {type_} with {identifiers}")
+            return None
+
+        # assure a state exists
+        if not state:
+            state = self.get_state(user=user)
+
+        artifact = get_artifact_func(state, *identifiers)
+        if not artifact:
+            return None
+
+        return self.lower_artifact(artifact)
+
+    def push_artifact(self, artifact: Artifact, user=None, state=None, commit_msg=None, api_set=False) -> bool:
+        """
+        Every pusher artifact does three things
+        1. Get the state setter function based on the class of the Obj
+        2. Get the commit msg of the obj based on the class
+        3. Lift the obj based on the Controller lifters
+
+        @param artifact:
+        @param user:
+        @param state:
+        @return:
+        """
+        if not artifact:
+            return False
+
+        try:
+            set_artifact_func = self.ARTIFACT_SET_MAP[artifact.__class__]
+        except KeyError:
+            _l.info(f"Attempting to push an unsupported Artifact of type {artifact}")
+            return False
+
+        # assure state exists
+        if not state:
+            state = self.get_state(user=user)
+
+        # assure function existence for artifacts requiring a function
+        if isinstance(artifact, (FunctionHeader, StackVariable, Comment)):
+            func_addr = artifact.func_addr if hasattr(artifact, "func_addr") else artifact.addr
+            if func_addr:
+                self.push_artifact(Function(func_addr, self.get_func_size(func_addr)), state=state)
+
+        # lift artifact into standard BinSync format
+        artifact = self.lift_artifact(artifact)
+
+        # set the artifact in the target state, likely master
+        was_set = set_artifact_func(state, artifact, set_last_change=not api_set)
+        if was_set:
+            self.client.commit_state(state, msg=commit_msg or artifact.commit_msg)
+
+        return was_set
+
+    #
     # Fillers:
     # A filler function is generally responsible for pulling down data from a specific user state
     # and reflecting those changes in decompiler view (like the text on the screen). Normally, these changes
@@ -574,7 +609,6 @@ class BinSyncController:
 
         This process supports: functions (header, stack vars), structs, and global vars
         TODO:
-        - support for comments
         - support for enums
         - refactor fill_function to stop attempting to set master state after we do
         -
@@ -583,137 +617,42 @@ class BinSyncController:
         @return:
         """
 
-        _l.info(f"Staring a magic sync with a preference for {preference_user}")
+        _l.info(f"Staring a Magic Sync with a preference for {preference_user}")
         # re-order users for the prefered user to be at the front of the queue (if they exist)
         all_users = list(self.usernames(priority=SchedSpeed.FAST))
         preference_user = preference_user if preference_user else self.client.master_user
         all_users.remove(preference_user)
         master_state = self.client.get_state(user=self.client.master_user, priority=SchedSpeed.FAST)
 
-        #
-        # structs
-        #
+        target_artifacts = {
+            Struct: self.fill_struct,
+            Comment: lambda *x, **y: None,
+            Function: self.fill_function,
+            GlobalVariable: self.fill_global_var
+        }
 
-        _l.info(f"Magic Syncing Structs...")
-        pref_state = self.client.get_state(user=preference_user, priority=SchedSpeed.FAST)
-        for struct_name in self.get_all_changed_structs():
-            _l.info(f"Looking at strunct {struct_name}")
-            pref_struct = pref_state.get_struct(struct_name)
-            for user in all_users:
-                user_state = self.client.get_state(user=user, priority=SchedSpeed.FAST)
-                user_struct = user_state.get_struct(user)
+        for artifact_type, filler_func in target_artifacts.items():
+            _l.info(f"Magic Syncing artifacts of type {artifact_type.__name__} now...")
+            pref_state = self.get_state(user=preference_user, priority=SchedSpeed.FAST)
+            for identifier in self.changed_artifacts_of_type(artifact_type):
+                pref_art = self.pull_artifact(artifact_type, identifier, state=pref_state)
+                for user in all_users:
+                    user_state = self.get_state(user=user, priority=SchedSpeed.FAST)
+                    user_art = self.pull_artifact(artifact_type, identifier, state=user_state)
 
-                if not user_struct:
-                    continue
+                    if not user_art:
+                        continue
 
-                if not pref_struct:
-                    pref_struct = user_struct.copy()
-                    continue
+                    if not pref_art:
+                        pref_art = user_art.copy()
 
-                pref_struct = Struct.from_nonconflicting_merge(pref_struct, user_struct)
-                pref_struct.last_change = None
+                    pref_art = artifact_type.from_nonconflicting_merge(pref_art, user_art)
+                    pref_art.last_change = None
 
-            if pref_struct:
-                pref_struct = self.artifact_lifer.lift(pref_struct)
-                master_state.structs[struct_name] = pref_struct
+                self.push_artifact(pref_art, state=master_state, commit_msg=f"Magic Synced {pref_art}")
+                filler_func(identifier, state=master_state)
 
-            self.fill_struct(struct_name, state=master_state)
-        self.client.commit_state(master_state, msg="Magic Sync Structs Merged")
-
-        #
-        # functions
-        #
-
-        master_state = self.client.get_state(user=self.client.master_user, priority=SchedSpeed.FAST)
-
-        _l.info(f"Magic Syncing Functions...")
-        pref_state = self.client.get_state(user=preference_user, priority=SchedSpeed.FAST)
-        for func_addr in self.get_all_changed_funcs():
-            _l.info(f"Looking at func {hex(func_addr)}")
-            pref_func = pref_state.get_function(addr=func_addr)
-            for user in all_users:
-                user_state = self.client.get_state(user=user, priority=SchedSpeed.FAST)
-                user_func = user_state.get_function(func_addr)
-
-                if not user_func:
-                    continue
-
-                if not pref_func:
-                    pref_func = user_func.copy()
-                    continue
-
-                pref_func = Function.from_nonconflicting_merge(pref_func, user_func)
-                pref_func.last_change = None
-
-            pref_func = self.artifact_lifer.lift(pref_func)
-            master_state.functions[pref_func.addr] = pref_func
-            self.fill_function(pref_func.addr, state=master_state)
-
-        self.client.commit_state(master_state, msg="Magic Sync Funcs Merged")
-
-        #
-        # global vars
-        #
-
-        _l.info(f"Magic Syncing Global Vars...")
-        master_state = self.client.get_state(user=self.client.master_user, priority=SchedSpeed.FAST)
-        pref_state = self.client.get_state(user=preference_user, priority=SchedSpeed.FAST)
-        for gvar_addr in self.get_all_changed_global_vars():
-            pref_gvar = pref_state.get_global_var(gvar_addr)
-            for user in all_users:
-                user_state = self.client.get_state(user=user, priority=SchedSpeed.FAST)
-                user_gvar = user_state.get_global_var(gvar_addr)
-
-                if not user_gvar:
-                    continue
-
-                if not pref_gvar:
-                    pref_gvar = user_gvar.copy()
-                    continue
-
-                pref_gvar = GlobalVariable.from_nonconflicting_merge(pref_gvar, user_gvar)
-                pref_gvar.last_change = None
-
-            pref_gvar = self.artifact_lifer.lift(pref_gvar)
-            master_state.global_vars[pref_gvar.addr] = pref_gvar
-            self.fill_global_var(pref_gvar.addr, state=master_state)
-
-        self.client.commit_state(master_state, msg="Magic Sync Global Vars Merged")
         _l.info(f"Magic Syncing Completed!")
-
-    #
-    # Pushers
-    #
-
-    @init_checker
-    @make_and_commit_state
-    def push_comment(self, *args, user=None, state=None, **kwargs):
-        raise NotImplementedError
-
-    @init_checker
-    @make_state_with_func
-    def push_function_header(self, *args, user=None, state=None, **kwargs):
-        raise NotImplementedError
-
-    @init_checker
-    @make_state_with_func
-    def push_stack_variable(self, *args, user=None, state=None, **kwargs):
-        raise NotImplementedError
-
-    @init_checker
-    @make_and_commit_state
-    def push_struct(self, *args, user=None, state=None, **kwargs):
-        raise NotImplementedError
-
-    @init_checker
-    @make_and_commit_state
-    def push_global_var(self, *args, user=None, state=None, **kwargs):
-        raise NotImplementedError
-
-    @init_checker
-    @make_and_commit_state
-    def push_enum(self, *args, user=None, state=None, **kwargs):
-        raise NotImplementedError
 
     #
     # Force Push
@@ -736,10 +675,8 @@ class BinSyncController:
             return False
 
         master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
-        func = self.artifact_lifer.lift(func)
-        master_state.functions[func.addr] = func
-        self.client.commit_state(master_state, msg=f"Force pushed function {hex(func.addr)}")
-        return True
+        pushed = self.push_artifact(func, state=master_state, commit_msg=f"Forced pushed function {func}")
+        return pushed
 
     @init_checker
     def force_push_global_artifact(self, lookup_item):
@@ -756,81 +693,8 @@ class BinSyncController:
 
         master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
         global_art = self.artifact_lifer.lift(global_art)
-        if isinstance(global_art, GlobalVariable):
-            master_state.global_vars[global_art.addr] = global_art
-        elif isinstance(global_art, Struct):
-            master_state.structs[global_art.name] = global_art
-        elif isinstance(global_art, Enum):
-            master_state.enums[global_art.name] = global_art
-        else:
-            return False
-
-        self.client.commit_state(
-            master_state, msg=f"Force pushed global artifact {global_art.name or hex(global_art.addr)}"
-        )
-        return True
-
-    #
-    # Pullers
-    #
-
-    @init_checker
-    @make_ro_state
-    def pull_function(self, func_addr, user=None, state=None) -> Optional[Function]:
-        if not func_addr:
-            return None
-
-        return state.get_function(func_addr)
-
-    @init_checker
-    @make_ro_state
-    def pull_stack_variables(self, func_addr, user=None, state=None) -> Dict[int, StackVariable]:
-        return state.get_stack_variables(func_addr)
-
-    @init_checker
-    @make_ro_state
-    def pull_stack_variable(self, func_addr, offset, user=None, state=None) -> StackVariable:
-        return state.get_stack_variable(func_addr, offset)
-
-    @init_checker
-    @make_ro_state
-    def pull_func_comments(self, func_addr, user=None, state=None) -> Dict[int, Comment]:
-        return state.get_func_comments(func_addr)
-
-    @init_checker
-    @make_ro_state
-    def pull_comment(self, addr, user=None, state=None) -> Comment:
-        return state.get_comment(addr)
-
-    @init_checker
-    @make_ro_state
-    def pull_comments(self, user=None, state=None) -> Comment:
-        return state.comments()
-
-    @init_checker
-    @make_ro_state
-    def pull_struct(self, struct_name, user=None, state=None) -> Struct:
-        return state.get_struct(struct_name)
-
-    @init_checker
-    @make_ro_state
-    def pull_structs(self, user=None, state=None) -> List[Struct]:
-        return state.get_structs()
-
-    @init_checker
-    @make_ro_state
-    def pull_global_var(self, addr, user=None, state=None) -> GlobalVariable:
-        return state.get_global_var(addr)
-
-    @init_checker
-    @make_ro_state
-    def pull_enum(self, enum_name, user=None, state=None) -> Enum:
-        return state.get_enum(enum_name)
-
-    @init_checker
-    @make_ro_state
-    def pull_enums(self, user=None, state=None) -> List[Enum]:
-        return state.get_enums()
+        pushed = self.push_artifact(global_art, state=master_state, commit_msg=f"Force pushed {global_art}")
+        return pushed
 
     #
     # Utils
@@ -857,73 +721,25 @@ class BinSyncController:
 
         return new_func
 
-    @staticmethod
-    def get_default_type_str(size):
-        if size == 1:
-            return "unsigned char"
-        elif size == 2:
-            return "unsigned short"
-        elif size == 4:
-            return "unsigned int"
-        elif size == 8:
-            return "unsigned long long"
-        else:
-            raise Exception("Unable to decide default type string!")
+    def changed_artifacts_of_type(self, type_: Artifact):
+        prop_map = {
+            Function: "functions",
+            Comment: "comments",
+            GlobalVariable: "global_vars",
+            Struct: "structs"
+        }
 
-    def _generate_commit_message(self, pusher, *args, **kwargs):
-        from_user = kwargs.get("user", None)
-        msg = "Synced " if from_user else "Updated "
+        try:
+            prop_name = prop_map[type_]
+        except KeyError:
+            _l.info(f"Attempted to get changed artifacts of type {type_} which is unsupported")
+            return set()
 
-        if pusher.__qualname__ == self.push_function_header.__qualname__:
-            addr = args[0]
-            sync_type = "function"
-            sync_data = hex(addr)
-        elif pusher.__qualname__ == self.push_comment.__qualname__:
-            addr = args[0]
-            sync_type = "comment"
-            sync_data = hex(addr)
-        elif pusher.__qualname__ == self.push_stack_variable.__qualname__:
-            func_addr = args[0]
-            offset = args[1]
-            sync_type = "stack_var"
-            sync_data = f"{hex(offset)}@{hex(func_addr)}"
-        elif pusher.__qualname__ == self.push_struct.__qualname__:
-            struct_name = args[0].name
-            sync_type = "struct"
-            sync_data = struct_name
-        else:
-            sync_type = ""
-            sync_data = ""
-
-        msg += f"{sync_type}:{sync_data}"
-        msg += f"from {from_user}" if from_user else ""
-        if not sync_data:
-            msg = "Generic Update"
-        return msg
-
-    def get_all_changed_funcs(self):
-        known_funcs = set()
+        known_arts = set()
         for username in self.usernames(priority=SchedSpeed.FAST):
             state = self.client.get_state(user=username, priority=SchedSpeed.FAST)
-            for func_addr in state.functions:
-                known_funcs.add(func_addr)
+            artifact_dict: Dict = getattr(state, prop_name)
+            for identifier in artifact_dict:
+                known_arts.add(identifier)
 
-        return known_funcs
-
-    def get_all_changed_structs(self):
-        known_structs = set()
-        for username in self.usernames(priority=SchedSpeed.FAST):
-            state = self.client.get_state(user=username, priority=SchedSpeed.FAST)
-            for struct_name in state.structs:
-                known_structs.add(struct_name)
-
-        return known_structs
-
-    def get_all_changed_global_vars(self):
-        known_gvars = set()
-        for username in self.usernames(priority=SchedSpeed.FAST):
-            state = self.client.get_state(user=username, priority=SchedSpeed.FAST)
-            for offset in state.global_vars:
-                known_gvars.add(offset)
-
-        return known_gvars
+        return known_arts

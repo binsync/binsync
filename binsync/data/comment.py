@@ -7,16 +7,18 @@ class Comment(Artifact):
     __slots__ = (
         "last_change",
         "addr",
+        "func_addr",
         "comment",
         "decompiled",
 
     )
 
-    def __init__(self, addr, comment,  decompiled=False, last_change=None):
+    def __init__(self, addr, comment,  func_addr=None, decompiled=False, last_change=None):
         super(Comment, self).__init__(last_change=last_change)
         self.comment = comment  # type: str
         self.decompiled = decompiled  # TODO: use this in other places!
         self.addr = addr  # type: int
+        self.func_addr = func_addr
 
     def __str__(self):
         return f"<Comment: @{hex(self.addr)} len={len(self.comment)}>"
@@ -53,6 +55,16 @@ class Comment(Artifact):
         return Comment(
             self.addr,
             self.comment,
+            func_addr=self.func_addr,
             decompiled=self.decompiled,
             last_change=self.last_change
         )
+
+    @classmethod
+    def from_nonconflicting_merge(cls, obj1: "Comment", obj2: "Comment") -> "Comment":
+        if not obj2 or obj1 == obj2:
+            return obj1.copy()
+
+        merge_comment = obj1.copy()
+        merge_comment.comment += "\n" + obj2.comment
+        return merge_comment

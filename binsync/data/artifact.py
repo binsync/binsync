@@ -89,6 +89,10 @@ class Artifact:
     def copy(self):
         pass
 
+    @property
+    def commit_msg(self) -> str:
+        return f"Updated {self}"
+
     @classmethod
     def parse(cls, s):
         """
@@ -116,6 +120,9 @@ class Artifact:
 
     @classmethod
     def from_nonconflicting_merge(cls, obj1: "Artifact", obj2: "Artifact"):
+        if not obj2 or obj1 == obj2:
+            return obj1.copy()
+
         obj_diff = obj1.diff(obj2)
         merge_obj = obj1.copy()
 
