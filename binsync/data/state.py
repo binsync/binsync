@@ -530,7 +530,7 @@ class State:
 
         return cmt
 
-    def get_func_comments(self, func_addr) -> Dict[Comment]:
+    def get_func_comments(self, func_addr) -> Dict[int, Comment]:
         try:
             func = self.functions[func_addr]
         except KeyError:
