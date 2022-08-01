@@ -1,7 +1,16 @@
 import sys
 
-from PySide2.QtWidgets import *
-from PySide2.QtCore import Qt, QSize, QEvent
+from binsync.common.ui.qt_objects import (
+    QEvent,
+    QDialogButtonBox,
+    QGridLayout,
+    QLabel,
+    QDialog,
+    QMenu,
+    QPushButton,
+    QMainWindow,
+    QApplication
+)
 from binsync import StackVariable, StackOffsetType
 import random
 
