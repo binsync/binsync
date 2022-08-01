@@ -23,7 +23,7 @@ l = logging.getLogger(__name__)
 
 class QContextStatusBar(QStatusBar):
     def __init__(self, controller, parent = None):
-        QStatusBar.__init__(self, parent)
+        super().__init__(parent)
         self.controller = controller
 
     def contextMenuEvent(self, event):
