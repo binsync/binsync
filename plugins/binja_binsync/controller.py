@@ -143,8 +143,8 @@ class BinjaBinSyncController(BinSyncController):
         Grab all relevant information from the specified user and fill the @bn_func.
         """
         updates = False
-        bn_func = self.bv.get_function_at(func_addr)
-        sync_func = self.pull_artifact(Function, func_addr, user=user, state=state)
+        bn_func = self.bv.get_function_at(self.artifact_lifer.lower_addr(func_addr))
+        sync_func = state.get_function(func_addr)
         if sync_func is None or bn_func is None:
             return
 
@@ -244,10 +244,7 @@ class BinjaBinSyncController(BinSyncController):
         # comments
         #
 
-        sync_cmts = {
-            cmt_addr: self.pull_artifact(Comment, cmt_addr) for cmt_addr in state.comments
-            if sync_func.addr <= cmt_addr <= sync_func.addr + sync_func.size
-        }
+        sync_cmts = self.pull_artifact(Comment, func_addr, many=True, state=state, user=user)
         for addr, comment in sync_cmts.items():
             if not comment:
                 continue

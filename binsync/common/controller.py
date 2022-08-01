@@ -57,6 +57,7 @@ def make_ro_state(f):
 
 # https://stackoverflow.com/questions/10926328
 BUSY_LOOP_COOLDOWN = 0.5
+GET_MANY = True
 
 
 class SyncControlStatus:
@@ -76,6 +77,7 @@ class SyncLevel:
 #
 
 class BinSyncController:
+
     ARTIFACT_SET_MAP = {
         Function: State.set_function,
         FunctionHeader: State.set_function_header,
@@ -89,10 +91,14 @@ class BinSyncController:
     ARTIFACT_GET_MAP = {
         Function: State.get_function,
         StackVariable: State.get_stack_variable,
+        (StackVariable, GET_MANY): State.get_stack_variables,
         Comment: State.get_comment,
+        (Comment, GET_MANY): State.get_func_comments,
         GlobalVariable: State.get_global_var,
         Struct: State.get_struct,
-        Enum: State.get_enum
+        (Struct, GET_MANY): State.get_structs,
+        Enum: State.get_enum,
+        (Enum, GET_MANY): State.get_enums,
     }
 
     """
@@ -420,12 +426,12 @@ class BinSyncController:
         return self.client.get_state(user=user, version=version, priority=priority, no_cache=no_cache)
 
     @init_checker
-    def pull_artifact(self, type_: Artifact, *identifiers, user=None, state=None) -> Optional[Artifact]:
+    def pull_artifact(self, type_: Artifact, *identifiers, many=False, user=None, state=None) -> Optional[Artifact]:
         if not identifiers:
             return None
 
         try:
-            get_artifact_func = self.ARTIFACT_GET_MAP[type_]
+            get_artifact_func = self.ARTIFACT_GET_MAP[type_] if not many else self.ARTIFACT_GET_MAP[(type_, GET_MANY)]
         except KeyError:
             _l.info(f"Attempting to pull an unsupported Artifact of type {type_} with {identifiers}")
             return None
@@ -715,6 +721,7 @@ class BinSyncController:
         elif self.sync_level == SyncLevel.MERGE:
             _l.warning("Manual Merging is not currently supported, using non-conflict syncing...")
             new_func = Function.from_nonconflicting_merge(master_func, sync_func)
+            new_func = self.lower_artifact(sync_func)
 
         else:
             raise Exception("Your BinSync Client has an unsupported Sync Level activated")

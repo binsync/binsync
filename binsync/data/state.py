@@ -530,17 +530,15 @@ class State:
 
         return cmt
 
-    def get_comments(self) -> Dict[int, Comment]:
-        return self.comments
-
-    def get_func_comments(self, func_addr):
+    def get_func_comments(self, func_addr) -> Dict[Comment]:
         try:
             func = self.functions[func_addr]
         except KeyError:
             return {}
 
         return {
-            addr: cmt for addr, cmt in self.comments.items() if addr <= func.addr + func.size
+            addr: cmt for addr, cmt in self.comments.items()
+            if func.addr <= addr <= func.addr + func.size
         }
 
     def get_patch(self, addr) -> Patch:
@@ -667,11 +665,3 @@ class State:
                 return func
         else:
             return None
-
-    def find_latest_comment_for_func(self, func: Function) -> Optional[Comment]:
-        cmts = [cmt for addr, cmt in self.comments.items() if addr <= func.addr + func.size]
-        if not cmts:
-            return None
-
-        lastest_cmt = max(cmts, key=lambda c: c.last_change if c.last_change else -1)
-        return lastest_cmt

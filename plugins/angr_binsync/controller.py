@@ -13,7 +13,9 @@ from binsync.common.controller import (
     init_checker,
     make_ro_state,
 )
-from binsync.data import FunctionHeader, StackOffsetType
+from binsync.data import (
+    FunctionHeader, StackOffsetType, Comment, StackVariable
+)
 
 from .artifact_lifter import AngrArtifactLifter
 
@@ -90,12 +92,13 @@ class AngrBinSyncController(BinSyncController):
     @init_checker
     @make_ro_state
     def fill_function(self, func_addr, user=None, state=None):
-        func = self._instance.kb.functions[self.rebase_addr(func_addr, up=True)]
+        func = self._instance.kb.functions[self.artifact_lifer.lower_addr(func_addr)]
 
         # re-decompile a function if needed
         decompilation = self.decompile_function(func)
 
-        sync_func: binsync.data.Function = self.pull_artifact(Function, func.addr, user=user)
+        # use a lifted version of stat function go generate function
+        sync_func: Function = state.get_function(func_addr)
         if sync_func is None:
             # the function does not exist for that user's state
             return False
@@ -123,7 +126,7 @@ class AngrBinSyncController(BinSyncController):
         # Comments
         #
 
-        for addr, cmt in self.pull_func_comments(self.rebase_addr(func_addr)).items():
+        for addr, cmt in self.pull_artifact(Comment, func_addr, many=True, user=user, state=state).items():
             if not cmt or not cmt.comment:
                 continue
 
@@ -140,7 +143,7 @@ class AngrBinSyncController(BinSyncController):
                 self._instance.kb.comments[cmt.addr] = cmt.comment
 
         # ==== Stack Vars ==== #
-        sync_vars = self.pull_stack_variables(self.rebase_addr(func.addr), user=user)
+        sync_vars = self.pull_artifact(StackVariable, func_addr, many=True, state=state, user=user)
         for offset, sync_var in sync_vars.items():
             code_var = AngrBinSyncController.find_stack_var_in_codegen(decompilation, offset)
             if code_var:

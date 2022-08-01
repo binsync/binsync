@@ -237,10 +237,8 @@ class IDABinSyncController(BinSyncController):
         @return:
         """
         data_changed = False
-        structs = {
-            name: self.pull_artifact(Struct, name, state=state) for name in state.structs
-        }
 
+        structs = self.pull_artifact(Struct, many=True, state=state)
         for _, struct in structs.items():
             data_changed |= compat.set_ida_struct(struct, self)
 
@@ -279,7 +277,7 @@ class IDABinSyncController(BinSyncController):
         data_changed = False
 
         # sanity check this function
-        ida_func = ida_funcs.get_func(func_addr)
+        ida_func = ida_funcs.get_func(self.artifact_lifer.lower_addr(func_addr))
         if ida_func is None:
             _l.warning(f"IDA function does not exist on sync for \'{user}\' on function {hex(func_addr)}.")
             return data_changed
@@ -289,7 +287,7 @@ class IDABinSyncController(BinSyncController):
         #
 
         # function should exist in pulled state
-        binsync_func: Function = self.pull_artifact(Function, func_addr, state=state)
+        binsync_func: Function = state.get_function(func_addr)
         if binsync_func is None:
             return data_changed
 
@@ -323,15 +321,8 @@ class IDABinSyncController(BinSyncController):
         # COMMENTS
         #
 
-        #TODO: replace this bit of code with a conveinence func in State
-        sync_cmts = {
-            cmt_addr: self.pull_artifact(Comment, cmt_addr) for cmt_addr in state.comments
-            if binsync_func.addr <= cmt_addr <= binsync_func.addr + binsync_func.size
-        }
+        sync_cmts = self.pull_artifact(Comment, func_addr, many=True, state=state, user=user)
         for addr, cmt in sync_cmts.items():
-            if not cmt:
-                continue
-
             self.inc_api_count()
             res = compat.set_ida_comment(addr, cmt.comment, decompiled=cmt.decompiled)
             if not res:
@@ -389,7 +380,7 @@ class IDABinSyncController(BinSyncController):
             # NOTE: api_count is incremented inside the function
             data_changed |= compat.set_stack_vars_types(stack_vars_to_set, ida_code_view, self)
 
-        compat.refresh_pseudocode_view(binsync_func.addr)
+        compat.refresh_pseudocode_view(self.artifact_lifer.lower_addr(binsync_func.addr))
         if data_changed:
             _l.info(f"New data synced for \'{user}\' on function {hex(ida_func.start_ea)}.")
         else:
