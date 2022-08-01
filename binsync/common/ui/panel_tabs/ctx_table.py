@@ -10,6 +10,8 @@ from binsync.common.ui.qt_objects import (
     QTableWidgetItem,
 )
 from binsync.common.ui.utils import QNumericItem, friendly_datetime
+from binsync.data import State
+from binsync.common.ui.manual_merge import MergeWin, generate_random_vars
 
 l = logging.getLogger(__name__)
 
@@ -106,6 +108,7 @@ class QCTXTable(QTableWidget):
             return
         username = item.text()
         menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=username))
+        menu.addAction("Manual Merge", lambda: self._open_merge_window(func_addr, user=username))
 
         menu.popup(self.mapToGlobal(event.pos()))
 
@@ -129,3 +132,28 @@ class QCTXTable(QTableWidget):
             self.items.append(
                 QCTXItem(user.name, func.name, func.last_change, 0)
             )
+    def _open_merge_window(self, func_addr, user=None):
+        master_state: State = self.controller.client.get_state()
+        master_func = master_state.get_function(func_addr)
+        if not master_func:
+            return
+
+        other_state: State = self.controller.client.get_state(user=user)
+        other_func = other_state.get_function(func_addr)
+        if not other_func:
+            return
+
+        # get the stack vars
+        merge_dict = {}
+        for off, sv in master_func.stack_vars.items():
+            try:
+                other_var = other_func.stack_vars[off]
+            except KeyError:
+                continue
+
+            merge_dict[off] = (sv, other_var)
+
+        merge_win = MergeWin(merge_dict)
+        merge_win.exec_()
+
+        l.info(merge_win.final)

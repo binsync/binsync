@@ -680,7 +680,6 @@ class BinSyncController:
 
         self.client.commit_state(master_state, msg="Magic Sync Global Vars Merged")
         _l.info(f"Magic Syncing Completed!")
-
     #
     # Pushers
     #

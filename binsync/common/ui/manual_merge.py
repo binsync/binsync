@@ -167,32 +167,3 @@ class MergeWin(QDialog):
         print("the user pressed the 'okay' button \n")
         print("Final Dictionary:")
         print(self.final)
-
-
-
-class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
-
-        self.setWindowTitle("Main Window")
-
-        startButton = QPushButton("Press here to start")
-        startButton.clicked.connect(self.start_code)
-        self.setCentralWidget(startButton)
-
-
-    def start_code(self):
-        print("User clicked the Start Button")
-
-
-        win1 = MergeWin(generate_random_vars())
-        win1.exec_()
-
-
-app = QApplication(sys.argv)
-
-main = MainWindow()
-
-main.show()
-app.exec_()
-

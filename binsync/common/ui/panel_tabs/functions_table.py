@@ -11,6 +11,7 @@ from binsync.common.ui.qt_objects import (
     QTableWidgetItem,
 )
 from binsync.common.ui.utils import QNumericItem, friendly_datetime
+from binsync.common.ui.manual_merge import MergeWin, generate_random_vars
 from binsync.data import Function
 from binsync.data.state import State
 from binsync.core.scheduler import SchedSpeed
@@ -103,6 +104,7 @@ class QFunctionTable(QTableWidget):
         func_addr = item.data(Qt.UserRole)
         
         menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=self.item(selected_row, 2).text()))
+        menu.addAction("Manual Merge", lambda: self._open_merge_window(func_addr, user=self.item(selected_row, 2).text()))
         from_menu = menu.addMenu("Sync from...")
         
         for username in self._get_valid_users_for_func(func_addr):
@@ -153,5 +155,28 @@ class QFunctionTable(QTableWidget):
         row = self.items[row_idx]
         self.controller.goto_address(row.addr)
 
+    def _open_merge_window(self, func_addr, user=None):
+        master_state: State = self.controller.client.get_state()
+        master_func = master_state.get_function(func_addr)
+        if not master_func:
+            return
 
+        other_state: State = self.controller.client.get_state(user=user)
+        other_func = other_state.get_function(func_addr)
+        if not other_func:
+            return
 
+        # get the stack vars
+        merge_dict = {}
+        for off, sv in master_func.stack_vars.items():
+            try:
+                other_var = other_func.stack_vars[off]
+            except KeyError:
+                continue
+
+            merge_dict[off] = (sv, other_var)
+
+        merge_win = MergeWin(merge_dict)
+        merge_win.exec_()
+
+        l.info(merge_win.final)
