@@ -98,7 +98,7 @@ class MergeWin(QDialog):
                 type_.setStyleSheet("color: red")
 
             if self.sv1.name != self.sv2.name:
-                type_.setStyleSheet("color: red")
+                name_.setStyleSheet("color: red")
 
 
             # creates a final dictionary that has all the StackVariables (type, name) recorded; dict is updated after user makes changes
