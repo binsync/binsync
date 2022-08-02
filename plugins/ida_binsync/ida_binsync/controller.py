@@ -35,9 +35,7 @@ import ida_funcs
 import ida_kernwin
 
 import binsync
-from binsync.common.controller import (
-    BinSyncController, make_and_commit_state, make_ro_state, init_checker, make_state_with_func
-)
+from binsync.common.controller import BinSyncController, init_checker, make_ro_state
 from binsync import (
     StackVariable, StackOffsetType, Function, FunctionHeader, Struct, Comment, GlobalVariable, Enum, State, Patch
 )
@@ -163,7 +161,7 @@ class IDABinSyncController(BinSyncController):
 
     def make_controller_cmd(self, cmd_func, *args, **kwargs):
         with self.queue_lock:
-            if cmd_func == self.push_struct:
+            if isinstance(args[0], Struct):
                 self.cmd_queue[args[0].name] = (cmd_func, args, kwargs)
             else:
                 self.cmd_queue[time.time()] = (cmd_func, args, kwargs)
@@ -209,12 +207,11 @@ class IDABinSyncController(BinSyncController):
     def fill_struct(self, struct_name, user=None, state=None):
         data_changed = False
 
-        pulled_structs: List[Struct] = self.pull_structs(user=user, state=state)
-        if len(pulled_structs) <= 0:
-            _l.info(f"User {user} has no structs to sync!")
-            return 0
+        for struct_name in state.structs:
+            struct: Struct = self.pull_artifact(Struct, struct_name, state=state)
+            if not struct:
+                continue
 
-        for struct in pulled_structs:
             if struct.name == struct_name:
                 compat.set_ida_struct(struct, self)
                 compat.set_ida_struct_member_types(struct, self)
@@ -240,18 +237,12 @@ class IDABinSyncController(BinSyncController):
         @return:
         """
         data_changed = False
-        # sanity check, the desired user has some structs to sync
-        pulled_structs: List[Struct] = self.pull_structs(user=user, state=state)
-        if len(pulled_structs) <= 0:
-            _l.info(f"User {user} has no structs to sync!")
-            return 0
 
-        # convert each binsync struct into an ida struct and set it in the GUI
-        for struct in pulled_structs:
+        structs = self.pull_artifact(Struct, many=True, state=state)
+        for _, struct in structs.items():
             data_changed |= compat.set_ida_struct(struct, self)
 
-        # set the type of each member in the structs
-        for struct in pulled_structs:
+        for _, struct in structs.items():
             data_changed |= compat.set_ida_struct_member_types(struct, self)
 
         return data_changed
@@ -260,7 +251,7 @@ class IDABinSyncController(BinSyncController):
     @make_ro_state
     def fill_global_var(self, var_addr, user=None, state=None):
         changed = False
-        global_var = self.pull_global_var(var_addr, user=user)
+        global_var: GlobalVariable = self.pull_artifact(GlobalVariable, var_addr, state=state)
         if global_var and global_var.name:
             self.inc_api_count()
             changed = compat.set_global_var_name(var_addr, global_var.name)
@@ -286,7 +277,7 @@ class IDABinSyncController(BinSyncController):
         data_changed = False
 
         # sanity check this function
-        ida_func = ida_funcs.get_func(func_addr)
+        ida_func = ida_funcs.get_func(self.artifact_lifer.lower_addr(func_addr))
         if ida_func is None:
             _l.warning(f"IDA function does not exist on sync for \'{user}\' on function {hex(func_addr)}.")
             return data_changed
@@ -296,7 +287,7 @@ class IDABinSyncController(BinSyncController):
         #
 
         # function should exist in pulled state
-        binsync_func = self.pull_function(func_addr, user=user, state=state)  # type: Function
+        binsync_func: Function = state.get_function(func_addr)
         if binsync_func is None:
             return data_changed
 
@@ -330,7 +321,7 @@ class IDABinSyncController(BinSyncController):
         # COMMENTS
         #
 
-        sync_cmts = self.pull_func_comments(func_addr, user=user, state=state)
+        sync_cmts = self.pull_artifact(Comment, func_addr, many=True, state=state, user=user)
         for addr, cmt in sync_cmts.items():
             self.inc_api_count()
             res = compat.set_ida_comment(addr, cmt.comment, decompiled=cmt.decompiled)
@@ -389,92 +380,13 @@ class IDABinSyncController(BinSyncController):
             # NOTE: api_count is incremented inside the function
             data_changed |= compat.set_stack_vars_types(stack_vars_to_set, ida_code_view, self)
 
-        compat.refresh_pseudocode_view(binsync_func.addr)
+        compat.refresh_pseudocode_view(self.artifact_lifer.lower_addr(binsync_func.addr))
         if data_changed:
             _l.info(f"New data synced for \'{user}\' on function {hex(ida_func.start_ea)}.")
         else:
             _l.info(f"No new data was set either by failure or lack of differences.")
 
         return data_changed
-
-    #
-    #   Pushers
-    #
-
-    @init_checker
-    @make_state_with_func
-    def push_comment(self, addr, comment, decompiled=False, func_addr=None, user=None, state=None, api_set=False):
-        sync_cmt = binsync.data.Comment(addr, comment, decompiled=decompiled)
-        sync_cmt = self.artifact_lifer.lift(sync_cmt)
-        state.set_comment(sync_cmt, set_last_change=not api_set)
-
-    @init_checker
-    @make_state_with_func
-    def push_comments(self, cmt_list: List[Comment], func_addr=None, user=None, state=None, api_set=False):
-        for cmt in cmt_list:
-            cmt = self.artifact_lifer.lift(cmt)
-            state.set_comment(cmt)
-
-    '''
-    # TODO: Just pass along the offset. Why the whole patch ??
-    @init_checker
-    @make_state
-    def push_patch(self, patch, user=None, state=None, api_set=False):
-        # Update last pushed values
-        push_time = int(time.time())
-        last_push_func = compat.ida_func_addr(patch.offset)
-        func_name = compat.get_func_name(last_push_func)
-
-        state.set_patch(patch.offset, patch)
-        self.client.set_last_push(last_push_func, push_time, func_name)
-    '''
-
-    @init_checker
-    @make_state_with_func
-    def push_function_header(self, addr, new_name, ret_type=None, args=None, user=None, state=None, api_set=False):
-        func_header = FunctionHeader(new_name, addr, ret_type=ret_type, args=args)
-        func_header = self.artifact_lifer.lift(func_header)
-        state.set_function_header(func_header, set_last_change=not api_set)
-
-    @init_checker
-    @make_state_with_func
-    def push_stack_variable(self, addr, stack_offset, name, type_str, size, user=None, state=None, api_set=False):
-        # convert longs to ints
-        stack_offset = int(stack_offset)
-        func_addr = int(addr)
-        size = int(size)
-
-        v = StackVariable(stack_offset,
-                          StackOffsetType.IDA,
-                          name,
-                          type_str,
-                          size,
-                          func_addr)
-
-        v = self.artifact_lifer.lift(v)
-        state.set_stack_variable(v, stack_offset, func_addr, set_last_change=not api_set)
-
-    @init_checker
-    @make_and_commit_state
-    def push_struct(self, struct, old_name,
-                    user=None, state=None, api_set=False):
-        old_name = None if old_name == "" else old_name
-        struct = self.artifact_lifer.lift(struct)
-        state.set_struct(struct, old_name, set_last_change=not api_set)
-
-    @init_checker
-    @make_and_commit_state
-    def push_global_var(self, addr, name, type_str=None, size=0, user=None, state=None, api_set=False):
-        gvar = GlobalVariable(addr, name, type_str=type_str, size=size)
-        gvar = self.artifact_lifer.lift(gvar)
-        state.set_global_var(gvar, set_last_change=not api_set)
-
-    @init_checker
-    @make_and_commit_state
-    def push_enum(self, name, value_map, user=None, state=None, api_set=False):
-        enum = Enum(name, value_map)
-        enum = self.artifact_lifer.lift(enum)
-        state.set_enum(enum, set_last_change=not api_set)
 
     #
     # Artifact API

@@ -283,6 +283,9 @@ class Function(Artifact):
 
     @classmethod
     def from_nonconflicting_merge(cls, func1: "Function", func2: "Function") -> "Function":
+        if not func2 or func1 == func2:
+            return func1.copy()
+
         func_diff = func1.diff(func2)
         merge_func = func1.copy()
 

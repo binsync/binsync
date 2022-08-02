@@ -4,6 +4,8 @@ import toml
 
 from binsync.data.artifact import Artifact
 
+import logging
+l = logging.getLogger(name=__name__)
 
 class StructMember(Artifact):
     """
@@ -128,6 +130,8 @@ class Struct(Artifact):
 
             diff_dict["struct_members"][off] = self.invert_diff(other_mem.diff(None))
 
+        return diff_dict
+
     def copy(self):
         struct_members = {offset: member.copy() for offset, member in self.struct_members.items()}
         struct = Struct(self.name, self.size, struct_members, last_change=self.last_change)
@@ -147,6 +151,9 @@ class Struct(Artifact):
 
     @classmethod
     def from_nonconflicting_merge(cls, struct1: "Struct", struct2: "Struct") -> "Struct":
+        if not struct2 or struct1 == struct2:
+            return struct1.copy()
+
         struct_diff = struct1.diff(struct2)
         merge_struct = struct1.copy()
 
@@ -159,7 +166,7 @@ class Struct(Artifact):
             mem_diff = members_diff[off]
 
             # struct member is newly created
-            if mem_diff["before"] is None:
+            if "before" in mem_diff and mem_diff["before"] is None:
                 # check for overlap
                 new_mem_size = mem.size
                 new_mem_offset = mem.offset

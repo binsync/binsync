@@ -36,8 +36,13 @@ from binaryninjaui import (
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourceType
 from binaryninja.mainthread import execute_on_main_thread, is_main_thread
 
-from binsync.common.controller import *
-from binsync.data import StackOffsetType, FunctionHeader, FunctionArgument
+from binsync.common.controller import BinSyncController, make_ro_state, init_checker
+from binsync.data import (
+    State, User, Artifact,
+    Function, FunctionHeader, FunctionArgument, StackVariable, StackOffsetType,
+    Comment, GlobalVariable, Patch,
+    Enum, Struct
+)
 import binsync
 
 from .artifact_lifter import BinjaArtifactLifter
@@ -121,13 +126,25 @@ class BinjaBinSyncController(BinSyncController):
     @init_checker
     @make_ro_state
     @background_and_wait
+    def fill_struct(self, struct_name, user=None, state=None):
+        pass
+
+    @init_checker
+    @make_ro_state
+    @background_and_wait
+    def fill_global_var(self, var_addr, user=None, state=None):
+        pass
+
+    @init_checker
+    @make_ro_state
+    @background_and_wait
     def fill_function(self, func_addr, user=None, state=None):
         """
         Grab all relevant information from the specified user and fill the @bn_func.
         """
         updates = False
-        bn_func = self.bv.get_function_at(func_addr)
-        sync_func = self.pull_function(func_addr, user=user, state=state) # type: Function
+        bn_func = self.bv.get_function_at(self.artifact_lifer.lower_addr(func_addr))
+        sync_func = state.get_function(func_addr)
         if sync_func is None or bn_func is None:
             return
 
@@ -227,7 +244,11 @@ class BinjaBinSyncController(BinSyncController):
         # comments
         #
 
-        for addr, comment in self.pull_func_comments(bn_func.start, user=user).items():
+        sync_cmts = self.pull_artifact(Comment, func_addr, many=True, state=state, user=user)
+        for addr, comment in sync_cmts.items():
+            if not comment:
+                continue
+
             bn_func.set_comment_at(addr, comment.comment)
             updates |= True
 
@@ -301,58 +322,3 @@ class BinjaBinSyncController(BinSyncController):
             addr, self.bv.get_symbol_at(addr) or f"data_{addr:x}", type_str=str(var.type), size=var.type.width
         )
         return gvar
-
-    #
-    # Pushers
-    #
-
-    @init_checker
-    @make_state_with_func
-    def push_function_header(self, addr, bs_func_header: binsync.data.FunctionHeader, user=None, state=None, api_set=False):
-        # Push function header
-        bs_func_header = self.artifact_lifer.lift(bs_func_header)
-        state.set_function_header(bs_func_header, set_last_change=not api_set)
-
-    @init_checker
-    @make_and_commit_state
-    def push_patch(self, patch, user=None, state=None):
-        patch = self.artifact_lifer.lift(patch)
-        state.set_patch(patch.offset, patch)
-
-    @init_checker
-    @make_state_with_func
-    def push_stack_variable(self, addr, stack_offset, name, type_str, size, user=None, state=None, api_set=False):
-        v = StackVariable(
-            stack_offset,
-            StackOffsetType.IDA,
-            name,
-            type_str,
-            size,
-            addr
-        )
-        v = self.artifact_lifer.lift(v)
-        state.set_stack_variable(v, stack_offset, addr)
-
-    @init_checker
-    @make_and_commit_state
-    def push_stack_variables(self, bn_func, user=None, state=None):
-        for stack_var in bn_func.stack_layout:
-            # ignore all unnamed variables
-            # TODO: Do not ignore re-typed but unnamed variables
-            if re.match(r"var_\d+[_\d+]{0,1}", stack_var.name) \
-                    or stack_var.name in {
-                '__saved_rbp', '__return_addr',
-            }:
-                continue
-            if not stack_var.source_type == VariableSourceType.StackVariableSourceType:
-                continue
-            self.push_stack_variable(bn_func, stack_var, state=state, user=user)
-
-    @init_checker
-    @make_state_with_func
-    def push_comments(self, comments: Dict[int,str], func_addr=None, user=None, state=None) -> None:
-        # Push comments
-        for addr, comment in comments.items():
-            cmt = binsync.data.Comment(addr, comment, decompiled=True)
-            cmt = self.artifact_lifer.lift(cmt)
-            state.set_comment(cmt)

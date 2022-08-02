@@ -35,7 +35,7 @@ class ArtifactLifter:
         return self.lift_type(type_str)
 
     def lower_type_str(self, type_str):
-        return self.lower_type_str(type_str)
+        return self.lower_type(type_str)
 
     #
     # Override Mandatory Funcs

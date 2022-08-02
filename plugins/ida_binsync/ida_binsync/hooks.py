@@ -44,8 +44,11 @@ import idc
 
 from . import compat
 from .controller import IDABinSyncController
-from binsync.data.struct import Struct
-from binsync.data import Comment, Function, FunctionHeader, FunctionArgument
+from binsync.data import (
+    Function, FunctionHeader, FunctionArgument, StackVariable, StackOffsetType,
+    Comment, GlobalVariable, Patch,
+    Enum, Struct
+)
 
 l = logging.getLogger(__name__)
 
@@ -215,8 +218,13 @@ class IDBHooks(ida_idp.IDB_Hooks):
             new_name = ida_struct.get_member_name(mptr.id)
 
             # do the change on a new thread
-            self.binsync_state_change(self.controller.push_stack_variable,
-                                      func_addr, angr_offset, new_name, type_str, size)
+            sv = StackVariable(
+                angr_offset, StackOffsetType.IDA, new_name, type_str, size, func_addr
+            )
+            self.binsync_state_change(
+                self.controller.push_artifact,
+                sv
+            )
 
         # an actual struct
         else:
@@ -247,8 +255,13 @@ class IDBHooks(ida_idp.IDB_Hooks):
             new_name = stack_var_info.name #ida_struct.get_member_name(mptr.id)
 
             # do the change on a new thread
-            self.binsync_state_change(self.controller.push_stack_variable,
-                                      func_addr, angr_offset, new_name, type_str, size)
+            sv = StackVariable(
+                angr_offset, StackOffsetType.IDA, new_name, type_str, size, func_addr
+            )
+            self.binsync_state_change(
+                self.controller.push_artifact,
+                sv
+            )
         else:
             self.ida_struct_changed(sptr.id)
 
@@ -281,13 +294,19 @@ class IDBHooks(ida_idp.IDB_Hooks):
         # global var renaming
         if ida_func is None:
             size = idaapi.get_item_size(ea)
-            self.binsync_state_change(self.controller.push_global_var, ea, new_name, size=size)
+            self.binsync_state_change(
+                self.controller.push_artifact,
+                GlobalVariable(ea, new_name, size=size)
+            )
 
         # function name renaming
         elif ida_func.start_ea == ea:
             # grab the name instead from ida
             name = idc.get_func_name(ida_func.start_ea)
-            self.binsync_state_change(self.controller.push_function_header, ida_func.start_ea, name)
+            self.binsync_state_change(
+                self.controller.push_artifact,
+                FunctionHeader(name, ida_func.start_ea)
+            )
 
         return 0
 
@@ -338,14 +357,21 @@ class IDBHooks(ida_idp.IDB_Hooks):
         func_addr = ida_func.start_ea if ida_func else None
         kwarg = {"func_addr": func_addr}
 
+        bs_cmt = Comment(address, comment, **kwarg)
         # disass comment changed
         if cmt_type == "cmt":
-            self.binsync_state_change(self.controller.push_comment, address, comment, **kwarg)
+            self.binsync_state_change(
+                self.controller.push_artifact,
+                bs_cmt
+            )
 
         # function comment changed
         elif cmt_type == "range":
             # overwrite the entire function comment
-            self.binsync_state_change(self.controller.push_comment, address, comment, **kwarg)
+            self.binsync_state_change(
+                self.controller.push_artifact,
+                bs_cmt
+            )
 
         # XXX: other?
         elif cmt_type == "extra":
@@ -381,7 +407,10 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
         # if deleted, finish early
         if deleted:
-            self.binsync_state_change(self.controller.push_struct, Struct(None, None, {}), s_name)
+            self.binsync_state_change(
+                self.controller.push_artifact,
+                Struct(s_name, None, {})
+            )
             return 0
 
         # convert the ida_struct into a binsync_struct
@@ -396,7 +425,10 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
         # make the controller update the local state and push
         old_s_name = old_name if old_name else s_name
-        self.binsync_state_change(self.controller.push_struct, binsync_struct, old_s_name)
+        self.binsync_state_change(
+            self.controller.push_artifact,
+            binsync_struct
+        )
         return 0
 
     def binsync_state_change(self, *args, **kwargs):
@@ -495,11 +527,8 @@ class HexRaysHooks:
 
             # send the change
             self.binsync_state_change(
-                self.controller.push_function_header,
-                cur_func_header.addr,
-                cur_func_header.name,
-                ret_type=cur_func_header.ret_type,
-                args=binsync_args
+                self.controller.push_artifact,
+                cur_func_header
             )
 
             self._cached_funcs[ida_cfunc.entry_ea]["header"] = cur_header_str
@@ -533,7 +562,12 @@ class HexRaysHooks:
         if cmts != self._cached_funcs[ea]["cmts"]:
             # thread it!
             sync_cmts = [Comment(addr, cmt, decompiled=True) for addr, cmt in cmts.items()]
-            self.binsync_state_change(self.controller.push_comments, sync_cmts, **{"func_addr": ea})
+            for cmt in sync_cmts:
+                cmt.func_addr = ea
+                self.binsync_state_change(
+                    self.controller.push_artifact,
+                    cmt
+                )
 
             # cache so we don't double push a copy
             self._cached_funcs[ea]["cmts"] = cmts
