@@ -1,4 +1,5 @@
 import sys
+import logging
 
 from binsync.common.ui.qt_objects import (
     QEvent,
@@ -11,10 +12,14 @@ from binsync.common.ui.qt_objects import (
     QMainWindow,
     QApplication
 )
-from binsync import StackVariable, StackOffsetType
+from binsync.common.controller import BinSyncController
+from binsync.data import (
+    State, StackVariable, StackOffsetType
+)
 import random
 
 
+l = logging.getLogger(__name__)
 
 def generate_random_stack_var(offset):
     default_addr = 0xdeadbeef
@@ -176,6 +181,39 @@ class MergeWin(QDialog):
 
     def okay_button(self):
         self.close()
-        print("the user pressed the 'okay' button \n")
-        print("Final Dictionary:")
-        print(self.final)
+
+
+def manual_merge(controller: BinSyncController, func_addr, user=None):
+    l.info("Starting a Manual Merge...")
+    master_state: State = controller.client.get_state()
+    master_func = master_state.get_function(func_addr)
+    if not master_func:
+        return
+
+    other_state: State = controller.client.get_state(user=user)
+    other_func = other_state.get_function(func_addr)
+    if not other_func:
+        return
+
+    # get the stack vars
+    merge_dict = {}
+    for off, sv in master_func.stack_vars.items():
+        try:
+            other_var = other_func.stack_vars[off]
+        except KeyError:
+            continue
+
+        merge_dict[off] = (sv, other_var)
+
+    merge_win = MergeWin(merge_dict)
+    merge_win.exec_()
+
+    for off, svar in merge_win.final.items():
+        try:
+            master_func.stack_vars[off] = svar
+        except KeyError:
+            continue
+
+    master_state.functions[master_func.addr] = master_func
+    l.info(f"Completing Manual Merge by Filling function {hex(master_func.addr)}...")
+    controller.fill_function(master_func.addr, state=master_state, user=master_state.user, manual=True)

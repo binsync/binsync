@@ -528,7 +528,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_function(self, func_addr, user=None, state=None):
+    def fill_function(self, func_addr, user=None, state=None, manual=False):
         """
         Grab all relevant information from the specified user and fill the @func_adrr.
         """

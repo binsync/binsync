@@ -90,18 +90,19 @@ class AngrBinSyncController(BinSyncController):
 
     @init_checker
     @make_ro_state
-    def fill_function(self, func_addr, user=None, state=None):
+    def fill_function(self, func_addr, user=None, state=None, manual=False):
         func = self._instance.kb.functions[self.rebase_addr(func_addr, up=True)]
 
         # re-decompile a function if needed
         decompilation = self.decompile_function(func)
 
-        sync_func: binsync.data.Function = self.pull_function(self.rebase_addr(func.addr), user=user)
+        sync_func: binsync.data.Function = self.pull_function(self.rebase_addr(func.addr), user=user, state=state)
         if sync_func is None:
             # the function does not exist for that user's state
             return False
 
-        sync_func = self.generate_func_for_sync_level(sync_func)
+        if not manual:
+            sync_func = self.generate_func_for_sync_level(sync_func)
 
         #
         # Function Header

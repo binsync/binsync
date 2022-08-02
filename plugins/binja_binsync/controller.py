@@ -121,7 +121,7 @@ class BinjaBinSyncController(BinSyncController):
     @init_checker
     @make_ro_state
     @background_and_wait
-    def fill_function(self, func_addr, user=None, state=None):
+    def fill_function(self, func_addr, user=None, state=None, manual=False):
         """
         Grab all relevant information from the specified user and fill the @bn_func.
         """
@@ -132,7 +132,8 @@ class BinjaBinSyncController(BinSyncController):
             return
 
         self.sync_lock = True
-        sync_func = self.generate_func_for_sync_level(sync_func)
+        if not manual:
+            sync_func = self.generate_func_for_sync_level(sync_func)
 
         #
         # header

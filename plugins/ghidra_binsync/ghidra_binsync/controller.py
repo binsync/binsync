@@ -60,7 +60,7 @@ class GhidraBinSyncController(BinSyncController):
 
     @init_checker
     @make_ro_state
-    def fill_function(self, func_addr, user=None, state=None):
+    def fill_function(self, func_addr, user=None, state=None, manual=False):
         l.info("Inside fill function!")
         sync_func = self.pull_function(func_addr, user=user)
         l.info("pulling a function")

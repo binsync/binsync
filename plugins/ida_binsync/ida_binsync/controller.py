@@ -279,7 +279,7 @@ class IDABinSyncController(BinSyncController):
 
     @init_checker
     @make_ro_state
-    def fill_function(self, func_addr, user=None, state=None):
+    def fill_function(self, func_addr, user=None, state=None, manual=False):
         """
         Grab all relevant information from the specified user and fill the @func_adrr.
         """
@@ -301,7 +301,8 @@ class IDABinSyncController(BinSyncController):
             return data_changed
 
         # make function prepared for either merging or not
-        binsync_func = self.generate_func_for_sync_level(binsync_func)
+        if not manual:
+            binsync_func = self.generate_func_for_sync_level(binsync_func)
 
         ida_code_view = compat.acquire_pseudocode_vdui(ida_func.start_ea)
         # check if a header has been set for the func
