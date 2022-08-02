@@ -427,9 +427,6 @@ class BinSyncController:
 
     @init_checker
     def pull_artifact(self, type_: Artifact, *identifiers, many=False, user=None, state=None) -> Optional[Artifact]:
-        if not identifiers:
-            return None
-
         try:
             get_artifact_func = self.ARTIFACT_GET_MAP[type_] if not many else self.ARTIFACT_GET_MAP[(type_, GET_MANY)]
         except KeyError:
@@ -440,9 +437,14 @@ class BinSyncController:
         if not state:
             state = self.get_state(user=user)
 
-        artifact = get_artifact_func(state, *identifiers)
-        if not artifact:
+        try:
+            artifact = get_artifact_func(state, *identifiers)
+        except Exception:
+            _l.warning(f"Failed to pull an supported Artifact of type {type_} with {identifiers}")
             return None
+
+        if not artifact:
+            return artifact
 
         return self.lower_artifact(artifact)
 

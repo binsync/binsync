@@ -579,8 +579,8 @@ class State:
 
         return struct
 
-    def get_structs(self) -> Iterable[Struct]:
-        return self.structs.values()
+    def get_structs(self) -> Dict[str, Struct]:
+        return self.structs
 
     def get_global_var(self, addr):
         try:
