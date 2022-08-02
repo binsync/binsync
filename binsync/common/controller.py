@@ -50,7 +50,17 @@ def make_ro_state(f):
 
     return state_check
 
+def check_sync_logs(f):
+    """
+    Check a log of last sync times for all synced artifacts. If the most recent sync time for artifact is greater than the most
+    recent edit time, do not continue with sync.
+    """
 
+    @wraps(f)
+    def sync_check(self, *args, **kwargs):
+
+        return f(self, *args, **kwargs)
+    return sync_check
 #
 # Description Constants
 #
@@ -577,6 +587,8 @@ class BinSyncController:
         """
         raise NotImplementedError
 
+    @init_checker
+    @make_ro_state
     def fill_functions(self, user=None, state=None):
         change = False
         for addr, func in state.functions.items():
@@ -602,7 +614,7 @@ class BinSyncController:
         _l.info(f"Filling all data from user {user}...")
 
         fillers = [
-            self.fill_structs, self.fill_enums, self.fill_global_vars
+            self.fill_structs, self.fill_enums, self.fill_global_vars, self.fill_functions
         ]
 
         for filler in fillers:
