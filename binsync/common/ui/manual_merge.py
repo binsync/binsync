@@ -45,10 +45,6 @@ def generate_random_vars():
 
 
 
-#import ipdb; ipdb.set_trace()
-
-
-
 class MergeWin(QDialog):
     def __init__(self, stack_vars):
         super().__init__()
@@ -93,16 +89,23 @@ class MergeWin(QDialog):
             self.layout.addWidget(name_, i, 2)
             name_.installEventFilter(self)
 
-
+            # adds the new type_ and name_ value to the types and names dicts
             self.types[type_] = self.sv1.type, self.sv2.type, k
             self.names[name_] = self.sv1.name, self.sv2.name, k
 
+            # checks for a conflict; if there is, the text will be red.
+            if self.sv1.type != self.sv2.type:
+                type_.setStyleSheet("color: red")
 
+            if self.sv1.type != self.sv2.type:
+                type_.setStyleSheet("color: red")
+
+
+            # creates a final dictionary that has all the StackVariables (type, name) recorded; dict is updated after user makes changes
             self.final[self.sv1.stack_offset] = self.sv1.copy()
-            self.org_pairs.append((type_, name_))
-            #self.conflicting_check()
-            #self.final[0x10].type = sv2.type
 
+            # values added to org_pairs list to be checked in tuple_pairs
+            self.org_pairs.append((type_, name_))
 
 
         self.layout.addWidget(self.buttonBox, x+2, 3)
@@ -120,9 +123,6 @@ class MergeWin(QDialog):
 
 
 
-
-
-
     def eventFilter(self, source, event):
         if event.type() == QEvent.ContextMenu and source in self.types:
 
@@ -133,11 +133,17 @@ class MergeWin(QDialog):
             action = menu.exec_(event.globalPos())
 
             if action:
-                source.setStyleSheet("color: purple")
+                # if there is a conflict and the user makes a change, the text will turn purple
+                if source.sv1.type == source.sv2.type:
+                    source.setStyleSheet("color: purple")
+
+                # the option the user chooses, replaces the text in the window
                 item = action.text()
                 source.setText(f"{item} ")
                 other = self.tuple_pairs(source)
                 self.set_type = item
+
+                # the dictionary is updated with the new pair.
                 k = self.types[source][2]
                 self.final[k].type = item
 
@@ -150,11 +156,17 @@ class MergeWin(QDialog):
             action = menu.exec_(event.globalPos())
 
             if action:
-                source.setStyleSheet("color: purple")
+                # if there is a conflict and the user makes a change, the text will turn purple
+                if source.sv1.name != source.sv2.name:
+                    source.setStyleSheet("color: purple")
+
+                # the option the user chooses, replaces the text in the window
                 item = action.text()
                 source.setText(f"{item}")
                 other = self.tuple_pairs(source)
                 self.set_type = item
+
+                # the dictionary is updated with the new pair.
                 k = self.names[source][2]
                 self.final[k].name = item
 
