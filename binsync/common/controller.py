@@ -680,11 +680,13 @@ class BinSyncController:
         """
         func = self.function(addr)
         if not func:
+            _l.info(f"Pushing function {hex(addr)} Failed")
             return False
 
         master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
         pushed = self.push_artifact(func, state=master_state, commit_msg=f"Forced pushed function {func}")
         return pushed
+
 
     @init_checker
     def force_push_global_artifact(self, lookup_item):
@@ -696,13 +698,16 @@ class BinSyncController:
         @return: Success of committing the Artifact
         """
         global_art = self.global_artifact(lookup_item)
+        
         if not global_art:
+            _l.info(f"Pushing global artifact {lookup_item if isinstance(lookup_item, str) else hex(lookup_item)} Failed")
             return False
 
         master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
         global_art = self.artifact_lifer.lift(global_art)
         pushed = self.push_artifact(global_art, state=master_state, commit_msg=f"Force pushed {global_art}")
         return pushed
+
 
     #
     # Utils
