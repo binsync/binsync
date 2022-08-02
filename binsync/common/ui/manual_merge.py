@@ -97,7 +97,7 @@ class MergeWin(QDialog):
             if self.sv1.type != self.sv2.type:
                 type_.setStyleSheet("color: red")
 
-            if self.sv1.type != self.sv2.type:
+            if self.sv1.name != self.sv2.name:
                 type_.setStyleSheet("color: red")
 
 
@@ -134,7 +134,7 @@ class MergeWin(QDialog):
 
             if action:
                 # if there is a conflict and the user makes a change, the text will turn purple
-                if source.sv1.type == source.sv2.type:
+                if self.types[source][1] != self.types[source][2]:
                     source.setStyleSheet("color: purple")
 
                 # the option the user chooses, replaces the text in the window
@@ -157,7 +157,7 @@ class MergeWin(QDialog):
 
             if action:
                 # if there is a conflict and the user makes a change, the text will turn purple
-                if source.sv1.name != source.sv2.name:
+                if self.names[source][1] != self.names[source][2]:
                     source.setStyleSheet("color: purple")
 
                 # the option the user chooses, replaces the text in the window
