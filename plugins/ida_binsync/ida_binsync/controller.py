@@ -228,17 +228,18 @@ class IDABinSyncController(BinSyncController):
 
     @init_checker
     @make_ro_state
-    def fill_structs(self, user=None, state=None):
+    def fill_structs(self, artifacts={}, user=None, state=None):
         """
         Grab all the structs from a specified user, then fill them locally
 
         @param user:
         @param state:
+        @param artifacts:
         @return:
         """
         data_changed = False
 
-        structs = self.pull_artifact(Struct, many=True, state=state)
+        structs = artifacts
         for _, struct in structs.items():
             data_changed |= compat.set_ida_struct(struct, self)
 

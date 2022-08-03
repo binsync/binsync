@@ -1,7 +1,7 @@
 import logging
 import threading
 import time
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from functools import wraps
 from typing import Dict, Iterable, List, Optional, Union
 
@@ -66,15 +66,36 @@ def check_sync_logs(f):
         BinSyncController.fill_enums.__name__: (Enum, True)
     }
 
+    #Note: ida plugin has been made to comply with new `fill_xs` but other plugins still need touchups
     @wraps(f)
     def sync_check(self, *args, **kwargs):
         state = kwargs['state']
         user = kwargs['user']
         type_, many = sync_map[f.__name__]
         identifiers = args
-        targets = self.pull_artifact(type_, *identifiers, many=many, user=user, state=state)
 
-        args = (targets, *args)
+        targets = self.pull_artifact(type_, *identifiers, many=many, user=user, state=state)
+        artifacts = targets if isinstance(targets, dict) else {args[0]: targets}
+
+        #go over artifacts in reverse order so pop function does not lead to
+        #a failure to iterate the entire dict
+        for reference, artifact in artifacts.items()[::-1]:
+            if artifact.last_change <= self.sync_log[user][reference]:
+                artifacts.pop(reference)
+            else:
+                # should likely move this into the sync functions that wind up trying
+                # to do the work, in case they fail, we will see
+                self.sync_log[user][reference] = artifact.last_change
+
+        if not artifacts:
+            return False
+
+        #Setting the artifacts kwarg for functions that try to fill all of an artifact type
+        if isinstance(targets, dict):
+            kwargs['artifacts'] = artifacts
+        #args and kwargs are left the same for singleton fill functions, we checked time and it
+        #needs an update. We theoretically could pass in the binsync artifact that we loaded already but
+        #the time save is likely nominal (or even entirely killed by other side-effects)
         return f(self, *args, **kwargs)
     return sync_check
 #
@@ -161,7 +182,7 @@ class BinSyncController:
 
         # create a pulling thread, but start on connection
         self.updater_thread = threading.Thread(target=self.updater_routine)
-
+        self.sync_log = defaultdict(dict)
     #
     #   Multithreading updaters, locks, and evaluators
     #
@@ -541,7 +562,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_structs(self, user=None, state=None):
+    def fill_structs(self, artifacts={}, user=None, state=None):
         """
         Grab all the structs from a specified user, then fill them locally
 
@@ -566,8 +587,8 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_global_vars(self, user=None, state=None):
-        for off, gvar in state.global_vars.items():
+    def fill_global_vars(self, artifacts={}, user=None, state=None):
+        for off, gvar in artifacts.items():
             self.fill_global_var(off, user=user, state=state)
 
         return True
@@ -587,7 +608,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_enums(self, user=None, state=None):
+    def fill_enums(self, artifacts={}, user=None, state=None):
         """
         Grab all enums and fill it locally
 
@@ -607,9 +628,9 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_functions(self, user=None, state=None):
+    def fill_functions(self, artifacts={}, user=None, state=None):
         change = False
-        for addr, func in state.functions.items():
+        for addr, func in artifacts.items():
             change |= self.fill_function(addr, user=user, state=state)
 
         return change
