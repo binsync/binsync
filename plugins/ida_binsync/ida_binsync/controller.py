@@ -225,7 +225,7 @@ class IDABinSyncController(BinSyncController):
 
     @init_checker
     @make_ro_state
-    def fill_structs(self, artifacts={}, user=None, state=None):
+    def fill_structs(self, user=None, state=None):
         """
         Grab all the structs from a specified user, then fill them locally
 
@@ -235,11 +235,11 @@ class IDABinSyncController(BinSyncController):
         @return:
         """
         data_changed = False
-
-        for struct_name, struct in artifacts.items():
+        structs = self.pull_artifact(Struct, many=True, state=state)
+        for struct_name, struct in structs.items():
             data_changed |= self.fill_struct(struct_name, user=user, state=state, header=True)
 
-        for struct_name, struct in artifacts.items():
+        for struct_name, struct in structs.items():
             data_changed |= self.fill_struct(struct_name, user=user, state=state, header=False)
 
         return data_changed

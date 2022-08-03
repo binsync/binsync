@@ -173,7 +173,6 @@ class BinSyncController:
 
         # create a pulling thread, but start on connection
         self.updater_thread = threading.Thread(target=self.updater_routine)
-        self.sync_log = defaultdict(dict)
     #
     #   Multithreading updaters, locks, and evaluators
     #
@@ -553,7 +552,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_structs(self, artifacts={}, user=None, state=None):
+    def fill_structs(self, user=None, state=None):
         """
         Grab all the structs from a specified user, then fill them locally
 
@@ -578,8 +577,8 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_global_vars(self, artifacts={}, user=None, state=None):
-        for off, gvar in artifacts.items():
+    def fill_global_vars(self, user=None, state=None):
+        for off, gvar in state.global_vars.items():
             self.fill_global_var(off, user=user, state=state)
 
         return True
@@ -599,7 +598,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_enums(self, artifacts={}, user=None, state=None):
+    def fill_enums(self, user=None, state=None):
         """
         Grab all enums and fill it locally
 
@@ -619,9 +618,9 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_functions(self, artifacts={}, user=None, state=None):
+    def fill_functions(self, user=None, state=None):
         change = False
-        for addr, func in artifacts.items():
+        for addr, func in state.functions.items():
             change |= self.fill_function(addr, user=user, state=state)
 
         return change
