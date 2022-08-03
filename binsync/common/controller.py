@@ -553,7 +553,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_struct(self, struct_name, user=None, state=None, passed=False):
+    def fill_struct(self, struct_name, user=None, state=None):
         """
         Fill a single specific struct from the user
 
@@ -578,7 +578,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_global_var(self, var_addr, user=None, state=None, passed=False):
+    def fill_global_var(self, var_addr, user=None, state=None):
         """
         Grab a global variable for a specified address and fill it locally
 
@@ -599,7 +599,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_enum(self, enum_name, user=None, state=None, passed=False):
+    def fill_enum(self, enum_name, user=None, state=None):
         """
         Grab an enum and fill it locally
 
@@ -624,7 +624,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_function(self, func_addr, user=None, state=None, passed=False):
+    def fill_function(self, func_addr, user=None, state=None):
         """
         Grab all relevant information from the specified user and fill the @func_adrr.
         """
