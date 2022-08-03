@@ -86,8 +86,11 @@ class AngrBinSyncController(BinSyncController):
     # Display Fillers
     #
 
-    def fill_struct(self, struct_name, user=None, state=None):
-        pass
+    def fill_global_var(self, var_addr, user=None, state=None):
+        return False
+
+    def fill_struct(self, struct_name, user=None, state=None, header=True, members=True):
+        return False
 
     @init_checker
     @make_ro_state

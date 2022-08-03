@@ -74,7 +74,7 @@ class GhidraBinSyncController(BinSyncController):
             l.info("setting funciton name now to " + sync_func.name)
             self.bridge.server.set_func_name(sync_func.addr, sync_func.name)
 
-    def fill_struct(self, struct_name, user=None, state=None):
+    def fill_struct(self, struct_name, user=None, state=None, header=True, members=True):
         return False
 
     def fill_global_var(self, var_addr, user=None, state=None):
