@@ -539,13 +539,13 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_struct(self, struct_name, user=None, state=None):
+    def fill_struct(self, struct_name, user=None, state=None, header_only=False):
         """
-        Fill a single specific struct from the user
 
         @param struct_name:
         @param user:
         @param state:
+        @param header_only:
         @return:
         """
         raise NotImplementedError
