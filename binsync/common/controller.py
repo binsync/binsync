@@ -55,10 +55,26 @@ def check_sync_logs(f):
     Check a log of last sync times for all synced artifacts. If the most recent sync time for artifact is greater than the most
     recent edit time, do not continue with sync.
     """
+    sync_map = {
+        BinSyncController.fill_function.__name__: (Function, False),
+        BinSyncController.fill_functions.__name__: (Function, True),
+        BinSyncController.fill_global_var.__name__: (GlobalVariable, False),
+        BinSyncController.fill_global_vars.__name__: (GlobalVariable, True),
+        BinSyncController.fill_struct.__name__: (Struct, False),
+        BinSyncController.fill_structs.__name__: (Struct, True),
+        BinSyncController.fill_enum.__name__: (Enum, False),
+        BinSyncController.fill_enums.__name__: (Enum, True)
+    }
 
     @wraps(f)
     def sync_check(self, *args, **kwargs):
+        state = kwargs['state']
+        user = kwargs['user']
+        type_, many = sync_map[f.__name__]
+        identifiers = args
+        targets = self.pull_artifact(type_, *identifiers, many=many, user=user, state=state)
 
+        args = (targets, *args)
         return f(self, *args, **kwargs)
     return sync_check
 #
@@ -100,11 +116,13 @@ class BinSyncController:
 
     ARTIFACT_GET_MAP = {
         Function: State.get_function,
+        (Function, GET_MANY): State.get_functions,
         StackVariable: State.get_stack_variable,
         (StackVariable, GET_MANY): State.get_stack_variables,
         Comment: State.get_comment,
         (Comment, GET_MANY): State.get_func_comments,
         GlobalVariable: State.get_global_var,
+        (GlobalVariable, GET_MANY): State.get_global_vars,
         Struct: State.get_struct,
         (Struct, GET_MANY): State.get_structs,
         Enum: State.get_enum,
