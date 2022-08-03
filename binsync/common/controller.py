@@ -69,33 +69,37 @@ def check_sync_logs(f):
     #Note: ida plugin has been made to comply with new `fill_xs` but other plugins still need touchups
     @wraps(f)
     def sync_check(self, *args, **kwargs):
-        state = kwargs['state']
-        user = kwargs['user']
-        type_, many = sync_map[f.__name__]
-        identifiers = args
+        #passed has a default value false, it is set to True by fill_xs functions
+        #to indicate that these checks have already been done if subsequently calling
+        #fill_x
+        if not kwargs.pop('passed', False):
+            state = kwargs['state']
+            user = kwargs['user']
+            type_, many = sync_map[f.__name__]
+            identifiers = args
 
-        targets = self.pull_artifact(type_, *identifiers, many=many, user=user, state=state)
-        artifacts = targets if isinstance(targets, dict) else {args[0]: targets}
+            targets = self.pull_artifact(type_, *identifiers, many=many, user=user, state=state)
+            artifacts = targets if isinstance(targets, dict) else {args[0]: targets}
 
-        #go over artifacts in reverse order so pop function does not lead to
-        #a failure to iterate the entire dict
-        for reference, artifact in artifacts.items()[::-1]:
-            if artifact.last_change <= self.sync_log[user][reference]:
-                artifacts.pop(reference)
-            else:
-                # should likely move this into the sync functions that wind up trying
-                # to do the work, in case they fail, we will see
-                self.sync_log[user][reference] = artifact.last_change
+            #go over artifacts in reverse order so pop function does not lead to
+            #a failure to iterate the entire dict
+            for reference, artifact in artifacts.items()[::-1]:
+                if artifact.last_change <= self.sync_log[user][reference]:
+                    artifacts.pop(reference)
+                else:
+                    # should likely move this into the sync functions that wind up trying
+                    # to do the work, in case they fail, we will see
+                    self.sync_log[user][reference] = artifact.last_change
 
-        if not artifacts:
-            return False
+            if not artifacts:
+                return False
 
-        #Setting the artifacts kwarg for functions that try to fill all of an artifact type
-        if isinstance(targets, dict):
-            kwargs['artifacts'] = artifacts
-        #args and kwargs are left the same for singleton fill functions, we checked time and it
-        #needs an update. We theoretically could pass in the binsync artifact that we loaded already but
-        #the time save is likely nominal (or even entirely killed by other side-effects)
+            #Setting the artifacts kwarg for functions that try to fill all of an artifact type
+            if isinstance(targets, dict):
+                kwargs['artifacts'] = artifacts
+            #args and kwargs are left the same for singleton fill functions, we checked time and it
+            #needs an update. We theoretically could pass in the binsync artifact that we loaded already but
+            #the time save is likely nominal (or even entirely killed by other side-effects)
         return f(self, *args, **kwargs)
     return sync_check
 #
@@ -549,7 +553,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_struct(self, struct_name, user=None, state=None):
+    def fill_struct(self, struct_name, user=None, state=None, passed=False):
         """
         Fill a single specific struct from the user
 
@@ -574,7 +578,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_global_var(self, var_addr, user=None, state=None):
+    def fill_global_var(self, var_addr, user=None, state=None, passed=False):
         """
         Grab a global variable for a specified address and fill it locally
 
@@ -589,13 +593,13 @@ class BinSyncController:
     @make_ro_state
     def fill_global_vars(self, artifacts={}, user=None, state=None):
         for off, gvar in artifacts.items():
-            self.fill_global_var(off, user=user, state=state)
+            self.fill_global_var(off, user=user, state=state, passed=True)
 
         return True
 
     @init_checker
     @make_ro_state
-    def fill_enum(self, enum_name, user=None, state=None):
+    def fill_enum(self, enum_name, user=None, state=None, passed=False):
         """
         Grab an enum and fill it locally
 
@@ -620,7 +624,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_function(self, func_addr, user=None, state=None):
+    def fill_function(self, func_addr, user=None, state=None, passed=False):
         """
         Grab all relevant information from the specified user and fill the @func_adrr.
         """
@@ -631,7 +635,7 @@ class BinSyncController:
     def fill_functions(self, artifacts={}, user=None, state=None):
         change = False
         for addr, func in artifacts.items():
-            change |= self.fill_function(addr, user=user, state=state)
+            change |= self.fill_function(addr, user=user, state=state, passed=True)
 
         return change
 
