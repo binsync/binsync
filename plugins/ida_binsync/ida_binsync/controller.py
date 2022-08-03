@@ -204,24 +204,21 @@ class IDABinSyncController(BinSyncController):
 
     @init_checker
     @make_ro_state
-    def fill_struct(self, struct_name, user=None, state=None):
+    def fill_struct(self, struct_name, user=None, state=None, header=None):
         data_changed = False
 
-        for struct_name in state.structs:
-            struct: Struct = self.pull_artifact(Struct, struct_name, state=state)
-            if not struct:
-                continue
-
-            if struct.name == struct_name:
-                compat.set_ida_struct(struct, self)
-                compat.set_ida_struct_member_types(struct, self)
-                data_changed |= True
-                break
+        struct: Struct = self.pull_artifact(Struct, struct_name, state=state)
+        if struct:
+            if header or header is None:
+                data_changed |= compat.set_ida_struct(struct, self)
+            if not header:
+                data_changed |= compat.set_ida_struct_member_types(struct, self)
         else:
             _l.warning("Was not able to find the struct you requested in other users name")
 
         if data_changed:
-            _l.info(f"New data synced for \'{user}\'.")
+            changes = ' header' if header else ' members' if header is False else ''
+            _l.info(f"New data synced from \'{user}\' on struct \'{struct_name}\'{changes}.")
         else:
             _l.info(f"No new data was set either by failure or lack of differences.")
         return data_changed
@@ -239,12 +236,11 @@ class IDABinSyncController(BinSyncController):
         """
         data_changed = False
 
-        structs = artifacts
-        for _, struct in structs.items():
-            data_changed |= compat.set_ida_struct(struct, self)
+        for struct_name, struct in artifacts.items():
+            data_changed |= self.fill_struct(struct_name, user=user, state=state, header=True)
 
-        for _, struct in structs.items():
-            data_changed |= compat.set_ida_struct_member_types(struct, self)
+        for struct_name, struct in artifacts.items():
+            data_changed |= self.fill_struct(struct_name, user=user, state=state, header=False)
 
         return data_changed
 

@@ -50,11 +50,13 @@ def make_ro_state(f):
 
     return state_check
 
+
 def check_sync_logs(f):
     """
-    Check a log of last sync times for all synced artifacts. If the most recent sync time for artifact is greater than the most
-    recent edit time, do not continue with sync.
+    Check a log of last sync times for all synced artifacts. If the most recent sync time for artifact is greater than
+    the most recent edit time, do not continue with sync.
     """
+
     sync_map = {
         BinSyncController.fill_function.__name__: (Function, False),
         BinSyncController.fill_functions.__name__: (Function, True),
@@ -66,42 +68,27 @@ def check_sync_logs(f):
         BinSyncController.fill_enums.__name__: (Enum, True)
     }
 
-    #Note: ida plugin has been made to comply with new `fill_xs` but other plugins still need touchups
+    # Note: In its current state this should only be applied as a decorator to
+    # fill_x functions not fill_xs
     @wraps(f)
     def sync_check(self, *args, **kwargs):
-        #passed has a default value false, it is set to True by fill_xs functions
-        #to indicate that these checks have already been done if subsequently calling
-        #fill_x
-        if not kwargs.pop('passed', False):
-            state = kwargs['state']
-            user = kwargs['user']
-            type_, many = sync_map[f.__name__]
-            identifiers = args
+        user_state = kwargs['state']
+        type_, many = sync_map[f.__name__]
+        identifiers = args
+        user_artifact: Artifact = self.pull_artifact(type_, *identifiers, many=many, state=user_state)
 
-            targets = self.pull_artifact(type_, *identifiers, many=many, user=user, state=state)
-            artifacts = targets if isinstance(targets, dict) else {args[0]: targets}
+        master_state = self.client.get_state()
+        master_artifact: Artifact = self.pull_artifact(type_, *identifiers, many=many, state=master_state)
+        if master_artifact == user_artifact:
+            return False
 
-            #go over artifacts in reverse order so pop function does not lead to
-            #a failure to iterate the entire dict
-            for reference, artifact in artifacts.items()[::-1]:
-                if artifact.last_change <= self.sync_log[user][reference]:
-                    artifacts.pop(reference)
-                else:
-                    # should likely move this into the sync functions that wind up trying
-                    # to do the work, in case they fail, we will see
-                    self.sync_log[user][reference] = artifact.last_change
-
-            if not artifacts:
-                return False
-
-            #Setting the artifacts kwarg for functions that try to fill all of an artifact type
-            if isinstance(targets, dict):
-                kwargs['artifacts'] = artifacts
-            #args and kwargs are left the same for singleton fill functions, we checked time and it
-            #needs an update. We theoretically could pass in the binsync artifact that we loaded already but
-            #the time save is likely nominal (or even entirely killed by other side-effects)
+        # args and kwargs are left the same for singleton fill functions, we checked time, and it
+        # needs an update. We theoretically could pass in the binsync artifact that we loaded already but
+        # the time save is likely nominal (or even entirely killed by other side effects)
         return f(self, *args, **kwargs)
+
     return sync_check
+
 #
 # Description Constants
 #
@@ -593,7 +580,7 @@ class BinSyncController:
     @make_ro_state
     def fill_global_vars(self, artifacts={}, user=None, state=None):
         for off, gvar in artifacts.items():
-            self.fill_global_var(off, user=user, state=state, passed=True)
+            self.fill_global_var(off, user=user, state=state)
 
         return True
 
@@ -635,7 +622,7 @@ class BinSyncController:
     def fill_functions(self, artifacts={}, user=None, state=None):
         change = False
         for addr, func in artifacts.items():
-            change |= self.fill_function(addr, user=user, state=state, passed=True)
+            change |= self.fill_function(addr, user=user, state=state)
 
         return change
 
