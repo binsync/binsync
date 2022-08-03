@@ -539,16 +539,17 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_struct(self, struct_name, user=None, state=None, header_only=False):
+    def fill_struct(self, struct_name, user=None, state=None, header=True, members=True):
         """
 
         @param struct_name:
         @param user:
         @param state:
-        @param header_only:
+        @param header:
+        @param members:
         @return:
         """
-        raise NotImplementedError
+        _l.info(f"Fill Struct is not implemented in your decompiler.")
 
     @init_checker
     @make_ro_state
@@ -560,7 +561,12 @@ class BinSyncController:
         @param state:
         @return:
         """
-        raise NotImplementedError
+        # only do struct headers for circular references
+        for name, struct in state.structs.items():
+            self.fill_struct(name, user=user, state=state, members=False)
+
+        for name, struct in state.structs.items():
+            self.fill_struct(name, user=user, state=state, header=False)
 
     @init_checker
     @make_ro_state
@@ -573,7 +579,7 @@ class BinSyncController:
         @param state:
         @return:
         """
-        raise NotImplementedError
+        _l.info(f"Fill Global Var is not implemented in your decompiler.")
 
     @init_checker
     @make_ro_state

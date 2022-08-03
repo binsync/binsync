@@ -204,7 +204,7 @@ class IDABinSyncController(BinSyncController):
 
     @init_checker
     @make_ro_state
-    def fill_struct(self, struct_name, user=None, state=None, header_only=False):
+    def fill_struct(self, struct_name, user=None, state=None, header=True, members=True):
         data_changed = False
         struct: Struct = self.pull_artifact(Struct, struct_name, state=state)
 
@@ -212,35 +212,17 @@ class IDABinSyncController(BinSyncController):
             _l.warning("Was not able to find the struct you requested in other users name")
             return None
 
-        data_changed |= compat.set_ida_struct(struct, self) \
-            if header_only else compat.set_ida_struct_member_types(struct, self)
+        if header:
+            data_changed |= compat.set_ida_struct(struct, self)
+
+        if members:
+            data_changed |= compat.set_ida_struct_member_types(struct, self)
 
         _l.info(
-            f"New data synced from \'{user}\' on struct \'{struct_name}\' {'header' if header_only else 'members'}."
-            if data_changed else \
+            f"New data synced from \'{user}\' on struct \'{struct_name}\'"
+            if data_changed else
             f"No new data was set either by failure or lack of differences."
         )
-        return data_changed
-
-    @init_checker
-    @make_ro_state
-    def fill_structs(self, user=None, state=None):
-        """
-        Grab all the structs from a specified user, then fill them locally
-
-        @param user:
-        @param state:
-        @param artifacts:
-        @return:
-        """
-        data_changed = False
-        structs = self.pull_artifact(Struct, many=True, state=state)
-        for struct_name, struct in structs.items():
-            data_changed |= self.fill_struct(struct_name, user=user, state=state, header=True)
-
-        for struct_name, struct in structs.items():
-            data_changed |= self.fill_struct(struct_name, user=user, state=state, header=False)
-
         return data_changed
 
     @init_checker
