@@ -182,6 +182,7 @@ class Struct(Artifact):
             # member differs
             merge_mem = merge_struct.struct_members[off].copy()
             merge_mem = StructMember.from_nonconflicting_merge(merge_mem, mem)
+            merge_struct.struct_members[off] = merge_mem
 
         # compute the new size
         merge_struct.size = sum(mem.size for mem in merge_struct.struct_members.values())
