@@ -39,32 +39,6 @@ def fill_event(f):
 
     return _fill_event
 
-def make_and_commit_states(f):
-    """
-    Build a read-only State _instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
-    Function `f` should have at least two kwargs, `user` and `state`.
-    """
-
-    @wraps(f)
-    def _make_and_commit_states(self: "BinSyncController", *args, **kwargs):
-        state = kwargs.pop('state', None)
-        user = kwargs.pop('user', None)
-        master_state = kwargs.pop('master_state', None)
-        if state is None:
-            state = self.client.get_state(user=user)
-
-        if master_state is None:
-            master_state = self.client.get_state()
-
-        kwargs['state'] = state
-        kwargs['user'] = user
-        kwargs['master_state'] = master_state
-
-        return f(self, *args, **kwargs)
-
-    return _make_and_commit_states
-
-
 #
 # Description Constants
 #
@@ -534,11 +508,14 @@ class BinSyncController:
         @param kwargs: 
         @return: 
         """
-        
+
         ARTIFACT_FILL_MAP = {
-            self.fill_function.__name__: Function
+            self.fill_function.__name__: Function,
+            self.fill_global_var.__name__: GlobalVariable,
+            self.fill_struct.__name__: Struct,
+            self.fill_enum.__name__: Enum
         }
-        
+
         state = state if state is not None else self.get_state(user=user, priority=SchedSpeed.FAST)
         master_state = master_state if master_state is not None else self.get_state(priority=SchedSpeed.FAST)
         artifact_type = ARTIFACT_FILL_MAP.get(filler_func.__name__, None)
@@ -551,7 +528,7 @@ class BinSyncController:
             art_getter(master_state, *identifiers), art_getter(state, *identifiers),
             merge_level=merge_level
         )
-        artifact = merged_artifact
+        artifact = self.lower_artifact(merged_artifact)
         
         fill_changes = filler_func(
             *identifiers,
@@ -585,7 +562,7 @@ class BinSyncController:
 
     @init_checker
     @fill_event
-    def fill_global_var(self, var_addr, **kwargs):
+    def fill_global_var(self, var_addr, user=None, artifact=None, **kwargs):
         """
         Grab a global variable for a specified address and fill it locally
 
@@ -599,8 +576,8 @@ class BinSyncController:
 
 
     @init_checker
-    @make_and_commit_states
-    def fill_enum(self, enum_name, user=None, state=None, **kwargs):
+    @fill_event
+    def fill_enum(self, enum_name, user=None, artifact=None, **kwargs):
         """
         Grab an enum and fill it locally
 
@@ -612,21 +589,24 @@ class BinSyncController:
         _l.debug(f"Fill Enum is not implemented in your decompiler.")
         return False
 
-    def fill_stack_variable(self, func_addr, offset, user=None, state=None, **kwargs):
+    @fill_event
+    def fill_stack_variable(self, func_addr, offset, user=None, artifact=None, **kwargs):
         _l.debug(f"Fill Stack Var is not implemented in your decompiler.")
         return False
 
-    def fill_function_header(self, func_addr, user=None, state=None, **kwargs):
+    @fill_event
+    def fill_function_header(self, func_addr, user=None, artifact=None, **kwargs):
         _l.debug(f"Fill Function Header is not implemented in your decompiler.")
         return False
 
-    def fill_comment(self, addr, user=None, state=None, **kwargs):
+    @fill_event
+    def fill_comment(self, addr, user=None, artifact=None, **kwargs):
         _l.debug(f"Fill Comments is not implemented in your decompiler.")
         return False
 
     @init_checker
-    @make_and_commit_states
-    def fill_function(self, func_addr, user=None, state=None, merge_level=None, **kwargs):
+    @fill_event
+    def fill_function(self, func_addr, user=None, merge_level=None, artifact=None, **kwargs):
         """
         Grab all relevant information from the specified user and fill the @func_addr.
         """
@@ -635,49 +615,42 @@ class BinSyncController:
             _l.warning(f"The function at {hex(func_addr)} does not exist in your decompiler. Stopping sync.")
             return False
 
-        user_func: Function = state.get_function(func_addr)
-        master_func: Function = self.lower_artifact(
-            self.merge_function_into_master(user_func, merge_level=merge_level)
-        )
-
+        master_func: Function = artifact
         changes = False
 
         # function header
-        master_state = self.get_state(priority=SchedSpeed.FAST)
         if master_func.header != dec_func.header:
             # type is user made (a struct)
-            changes |= self.import_user_defined_type(master_func.header.ret_type, master_state=master_state, state=state)
+            changes |= self.import_user_defined_type(master_func.header.ret_type, **kwargs)
             changes |= self.fill_function_header(func_addr, **kwargs)
 
         # stack vars
-        master_state = self.get_state(priority=SchedSpeed.FAST)
         if master_func.stack_vars != dec_func.stack_vars:
             for offset, sv in master_func.stack_vars.items():
                 dec_sv = dec_func.stack_vars.get(offset, None)
                 if not dec_sv or sv == dec_sv:
                     continue
 
-                changes |= self.import_user_defined_type(sv.type, master_state=master_state, state=state)
+                changes |= self.import_user_defined_type(sv.type, **kwargs)
                 changes |= self.fill_stack_variable(func_addr, offset, **kwargs)
 
         # comments
-        for addr, cmt in state.get_func_comments(func_addr):
+        for addr, cmt in kwargs['state'].get_func_comments(func_addr):
             changes |= self.fill_comment(addr, **kwargs)
 
         return False
 
     @init_checker
-    @make_and_commit_states
-    def fill_functions(self, **kwargs):
+    def fill_functions(self, user=None, **kwargs):
         change = False
-        master_state, state = self.get_master_and_user_state(**kwargs)
+        master_state, state = self.get_master_and_user_state(user=user)
         for addr, func in state.functions.items():
-            change |= self.fill_function(addr, state=state, master_state=master_state, **kwargs)
+            change |= self.fill_function(addr, state=state, master_state=master_state)
 
         return change
 
     @init_checker
-    def fill_structs(self, user=None, state=None):
+    def fill_structs(self, user=None, **kwargs):
         """
         Grab all the structs from a specified user, then fill them locally
 
@@ -687,17 +660,17 @@ class BinSyncController:
         """
         changes = False
         # only do struct headers for circular references
+        master_state, state = self.get_master_and_user_state(user=user)
         for name, struct in state.structs.items():
-            changes |= self.fill_struct(name, user=user, state=state, members=False)
+            changes |= self.fill_struct(name, user=user, state=state, master_state=master_state, members=False)
 
         for name, struct in state.structs.items():
-            changes |= self.fill_struct(name, user=user, state=state, header=False)
+            changes |= self.fill_struct(name, user=user, state=state, master_state=master_state, header=False)
 
         return changes
 
     @init_checker
-    @make_and_commit_states
-    def fill_enums(self, user=None, state=None):
+    def fill_enums(self, user=None, **kwargs):
         """
         Grab all enums and fill it locally
 
@@ -706,23 +679,23 @@ class BinSyncController:
         @return:
         """
         changes = False
+        master_state, state = self.get_master_and_user_state(user=user)
         for name, enum in state.enums.items():
-            changes |= self.fill_enum(name, user=user, state=state)
+            changes |= self.fill_enum(name, user=user, state=state, master_state=master_state)
 
         return changes
 
     @init_checker
-    @make_and_commit_states
-    def fill_global_vars(self, user=None, state=None):
+    def fill_global_vars(self, user=None, **kwargs):
         changes = False
+        master_state, state = self.get_master_and_user_state(user=user)
         for off, gvar in state.global_vars.items():
-            changes |= self.fill_global_var(off, user=user, state=state)
+            changes |= self.fill_global_var(off, user=user, state=state, master_state=master_state)
 
         return changes
 
     @init_checker
-    @make_and_commit_states
-    def fill_all(self, user=None, state=None):
+    def fill_all(self, user=None, **kwargs):
         """
         Connected to the Sync All action:
         syncs in all the data from the targeted user
@@ -739,7 +712,7 @@ class BinSyncController:
 
         changes = False
         for filler in fillers:
-            changes |= filler(user=user, state=state)
+            changes |= filler(user=user, **kwargs)
 
         return changes
 
@@ -931,7 +904,9 @@ class BinSyncController:
         base_type_str = type_.base_type.type_str
         return base_type_str if base_type_str in state.structs.keys() else None
 
-    def import_user_defined_type(self, type_str, master_state=None, state=None):
+    def import_user_defined_type(self, type_str, **kwargs):
+        state = kwargs['state']
+        master_state = kwargs['master_state']
         base_type_str = self.type_is_user_defined(type_str, state=state)
         if not base_type_str:
             return False
@@ -954,15 +929,11 @@ class BinSyncController:
             else self.fill_structs(state=state)
         return changes
 
-    def get_master_and_user_state(self, **kwargs):
-        state = kwargs.get("state", None)
-        user = kwargs.get("user", None)
-        master_state = kwargs.get("master_state", None)
+    def get_master_and_user_state(self, user=None, **kwargs):
+        state = kwargs.get("state", None) \
+            or self.get_state(user=user, priority=SchedSpeed.FAST)
 
-        if state is None:
-            state = self.get_state(user=user, priority=SchedSpeed.FAST)
+        master_state = kwargs.get("master_state", None) \
+            or self.get_state(priority=SchedSpeed.FAST)
 
-        if master_state is None:
-            master_state = self.get_state(priority=SchedSpeed.FAST)
-            
         return master_state, state

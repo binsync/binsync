@@ -11,7 +11,7 @@ from binsync import Function
 from binsync.common.controller import (
     BinSyncController,
     init_checker,
-    make_and_commit_states,
+    fill_event
 )
 from binsync.data import (
     FunctionHeader, StackOffsetType, Comment, StackVariable
@@ -85,16 +85,18 @@ class AngrBinSyncController(BinSyncController):
     #
     # Display Fillers
     #
-
-    def fill_global_var(self, var_addr, user=None, state=None):
+    @fill_event
+    def fill_global_var(self, var_addr, user=None, artifact=None, **kwargs):
         return False
 
-    def fill_struct(self, struct_name, user=None, state=None, header=True, members=True):
+    @fill_event
+    def fill_struct(self, struct_name, user=None, artifact=None, **kwargs):
         return False
 
     @init_checker
-    @make_and_commit_states
-    def fill_function(self, func_addr, user=None, state=None):
+    @fill_event
+    def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
+        state = kwargs['state']
         func = self._instance.kb.functions[self.artifact_lifer.lower_addr(func_addr)]
 
         # re-decompile a function if needed

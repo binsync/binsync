@@ -35,7 +35,7 @@ import ida_funcs
 import ida_kernwin
 
 import binsync
-from binsync.common.controller import BinSyncController, init_checker, make_and_commit_states
+from binsync.common.controller import BinSyncController, init_checker, fill_event
 from binsync import (
     StackVariable, StackOffsetType, Function, FunctionHeader, Struct, Comment, GlobalVariable, Enum, State, Patch
 )
@@ -203,10 +203,10 @@ class IDABinSyncController(BinSyncController):
     #
 
     @init_checker
-    @make_and_commit_states
-    def fill_struct(self, struct_name, user=None, state=None, header=True, members=True):
+    @fill_event
+    def fill_struct(self, struct_name, user=None, header=True, members=True, artifact=None, **kwargs):
         data_changed = False
-        struct: Struct = self.pull_artifact(Struct, struct_name, state=state)
+        struct: Struct = artifact
 
         if not struct:
             _l.warning("Was not able to find the struct you requested in other users name")
@@ -226,10 +226,10 @@ class IDABinSyncController(BinSyncController):
         return data_changed
 
     @init_checker
-    @make_and_commit_states
-    def fill_global_var(self, var_addr, user=None, state=None):
+    @fill_event
+    def fill_global_var(self, var_addr, user=None, artifact=None, **kwargs):
         changed = False
-        global_var: GlobalVariable = self.pull_artifact(GlobalVariable, var_addr, state=state)
+        global_var: GlobalVariable = artifact
         if global_var and global_var.name:
             self.inc_api_count()
             changed = compat.set_global_var_name(var_addr, global_var.name)
@@ -247,11 +247,12 @@ class IDABinSyncController(BinSyncController):
         return changed
 
     @init_checker
-    @make_and_commit_states
-    def fill_function(self, func_addr, user=None, state=None):
+    @fill_event
+    def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
         """
         Grab all relevant information from the specified user and fill the @func_adrr.
         """
+        state = kwargs['state']
         data_changed = False
 
         # sanity check this function
