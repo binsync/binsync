@@ -11,7 +11,7 @@ from binsync import Function
 from binsync.common.controller import (
     BinSyncController,
     init_checker,
-    make_ro_state,
+    make_and_commit_states,
 )
 from binsync.data import (
     FunctionHeader, StackOffsetType, Comment, StackVariable
@@ -93,7 +93,7 @@ class AngrBinSyncController(BinSyncController):
         return False
 
     @init_checker
-    @make_ro_state
+    @make_and_commit_states
     def fill_function(self, func_addr, user=None, state=None):
         func = self._instance.kb.functions[self.artifact_lifer.lower_addr(func_addr)]
 

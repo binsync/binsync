@@ -36,7 +36,7 @@ from binaryninjaui import (
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourceType
 from binaryninja.mainthread import execute_on_main_thread, is_main_thread
 
-from binsync.common.controller import BinSyncController, make_ro_state, init_checker
+from binsync.common.controller import BinSyncController, make_and_commit_states, init_checker
 from binsync.data import (
     State, User, Artifact,
     Function, FunctionHeader, FunctionArgument, StackVariable, StackOffsetType,
@@ -124,19 +124,19 @@ class BinjaBinSyncController(BinSyncController):
     #
 
     @init_checker
-    @make_ro_state
+    @make_and_commit_states
     @background_and_wait
     def fill_struct(self, struct_name, user=None, state=None, header=True, members=True):
         pass
 
     @init_checker
-    @make_ro_state
+    @make_and_commit_states
     @background_and_wait
     def fill_global_var(self, var_addr, user=None, state=None):
         pass
 
     @init_checker
-    @make_ro_state
+    @make_and_commit_states
     @background_and_wait
     def fill_function(self, func_addr, user=None, state=None):
         """

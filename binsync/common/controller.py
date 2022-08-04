@@ -33,23 +33,30 @@ def init_checker(f):
     return _init_check
 
 
-def make_ro_state(f):
+def make_and_commit_states(f):
     """
     Build a read-only State _instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
-    Function `f` should have have at least two kwargs, `user` and `state`.
+    Function `f` should have at least two kwargs, `user` and `state`.
     """
 
     @wraps(f)
-    def state_check(self, *args, **kwargs):
+    def _make_and_commit_states(self: "BinSyncController", *args, **kwargs):
         state = kwargs.pop('state', None)
         user = kwargs.pop('user', None)
+        master_state = kwargs.pop('master_state', None)
         if state is None:
             state = self.client.get_state(user=user)
+
+        if master_state is None:
+            master_state = self.client.get_state()
+
         kwargs['state'] = state
         kwargs['user'] = user
+        kwargs['master_state'] = master_state
+
         return f(self, *args, **kwargs)
 
-    return state_check
+    return _make_and_commit_states
 
 
 #
@@ -59,6 +66,7 @@ def make_ro_state(f):
 # https://stackoverflow.com/questions/10926328
 BUSY_LOOP_COOLDOWN = 0.5
 GET_MANY = True
+FILL_MANY = True
 
 class SyncControlStatus:
     CONNECTED = 0
@@ -427,6 +435,7 @@ class BinSyncController:
     def lower_artifact(self, artifact: Artifact) -> Artifact:
         return self.artifact_lifer.lower(artifact)
 
+    @init_checker
     def get_state(self, user=None, version=None, priority=None, no_cache=False) -> State:
         return self.client.get_state(user=user, version=version, priority=priority, no_cache=no_cache)
 
@@ -453,6 +462,7 @@ class BinSyncController:
 
         return self.lower_artifact(artifact)
 
+    @init_checker
     def push_artifact(self, artifact: Artifact, user=None, state=None, commit_msg=None, api_set=False) -> bool:
         """
         Every pusher artifact does three things
@@ -503,9 +513,39 @@ class BinSyncController:
     # cause a save of the BS state.
     #
 
+    def fill_event_callback(self, filler, *identifiers, **kwargs):
+        ARTIFACT_FILL_MAP = {
+            self.fill_function.__name__: Function
+        }
+
+        user = kwargs.get('state', None)
+        state = kwargs.get('state', None)
+        master_state: State = kwargs.get('master_state', None)
+
+        if state is None:
+            state = self.get_state(user=user, priority=SchedSpeed.FAST)
+
+        if master_state is None:
+            master_state = self.get_state(priority=SchedSpeed.FAST)
+
+        artifact_type = ARTIFACT_FILL_MAP.get(filler.__name__, None)
+        if not artifact_type:
+            _l.warning(f"Attempting to Fill an unknown type! Stopping Fill...")
+            return None
+
+        art_getter = self.ARTIFACT_GET_MAP.get(artifact_type)
+        merged_artifact = self.merge_artifacts(
+            art_getter(master_state, *identifiers), art_getter(state, *identifiers),
+            merge_level=kwargs.get('merge_level', None)
+        )
+
+        filler()
+
+
     @init_checker
-    @make_ro_state
-    def fill_struct(self, struct_name, user=None, state=None, header=True, members=True):
+    @make_and_commit_states
+    def fill_struct(self, struct_name,
+                    user=None, state=None, header=True, members=True, **kwargs):
         """
 
         @param struct_name:
@@ -519,8 +559,8 @@ class BinSyncController:
         return False
 
     @init_checker
-    @make_ro_state
-    def fill_global_var(self, var_addr, user=None, state=None):
+    @make_and_commit_states
+    def fill_global_var(self, var_addr, user=None, state=None, **kwargs):
         """
         Grab a global variable for a specified address and fill it locally
 
@@ -534,8 +574,8 @@ class BinSyncController:
 
 
     @init_checker
-    @make_ro_state
-    def fill_enum(self, enum_name, user=None, state=None):
+    @make_and_commit_states
+    def fill_enum(self, enum_name, user=None, state=None, **kwargs):
         """
         Grab an enum and fill it locally
 
@@ -547,21 +587,21 @@ class BinSyncController:
         _l.debug(f"Fill Enum is not implemented in your decompiler.")
         return False
 
-    def fill_stack_variable(self, func_addr, offset, user=None, state=None):
+    def fill_stack_variable(self, func_addr, offset, user=None, state=None, **kwargs):
         _l.debug(f"Fill Stack Var is not implemented in your decompiler.")
         return False
 
-    def fill_function_header(self, func_addr, user=None, state=None):
+    def fill_function_header(self, func_addr, user=None, state=None, **kwargs):
         _l.debug(f"Fill Function Header is not implemented in your decompiler.")
         return False
 
-    def fill_comment(self, addr, user=None, state=None):
+    def fill_comment(self, addr, user=None, state=None, **kwargs):
         _l.debug(f"Fill Comments is not implemented in your decompiler.")
         return False
 
     @init_checker
-    @make_ro_state
-    def fill_function(self, func_addr, user=None, state=None, merge_level=None):
+    @make_and_commit_states
+    def fill_function(self, func_addr, user=None, state=None, merge_level=None, **kwargs):
         """
         Grab all relevant information from the specified user and fill the @func_addr.
         """
@@ -602,7 +642,7 @@ class BinSyncController:
         return False
 
     @init_checker
-    @make_ro_state
+    @make_and_commit_states
     def fill_functions(self, user=None, state=None):
         change = False
         for addr, func in state.functions.items():
@@ -611,7 +651,7 @@ class BinSyncController:
         return change
 
     @init_checker
-    @make_ro_state
+    @make_and_commit_states
     def fill_structs(self, user=None, state=None):
         """
         Grab all the structs from a specified user, then fill them locally
@@ -631,7 +671,7 @@ class BinSyncController:
         return changes
 
     @init_checker
-    @make_ro_state
+    @make_and_commit_states
     def fill_enums(self, user=None, state=None):
         """
         Grab all enums and fill it locally
@@ -647,7 +687,7 @@ class BinSyncController:
         return changes
 
     @init_checker
-    @make_ro_state
+    @make_and_commit_states
     def fill_global_vars(self, user=None, state=None):
         changes = False
         for off, gvar in state.global_vars.items():
@@ -656,7 +696,7 @@ class BinSyncController:
         return changes
 
     @init_checker
-    @make_ro_state
+    @make_and_commit_states
     def fill_all(self, user=None, state=None):
         """
         Connected to the Sync All action:
@@ -781,6 +821,26 @@ class BinSyncController:
     #
     # Utils
     #
+
+    def merge_artifacts(self, art1: Artifact, art2: Artifact, merge_level=None):
+        if merge_level is None:
+            merge_level = self.sync_level
+
+        if merge_level == SyncLevel.OVERWRITE or not art1 or art1 == art2:
+            return art2
+
+        if merge_level == SyncLevel.NON_CONFLICTING:
+            merge_art = art1.nonconflict_merge(art1, art2)
+
+        elif merge_level == SyncLevel.MERGE:
+            _l.warning("Manual Merging is not currently supported, using non-conflict syncing...")
+            merge_art = art1.nonconflict_merge(art1, art2)
+
+        else:
+            raise Exception("Your BinSync Client has an unsupported Sync Level activated")
+
+        return merge_art
+
 
     def merge_function_into_master(self, sync_func: Function, merge_level=None) -> Function:
         if merge_level is None:
