@@ -58,7 +58,6 @@ def make_ro_state(f):
 # https://stackoverflow.com/questions/10926328
 BUSY_LOOP_COOLDOWN = 0.5
 GET_MANY = True
-FILL_MANY = True
 
 class SyncControlStatus:
     CONNECTED = 0
