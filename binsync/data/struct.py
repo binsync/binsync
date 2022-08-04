@@ -66,7 +66,7 @@ class Struct(Artifact):
         super(Struct, self).__init__(last_change=last_change)
         self.name = name
         self.size = size
-        self.struct_members = struct_members
+        self.struct_members: Dict[int, StructMember] = struct_members
 
     def __str__(self):
         return f"<Struct: {self.name} membs={len(self.struct_members)} ({hex(self.size)})>"

@@ -30,7 +30,7 @@ class AngrBinSyncController(BinSyncController):
     """
 
     def __init__(self, workspace):
-        super(AngrBinSyncController, self).__init__(AngrArtifactLifter(self))
+        super(AngrBinSyncController, self).__init__(artifact_lifter=AngrArtifactLifter(self))
         self._workspace = workspace
         self._instance = workspace.instance
 
@@ -106,7 +106,7 @@ class AngrBinSyncController(BinSyncController):
             # the function does not exist for that user's state
             return False
 
-        sync_func = self.generate_func_for_sync_level(sync_func)
+        sync_func = self.merge_function_into_master(sync_func)
 
         #
         # Function Header

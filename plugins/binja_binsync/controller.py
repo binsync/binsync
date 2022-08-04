@@ -77,7 +77,7 @@ def background_and_wait(func):
 
 class BinjaBinSyncController(BinSyncController):
     def __init__(self):
-        super(BinjaBinSyncController, self).__init__(BinjaArtifactLifter(self))
+        super(BinjaBinSyncController, self).__init__(artifact_lifter=BinjaArtifactLifter(self))
         self.bv = None
         self.sync_lock = False
 
@@ -149,7 +149,7 @@ class BinjaBinSyncController(BinSyncController):
             return
 
         self.sync_lock = True
-        sync_func = self.generate_func_for_sync_level(sync_func)
+        sync_func = self.merge_function_into_master(sync_func)
 
         #
         # header

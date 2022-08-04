@@ -132,7 +132,7 @@ class UpdateTaskState:
 
 class IDABinSyncController(BinSyncController):
     def __init__(self):
-        super(IDABinSyncController, self).__init__(IDAArtifactLifter(self))
+        super(IDABinSyncController, self).__init__(artifact_lifter=IDAArtifactLifter(self))
 
         # view change callback
         self._updated_ctx = None
@@ -270,7 +270,7 @@ class IDABinSyncController(BinSyncController):
             return data_changed
 
         # make function prepared for either merging or not
-        binsync_func = self.generate_func_for_sync_level(binsync_func)
+        binsync_func = self.merge_function_into_master(binsync_func)
 
         ida_code_view = compat.acquire_pseudocode_vdui(ida_func.start_ea)
         # check if a header has been set for the func

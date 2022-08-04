@@ -8,6 +8,7 @@ from typing import Dict, Iterable, List, Optional, Union
 import binsync.data
 from binsync.common.artifact_lifter import ArtifactLifter
 from binsync.core.client import Client, SchedSpeed
+from binsync.data.type_parser import BSTypeParser, BSType
 from binsync.data import (
     State, User, Artifact,
     Function, FunctionHeader, FunctionArgument, StackVariable,
@@ -111,7 +112,7 @@ class BinSyncController:
     The client will be set on connection. The ctx_change_callback will be set by an outside UI
 
     """
-    def __init__(self, artifact_lifter, headless=False, reload_time=10):
+    def __init__(self, artifact_lifter=None, headless=False, reload_time=10):
         self.headless = headless
         self.reload_time = reload_time
         self.artifact_lifer: ArtifactLifter = artifact_lifter
@@ -134,6 +135,10 @@ class BinSyncController:
 
         # create a pulling thread, but start on connection
         self.updater_thread = threading.Thread(target=self.updater_routine)
+
+        # TODO: make the initialization of this with types of decompiler
+        self.type_parser = BSTypeParser()
+
     #
     #   Multithreading updaters, locks, and evaluators
     #
@@ -515,6 +520,98 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
+    def fill_global_var(self, var_addr, user=None, state=None):
+        """
+        Grab a global variable for a specified address and fill it locally
+
+        @param var_addr:
+        @param user:
+        @param state:
+        @return:
+        """
+        _l.debug(f"Fill Global Var is not implemented in your decompiler.")
+        return False
+
+
+    @init_checker
+    @make_ro_state
+    def fill_enum(self, enum_name, user=None, state=None):
+        """
+        Grab an enum and fill it locally
+
+        @param enum_name:
+        @param user:
+        @param state:
+        @return:
+        """
+        _l.debug(f"Fill Enum is not implemented in your decompiler.")
+        return False
+
+    def fill_stack_variable(self, func_addr, offset, user=None, state=None):
+        _l.debug(f"Fill Stack Var is not implemented in your decompiler.")
+        return False
+
+    def fill_function_header(self, func_addr, user=None, state=None):
+        _l.debug(f"Fill Function Header is not implemented in your decompiler.")
+        return False
+
+    def fill_comment(self, addr, user=None, state=None):
+        _l.debug(f"Fill Comments is not implemented in your decompiler.")
+        return False
+
+    @init_checker
+    @make_ro_state
+    def fill_function(self, func_addr, user=None, state=None, merge_level=None):
+        """
+        Grab all relevant information from the specified user and fill the @func_addr.
+        """
+        dec_func: Function = self.function(func_addr)
+        if not dec_func:
+            _l.warning(f"The function at {hex(func_addr)} does not exist in your decompiler. Stopping sync.")
+            return False
+
+        user_func: Function = state.get_function(func_addr)
+        master_func: Function = self.lower_artifact(
+            self.merge_function_into_master(user_func, merge_level=merge_level)
+        )
+
+        changes = False
+
+        # function header
+        master_state = self.get_state(priority=SchedSpeed.FAST)
+        if master_func.header != dec_func.header:
+            # type is user made (a struct)
+            changes |= self.import_user_defined_type(master_func.header.ret_type, master_state=master_state, state=state)
+            changes |= self.fill_function_header(func_addr, user=user, state=state)
+
+        # stack vars
+        master_state = self.get_state(priority=SchedSpeed.FAST)
+        if master_func.stack_vars != dec_func.stack_vars:
+            for offset, sv in master_func.stack_vars.items():
+                dec_sv = dec_func.stack_vars.get(offset, None)
+                if not dec_sv or sv == dec_sv:
+                    continue
+
+                changes |= self.import_user_defined_type(sv.type, master_state=master_state, state=state)
+                changes |= self.fill_stack_variable(func_addr, offset, user=user, state=state)
+
+        # comments
+        for addr, cmt in state.get_func_comments(func_addr):
+            changes |= self.fill_comment(addr, state=state)
+
+        return False
+
+    @init_checker
+    @make_ro_state
+    def fill_functions(self, user=None, state=None):
+        change = False
+        for addr, func in state.functions.items():
+            change |= self.fill_function(addr, user=user, state=state)
+
+        return change
+
+    @init_checker
+    @make_ro_state
     def fill_structs(self, user=None, state=None):
         """
         Grab all the structs from a specified user, then fill them locally
@@ -535,43 +632,6 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_global_var(self, var_addr, user=None, state=None):
-        """
-        Grab a global variable for a specified address and fill it locally
-
-        @param var_addr:
-        @param user:
-        @param state:
-        @return:
-        """
-        _l.debug(f"Fill Global Var is not implemented in your decompiler.")
-        return False
-
-    @init_checker
-    @make_ro_state
-    def fill_global_vars(self, user=None, state=None):
-        changes = False
-        for off, gvar in state.global_vars.items():
-            changes |= self.fill_global_var(off, user=user, state=state)
-
-        return changes
-
-    @init_checker
-    @make_ro_state
-    def fill_enum(self, enum_name, user=None, state=None):
-        """
-        Grab an enum and fill it locally
-
-        @param enum_name:
-        @param user:
-        @param state:
-        @return:
-        """
-        _l.debug(f"Fill Enum is not implemented in your decompiler.")
-        return False
-
-    @init_checker
-    @make_ro_state
     def fill_enums(self, user=None, state=None):
         """
         Grab all enums and fill it locally
@@ -588,21 +648,12 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_function(self, func_addr, user=None, state=None):
-        """
-        Grab all relevant information from the specified user and fill the @func_adrr.
-        """
-        _l.debug(f"Fill Function is not implemented in your decompiler.")
-        return False
+    def fill_global_vars(self, user=None, state=None):
+        changes = False
+        for off, gvar in state.global_vars.items():
+            changes |= self.fill_global_var(off, user=user, state=state)
 
-    @init_checker
-    @make_ro_state
-    def fill_functions(self, user=None, state=None):
-        change = False
-        for addr, func in state.functions.items():
-            change |= self.fill_function(addr, user=user, state=state)
-
-        return change
+        return changes
 
     @init_checker
     @make_ro_state
@@ -731,19 +782,23 @@ class BinSyncController:
     # Utils
     #
 
-    def generate_func_for_sync_level(self, sync_func: Function) -> Function:
-        if self.sync_level == SyncLevel.OVERWRITE:
+    def merge_function_into_master(self, sync_func: Function, merge_level=None) -> Function:
+        if merge_level is None:
+            merge_level = self.sync_level
+
+        if merge_level == SyncLevel.OVERWRITE:
             return sync_func
 
         master_state = self.client.get_state()
         master_func = master_state.get_function(sync_func.addr)
-        if not master_func:
+
+        if not master_func or master_func == sync_func:
             return sync_func
 
-        if self.sync_level == SyncLevel.NON_CONFLICTING:
+        if merge_level == SyncLevel.NON_CONFLICTING:
             new_func = Function.from_nonconflicting_merge(master_func, sync_func)
 
-        elif self.sync_level == SyncLevel.MERGE:
+        elif merge_level == SyncLevel.MERGE:
             _l.warning("Manual Merging is not currently supported, using non-conflict syncing...")
             new_func = Function.from_nonconflicting_merge(master_func, sync_func)
 
@@ -774,3 +829,42 @@ class BinSyncController:
                 known_arts.add(identifier)
 
         return known_arts
+
+    def type_is_user_defined(self, type_str, state=None):
+        if not type_str:
+            return None
+
+        type_: BSType = self.type_parser.parse_type(type_str)
+        if not type_:
+            # it was not parseable
+            return None
+
+        # type is known and parseable
+        if not type_.is_unknown:
+            return None
+
+        base_type_str = type_.base_type.type_str
+        return base_type_str if base_type_str in state.structs.keys() else None
+
+    def import_user_defined_type(self, type_str, master_state=None, state=None):
+        base_type_str = self.type_is_user_defined(type_str, state=state)
+        if not base_type_str:
+            return False
+
+        struct: Struct = state.get_struct(base_type_str)
+        if not struct:
+            return False
+
+        nested_undefined_structs = False
+        for off, memb in struct.struct_members.items():
+            user_type = self.type_is_user_defined(memb.type)
+            if user_type and user_type not in master_state.structs.keys():
+                # should we ever happen to have a struct with a nested type that is
+                # also a struct that we don't have in our master_state, then we give up
+                # and attempt to fill all structs to resolve type issues
+                nested_undefined_structs = True
+                break
+
+        changes = self.fill_struct(base_type_str, state=state) if not nested_undefined_structs \
+            else self.fill_structs(state=state)
+        return changes

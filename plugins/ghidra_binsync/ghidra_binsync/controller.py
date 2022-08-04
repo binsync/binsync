@@ -16,7 +16,7 @@ class GhidraBinSyncController(BinSyncController):
         """
         TODO: add a real lifter as first arg here
         """
-        super(GhidraBinSyncController, self).__init__(None)
+        super(GhidraBinSyncController, self).__init__()
         l.info("Start Ghidra controller")
         self.bridge = BSBridgeClient()
 
