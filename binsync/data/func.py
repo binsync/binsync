@@ -281,10 +281,11 @@ class Function(Artifact):
         f.__setstate__(func_toml)
         return f
 
-    @classmethod
-    def from_nonconflicting_merge(cls, func1: "Function", func2: "Function") -> "Function":
+    def nonconflict_merge(self, func2: "Function") -> "Function":
+        func1: "Function" = self.copy()
+
         if not func2 or func1 == func2:
-            return func1.copy()
+            return func1
 
         func_diff = func1.diff(func2)
         merge_func = func1.copy()
@@ -303,14 +304,14 @@ class Function(Artifact):
             # header args
             for off, var in func2.header.args.items():
                 merge_var = func1.header.args[off].copy() if off in func1.header.args else var
-                merge_var = FunctionArgument.from_nonconflicting_merge(merge_var, var)
+                merge_var = FunctionArgument.nonconflict_merge(merge_var, var)
 
                 merge_func.header.args[off]= merge_var
 
         # stack vars
         for off, var in func2.stack_vars.items():
             merge_var = func1.stack_vars[off].copy() if off in func1.stack_vars else var
-            merge_var = StackVariable.from_nonconflicting_merge(merge_var, var)
+            merge_var = StackVariable.nonconflict_merge(merge_var, var)
 
             merge_func.stack_vars[off] = merge_var
 

@@ -60,6 +60,14 @@ class SyncLevel:
     MERGE = 2
 
 
+class FakeSyncLock:
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+
 #
 #   Controller
 #
@@ -120,6 +128,7 @@ class BinSyncController:
         # command locks
         self.queue_lock = threading.Lock()
         self.cmd_queue = OrderedDict()
+        self.sync_lock = threading.Lock()
 
         # create a pulling thread, but start on connection
         self.updater_thread = threading.Thread(target=self.updater_routine)
@@ -529,12 +538,14 @@ class BinSyncController:
             merge_level=merge_level
         )
         artifact = self.lower_artifact(merged_artifact)
-        
-        fill_changes = filler_func(
-            *identifiers,
-            artifact=artifact, user=user, state=state, master_state=master_state, merge_level=merge_level,
-            **kwargs
-        )
+
+        lock = self.sync_lock if not self.sync_lock.locked() else FakeSyncLock()
+        with lock:
+            fill_changes = filler_func(
+                *identifiers,
+                artifact=artifact, user=user, state=state, master_state=master_state, merge_level=merge_level,
+                **kwargs
+            )
 
         self.make_controller_cmd(
             self.push_artifact,
@@ -606,7 +617,7 @@ class BinSyncController:
 
     @init_checker
     @fill_event
-    def fill_function(self, func_addr, user=None, merge_level=None, artifact=None, **kwargs):
+    def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
         """
         Grab all relevant information from the specified user and fill the @func_addr.
         """
@@ -619,26 +630,26 @@ class BinSyncController:
         changes = False
 
         # function header
-        if master_func.header != dec_func.header:
+        if master_func.header and master_func.header != dec_func.header:
             # type is user made (a struct)
             changes |= self.import_user_defined_type(master_func.header.ret_type, **kwargs)
-            changes |= self.fill_function_header(func_addr, **kwargs)
+            changes |= self.fill_function_header(func_addr, artifact=master_func.header, **kwargs)
 
         # stack vars
-        if master_func.stack_vars != dec_func.stack_vars:
+        if master_func.stack_vars and master_func.stack_vars != dec_func.stack_vars:
             for offset, sv in master_func.stack_vars.items():
                 dec_sv = dec_func.stack_vars.get(offset, None)
                 if not dec_sv or sv == dec_sv:
                     continue
 
                 changes |= self.import_user_defined_type(sv.type, **kwargs)
-                changes |= self.fill_stack_variable(func_addr, offset, **kwargs)
+                changes |= self.fill_stack_variable(func_addr, offset, artifact=sv, **kwargs)
 
         # comments
         for addr, cmt in kwargs['state'].get_func_comments(func_addr):
-            changes |= self.fill_comment(addr, **kwargs)
+            changes |= self.fill_comment(addr, artifact=cmt, **kwargs)
 
-        return False
+        return changes
 
     @init_checker
     def fill_functions(self, user=None, **kwargs):
@@ -761,7 +772,7 @@ class BinSyncController:
                     if not pref_art:
                         pref_art = user_art.copy()
 
-                    pref_art = artifact_type.from_nonconflicting_merge(pref_art, user_art)
+                    pref_art = pref_art.nonconflict_merge(user_art)
                     pref_art.last_change = None
 
                 self.push_artifact(pref_art, state=master_state, commit_msg=f"Magic Synced {pref_art}")
@@ -854,11 +865,11 @@ class BinSyncController:
             return sync_func
 
         if merge_level == SyncLevel.NON_CONFLICTING:
-            new_func = Function.from_nonconflicting_merge(master_func, sync_func)
+            new_func = Function.nonconflict_merge(master_func, sync_func)
 
         elif merge_level == SyncLevel.MERGE:
             _l.warning("Manual Merging is not currently supported, using non-conflict syncing...")
-            new_func = Function.from_nonconflicting_merge(master_func, sync_func)
+            new_func = Function.nonconflict_merge(master_func, sync_func)
 
         else:
             raise Exception("Your BinSync Client has an unsupported Sync Level activated")
@@ -925,8 +936,8 @@ class BinSyncController:
                 nested_undefined_structs = True
                 break
 
-        changes = self.fill_struct(base_type_str, state=state) if not nested_undefined_structs \
-            else self.fill_structs(state=state)
+        changes = self.fill_struct(base_type_str, state=state, **kwargs) if not nested_undefined_structs \
+            else self.fill_structs(state=state, **kwargs)
         return changes
 
     def get_master_and_user_state(self, user=None, **kwargs):

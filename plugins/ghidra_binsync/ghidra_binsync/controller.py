@@ -110,7 +110,7 @@ class GhidraBinSyncController(BinSyncController):
                     pref_func = user_func.copy()
                     continue
 
-                pref_func = Function.from_nonconflicting_merge(pref_func, user_func)
+                pref_func = Function.nonconflict_merge(pref_func, user_func)
                 pref_func.last_change = None
 
             master_state.functions[pref_func.addr] = pref_func

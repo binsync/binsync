@@ -149,13 +149,13 @@ class Struct(Artifact):
         s.__setstate__(struct_toml)
         return s
 
-    @classmethod
-    def from_nonconflicting_merge(cls, struct1: "Struct", struct2: "Struct") -> "Struct":
+    def nonconflict_merge(self, struct2: "Struct") -> "Struct":
+        struct1: "Struct" = self.copy()
         if not struct2 or struct1 == struct2:
-            return struct1.copy()
+            return struct1
 
         struct_diff = struct1.diff(struct2)
-        merge_struct = struct1.copy()
+        merge_struct = struct1
 
         members_diff = struct_diff["struct_members"]
         for off, mem in struct2.struct_members.items():
@@ -181,7 +181,7 @@ class Struct(Artifact):
 
             # member differs
             merge_mem = merge_struct.struct_members[off].copy()
-            merge_mem = StructMember.from_nonconflicting_merge(merge_mem, mem)
+            merge_mem = StructMember.nonconflict_merge(merge_mem, mem)
             merge_struct.struct_members[off] = merge_mem
 
         # compute the new size

@@ -249,9 +249,54 @@ class IDABinSyncController(BinSyncController):
     @init_checker
     @fill_event
     def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
-        """
-        Grab all relevant information from the specified user and fill the @func_adrr.
-        """
+        func: Function = artifact
+        ida_code_view = compat.acquire_pseudocode_vdui(func.addr)
+        super(IDABinSyncController, self).fill_function(
+            func_addr, user=user, artifact=artifact, ida_code_view=ida_code_view, **kwargs
+        )
+
+    @init_checker
+    @fill_event
+    def fill_comment(self, addr, user=None, artifact=None, **kwargs):
+        cmt: Comment = artifact
+        res = compat.set_ida_comment(addr, cmt.comment, decompiled=cmt.decompiled)
+        if not res:
+            _l.warning(f"Failed to sync comment at <{hex(addr)}>: \'{cmt.comment}\'")
+
+        return res
+
+    @init_checker
+    @fill_event
+    def fill_stack_variable(self, func_addr, offset, user=None, artifact=None, ida_code_view=None, **kwargs):
+        stack_var: StackVariable = artifact
+        frame = idaapi.get_frame(stack_var.addr)
+        changes = False
+        if frame is None or frame.memqty <= 0:
+            _l.warning(f"Function {stack_var.addr:x} does not have an associated function frame. Stopping sync here!")
+            return False
+
+        if ida_struct.set_member_name(frame, stack_var.stack_offset, stack_var.name):
+            changes |= True
+
+        ida_type = compat.convert_type_str_to_ida_type(stack_var.type)
+        if ida_type is None:
+            _l.warning(f"Failed to parse type for stack var {stack_var}")
+            return changes
+
+        changes |= compat.set_stack_vars_types({stack_var.stack_offset: ida_type}, ida_code_view, self)
+        return changes
+
+    @init_checker
+    @fill_event
+    def fill_function_header(self, func_addr, user=None, artifact=None, ida_code_view=None, **kwargs):
+        func_header: FunctionHeader = artifact
+        updated_header = compat.set_function_header(ida_code_view, func_header)
+        return updated_header
+
+    """
+    @init_checker
+    @fill_event
+    def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
         state = kwargs['state']
         data_changed = False
 
@@ -366,6 +411,7 @@ class IDABinSyncController(BinSyncController):
             _l.info(f"No new data was set either by failure or lack of differences.")
 
         return data_changed
+    """
 
     #
     # Artifact API
