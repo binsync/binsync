@@ -511,7 +511,7 @@ class BinSyncController:
         @param members:
         @return:
         """
-        _l.info(f"Fill Struct is not implemented in your decompiler.")
+        _l.debug(f"Fill Struct is not implemented in your decompiler.")
         return False
 
     @init_checker
@@ -545,7 +545,7 @@ class BinSyncController:
         @param state:
         @return:
         """
-        _l.info(f"Fill Global Var is not implemented in your decompiler.")
+        _l.debug(f"Fill Global Var is not implemented in your decompiler.")
         return False
 
     @init_checker
@@ -568,7 +568,7 @@ class BinSyncController:
         @param state:
         @return:
         """
-        _l.info(f"Fill Enum is not implemented in your decompiler.")
+        _l.debug(f"Fill Enum is not implemented in your decompiler.")
         return False
 
     @init_checker
@@ -593,7 +593,7 @@ class BinSyncController:
         """
         Grab all relevant information from the specified user and fill the @func_adrr.
         """
-        _l.info(f"Fill Function is not implemented in your decompiler.")
+        _l.debug(f"Fill Function is not implemented in your decompiler.")
         return False
 
     @init_checker
