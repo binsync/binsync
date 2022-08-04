@@ -126,7 +126,7 @@ class BinjaBinSyncController(BinSyncController):
     @init_checker
     @make_ro_state
     @background_and_wait
-    def fill_struct(self, struct_name, user=None, state=None):
+    def fill_struct(self, struct_name, user=None, state=None, header=True, members=True):
         pass
 
     @init_checker

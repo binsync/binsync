@@ -522,6 +522,9 @@ class State:
 
         return func
 
+    def get_functions(self):
+        return self.functions
+
     def get_comment(self, addr) -> Comment:
         try:
             cmt = self.comments[addr]
@@ -589,6 +592,9 @@ class State:
             gvar = None
 
         return gvar
+
+    def get_global_vars(self):
+        return self.global_vars
 
     def get_enum(self, name):
         try:

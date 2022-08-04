@@ -1,7 +1,7 @@
 import logging
 import threading
 import time
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from functools import wraps
 from typing import Dict, Iterable, List, Optional, Union
 
@@ -59,7 +59,6 @@ def make_ro_state(f):
 BUSY_LOOP_COOLDOWN = 0.5
 GET_MANY = True
 
-
 class SyncControlStatus:
     CONNECTED = 0
     CONNECTED_NO_REMOTE = 1
@@ -90,11 +89,13 @@ class BinSyncController:
 
     ARTIFACT_GET_MAP = {
         Function: State.get_function,
+        (Function, GET_MANY): State.get_functions,
         StackVariable: State.get_stack_variable,
         (StackVariable, GET_MANY): State.get_stack_variables,
         Comment: State.get_comment,
         (Comment, GET_MANY): State.get_func_comments,
         GlobalVariable: State.get_global_var,
+        (GlobalVariable, GET_MANY): State.get_global_vars,
         Struct: State.get_struct,
         (Struct, GET_MANY): State.get_structs,
         Enum: State.get_enum,
@@ -133,7 +134,6 @@ class BinSyncController:
 
         # create a pulling thread, but start on connection
         self.updater_thread = threading.Thread(target=self.updater_routine)
-
     #
     #   Multithreading updaters, locks, and evaluators
     #
@@ -500,16 +500,18 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
-    def fill_struct(self, struct_name, user=None, state=None):
+    def fill_struct(self, struct_name, user=None, state=None, header=True, members=True):
         """
-        Fill a single specific struct from the user
 
         @param struct_name:
         @param user:
         @param state:
+        @param header:
+        @param members:
         @return:
         """
-        raise NotImplementedError
+        _l.debug(f"Fill Struct is not implemented in your decompiler.")
+        return False
 
     @init_checker
     @make_ro_state
@@ -521,7 +523,15 @@ class BinSyncController:
         @param state:
         @return:
         """
-        raise NotImplementedError
+        changes = False
+        # only do struct headers for circular references
+        for name, struct in state.structs.items():
+            changes |= self.fill_struct(name, user=user, state=state, members=False)
+
+        for name, struct in state.structs.items():
+            changes |= self.fill_struct(name, user=user, state=state, header=False)
+
+        return changes
 
     @init_checker
     @make_ro_state
@@ -534,15 +544,17 @@ class BinSyncController:
         @param state:
         @return:
         """
-        raise NotImplementedError
+        _l.debug(f"Fill Global Var is not implemented in your decompiler.")
+        return False
 
     @init_checker
     @make_ro_state
     def fill_global_vars(self, user=None, state=None):
+        changes = False
         for off, gvar in state.global_vars.items():
-            self.fill_global_var(off, user=user, state=state)
+            changes |= self.fill_global_var(off, user=user, state=state)
 
-        return True
+        return changes
 
     @init_checker
     @make_ro_state
@@ -555,7 +567,8 @@ class BinSyncController:
         @param state:
         @return:
         """
-        pass
+        _l.debug(f"Fill Enum is not implemented in your decompiler.")
+        return False
 
     @init_checker
     @make_ro_state
@@ -567,7 +580,11 @@ class BinSyncController:
         @param state:
         @return:
         """
-        pass
+        changes = False
+        for name, enum in state.enums.items():
+            changes |= self.fill_enum(name, user=user, state=state)
+
+        return changes
 
     @init_checker
     @make_ro_state
@@ -575,8 +592,11 @@ class BinSyncController:
         """
         Grab all relevant information from the specified user and fill the @func_adrr.
         """
-        raise NotImplementedError
+        _l.debug(f"Fill Function is not implemented in your decompiler.")
+        return False
 
+    @init_checker
+    @make_ro_state
     def fill_functions(self, user=None, state=None):
         change = False
         for addr, func in state.functions.items():
@@ -591,22 +611,21 @@ class BinSyncController:
         Connected to the Sync All action:
         syncs in all the data from the targeted user
 
-        TODO:
-        - add support for enums
-
         @param user:
         @param state:
-        @param no_functions:
         @return:
         """
         _l.info(f"Filling all data from user {user}...")
 
         fillers = [
-            self.fill_structs, self.fill_enums, self.fill_global_vars
+            self.fill_structs, self.fill_enums, self.fill_global_vars, self.fill_functions
         ]
 
+        changes = False
         for filler in fillers:
-            filler(user=user, state=state)
+            changes |= filler(user=user, state=state)
+
+        return changes
 
     @init_checker
     def magic_fill(self, preference_user=None):
@@ -624,7 +643,6 @@ class BinSyncController:
         @param preference_user:
         @return:
         """
-
         _l.info(f"Staring a Magic Sync with a preference for {preference_user}")
         # re-order users for the prefered user to be at the front of the queue (if they exist)
         all_users = list(self.usernames(priority=SchedSpeed.FAST))
@@ -728,7 +746,6 @@ class BinSyncController:
         elif self.sync_level == SyncLevel.MERGE:
             _l.warning("Manual Merging is not currently supported, using non-conflict syncing...")
             new_func = Function.from_nonconflicting_merge(master_func, sync_func)
-            new_func = self.lower_artifact(sync_func)
 
         else:
             raise Exception("Your BinSync Client has an unsupported Sync Level activated")
