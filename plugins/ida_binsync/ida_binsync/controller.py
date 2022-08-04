@@ -35,7 +35,7 @@ import ida_funcs
 import ida_kernwin
 
 import binsync
-from binsync.common.controller import BinSyncController, init_checker, make_ro_state, check_sync_logs
+from binsync.common.controller import BinSyncController, init_checker, make_ro_state
 from binsync import (
     StackVariable, StackOffsetType, Function, FunctionHeader, Struct, Comment, GlobalVariable, Enum, State, Patch
 )
