@@ -57,21 +57,20 @@ def check_sync_logs(f):
     the most recent edit time, do not continue with sync.
     """
 
-    sync_map = {
-        BinSyncController.fill_function.__name__: (Function, False),
-        BinSyncController.fill_functions.__name__: (Function, True),
-        BinSyncController.fill_global_var.__name__: (GlobalVariable, False),
-        BinSyncController.fill_global_vars.__name__: (GlobalVariable, True),
-        BinSyncController.fill_struct.__name__: (Struct, False),
-        BinSyncController.fill_structs.__name__: (Struct, True),
-        BinSyncController.fill_enum.__name__: (Enum, False),
-        BinSyncController.fill_enums.__name__: (Enum, True)
-    }
-
     # Note: In its current state this should only be applied as a decorator to
     # fill_x functions not fill_xs
     @wraps(f)
     def sync_check(self, *args, **kwargs):
+        sync_map = {
+            self.fill_function.__name__: (Function, False),
+            self.fill_functions.__name__: (Function, True),
+            self.fill_global_var.__name__: (GlobalVariable, False),
+            self.fill_global_vars.__name__: (GlobalVariable, True),
+            self.fill_struct.__name__: (Struct, False),
+            self.fill_structs.__name__: (Struct, True),
+            self.fill_enum.__name__: (Enum, False),
+            self.fill_enums.__name__: (Enum, True)
+        }
         user_state = kwargs['state']
         type_, many = sync_map[f.__name__]
         identifiers = args
@@ -79,7 +78,9 @@ def check_sync_logs(f):
 
         master_state = self.client.get_state()
         master_artifact: Artifact = self.pull_artifact(type_, *identifiers, many=many, state=master_state)
+        _l.info(f"comparing user_artifact and master_artifact: {user_artifact==master_artifact}")
         if master_artifact == user_artifact:
+            _l.info(f"Artifact {args[0]} of type {type_} is up to date and will not be synced")
             return False
 
         # args and kwargs are left the same for singleton fill functions, we checked time, and it
@@ -96,7 +97,7 @@ def check_sync_logs(f):
 # https://stackoverflow.com/questions/10926328
 BUSY_LOOP_COOLDOWN = 0.5
 GET_MANY = True
-
+FILL_MANY = True
 
 class SyncControlStatus:
     CONNECTED = 0
@@ -539,6 +540,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
+    @check_sync_logs
     def fill_struct(self, struct_name, user=None, state=None, header=True, members=True):
         """
 
@@ -574,6 +576,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
+    @check_sync_logs
     def fill_global_var(self, var_addr, user=None, state=None):
         """
         Grab a global variable for a specified address and fill it locally
@@ -597,6 +600,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
+    @check_sync_logs
     def fill_enum(self, enum_name, user=None, state=None):
         """
         Grab an enum and fill it locally
@@ -627,6 +631,7 @@ class BinSyncController:
 
     @init_checker
     @make_ro_state
+    @check_sync_logs
     def fill_function(self, func_addr, user=None, state=None):
         """
         Grab all relevant information from the specified user and fill the @func_adrr.

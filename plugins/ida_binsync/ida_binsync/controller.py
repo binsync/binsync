@@ -35,7 +35,7 @@ import ida_funcs
 import ida_kernwin
 
 import binsync
-from binsync.common.controller import BinSyncController, init_checker, make_ro_state
+from binsync.common.controller import BinSyncController, init_checker, make_ro_state, check_sync_logs
 from binsync import (
     StackVariable, StackOffsetType, Function, FunctionHeader, Struct, Comment, GlobalVariable, Enum, State, Patch
 )
@@ -204,6 +204,7 @@ class IDABinSyncController(BinSyncController):
 
     @init_checker
     @make_ro_state
+    @check_sync_logs
     def fill_struct(self, struct_name, user=None, state=None, header=True, members=True):
         data_changed = False
         struct: Struct = self.pull_artifact(Struct, struct_name, state=state)
@@ -227,6 +228,7 @@ class IDABinSyncController(BinSyncController):
 
     @init_checker
     @make_ro_state
+    @check_sync_logs
     def fill_global_var(self, var_addr, user=None, state=None):
         changed = False
         global_var: GlobalVariable = self.pull_artifact(GlobalVariable, var_addr, state=state)
@@ -248,6 +250,7 @@ class IDABinSyncController(BinSyncController):
 
     @init_checker
     @make_ro_state
+    @check_sync_logs
     def fill_function(self, func_addr, user=None, state=None):
         """
         Grab all relevant information from the specified user and fill the @func_adrr.
