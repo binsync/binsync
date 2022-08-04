@@ -32,6 +32,12 @@ def init_checker(f):
 
     return _init_check
 
+def fill_event(f):
+    @wraps(f)
+    def _fill_event(self: "BinSyncController", *args, **kwargs):
+        return self.fill_event_handler(f, *args, **kwargs)
+
+    return _fill_event
 
 def make_and_commit_states(f):
     """
@@ -513,22 +519,29 @@ class BinSyncController:
     # cause a save of the BS state.
     #
 
-    def fill_event_callback(self, filler, *identifiers, **kwargs):
+    def fill_event_handler(self, filler_func, *identifiers,
+                           artifact=None, user=None, state=None, master_state=None, merge_level=None,
+                           **kwargs
+                           ):
+        """
+        
+        @param filler_func:
+        @param identifiers: 
+        @param artifact: 
+        @param user: 
+        @param state: 
+        @param master_state: 
+        @param kwargs: 
+        @return: 
+        """
+        
         ARTIFACT_FILL_MAP = {
             self.fill_function.__name__: Function
         }
-
-        user = kwargs.get('state', None)
-        state = kwargs.get('state', None)
-        master_state: State = kwargs.get('master_state', None)
-
-        if state is None:
-            state = self.get_state(user=user, priority=SchedSpeed.FAST)
-
-        if master_state is None:
-            master_state = self.get_state(priority=SchedSpeed.FAST)
-
-        artifact_type = ARTIFACT_FILL_MAP.get(filler.__name__, None)
+        
+        state = state if state is not None else self.get_state(user=user, priority=SchedSpeed.FAST)
+        master_state = master_state if master_state is not None else self.get_state(priority=SchedSpeed.FAST)
+        artifact_type = ARTIFACT_FILL_MAP.get(filler_func.__name__, None)
         if not artifact_type:
             _l.warning(f"Attempting to Fill an unknown type! Stopping Fill...")
             return None
@@ -536,16 +549,28 @@ class BinSyncController:
         art_getter = self.ARTIFACT_GET_MAP.get(artifact_type)
         merged_artifact = self.merge_artifacts(
             art_getter(master_state, *identifiers), art_getter(state, *identifiers),
-            merge_level=kwargs.get('merge_level', None)
+            merge_level=merge_level
+        )
+        artifact = merged_artifact
+        
+        fill_changes = filler_func(
+            *identifiers,
+            artifact=artifact, user=user, state=state, master_state=master_state, merge_level=merge_level,
+            **kwargs
         )
 
-        filler()
+        self.make_controller_cmd(
+            self.push_artifact,
+            merged_artifact,
+            state=master_state
+        )
+
+        return fill_changes
 
 
     @init_checker
-    @make_and_commit_states
-    def fill_struct(self, struct_name,
-                    user=None, state=None, header=True, members=True, **kwargs):
+    @fill_event
+    def fill_struct(self, struct_name, header=True, members=True, artifact=None, **kwargs):
         """
 
         @param struct_name:
@@ -559,8 +584,8 @@ class BinSyncController:
         return False
 
     @init_checker
-    @make_and_commit_states
-    def fill_global_var(self, var_addr, user=None, state=None, **kwargs):
+    @fill_event
+    def fill_global_var(self, var_addr, **kwargs):
         """
         Grab a global variable for a specified address and fill it locally
 
@@ -622,7 +647,7 @@ class BinSyncController:
         if master_func.header != dec_func.header:
             # type is user made (a struct)
             changes |= self.import_user_defined_type(master_func.header.ret_type, master_state=master_state, state=state)
-            changes |= self.fill_function_header(func_addr, user=user, state=state)
+            changes |= self.fill_function_header(func_addr, **kwargs)
 
         # stack vars
         master_state = self.get_state(priority=SchedSpeed.FAST)
@@ -633,25 +658,25 @@ class BinSyncController:
                     continue
 
                 changes |= self.import_user_defined_type(sv.type, master_state=master_state, state=state)
-                changes |= self.fill_stack_variable(func_addr, offset, user=user, state=state)
+                changes |= self.fill_stack_variable(func_addr, offset, **kwargs)
 
         # comments
         for addr, cmt in state.get_func_comments(func_addr):
-            changes |= self.fill_comment(addr, state=state)
+            changes |= self.fill_comment(addr, **kwargs)
 
         return False
 
     @init_checker
     @make_and_commit_states
-    def fill_functions(self, user=None, state=None):
+    def fill_functions(self, **kwargs):
         change = False
+        master_state, state = self.get_master_and_user_state(**kwargs)
         for addr, func in state.functions.items():
-            change |= self.fill_function(addr, user=user, state=state)
+            change |= self.fill_function(addr, state=state, master_state=master_state, **kwargs)
 
         return change
 
     @init_checker
-    @make_and_commit_states
     def fill_structs(self, user=None, state=None):
         """
         Grab all the structs from a specified user, then fill them locally
@@ -928,3 +953,16 @@ class BinSyncController:
         changes = self.fill_struct(base_type_str, state=state) if not nested_undefined_structs \
             else self.fill_structs(state=state)
         return changes
+
+    def get_master_and_user_state(self, **kwargs):
+        state = kwargs.get("state", None)
+        user = kwargs.get("user", None)
+        master_state = kwargs.get("master_state", None)
+
+        if state is None:
+            state = self.get_state(user=user, priority=SchedSpeed.FAST)
+
+        if master_state is None:
+            master_state = self.get_state(priority=SchedSpeed.FAST)
+            
+        return master_state, state
