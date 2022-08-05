@@ -131,6 +131,9 @@ class FunctionNotification(BinaryDataNotification):
         self._function_saved = None
 
     def function_updated(self, view, func_):
+        if self._controller.sync_lock.locked():
+            return
+
         # Service requested function only
         if self._function_requested == func_.start:
             #print(f"[BinSync] Servicing function: {func_.start:#x}")
@@ -196,12 +199,15 @@ class FunctionNotification(BinaryDataNotification):
             self._function_saved = None
 
     def function_update_requested(self, view, func):
-        if not self._controller.sync_lock and self._function_requested is None:
+        if not self._controller.sync_lock.locked() and self._function_requested is None:
             #print(f"[BinSync] Function requested {func.start:#x}")
             self._function_requested = func.start
             self._function_saved = conv_func_binja_to_binsync(func)
     
     def symbol_updated(self, view, sym):
+        if self._controller.sync_lock.locked():
+            return
+
         if sym.type == SymbolType.FunctionSymbol:
             func = view.get_function_at(sym.address)
             bs_func = conv_func_binja_to_binsync(func)
@@ -290,7 +296,7 @@ class BinjaPlugin:
         controller_bv = self.controllers[bv]
 
         # exit early if we already configed
-        if controller_bv.bv is not None:
+        if controller_bv.bv is not None or bv is None:
             return
         controller_bv.bv = bv
 
