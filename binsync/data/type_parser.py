@@ -180,6 +180,9 @@ class BSTypeParser:
 
         >>> self.parse_type_with_name('int *foo')
         """
+        if not defn:
+            return None
+
         if pycparser is None:
             raise ImportError("Please install pycparser in order to parse C definitions")
 
@@ -211,6 +214,9 @@ class BSTypeParser:
         return self._decl_to_type(decl, extra_types=extra_types), node.name
 
     def _decl_to_type(self, decl, extra_types=None) -> Optional[BSType]:
+        if not decl:
+            return decl
+
         if extra_types is None: extra_types = {}
 
         if isinstance(decl, pycparser.c_ast.FuncDecl):
@@ -221,6 +227,9 @@ class BSTypeParser:
 
         elif isinstance(decl, pycparser.c_ast.PtrDecl):
             pts_to = self._decl_to_type(decl.type, extra_types)
+            if not pts_to:
+                return None
+
             return BSType(type_=pts_to.type, size=self.sizeof_ptr, is_ptr=True, is_unknown=pts_to.is_unknown)
 
         elif isinstance(decl, pycparser.c_ast.ArrayDecl):
