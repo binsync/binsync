@@ -180,7 +180,10 @@ class Struct(Artifact):
                 continue
 
             # member differs
-            merge_mem = merge_struct.struct_members[off].copy()
+            merge_mem = merge_struct.struct_members.get(off, None)
+            if not merge_mem:
+                merge_mem = mem
+
             merge_mem = StructMember.nonconflict_merge(merge_mem, mem)
             merge_struct.struct_members[off] = merge_mem
 

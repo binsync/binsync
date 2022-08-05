@@ -218,11 +218,6 @@ class IDABinSyncController(BinSyncController):
         if members:
             data_changed |= compat.set_ida_struct_member_types(struct, self)
 
-        _l.info(
-            f"New data synced from \'{user}\' on struct \'{struct_name}\'"
-            if data_changed else
-            f"No new data was set either by failure or lack of differences."
-        )
         return data_changed
 
     @init_checker
@@ -231,18 +226,12 @@ class IDABinSyncController(BinSyncController):
         changed = False
         global_var: GlobalVariable = artifact
         if global_var and global_var.name:
-            self.inc_api_count()
             changed = compat.set_global_var_name(var_addr, global_var.name)
-            if not changed:
-                self.dec_api_count()
 
         if changed:
-            _l.info(f"Synced variable at {hex(var_addr)} from user {user}.")
             ctx = self.active_context()
             if ctx:
                 compat.refresh_pseudocode_view(ctx.addr)
-        else:
-            _l.info(f"No change synced for {hex(var_addr)} from user {user}")
 
         return changed
 
@@ -282,7 +271,7 @@ class IDABinSyncController(BinSyncController):
 
         ida_type = compat.convert_type_str_to_ida_type(stack_var.type)
         if ida_type is None:
-            _l.warning(f"Failed to parse type for stack var {stack_var}")
+            _l.warning(f"IDA Failed to parse type for stack var {stack_var}")
             return changes
 
         changes |= compat.set_stack_vars_types({offset: ida_type}, ida_code_view, self)
@@ -294,126 +283,6 @@ class IDABinSyncController(BinSyncController):
         func_header: FunctionHeader = artifact
         updated_header = compat.set_function_header(ida_code_view, func_header)
         return updated_header
-
-    """
-    @init_checker
-    @fill_event
-    def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
-        state = kwargs['state']
-        data_changed = False
-
-        # sanity check this function
-        ida_func = ida_funcs.get_func(self.artifact_lifer.lower_addr(func_addr))
-        if ida_func is None:
-            _l.warning(f"IDA function does not exist on sync for \'{user}\' on function {hex(func_addr)}.")
-            return data_changed
-
-        #
-        # FUNCTION HEADER
-        #
-
-        # function should exist in pulled state
-        binsync_func: Function = state.get_function(func_addr)
-        if binsync_func is None:
-            return data_changed
-
-        # make function prepared for either merging or not
-        binsync_func = self.merge_function_into_master(binsync_func)
-
-        ida_code_view = compat.acquire_pseudocode_vdui(ida_func.start_ea)
-        # check if a header has been set for the func
-        if binsync_func.header:
-            updated_header = False
-            try:
-                # allow set_func_header to return None to let us know a type is missing
-                updated_header = compat.set_function_header(ida_code_view, binsync_func.header, self, exit_on_bad_type=True)
-            except Exception as e:
-                _l.warning(f"Header filling failed with exception {e}")
-                self.reset_api_count()
-
-            # this means the type failed
-            if updated_header is None:
-                # we likely are missing a custom type. Try again!
-                data_changed |= self.fill_structs(user=user, state=state)
-                try:
-                    updated_header = compat.set_function_header(ida_code_view, binsync_func.header, self)
-                except Exception as e:
-                    _l.warning(f"Header filling failed with exception {e}, even after pulling custom types.")
-                    self.reset_api_count()
-
-            data_changed |= updated_header
-
-        #
-        # COMMENTS
-        #
-
-        sync_cmts = self.pull_artifact(Comment, func_addr, many=True, state=state, user=user)
-        for addr, cmt in sync_cmts.items():
-            self.inc_api_count()
-            res = compat.set_ida_comment(addr, cmt.comment, decompiled=cmt.decompiled)
-            if not res:
-                _l.warning(f"Failed to sync comment at <{hex(addr)}>: \'{cmt.comment}\'")
-                self.reset_api_count()
-
-        #
-        # STACK VARIABLES
-        #
-
-        frame = idaapi.get_frame(ida_func.start_ea)
-        if frame is None or frame.memqty <= 0:
-            _l.warning("Function %#x does not have an associated function frame. Stopping sync here!",
-                     ida_func.start_ea)
-            return data_changed
-
-        # collect and covert the info of each stack variable
-        existing_stack_vars = {}
-        for offset, var in compat.get_func_stack_var_info(ida_func.start_ea).items():
-            existing_stack_vars[compat.ida_to_angr_stack_offset(ida_func.start_ea, offset)] = var
-
-        stack_vars_to_set = {}
-        # only try to set stack vars that actually exist
-        for offset, stack_var in binsync_func.stack_vars.items():
-            if offset in existing_stack_vars:
-                # change the variable's name
-                if stack_var.name != existing_stack_vars[offset].name:
-                    self.inc_api_count()
-                    if ida_struct.set_member_name(frame, existing_stack_vars[offset].stack_offset, stack_var.name):
-                        data_changed |= True
-
-                # check if the variables type should be changed
-                if ida_code_view and stack_var.type != existing_stack_vars[offset].type:
-                    # validate the type is convertible
-                    ida_type = compat.convert_type_str_to_ida_type(stack_var.type)
-                    if ida_type is None:
-                        # its possible the type is just a custom type from the same user
-                        # TODO: make it possible to sync a single struct
-                        if self._typestr_in_state_structs(stack_var.type, user=user, state=state):
-                            _l.info(f"Importing structs from user {user}")
-                            data_changed |= self.fill_structs(user=user, state=state)
-
-                        ida_type = compat.convert_type_str_to_ida_type(stack_var.type)
-                        # it really is just a bad type
-                        if ida_type is None:
-                            _l.debug(f"Failed to parse stack variable stored type at offset"
-                                     f" {hex(existing_stack_vars[offset].stack_offset)} with type {stack_var.type}"
-                                     f" on function {hex(ida_func.start_ea)}.")
-                            continue
-
-                    # queue up the change!
-                    stack_vars_to_set[existing_stack_vars[offset].stack_offset] = ida_type
-
-            # change the type of all vars that need to be changed
-            # NOTE: api_count is incremented inside the function
-            data_changed |= compat.set_stack_vars_types(stack_vars_to_set, ida_code_view, self)
-
-        compat.refresh_pseudocode_view(self.artifact_lifer.lower_addr(binsync_func.addr))
-        if data_changed:
-            _l.info(f"New data synced for \'{user}\' on function {hex(ida_func.start_ea)}.")
-        else:
-            _l.info(f"No new data was set either by failure or lack of differences.")
-
-        return data_changed
-    """
 
     #
     # Artifact API
@@ -436,16 +305,3 @@ class IDABinSyncController(BinSyncController):
 
     def struct(self, name) -> Optional[Struct]:
         return compat.struct(name)
-
-    #
-    # Utils
-    #
-
-    @init_checker
-    def _typestr_in_state_structs(self, type_str, user=None, state=None):
-        binsync_structs = state.get_structs()
-        for struct in binsync_structs:
-            if struct.name in type_str:
-                return True
-
-        return False

@@ -85,15 +85,13 @@ class AngrBinSyncController(BinSyncController):
     #
     # Display Fillers
     #
-    @fill_event
+    @init_checker
     def fill_global_var(self, var_addr, user=None, artifact=None, **kwargs):
         return False
 
-    @fill_event
+    @init_checker
     def fill_struct(self, struct_name, user=None, artifact=None, **kwargs):
         return False
-
-
 
     @init_checker
     @fill_event
@@ -111,56 +109,7 @@ class AngrBinSyncController(BinSyncController):
         decompilation.regenerate_text()
         self.decompile_function(func, refresh_gui=True)
         return changes
-        """
-        #
-        # Function Header
-        #
 
-        if sync_func.header:
-            if sync_func.name and sync_func.name != func.name:
-                func.name = sync_func.name
-                decompilation.cfunc.name = sync_func.name
-                decompilation.cfunc.demangled_name = sync_func.name
-
-            if sync_func.header.args:
-                for i, arg in sync_func.header.args.items():
-                    if i >= len(decompilation.cfunc.arg_list):
-                        break
-
-                    decompilation.cfunc.arg_list[i].variable.name = arg.name
-
-        #
-        # Comments
-        #
-
-        for addr, cmt in self.pull_artifact(Comment, func_addr, many=True, user=user, state=state).items():
-            if not cmt or not cmt.comment:
-                continue
-
-            if cmt.decompiled:
-                try:
-                    pos = decompilation.map_addr_to_pos.get_nearest_pos(addr)
-                    corrected_addr = decompilation.map_pos_to_addr.get_node(pos).tags['ins_addr']
-                # pylint: disable=broad-except
-                except Exception:
-                    break
-
-                decompilation.stmt_comments[corrected_addr] = cmt.comment
-            else:
-                self._instance.kb.comments[cmt.addr] = cmt.comment
-    
-        # ==== Stack Vars ==== #
-        sync_vars = self.pull_artifact(StackVariable, func_addr, many=True, state=state, user=user)
-        for offset, sync_var in sync_vars.items():
-            code_var = AngrBinSyncController.find_stack_var_in_codegen(decompilation, offset)
-            if code_var:
-                code_var.name = sync_var.name
-                code_var.renamed = True
-
-        decompilation.regenerate_text()
-        self.decompile_function(func, refresh_gui=True)
-        return True
-        """
     @init_checker
     @fill_event
     def fill_comment(self, addr, user=None, artifact=None, decompilation=None, **kwargs):

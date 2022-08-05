@@ -508,19 +508,21 @@ class BinSyncController:
     #
 
     def fill_event_handler(self, filler_func, *identifiers,
-                           artifact=None, user=None, state=None, master_state=None, merge_level=None,
+                           artifact=None, user=None, state=None, master_state=None, merge_level=None, blocking=False,
                            **kwargs
                            ):
         """
-        
+
         @param filler_func:
-        @param identifiers: 
-        @param artifact: 
-        @param user: 
-        @param state: 
-        @param master_state: 
-        @param kwargs: 
-        @return: 
+        @param identifiers:
+        @param artifact:
+        @param user:
+        @param state:
+        @param master_state:
+        @param merge_level:
+        @param blocking:
+        @param kwargs:
+        @return:
         """
 
         ARTIFACT_FILL_MAP = {
@@ -560,11 +562,19 @@ class BinSyncController:
                 **kwargs
             )
 
-        self.make_controller_cmd(
-            self.push_artifact,
-            merged_artifact,
-            state=master_state
+        _l.info(
+            f"Successfully synced new changes from {state.user} for {merged_artifact}" if fill_changes
+            else f"No new changes or failed to sync from {state.user} for {merged_artifact}"
         )
+
+        if blocking:
+            self.push_artifact(merged_artifact, state=master_state)
+        else:
+            self.make_controller_cmd(
+                self.push_artifact,
+                merged_artifact,
+                state=master_state
+            )
 
         return fill_changes
 
@@ -671,7 +681,7 @@ class BinSyncController:
     @init_checker
     def fill_functions(self, user=None, **kwargs):
         change = False
-        master_state, state = self.get_master_and_user_state(user=user)
+        master_state, state = self.get_master_and_user_state(user=user, **kwargs)
         for addr, func in state.functions.items():
             change |= self.fill_function(addr, state=state, master_state=master_state)
 
@@ -688,7 +698,7 @@ class BinSyncController:
         """
         changes = False
         # only do struct headers for circular references
-        master_state, state = self.get_master_and_user_state(user=user)
+        master_state, state = self.get_master_and_user_state(user=user, **kwargs)
         for name, struct in state.structs.items():
             changes |= self.fill_struct(name, user=user, state=state, master_state=master_state, members=False)
 
@@ -707,7 +717,7 @@ class BinSyncController:
         @return:
         """
         changes = False
-        master_state, state = self.get_master_and_user_state(user=user)
+        master_state, state = self.get_master_and_user_state(user=user, **kwargs)
         for name, enum in state.enums.items():
             changes |= self.fill_enum(name, user=user, state=state, master_state=master_state)
 
@@ -716,7 +726,7 @@ class BinSyncController:
     @init_checker
     def fill_global_vars(self, user=None, **kwargs):
         changes = False
-        master_state, state = self.get_master_and_user_state(user=user)
+        master_state, state = self.get_master_and_user_state(user=user, **kwargs)
         for off, gvar in state.global_vars.items():
             changes |= self.fill_global_var(off, user=user, state=state, master_state=master_state)
 
@@ -734,13 +744,14 @@ class BinSyncController:
         """
         _l.info(f"Filling all data from user {user}...")
 
+        master_state, state = self.get_master_and_user_state(user=user, **kwargs)
         fillers = [
             self.fill_structs, self.fill_enums, self.fill_global_vars, self.fill_functions
         ]
 
         changes = False
         for filler in fillers:
-            changes |= filler(user=user, **kwargs)
+            changes |= filler(user=user, state=state, master_state=master_state)
 
         return changes
 
@@ -843,7 +854,6 @@ class BinSyncController:
         pushed = self.push_artifact(global_art, state=master_state, commit_msg=f"Force pushed {global_art}")
         return pushed
 
-
     #
     # Utils
     #
@@ -866,32 +876,6 @@ class BinSyncController:
             raise Exception("Your BinSync Client has an unsupported Sync Level activated")
 
         return merge_art
-
-
-    def merge_function_into_master(self, sync_func: Function, merge_level=None) -> Function:
-        if merge_level is None:
-            merge_level = self.sync_level
-
-        if merge_level == SyncLevel.OVERWRITE:
-            return sync_func
-
-        master_state = self.client.get_state()
-        master_func = master_state.get_function(sync_func.addr)
-
-        if not master_func or master_func == sync_func:
-            return sync_func
-
-        if merge_level == SyncLevel.NON_CONFLICTING:
-            new_func = Function.nonconflict_merge(master_func, sync_func)
-
-        elif merge_level == SyncLevel.MERGE:
-            _l.warning("Manual Merging is not currently supported, using non-conflict syncing...")
-            new_func = Function.nonconflict_merge(master_func, sync_func)
-
-        else:
-            raise Exception("Your BinSync Client has an unsupported Sync Level activated")
-
-        return new_func
 
     def changed_artifacts_of_type(self, type_: Artifact):
         prop_map = {
@@ -938,19 +922,22 @@ class BinSyncController:
         base_type_str = self.type_is_user_defined(type_str, state=state)
         if not base_type_str:
             return False
+        _l.info(f"Detected user defined type!")
 
         struct: Struct = state.get_struct(base_type_str)
         if not struct:
             return False
+        _l.info(f"Found struct in user defined state for {struct}")
 
         nested_undefined_structs = False
         for off, memb in struct.struct_members.items():
-            user_type = self.type_is_user_defined(memb.type)
+            user_type = self.type_is_user_defined(memb.type, state=state)
             if user_type and user_type not in master_state.structs.keys():
                 # should we ever happen to have a struct with a nested type that is
                 # also a struct that we don't have in our master_state, then we give up
                 # and attempt to fill all structs to resolve type issues
                 nested_undefined_structs = True
+                _l.info("Nested undefined structs detected, pulling all structs")
                 break
 
         changes = self.fill_struct(base_type_str, state=state, **kwargs) if not nested_undefined_structs \
