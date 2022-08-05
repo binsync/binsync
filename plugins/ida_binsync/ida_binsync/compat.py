@@ -399,10 +399,12 @@ def get_func_stack_var_info(func_addr) -> typing.Dict[int, StackVariable]:
 
         size = var.width
         name = var.name
-        offset = var.location.stkoff() - decompilation.get_stkoff_delta()
+        
+        ida_offset = var.location.stkoff() - decompilation.get_stkoff_delta()
+        bs_offset = ida_to_angr_stack_offset(func_addr, ida_offset)
         type_str = str(var.type())
-        stack_var_info[offset] = StackVariable(
-            offset, StackOffsetType.IDA, name, type_str, size, func_addr
+        stack_var_info[bs_offset] = StackVariable(
+            ida_offset, StackOffsetType.IDA, name, type_str, size, func_addr
         )
 
     return stack_var_info

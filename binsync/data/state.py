@@ -472,6 +472,9 @@ class State:
         # set the new struct
         if struct.name is not None:
             self.structs[struct.name] = struct
+            return True
+
+        return False
 
     @dirty_checker
     @update_last_change
@@ -515,15 +518,23 @@ class State:
         return func
 
     def get_function(self, addr) -> Function:
-        try:
-            func = self.functions[addr]
-        except KeyError:
-            func = None
+        return self.functions.get(addr, None)
 
-        return func
-
-    def get_functions(self):
+    def get_functions(self) -> Dict[int, Function]:
         return self.functions
+
+    def get_function_header(self, addr) -> Optional[FunctionHeader]:
+        func = self.get_function(addr)
+        if not func:
+            return None
+
+        return func.header
+
+    def get_function_headers(self) -> Dict[int, FunctionHeader]:
+        return {
+            addr: func.header
+            for addr, func in self.functions.items() if func.header
+        }
 
     def get_comment(self, addr) -> Comment:
         try:

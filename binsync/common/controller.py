@@ -87,6 +87,8 @@ class BinSyncController:
     ARTIFACT_GET_MAP = {
         Function: State.get_function,
         (Function, GET_MANY): State.get_functions,
+        FunctionHeader: State.get_function_header,
+        (FunctionHeader, GET_MANY): State.get_function_headers,
         StackVariable: State.get_stack_variable,
         (StackVariable, GET_MANY): State.get_stack_variables,
         Comment: State.get_comment,
@@ -452,7 +454,7 @@ class BinSyncController:
         return self.lower_artifact(artifact)
 
     @init_checker
-    def push_artifact(self, artifact: Artifact, user=None, state=None, commit_msg=None, api_set=False) -> bool:
+    def push_artifact(self, artifact: Artifact, user=None, state=None, commit_msg=None, api_set=False, **kwargs) -> bool:
         """
         Every pusher artifact does three things
         1. Get the state setter function based on the class of the Obj
@@ -464,6 +466,7 @@ class BinSyncController:
         @param state:
         @return:
         """
+        _l.info(f"Running push now for {artifact}")
         if not artifact:
             return False
 
@@ -480,15 +483,17 @@ class BinSyncController:
         # assure function existence for artifacts requiring a function
         if isinstance(artifact, (FunctionHeader, StackVariable, Comment)):
             func_addr = artifact.func_addr if hasattr(artifact, "func_addr") else artifact.addr
-            if func_addr:
+            if func_addr and not state.get_function(func_addr):
                 self.push_artifact(Function(func_addr, self.get_func_size(func_addr)), state=state)
 
         # lift artifact into standard BinSync format
         artifact = self.lift_artifact(artifact)
 
         # set the artifact in the target state, likely master
+        _l.info(f"Setting an artifact now into {state} as {artifact}")
         was_set = set_artifact_func(state, artifact, set_last_change=not api_set)
         if was_set:
+            _l.info(f"{state} commiting now with {commit_msg or artifact.commit_msg}")
             self.client.commit_state(state, msg=commit_msg or artifact.commit_msg)
 
         return was_set
@@ -520,6 +525,9 @@ class BinSyncController:
 
         ARTIFACT_FILL_MAP = {
             self.fill_function.__name__: Function,
+            self.fill_function_header.__name__: FunctionHeader,
+            self.fill_stack_variable.__name__: StackVariable,
+            self.fill_comment.__name__: Comment,
             self.fill_global_var.__name__: GlobalVariable,
             self.fill_struct.__name__: Struct,
             self.fill_enum.__name__: Enum
@@ -527,6 +535,7 @@ class BinSyncController:
 
         state = state if state is not None else self.get_state(user=user, priority=SchedSpeed.FAST)
         master_state = master_state if master_state is not None else self.get_state(priority=SchedSpeed.FAST)
+        _l.info(f"Getting type of function with name {filler_func.__name__}")
         artifact_type = ARTIFACT_FILL_MAP.get(filler_func.__name__, None)
         if not artifact_type:
             _l.warning(f"Attempting to Fill an unknown type! Stopping Fill...")
@@ -537,11 +546,15 @@ class BinSyncController:
             art_getter(master_state, *identifiers), art_getter(state, *identifiers),
             merge_level=merge_level
         )
-        artifact = self.lower_artifact(merged_artifact)
+
+        if artifact is None:
+            artifact = self.lower_artifact(merged_artifact)
 
         lock = self.sync_lock if not self.sync_lock.locked() else FakeSyncLock()
         with lock:
+            _l.info(f"Calling fill to {filler_func} with {identifiers}")
             fill_changes = filler_func(
+                self,
                 *identifiers,
                 artifact=artifact, user=user, state=state, master_state=master_state, merge_level=merge_level,
                 **kwargs
@@ -636,17 +649,21 @@ class BinSyncController:
             changes |= self.fill_function_header(func_addr, artifact=master_func.header, **kwargs)
 
         # stack vars
+        _l.info(f"Should be filling stack vars now {master_func.stack_vars}")
+        _l.info(f"Should be filling stack vars now into dec: {dec_func.stack_vars}")
         if master_func.stack_vars and master_func.stack_vars != dec_func.stack_vars:
             for offset, sv in master_func.stack_vars.items():
                 dec_sv = dec_func.stack_vars.get(offset, None)
                 if not dec_sv or sv == dec_sv:
+                    _l.info(f"Decompiler stack var not found at {offset}")
                     continue
 
                 changes |= self.import_user_defined_type(sv.type, **kwargs)
-                changes |= self.fill_stack_variable(func_addr, offset, artifact=sv, **kwargs)
+                print(f"Doing a fill now for {sv}")
+                changes |= self.fill_stack_variable(func_addr, dec_sv.stack_offset, artifact=sv, **kwargs)
 
         # comments
-        for addr, cmt in kwargs['state'].get_func_comments(func_addr):
+        for addr, cmt in kwargs['state'].get_func_comments(func_addr).items():
             changes |= self.fill_comment(addr, artifact=cmt, **kwargs)
 
         return changes
@@ -839,11 +856,11 @@ class BinSyncController:
             return art2
 
         if merge_level == SyncLevel.NON_CONFLICTING:
-            merge_art = art1.nonconflict_merge(art1, art2)
+            merge_art = art1.nonconflict_merge(art2)
 
         elif merge_level == SyncLevel.MERGE:
             _l.warning("Manual Merging is not currently supported, using non-conflict syncing...")
-            merge_art = art1.nonconflict_merge(art1, art2)
+            merge_art = art1.nonconflict_merge(art2)
 
         else:
             raise Exception("Your BinSync Client has an unsupported Sync Level activated")
@@ -916,7 +933,7 @@ class BinSyncController:
         return base_type_str if base_type_str in state.structs.keys() else None
 
     def import_user_defined_type(self, type_str, **kwargs):
-        state = kwargs['state']
+        state = kwargs.pop('state')
         master_state = kwargs['master_state']
         base_type_str = self.type_is_user_defined(type_str, state=state)
         if not base_type_str:

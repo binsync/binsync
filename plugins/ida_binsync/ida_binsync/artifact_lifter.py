@@ -2,6 +2,8 @@ import logging
 
 from binsync.common import ArtifactLifter
 
+from . import compat
+
 l = logging.getLogger(name=__name__)
 
 
@@ -25,7 +27,7 @@ class IDAArtifactLifter(ArtifactLifter):
 
         return type_str
 
-    def lift_stack_offset(self, offset: int) -> int:
+    def lift_stack_offset(self, offset: int, func_addr: int) -> int:
         return offset
 
     def lower_addr(self, addr: int) -> int:
@@ -34,5 +36,5 @@ class IDAArtifactLifter(ArtifactLifter):
     def lower_type(self, type_str: str) -> str:
         return type_str
 
-    def lower_stack_offset(self, offset: int) -> int:
-        return offset
+    def lower_stack_offset(self, offset: int, func_addr: int) -> int:
+        return offset #compat.ida_to_angr_stack_offset(func_addr, offset)

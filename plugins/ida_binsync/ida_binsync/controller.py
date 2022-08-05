@@ -251,9 +251,11 @@ class IDABinSyncController(BinSyncController):
     def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
         func: Function = artifact
         ida_code_view = compat.acquire_pseudocode_vdui(func.addr)
-        super(IDABinSyncController, self).fill_function(
+        changes = super(IDABinSyncController, self).fill_function(
             func_addr, user=user, artifact=artifact, ida_code_view=ida_code_view, **kwargs
         )
+        compat.refresh_pseudocode_view(func.addr)
+        return changes
 
     @init_checker
     @fill_event
@@ -275,7 +277,7 @@ class IDABinSyncController(BinSyncController):
             _l.warning(f"Function {stack_var.addr:x} does not have an associated function frame. Stopping sync here!")
             return False
 
-        if ida_struct.set_member_name(frame, stack_var.stack_offset, stack_var.name):
+        if ida_struct.set_member_name(frame, offset, stack_var.name):
             changes |= True
 
         ida_type = compat.convert_type_str_to_ida_type(stack_var.type)
@@ -283,7 +285,7 @@ class IDABinSyncController(BinSyncController):
             _l.warning(f"Failed to parse type for stack var {stack_var}")
             return changes
 
-        changes |= compat.set_stack_vars_types({stack_var.stack_offset: ida_type}, ida_code_view, self)
+        changes |= compat.set_stack_vars_types({offset: ida_type}, ida_code_view, self)
         return changes
 
     @init_checker
