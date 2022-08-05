@@ -14,7 +14,7 @@ class AngrArtifactLifter(ArtifactLifter):
     def lift_type(self, type_str: str) -> str:
         return type_str
 
-    def lift_stack_offset(self, offset: int) -> int:
+    def lift_stack_offset(self, offset: int, func_addr: int) -> int:
         return offset
 
     def lower_addr(self, addr: int) -> int:
@@ -23,5 +23,5 @@ class AngrArtifactLifter(ArtifactLifter):
     def lower_type(self, type_str: str) -> str:
         return type_str
 
-    def lower_stack_offset(self, offset: int) -> int:
+    def lower_stack_offset(self, offset: int, func_addr: int) -> int:
         return offset
