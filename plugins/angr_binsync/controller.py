@@ -93,23 +93,25 @@ class AngrBinSyncController(BinSyncController):
     def fill_struct(self, struct_name, user=None, artifact=None, **kwargs):
         return False
 
+
+
     @init_checker
     @fill_event
     def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
-        state = kwargs['state']
-        func = self._instance.kb.functions[self.artifact_lifer.lower_addr(func_addr)]
+        func: Function = artifact
+        func = self._instance.kb.functions[self.artifact_lifer.lower_addr(func.addr)]
 
         # re-decompile a function if needed
         decompilation = self.decompile_function(func)
 
-        # use a lifted version of stat function go generate function
-        sync_func: Function = state.get_function(func_addr)
-        if sync_func is None:
-            # the function does not exist for that user's state
-            return False
+        changes = super(AngrBinSyncController, self).fill_function(
+            func_addr, user=user, artifact=artifact, decompilation=decompilation, **kwargs
+        )
 
-        sync_func = self.merge_function_into_master(sync_func)
-
+        decompilation.regenerate_text()
+        self.decompile_function(func, refresh_gui=True)
+        return changes
+        """
         #
         # Function Header
         #
@@ -146,7 +148,7 @@ class AngrBinSyncController(BinSyncController):
                 decompilation.stmt_comments[corrected_addr] = cmt.comment
             else:
                 self._instance.kb.comments[cmt.addr] = cmt.comment
-
+    
         # ==== Stack Vars ==== #
         sync_vars = self.pull_artifact(StackVariable, func_addr, many=True, state=state, user=user)
         for offset, sync_var in sync_vars.items():
@@ -158,6 +160,64 @@ class AngrBinSyncController(BinSyncController):
         decompilation.regenerate_text()
         self.decompile_function(func, refresh_gui=True)
         return True
+        """
+    @init_checker
+    @fill_event
+    def fill_comment(self, addr, user=None, artifact=None, decompilation=None, **kwargs):
+        cmt: Comment = artifact
+        changed = False
+
+        if cmt.decompiled:
+            try:
+                pos = decompilation.map_addr_to_pos.get_nearest_pos(addr)
+                corrected_addr = decompilation.map_pos_to_addr.get_node(pos).tags['ins_addr']
+            # pylint: disable=broad-except
+            except Exception:
+                return False
+
+            if decompilation.stmt_comments[corrected_addr] != cmt.comment:
+                decompilation.stmt_comments[corrected_addr] = cmt.comment
+                changed = True
+        else:
+            if self._instance.kb.comments[cmt.addr] != cmt.comment:
+                self._instance.kb.comments[cmt.addr] = cmt.comment
+                changed = True
+        return changed
+
+    @init_checker
+    @fill_event
+    def fill_stack_variable(self, func_addr, offset, user=None, artifact=None, decompilation=None, **kwargs):
+        sync_var: StackVariable = artifact
+        changed = False
+        code_var = AngrBinSyncController.find_stack_var_in_codegen(decompilation, offset)
+        if code_var:
+            code_var.name = sync_var.name
+            code_var.renamed = True
+            changed = True
+
+        return changed
+
+    @init_checker
+    @fill_event
+    def fill_function_header(self, func_addr, user=None, artifact=None, decompilation=None, **kwargs):
+        func_header: FunctionHeader = artifact
+        angr_func = self._instance.kb.functions[self.artifact_lifer.lower_addr(func_addr)]
+        changes = False
+        if func_header:
+            if func_header.name and func_header.name != angr_func.name:
+                angr_func.name = func_header.name
+                decompilation.cfunc.name = func_header.name
+                decompilation.cfunc.demangled_name = func_header.name
+                changes = True
+
+            if func_header.args:
+                for i, arg in func_header.args.items():
+                    if i >= len(decompilation.cfunc.arg_list):
+                        break
+                    if decompilation.cfunc.args_list[i].variable.name != arg.name:
+                        decompilation.cfunc.arg_list[i].variable.name = arg.name
+                        changes = True
+        return changes
 
     #
     # Artifact
