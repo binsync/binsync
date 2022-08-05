@@ -438,7 +438,6 @@ def set_stack_vars_types(var_type_dict, code_view, controller: "IDABinSyncContro
             cur_off = lvar.location.stkoff() - code_view.cfunc.get_stkoff_delta()
             if lvar.is_stk_var() and cur_off in var_type_dict:
                 if str(lvar.type()) != str(var_type_dict[cur_off]):
-                    controller.inc_api_count()
                     data_changed |= code_view.set_lvar_type(lvar, var_type_dict.pop(cur_off))
                     fixed_point = False
                     # make sure to break, in case the size of lvars array has now changed
@@ -497,11 +496,9 @@ def set_ida_struct(struct: Struct, controller) -> bool:
     sid = ida_struct.get_struc_id(struct.name)
     if sid != 0xffffffffffffffff:
         sptr = ida_struct.get_struc(sid)
-        controller.inc_api_count()
         data_changed |= ida_struct.del_struc(sptr)
 
     # now make a struct header
-    controller.inc_api_count()
     ida_struct.add_struc(ida_idaapi.BADADDR, struct.name, False)
     sid = ida_struct.get_struc_id(struct.name)
     sptr = ida_struct.get_struc(sid)
@@ -516,7 +513,6 @@ def set_ida_struct(struct: Struct, controller) -> bool:
         mflag = convert_size_to_flag(member.size)
 
         # create the new member
-        controller.inc_api_count()
         data_changed |= ida_struct.add_struc_member(
             sptr,
             member.member_name,
@@ -548,7 +544,6 @@ def set_ida_struct_member_types(struct: Struct, controller) -> bool:
 
         # set the type
         mptr = sptr.get_member(idx)
-        controller.inc_api_count()
         was_set = ida_struct.set_member_tinfo(
             sptr,
             mptr,

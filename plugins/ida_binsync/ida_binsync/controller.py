@@ -147,18 +147,6 @@ class IDABinSyncController(BinSyncController):
     #   Multithreaded locks and setters
     #
 
-    def inc_api_count(self):
-        with self.api_lock:
-            self.api_count += 1
-
-    def dec_api_count(self):
-        with self.api_lock:
-            self.api_count -= 1
-
-    def reset_api_count(self):
-        with self.api_lock:
-            self.api_count = 0
-
     def make_controller_cmd(self, cmd_func, *args, **kwargs):
         with self.queue_lock:
             if isinstance(args[0], Struct):
