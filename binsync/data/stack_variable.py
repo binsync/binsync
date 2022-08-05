@@ -46,7 +46,7 @@ class StackVariable(Artifact):
         return False
 
     def __str__(self):
-        return f"<StackVar: {self.name} {self.type}; {hex(self.stack_offset)}@{hex(self.addr)}>"
+        return f"<StackVar: {self.type} {self.name}; {hex(self.stack_offset)}@{hex(self.addr)}>"
 
     def __repr__(self):
         return self.__str__()
