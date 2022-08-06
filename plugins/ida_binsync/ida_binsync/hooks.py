@@ -65,6 +65,17 @@ def quite_init_checker(f):
         return f(self, *args, **kwargs)
     return initcheck
 
+
+def stop_if_syncing(f):
+    @wraps(f)
+    def _stop_if_syncing(self, *args, **kwargs):
+        if self.controller.sync_lock.locked():
+            return 0
+
+        return f(self, *args, **kwargs)
+
+    return _stop_if_syncing
+
 #
 #   IDA Change Hooks
 #
@@ -77,11 +88,13 @@ class IDBHooks(ida_idp.IDB_Hooks):
         self.last_local_type = None
 
     @quite_init_checker
+    @stop_if_syncing
     def local_types_changed(self):
         #print("local type changed")
         return 0
 
     @quite_init_checker
+    @stop_if_syncing
     def ti_changed(self, ea, type_, fname):
         #print(f"TI CHANGED: {ea}, {type_}, {fname}")
         return 0
@@ -91,39 +104,46 @@ class IDBHooks(ida_idp.IDB_Hooks):
     #
 
     @quite_init_checker
+    @stop_if_syncing
     def enum_created(self, enum):
         #print("enum created")
         return 0
 
     # XXX - use enum_deleted(self, id) instead?
     @quite_init_checker
+    @stop_if_syncing
     def deleting_enum(self, id):
         #print("enum deleted")
         return 0
 
     # XXX - use enum_renamed(self, id) instead?
     @quite_init_checker
+    @stop_if_syncing
     def renaming_enum(self, id, is_enum, newname):
         #print("enum renamed")
         return 0
 
     @quite_init_checker
+    @stop_if_syncing
     def enum_bf_changed(self, id):
         #print("enum renamed")
         return 0
 
     @quite_init_checker
+    @stop_if_syncing
     def enum_cmt_changed(self, tid, repeatable_cmt):
         #print("enum renamed")
         return 0
 
     @quite_init_checker
+    @stop_if_syncing
     def enum_member_created(self, id, cid):
         #print("enum member created")
         return 0
 
     # XXX - use enum_member_deleted(self, id, cid) instead?
     @quite_init_checker
+    @stop_if_syncing
     def deleting_enum_member(self, id, cid):
         #print("enum member")
         return 0
@@ -133,6 +153,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
     #
 
     @quite_init_checker
+    @stop_if_syncing
     def struc_created(self, tid):
         #print("struct created")
         sptr = ida_struct.get_struc(tid)
@@ -142,12 +163,14 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     # XXX - use struc_deleted(self, struc_id) instead?
     @quite_init_checker
+    @stop_if_syncing
     def deleting_struc(self, sptr):
         if not sptr.is_frame():
             self.ida_struct_changed(sptr.id, deleted=True)
         return 0
 
     @quite_init_checker
+    @stop_if_syncing
     def struc_align_changed(self, sptr):
         if not sptr.is_frame():
             self.ida_struct_changed(sptr.id)
@@ -156,6 +179,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
     # XXX - use struc_renamed(self, sptr) instead?
     @quite_init_checker
+    @stop_if_syncing
     def renaming_struc(self, id, oldname, newname):
         sptr = ida_struct.get_struc(id)
         if not sptr.is_frame():
@@ -163,6 +187,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         return 0
 
     @quite_init_checker
+    @stop_if_syncing
     def struc_expanded(self, sptr):
         #print("struct expanded")
         if not sptr.is_frame():
@@ -171,6 +196,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         return 0
 
     @quite_init_checker
+    @stop_if_syncing
     def struc_member_created(self, sptr, mptr):
         #print("struc member created")
         if not sptr.is_frame():
@@ -179,6 +205,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         return 0
 
     @quite_init_checker
+    @stop_if_syncing
     def struc_member_deleted(self, sptr, off1, off2):
         #print("struc member deleted")
         if not sptr.is_frame():
@@ -187,6 +214,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         return 0
 
     @quite_init_checker
+    @stop_if_syncing
     def struc_member_renamed(self, sptr, mptr):
         #print(f"struc member renamed: {sptr.id}: {mptr.id}")
         """
@@ -204,7 +232,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
             stack_frame = sptr
             func_addr = idaapi.get_func_by_frame(stack_frame.id)
             try:
-                stack_var_info = compat.get_func_stack_var_info(func_addr)[mptr.soff]
+                stack_var_info = compat.get_func_stack_var_info(func_addr)[compat.ida_to_angr_stack_offset(func_addr, mptr.soff)]
             except KeyError:
                 l.debug(f"Failed to track an internal changing stack var: {mptr.id}.")
                 return 0
@@ -233,6 +261,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         return 0
 
     @quite_init_checker
+    @stop_if_syncing
     def struc_member_changed(self, sptr, mptr):
         #print(f"struc member changed: {sptr.id}, {mptr.id}")
 
@@ -242,7 +271,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
             func_addr = idaapi.get_func_by_frame(stack_frame.id)
             try:
                 all_var_info = compat.get_func_stack_var_info(func_addr)
-                stack_var_info = all_var_info[mptr.soff]
+                stack_var_info = all_var_info[compat.ida_to_angr_stack_offset(func_addr, mptr.soff)]
             except KeyError:
                 l.debug(f"Failed to track an internal changing stack var: {mptr.id}.")
                 return 0
@@ -268,6 +297,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         return 0
 
     @quite_init_checker
+    @stop_if_syncing
     def struc_cmt_changed(self, id, repeatable_cmt):
         fullname = ida_struct.get_struc_name(id)
         if "." in fullname:
@@ -279,12 +309,14 @@ class IDBHooks(ida_idp.IDB_Hooks):
         return 0
 
     @quite_init_checker
+    @stop_if_syncing
     def sgr_changed(self, start_ea, end_ea, regnum, value, old_value, tag):
         # FIXME: sgr_changed is not triggered when a segment register is
         # being deleted by the user, so we need to sent the complete list
         return 0
 
     @quite_init_checker
+    @stop_if_syncing
     def renamed(self, ea, new_name, local_name):
         # #print("renamed(ea = %x, new_name = %s, local_name = %d)" % (ea, new_name, local_name))
         if ida_struct.is_member_id(ea) or ida_struct.get_struc(ea) or ida_enum.get_enum_name(ea):
@@ -311,10 +343,12 @@ class IDBHooks(ida_idp.IDB_Hooks):
         return 0
 
     @quite_init_checker
+    @stop_if_syncing
     def byte_patched(self, ea, old_value):
         return 0
 
     @quite_init_checker
+    @stop_if_syncing
     def cmt_changed(self, ea, repeatable_cmt):
         if repeatable_cmt:
             cmt = ida_bytes.get_cmt(ea, repeatable_cmt)
@@ -323,6 +357,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         return 0
 
     @quite_init_checker
+    @stop_if_syncing
     def range_cmt_changed(self, kind, a, cmt, repeatable):
         #print("range cmt changed")
         # verify it's a function comment
@@ -333,6 +368,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         return 0
 
     @quite_init_checker
+    @stop_if_syncing
     def extra_cmt_changed(self, ea, line_idx, cmt):
         #print("extra cmt changed")
         cmt = ida_bytes.get_cmt(ea, 0)
@@ -395,6 +431,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         @param deleted:     True only when the entire struct has been deleted.
         @return:
         """
+        l.info(f"IDA STRUCT CHANGE being called with {sid} and {new_name}")
         # parse the info of the current struct
         s_name = new_name if new_name else ida_struct.get_struc_name(sid)
 
@@ -407,6 +444,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
         # if deleted, finish early
         if deleted:
+            l.info(f"struct was deleted so pushing a deleted struct :(")
             self.binsync_state_change(
                 self.controller.push_artifact,
                 Struct(s_name, None, {})
@@ -425,6 +463,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
         # make the controller update the local state and push
         old_s_name = old_name if old_name else s_name
+        l.info(f"struct ready to push, pushing now {binsync_struct}")
         self.binsync_state_change(
             self.controller.push_artifact,
             binsync_struct
@@ -432,16 +471,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         return 0
 
     def binsync_state_change(self, *args, **kwargs):
-        # issue a new command to update the binsync state
-        with self.controller.api_lock:
-            if self.controller.api_count < 0:
-                self.controller.api_count = 0
-            elif self.controller.api_count > 0:
-                kwargs['api_set'] = True
-                self.controller.make_controller_cmd(*args, **kwargs)
-                self.controller.api_count -= 1
-            else:
-                self.controller.make_controller_cmd(*args, **kwargs)
+        self.controller.make_controller_cmd(*args, **kwargs)
 
 
 class IDPHooks(ida_idp.IDP_Hooks):
@@ -478,6 +508,7 @@ class HexRaysHooks:
             self._installed = False
 
     @quite_init_checker
+    @stop_if_syncing
     def _hxe_callback(self, event, *args):
         if not self._installed:
             return 0
@@ -588,16 +619,7 @@ class HexRaysHooks:
                     vu.refresh_view(False)
 
     def binsync_state_change(self, *args, **kwargs):
-        # issue a new command to update the binsync state
-        with self.controller.api_lock:
-            if self.controller.api_count < 0:
-                self.controller.api_count = 0
-            elif self.controller.api_count > 0:
-                kwargs['api_set'] = True
-                self.controller.make_controller_cmd(*args, **kwargs)
-                self.controller.api_count -= 1
-            else:
-                self.controller.make_controller_cmd(*args, **kwargs)
+        self.controller.make_controller_cmd(*args, **kwargs)
 
 
 class MasterHook:

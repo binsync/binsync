@@ -234,8 +234,7 @@ def function_header(ida_cfunc) -> FunctionHeader:
 
 
 @execute_write
-def set_function_header(ida_func_code_view, binsync_header: binsync.data.FunctionHeader,
-                        controller, exit_on_bad_type=False):
+def set_function_header(ida_func_code_view, binsync_header: binsync.data.FunctionHeader, exit_on_bad_type=False):
     data_changed = False
     ida_cfunc = ida_func_code_view.cfunc
     func_addr = ida_cfunc.entry_ea
@@ -247,7 +246,6 @@ def set_function_header(ida_func_code_view, binsync_header: binsync.data.Functio
     #
 
     if binsync_header.name and binsync_header.name != cur_ida_func.name:
-        controller.inc_api_count()
         set_ida_func_name(func_addr, binsync_header.name)
 
     #
@@ -259,7 +257,6 @@ def set_function_header(ida_func_code_view, binsync_header: binsync.data.Functio
     if binsync_header.ret_type and binsync_header.ret_type != cur_ret_type_str:
         old_prototype = str(ida_cfunc.type).replace("(", f" {func_name}(", 1)
         new_prototype = old_prototype.replace(cur_ret_type_str, binsync_header.ret_type, 1)
-        controller.inc_api_count()
         success = idc.SetType(func_addr, new_prototype)
 
         # we may need to reload types
@@ -282,7 +279,6 @@ def set_function_header(ida_func_code_view, binsync_header: binsync.data.Functio
 
         # change the name
         if binsync_arg.name and binsync_arg.name != cur_ida_arg.name:
-            controller.inc_api_count()
             success = ida_func_code_view.rename_lvar(ida_cfunc.arguments[idx], binsync_arg.name, 1)
             data_changed |= success is True
             refresh_pseudocode_view(func_addr)
@@ -309,7 +305,6 @@ def set_function_header(ida_func_code_view, binsync_header: binsync.data.Functio
     # set the change
     proto_body = ",".join(arg_strs)
     new_prototype = proto_head + proto_body
-    controller.inc_api_count()
     success = idc.SetType(func_addr, new_prototype)
 
     # we may need to reload types
@@ -404,10 +399,12 @@ def get_func_stack_var_info(func_addr) -> typing.Dict[int, StackVariable]:
 
         size = var.width
         name = var.name
-        offset = var.location.stkoff() - decompilation.get_stkoff_delta()
+        
+        ida_offset = var.location.stkoff() - decompilation.get_stkoff_delta()
+        bs_offset = ida_to_angr_stack_offset(func_addr, ida_offset)
         type_str = str(var.type())
-        stack_var_info[offset] = StackVariable(
-            offset, StackOffsetType.IDA, name, type_str, size, func_addr
+        stack_var_info[bs_offset] = StackVariable(
+            ida_offset, StackOffsetType.IDA, name, type_str, size, func_addr
         )
 
     return stack_var_info
@@ -441,7 +438,6 @@ def set_stack_vars_types(var_type_dict, code_view, controller: "IDABinSyncContro
             cur_off = lvar.location.stkoff() - code_view.cfunc.get_stkoff_delta()
             if lvar.is_stk_var() and cur_off in var_type_dict:
                 if str(lvar.type()) != str(var_type_dict[cur_off]):
-                    controller.inc_api_count()
                     data_changed |= code_view.set_lvar_type(lvar, var_type_dict.pop(cur_off))
                     fixed_point = False
                     # make sure to break, in case the size of lvars array has now changed
@@ -500,11 +496,9 @@ def set_ida_struct(struct: Struct, controller) -> bool:
     sid = ida_struct.get_struc_id(struct.name)
     if sid != 0xffffffffffffffff:
         sptr = ida_struct.get_struc(sid)
-        controller.inc_api_count()
         data_changed |= ida_struct.del_struc(sptr)
 
     # now make a struct header
-    controller.inc_api_count()
     ida_struct.add_struc(ida_idaapi.BADADDR, struct.name, False)
     sid = ida_struct.get_struc_id(struct.name)
     sptr = ida_struct.get_struc(sid)
@@ -519,7 +513,6 @@ def set_ida_struct(struct: Struct, controller) -> bool:
         mflag = convert_size_to_flag(member.size)
 
         # create the new member
-        controller.inc_api_count()
         data_changed |= ida_struct.add_struc_member(
             sptr,
             member.member_name,
@@ -551,7 +544,6 @@ def set_ida_struct_member_types(struct: Struct, controller) -> bool:
 
         # set the type
         mptr = sptr.get_member(idx)
-        controller.inc_api_count()
         was_set = ida_struct.set_member_tinfo(
             sptr,
             mptr,

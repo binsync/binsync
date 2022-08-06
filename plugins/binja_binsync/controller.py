@@ -36,7 +36,7 @@ from binaryninjaui import (
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourceType
 from binaryninja.mainthread import execute_on_main_thread, is_main_thread
 
-from binsync.common.controller import BinSyncController, make_ro_state, init_checker
+from binsync.common.controller import BinSyncController, fill_event, init_checker
 from binsync.data import (
     State, User, Artifact,
     Function, FunctionHeader, FunctionArgument, StackVariable, StackOffsetType,
@@ -77,9 +77,8 @@ def background_and_wait(func):
 
 class BinjaBinSyncController(BinSyncController):
     def __init__(self):
-        super(BinjaBinSyncController, self).__init__(BinjaArtifactLifter(self))
+        super(BinjaBinSyncController, self).__init__(artifact_lifter=BinjaArtifactLifter(self))
         self.bv = None
-        self.sync_lock = False
 
     def binary_hash(self) -> str:
         return hashlib.md5(self.bv.file.raw[:]).hexdigest()
@@ -124,50 +123,48 @@ class BinjaBinSyncController(BinSyncController):
     #
 
     @init_checker
-    @make_ro_state
-    @background_and_wait
-    def fill_struct(self, struct_name, user=None, state=None, header=True, members=True):
-        pass
+    def fill_struct(self, struct_name, header=True, members=True, artifact=None, **kwargs):
+        return False
 
     @init_checker
-    @make_ro_state
-    @background_and_wait
-    def fill_global_var(self, var_addr, user=None, state=None):
-        pass
+    def fill_global_var(self, var_addr, user=None, artifact=None, **kwargs):
+        return False
 
     @init_checker
-    @make_ro_state
     @background_and_wait
-    def fill_function(self, func_addr, user=None, state=None):
+    @fill_event
+    def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
         """
         Grab all relevant information from the specified user and fill the @bn_func.
         """
+        sync_func: Function = artifact
+        bn_func = self.bv.get_function_at(sync_func.addr)
+
+        changes = super(BinjaBinSyncController, self).fill_function(
+            func_addr, user=user, artifact=artifact, bn_func=bn_func, **kwargs
+        )
+        bn_func.reanalyze()
+        return changes
+
+    @init_checker
+    @fill_event
+    def fill_function_header(self, func_addr, user=None, artifact=None, bn_func=None, **kwargs):
         updates = False
-        bn_func = self.bv.get_function_at(self.artifact_lifer.lower_addr(func_addr))
-        sync_func = state.get_function(func_addr)
-        if sync_func is None or bn_func is None:
-            return
+        sync_header: FunctionHeader = artifact
 
-        self.sync_lock = True
-        sync_func = self.generate_func_for_sync_level(sync_func)
-
-        #
-        # header
-        #
-
-        if sync_func.header:
+        if sync_header:
             # func name
-            if sync_func.name and sync_func.name != bn_func.name:
-                bn_func.name = sync_func.name
+            if sync_header.name and sync_header.name != bn_func.name:
+                bn_func.name = sync_header.name
                 updates |= True
 
             # ret type
-            if sync_func.header.ret_type and \
-                    sync_func.header.ret_type != bn_func.return_type.get_string_before_name():
+            if sync_header.ret_type and \
+                    sync_header.ret_type != bn_func.return_type.get_string_before_name():
 
                 valid_type = False
                 try:
-                    new_type, _ = self.bv.parse_type_string(sync_func.header.ret_type)
+                    new_type, _ = self.bv.parse_type_string(sync_header.ret_type)
                     valid_type = True
                 except Exception:
                     pass
@@ -177,12 +174,12 @@ class BinjaBinSyncController(BinSyncController):
                     updates |= True
 
             # parameters
-            if sync_func.header.args:
-                prototype_tokens = [sync_func.header.ret_type] if sync_func.header.ret_type \
+            if sync_header.args:
+                prototype_tokens = [sync_header.ret_type] if sync_header.ret_type \
                     else [bn_func.return_type.get_string_before_name()]
 
                 prototype_tokens.append("(")
-                for idx, func_arg in sync_func.header.args.items():
+                for idx, func_arg in sync_header.args.items():
                     prototype_tokens.append(func_arg.type_str)
                     prototype_tokens.append(func_arg.name)
                     prototype_tokens.append(",")
@@ -203,27 +200,28 @@ class BinjaBinSyncController(BinSyncController):
                     bn_func.function_type = bn_prototype
                     updates |= True
 
-        #
-        # stack variables
-        #
+        return updates
+
+    @init_checker
+    @fill_event
+    def fill_stack_variable(self, func_addr, offset, user=None, artifact=None, bn_func=None, **kwargs):
+        updates = False
+        bs_stack_var: StackVariable = artifact
 
         existing_stack_vars: Dict[int, Any] = {
             v.storage: v for v in bn_func.stack_layout
             if v.source_type == VariableSourceType.StackVariableSourceType
         }
 
-        for offset, stack_var in sync_func.stack_vars.items():
-            bn_offset = stack_var.get_offset(StackOffsetType.BINJA)
-            # skip if this variable already exists
-            if bn_offset not in existing_stack_vars:
-                continue
+        bn_offset = bs_stack_var.get_offset(StackOffsetType.BINJA)
 
-            if existing_stack_vars[bn_offset].name != stack_var.name:
-                existing_stack_vars[bn_offset].name = stack_var.name
+        if bn_offset in existing_stack_vars:
+            if existing_stack_vars[bn_offset].name != bs_stack_var.name:
+                existing_stack_vars[bn_offset].name = bs_stack_var.name
 
             valid_type = False
             try:
-                type_, _ = self.bv.parse_type_string(stack_var.type)
+                type_, _ = self.bv.parse_type_string(bs_stack_var.type)
                 valid_type = True
             except Exception:
                 pass
@@ -231,35 +229,24 @@ class BinjaBinSyncController(BinSyncController):
             if valid_type:
                 if existing_stack_vars[bn_offset].type != type_:
                     existing_stack_vars[bn_offset].type = type_
-
                 try:
-                    bn_func.create_user_stack_var(bn_offset, type_, stack_var.name)
-                    bn_func.create_auto_stack_var(bn_offset, type_, stack_var.name)
+                    bn_func.create_user_stack_var(bn_offset, type_, bs_stack_var.name)
+                    bn_func.create_auto_stack_var(bn_offset, type_, bs_stack_var.name)
                 except Exception as e:
                     l.warning(f"BinSync could not sync stack variable at offset {bn_offset}: {e}")
 
                 updates |= True
 
-        #
-        # comments
-        #
-
-        sync_cmts = self.pull_artifact(Comment, func_addr, many=True, state=state, user=user)
-        for addr, comment in sync_cmts.items():
-            if not comment:
-                continue
-
-            bn_func.set_comment_at(addr, comment.comment)
-            updates |= True
-
-        bn_func.reanalyze()
-        if updates:
-            l.info(f"New data synced for \'{user}\' on function {hex(bn_func.start)}.")
-        else:
-            l.info(f"No new data was set either by failure or lack of differences.")
-
-        self.sync_lock = False
         return updates
+
+    @init_checker
+    @fill_event
+    def fill_comment(self, addr, user=None, artifact=None, bn_func=None, **kwargs):
+        # TODO: check if the comment changed when set!
+        comment: Comment = artifact
+        bn_func.set_comment_at(comment.addr, comment.comment)
+
+        return True
 
     #
     # Artifact API

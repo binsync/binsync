@@ -86,8 +86,8 @@ class Artifact:
         """
         return toml.dumps(self.__getstate__())
 
-    def copy(self):
-        pass
+    def copy(self) -> "Artifact":
+        return None
 
     @property
     def commit_msg(self) -> str:
@@ -118,15 +118,15 @@ class Artifact:
 
         return inverted_diff
 
-    @classmethod
-    def from_nonconflicting_merge(cls, obj1: "Artifact", obj2: "Artifact"):
+    def nonconflict_merge(self, obj2: "Artifact"):
+        obj1 = self.copy()
         if not obj2 or obj1 == obj2:
-            return obj1.copy()
+            return obj1
 
         obj_diff = obj1.diff(obj2)
         merge_obj = obj1.copy()
 
-        for attr in cls.__slots__:
+        for attr in self.__slots__:
             if attr in obj_diff and obj_diff[attr]["before"] is None:
                 setattr(merge_obj, attr, getattr(obj2, attr))
 

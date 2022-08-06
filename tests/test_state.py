@@ -168,7 +168,7 @@ class TestState(unittest.TestCase):
                 state.set_stack_variable(var)
         
         func1, func2 = state1.get_function(0x400000), state2.get_function(0x400000) 
-        merge_func = Function.from_nonconflicting_merge(func1, func2)
+        merge_func = func1.nonconflict_merge(func2)
 
         self.assertEqual(merge_func.name, "user1_func")
         self.assertEqual(merge_func.header.ret_type, "int *")
