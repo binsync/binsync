@@ -6,6 +6,7 @@ from functools import wraps
 from typing import Dict, Iterable, List, Optional, Union
 
 import binsync.data
+from binsync import ProjectConfig
 from binsync.common.artifact_lifter import ArtifactLifter
 from binsync.core.client import Client, SchedSpeed
 from binsync.data.type_parser import BSTypeParser, BSType
@@ -126,6 +127,9 @@ class BinSyncController:
 
         # settings
         self.sync_level: int = SyncLevel.NON_CONFLICTING
+        self.table_coloring_window = 2 * 60 * 60  # 2 hours in seconds
+
+        self.config = None
 
         # command locks
         self.queue_lock = threading.Lock()
@@ -956,3 +960,24 @@ class BinSyncController:
             or self.get_state(priority=SchedSpeed.FAST)
 
         return master_state, state
+
+    def load_saved_config(self):
+        self.config = ProjectConfig.load_from_file(self.binary_path())
+        if not self.config:
+            return None
+
+        if hasattr(self.config, "table_coloring_window") and self.config.table_coloring_window is not None:
+            self.table_coloring_window = self.config.table_coloring_window
+        if hasattr(self.config, "sync_level") and self.config.sync_level is not None:
+            self.sync_level = self.config.sync_level
+        if hasattr(self.config, "log_level") and self.config.log_level is not None:
+            if self.config.log_level == "DEBUG":
+                logging.getLogger("binsync").setLevel("DEBUG")
+                logging.getLogger("ida_binsync").setLevel("DEBUG")
+                _l.info("Logger has been set to level: DEBUG")
+            elif self.config.log_level == "INFO":
+                logging.getLogger("binsync").setLevel("INFO")
+                logging.getLogger("ida_binsync").setLevel("INFO")
+                _l.info("Logger has been set to level: INFO")
+
+        return self.config
