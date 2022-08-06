@@ -189,5 +189,4 @@ class Struct(Artifact):
 
         # compute the new size
         merge_struct.size = sum(mem.size for mem in merge_struct.struct_members.values())
-
         return merge_struct

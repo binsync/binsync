@@ -66,5 +66,4 @@ class Comment(Artifact):
             return obj1
 
         merge_comment = obj1
-        merge_comment.comment += "\n" + obj2.comment
         return merge_comment

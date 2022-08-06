@@ -57,7 +57,7 @@ def update_on_view(f):
         task = UpdateTask(f, self, func_addr, *args, **kwargs)
         self.update_states[func_addr].add_update_task(task)
 
-    return _update_on_view()
+    return _update_on_view
 
 
 #

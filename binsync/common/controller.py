@@ -454,7 +454,7 @@ class BinSyncController:
         return self.lower_artifact(artifact)
 
     @init_checker
-    def push_artifact(self, artifact: Artifact, user=None, state=None, commit_msg=None, api_set=False, **kwargs) -> bool:
+    def push_artifact(self, artifact: Artifact, user=None, state=None, commit_msg=None, set_last_change=True, **kwargs) -> bool:
         """
         Every pusher artifact does three things
         1. Get the state setter function based on the class of the Obj
@@ -466,7 +466,7 @@ class BinSyncController:
         @param state:
         @return:
         """
-        _l.info(f"Running push now for {artifact}")
+        _l.debug(f"Running push now for {artifact}")
         if not artifact:
             return False
 
@@ -484,16 +484,16 @@ class BinSyncController:
         if isinstance(artifact, (FunctionHeader, StackVariable, Comment)):
             func_addr = artifact.func_addr if hasattr(artifact, "func_addr") else artifact.addr
             if func_addr and not state.get_function(func_addr):
-                self.push_artifact(Function(func_addr, self.get_func_size(func_addr)), state=state)
+                self.push_artifact(Function(func_addr, self.get_func_size(func_addr)), state=state, set_last_change=set_last_change)
 
         # lift artifact into standard BinSync format
         artifact = self.lift_artifact(artifact)
 
         # set the artifact in the target state, likely master
-        _l.info(f"Setting an artifact now into {state} as {artifact}")
-        was_set = set_artifact_func(state, artifact, set_last_change=not api_set)
+        _l.debug(f"Setting an artifact now into {state} as {artifact}")
+        was_set = set_artifact_func(state, artifact, set_last_change=set_last_change)
         if was_set:
-            _l.info(f"{state} commiting now with {commit_msg or artifact.commit_msg}")
+            _l.debug(f"{state} committing now with {commit_msg or artifact.commit_msg}")
             self.client.commit_state(state, msg=commit_msg or artifact.commit_msg)
 
         return was_set
@@ -509,9 +509,12 @@ class BinSyncController:
 
     def fill_event_handler(self, filler_func, *identifiers,
                            artifact=None, user=None, state=None, master_state=None, merge_level=None, blocking=False,
+                           commit_msg=None,
                            **kwargs
                            ):
         """
+        fill_event_handler is the function called before every `fill_<artifact>` function. This handler is responsible
+        for assuring a variety of things exist for subsequent call to `fill_<artifact>`.
 
         @param filler_func:
         @param identifiers:
@@ -537,7 +540,6 @@ class BinSyncController:
 
         state = state if state is not None else self.get_state(user=user, priority=SchedSpeed.FAST)
         master_state = master_state if master_state is not None else self.get_state(priority=SchedSpeed.FAST)
-        _l.info(f"Getting type of function with name {filler_func.__name__}")
         artifact_type = ARTIFACT_FILL_MAP.get(filler_func.__name__, None)
         if not artifact_type:
             _l.warning(f"Attempting to Fill an unknown type! Stopping Fill...")
@@ -554,7 +556,6 @@ class BinSyncController:
 
         lock = self.sync_lock if not self.sync_lock.locked() else FakeSyncLock()
         with lock:
-            _l.info(f"Calling fill to {filler_func} with {identifiers}")
             fill_changes = filler_func(
                 self,
                 *identifiers,
@@ -568,12 +569,14 @@ class BinSyncController:
         )
 
         if blocking:
-            self.push_artifact(merged_artifact, state=master_state)
+            self.push_artifact(merged_artifact, state=master_state, set_last_change=False, commit_msg=commit_msg)
         else:
             self.make_controller_cmd(
                 self.push_artifact,
                 merged_artifact,
-                state=master_state
+                state=master_state,
+                set_last_change=False,
+                commit_msg=commit_msg
             )
 
         return fill_changes
@@ -659,8 +662,6 @@ class BinSyncController:
             changes |= self.fill_function_header(func_addr, artifact=master_func.header, **kwargs)
 
         # stack vars
-        _l.info(f"Should be filling stack vars now {master_func.stack_vars}")
-        _l.info(f"Should be filling stack vars now into dec: {dec_func.stack_vars}")
         if master_func.stack_vars and master_func.stack_vars != dec_func.stack_vars:
             for offset, sv in master_func.stack_vars.items():
                 dec_sv = dec_func.stack_vars.get(offset, None)
@@ -775,8 +776,12 @@ class BinSyncController:
         # re-order users for the prefered user to be at the front of the queue (if they exist)
         all_users = list(self.usernames(priority=SchedSpeed.FAST))
         preference_user = preference_user if preference_user else self.client.master_user
-        all_users.remove(preference_user)
         master_state = self.client.get_state(user=self.client.master_user, priority=SchedSpeed.FAST)
+        users_state_map = {
+            user: self.get_state(user=user, priority=SchedSpeed.FAST)
+            for user in all_users
+        }
+        all_users.remove(preference_user)
 
         target_artifacts = {
             Struct: self.fill_struct,
@@ -787,11 +792,11 @@ class BinSyncController:
 
         for artifact_type, filler_func in target_artifacts.items():
             _l.info(f"Magic Syncing artifacts of type {artifact_type.__name__} now...")
-            pref_state = self.get_state(user=preference_user, priority=SchedSpeed.FAST)
-            for identifier in self.changed_artifacts_of_type(artifact_type):
+            pref_state = users_state_map[preference_user]
+            for identifier in self.changed_artifacts_of_type(artifact_type, users=all_users + [preference_user], states=users_state_map):
                 pref_art = self.pull_artifact(artifact_type, identifier, state=pref_state)
                 for user in all_users:
-                    user_state = self.get_state(user=user, priority=SchedSpeed.FAST)
+                    user_state = users_state_map[user]
                     user_art = self.pull_artifact(artifact_type, identifier, state=user_state)
 
                     if not user_art:
@@ -803,8 +808,7 @@ class BinSyncController:
                     pref_art = pref_art.nonconflict_merge(user_art)
                     pref_art.last_change = None
 
-                self.push_artifact(pref_art, state=master_state, commit_msg=f"Magic Synced {pref_art}")
-                filler_func(identifier, state=master_state)
+                filler_func(identifier, artifact=pref_art, state=master_state,  commit_msg=f"Magic Synced {pref_art}")
 
         _l.info(f"Magic Syncing Completed!")
 
@@ -877,7 +881,7 @@ class BinSyncController:
 
         return merge_art
 
-    def changed_artifacts_of_type(self, type_: Artifact):
+    def changed_artifacts_of_type(self, type_: Artifact, users=[], states={}):
         prop_map = {
             Function: "functions",
             Comment: "comments",
@@ -892,8 +896,8 @@ class BinSyncController:
             return set()
 
         known_arts = set()
-        for username in self.usernames(priority=SchedSpeed.FAST):
-            state = self.client.get_state(user=username, priority=SchedSpeed.FAST)
+        for username in users:
+            state = states[username]
             artifact_dict: Dict = getattr(state, prop_name)
             for identifier in artifact_dict:
                 known_arts.add(identifier)
@@ -922,12 +926,10 @@ class BinSyncController:
         base_type_str = self.type_is_user_defined(type_str, state=state)
         if not base_type_str:
             return False
-        _l.info(f"Detected user defined type!")
 
         struct: Struct = state.get_struct(base_type_str)
         if not struct:
             return False
-        _l.info(f"Found struct in user defined state for {struct}")
 
         nested_undefined_structs = False
         for off, memb in struct.struct_members.items():
@@ -937,7 +939,7 @@ class BinSyncController:
                 # also a struct that we don't have in our master_state, then we give up
                 # and attempt to fill all structs to resolve type issues
                 nested_undefined_structs = True
-                _l.info("Nested undefined structs detected, pulling all structs")
+                _l.info(f"Nested undefined structs detected, pulling all structs from {state.user}")
                 break
 
         changes = self.fill_struct(base_type_str, state=state, **kwargs) if not nested_undefined_structs \
