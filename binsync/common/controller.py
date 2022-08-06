@@ -757,7 +757,7 @@ class BinSyncController:
         return changes
 
     @init_checker
-    def magic_fill(self, preference_user=None):
+    def magic_fill(self, preference_user=None, target_artifacts=None):
         """
         Traverses all the data in the BinSync repo, starting with an optional preference user,
         and sequentially merges that data together in a non-conflicting way. This also means that the prefrence
@@ -770,6 +770,7 @@ class BinSyncController:
         -
 
         @param preference_user:
+        @param target_artifacts:
         @return:
         """
         _l.info(f"Staring a Magic Sync with a preference for {preference_user}")
@@ -783,7 +784,7 @@ class BinSyncController:
         }
         all_users.remove(preference_user)
 
-        target_artifacts = {
+        target_artifacts = target_artifacts or {
             Struct: self.fill_struct,
             Comment: lambda *x, **y: None,
             Function: self.fill_function,
