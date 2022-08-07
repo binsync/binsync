@@ -39,6 +39,7 @@ import ida_pro
 import ida_segment
 import ida_struct
 import ida_typeinf
+import ida_enum
 import idaapi
 import idc
 
@@ -103,24 +104,40 @@ class IDBHooks(ida_idp.IDB_Hooks):
     #   Enum Hooks
     #
 
+    def enum_modifier(self, enum):
+        name = ida_enum.get_enum_name(enum)
+        _enum = compat.enum(name)
+        self.binsync_state_change(
+            self.controller.push_artifact,
+            _enum
+        )
+
     @quite_init_checker
     @stop_if_syncing
     def enum_created(self, enum):
-        #print("enum created")
+        self.enum_modifier(enum)
         return 0
 
     # XXX - use enum_deleted(self, id) instead?
     @quite_init_checker
     @stop_if_syncing
     def deleting_enum(self, id):
-        #print("enum deleted")
+        name = ida_enum.get_enum_name(id)
+        enum = Enum(name, {})
+        self.binsync_state_change(
+            self.controller.push_artifact,
+            enum
+        )
         return 0
 
     # XXX - use enum_renamed(self, id) instead?
     @quite_init_checker
     @stop_if_syncing
     def renaming_enum(self, id, is_enum, newname):
-        #print("enum renamed")
+        if is_enum:
+            self.enum_modifier(id)
+        else:
+            self.enum_modifier(ida_enum.get_enum_member_enum(id))
         return 0
 
     @quite_init_checker
@@ -138,14 +155,14 @@ class IDBHooks(ida_idp.IDB_Hooks):
     @quite_init_checker
     @stop_if_syncing
     def enum_member_created(self, id, cid):
-        #print("enum member created")
+        self.enum_modifier(id)
         return 0
 
     # XXX - use enum_member_deleted(self, id, cid) instead?
     @quite_init_checker
     @stop_if_syncing
     def deleting_enum_member(self, id, cid):
-        #print("enum member")
+        self.enum_modifier(id)
         return 0
 
     #
@@ -226,7 +243,6 @@ class IDBHooks(ida_idp.IDB_Hooks):
         :param mptr:    Member Pointer
         :return:
         """
-
         # struct pointer is actually a stack frame
         if sptr.is_frame():
             stack_frame = sptr

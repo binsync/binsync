@@ -644,7 +644,7 @@ def set_enum(bs_enum: Enum):
         l.warning(f"IDA failed to create a new enum with {bs_enum.name}")
         return False
 
-    for member_name, value in bs_enum.value_map.items():
+    for member_name, value in bs_enum.members.items():
         ida_enum.add_enum_member(enum_id, member_name, value)
 
     return True
