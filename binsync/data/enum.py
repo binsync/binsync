@@ -56,8 +56,37 @@ class Enum(Artifact):
             last_change=self.last_change
         )
 
-    @classmethod
-    def from_nonconflicting_merge(cls, enum1: "Enum", enum2: "Enum"):
+    def nonconflict_merge(self, enum2: "Enum"):
+        enum1 = self.copy()
         if not enum2 or enum1 == enum2:
             return enum1.copy()
 
+        constants = {
+            value for value in enum1.members.values()
+        }
+
+        for name, constant in enum2.members.items():
+            if name in enum1.members or constant in constants:
+                continue
+            enum1.members[name] = constant
+
+        return enum1
+
+    def conflict_merge(self, enum2: "Enum"):
+        enum1 = self.copy()
+        if not enum2 or enum1 == enum2:
+            return enum1.copy()
+
+        e1_rev = {
+            value: key for key, value in enum1.members.items()
+        }
+
+        for name, constant in enum2.members.items():
+            if name not in enum1.members or \
+                enum1.members[name] in enum2.members.values():
+                e1_rev[constant] = name
+
+        enum1.members = {
+            value: key for key, value in e1_rev.items()
+        }
+        return enum1

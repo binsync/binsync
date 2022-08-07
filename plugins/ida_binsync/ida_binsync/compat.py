@@ -638,7 +638,7 @@ def set_enum(bs_enum: Enum):
         return False
 
     ida_enum.delete_enum(_enum)
-    enum_id = ida_enum.add_enum(bs_enum.name)
+    enum_id = ida_enum.add_enum(ida_enum.get_enum_qty(), bs_enum.name, 0)
 
     if enum_id is None:
         l.warning(f"IDA failed to create a new enum with {bs_enum.name}")

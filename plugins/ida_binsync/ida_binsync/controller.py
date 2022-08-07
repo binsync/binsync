@@ -272,6 +272,13 @@ class IDABinSyncController(BinSyncController):
         updated_header = compat.set_function_header(ida_code_view, func_header)
         return updated_header
 
+    @init_checker
+    @fill_event
+    def fill_enum(self, name, user=None, artifact=None, ida_code_view=None, **kwargs):
+        enum: Enum = artifact
+        updated_enum = compat.set_enum(enum)
+        return updated_enum
+
     #
     # Artifact API
     #
@@ -299,15 +306,3 @@ class IDABinSyncController(BinSyncController):
 
     def enum(self, name) -> Optional[Enum]:
         return compat.enum(name)
-    #
-    # Utils
-    #
-
-    @init_checker
-    def _typestr_in_state_structs(self, type_str, user=None, state=None):
-        binsync_structs = state.get_structs()
-        for struct in binsync_structs:
-            if struct.name in type_str:
-                return True
-
-        return False

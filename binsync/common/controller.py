@@ -788,7 +788,8 @@ class BinSyncController:
             Struct: self.fill_struct,
             Comment: lambda *x, **y: None,
             Function: self.fill_function,
-            GlobalVariable: self.fill_global_var
+            GlobalVariable: self.fill_global_var,
+            Enum: self.fill_enum
         }
 
         for artifact_type, filler_func in target_artifacts.items():
