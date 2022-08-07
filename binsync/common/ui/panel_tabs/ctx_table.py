@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime
 from typing import Dict
 
@@ -38,7 +39,6 @@ class CTXTableModel(QAbstractTableModel):
         # 'Changes' temporarily disabled
     ]
 
-    # This is *most likely* alright, definitely works on linux, could use a macos/windows pass.
     # Custom defined role for sorting (since we shouldn't sort hex numbers alphabetically)
     SortRole = Qt.UserRole + 1000
 
@@ -83,8 +83,11 @@ class CTXTableModel(QAbstractTableModel):
                 return self.row_data[index.row()][1]
             elif index.column() == 2:
                 return self.row_data[index.row()][2]
-            elif index.column() == 3:  # dont filter based on time
-                return None
+            elif index.column() == 3:
+                if isinstance(self.row_data[index.row()][0], int):
+                    return self.row_data[index.row()][3]
+                elif isinstance(self.row_data[index.row()][0], datetime):
+                    return time.mktime(self.row_data[index.row()][3].timetuple())
         elif role == Qt.BackgroundRole:
             if len(self.row_data) != len(self.data_bgcolors) or not (0 <= index.row() < len(self.data_bgcolors)):
                 return None

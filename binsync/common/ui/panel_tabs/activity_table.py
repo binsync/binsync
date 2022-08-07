@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime
 from typing import Dict
 
@@ -38,7 +39,6 @@ class ActivityTableModel(QAbstractTableModel):
         'Last Push'
     ]
 
-    # This is *most likely* alright, definitely works on linux, could use a macos/windows pass.
     # Custom defined role for sorting (since we shouldn't sort hex numbers alphabetically)
     SortRole = Qt.UserRole + 1000
 
@@ -85,7 +85,10 @@ class ActivityTableModel(QAbstractTableModel):
             elif index.column() == 1:
                 return self.row_data[index.row()][1]
             elif index.column() == 2:
-                return self.row_data[index.row()][2]
+                if isinstance(self.row_data[index.row()][0], int):
+                    return self.row_data[index.row()][2]
+                elif isinstance(self.row_data[index.row()][0], datetime):
+                    return time.mktime(self.row_data[index.row()][2].timetuple())
         elif role == Qt.BackgroundRole:
             if len(self.row_data) != len(self.data_bgcolors) or not (0 <= index.row() < len(self.data_bgcolors)):
                 return None
@@ -239,7 +242,13 @@ class ActivityTableView(QTableView):
         self._init_settings()
 
     def _get_valid_funcs_for_user(self, username):
-        user_state: State = self.controller.client.get_state(user=username, priority=SchedSpeed.FAST)
+        # only populate with cached items to prevent main thread waiting on atomic actions
+        cache_item = self.controller.client.check_cache_(self.controller.client.get_state, user=username,
+                                                         priority=SchedSpeed.FAST)
+        if cache_item is not None:
+            user_state = cache_item
+        else:
+            return
         func_addrs = [addr for addr in user_state.functions]
 
         func_addrs.sort()

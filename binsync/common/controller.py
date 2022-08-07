@@ -962,6 +962,9 @@ class BinSyncController:
         return master_state, state
 
     def load_saved_config(self):
+        if self.binary_path() is None:
+            _l.warning(f"Tried to load binary-specific config when no binary is loaded!")
+            return
         self.config = ProjectConfig.load_from_file(self.binary_path())
         if not self.config:
             return None

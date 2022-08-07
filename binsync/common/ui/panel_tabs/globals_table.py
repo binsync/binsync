@@ -1,5 +1,6 @@
 import logging
 import re
+import time
 from datetime import datetime
 
 from binsync.common.controller import BinSyncController
@@ -37,7 +38,6 @@ class GlobalTableModel(QAbstractTableModel):
         'Last Push'
     ]
 
-    # This is *most likely* alright, definitely works on linux, could use a macos/windows pass.
     # Custom defined role for sorting (since we shouldn't sort hex numbers alphabetically)
     SortRole = Qt.UserRole + 1000
 
@@ -83,8 +83,11 @@ class GlobalTableModel(QAbstractTableModel):
                 return self.row_data[index.row()][1]
             elif index.column() == 2:
                 return self.row_data[index.row()][2]
-            elif index.column() == 3:  # dont filter based on time
-                return None
+            elif index.column() == 3:
+                if isinstance(self.row_data[index.row()][0], int):
+                    return self.row_data[index.row()][3]
+                elif isinstance(self.row_data[index.row()][0], datetime):
+                    return time.mktime(self.row_data[index.row()][3].timetuple())
         elif role == Qt.BackgroundRole:
             if len(self.row_data) != len(self.data_bgcolors) or not (0 <= index.row() < len(self.data_bgcolors)):
                 return None
@@ -270,11 +273,18 @@ class GlobalTableView(QTableView):
         elif global_type == "Enum":
             global_getter = "get_enum"
         else:
-            l.warning("Failed to get a valid type for global type")
+            l.warning(f"Failed to get a valid type for global type '{global_type}'")
             return
 
         for user in self.controller.users(priority=SchedSpeed.FAST):
-            user_state: State = self.controller.client.get_state(user=user.name, priority=SchedSpeed.FAST)
+            # only populate with cached items to prevent main thread waiting on atomic actions
+            cache_item = self.controller.client.check_cache_(self.controller.client.get_state, user=user.name,
+                                                             priority=SchedSpeed.FAST)
+            if cache_item is not None:
+                user_state = cache_item
+            else:
+                continue
+
             get_global = getattr(user_state, global_getter)
             user_global = get_global(global_name)
 
@@ -305,7 +315,6 @@ class GlobalTableView(QTableView):
         menu.setObjectName("binsync_global_table_context_menu")
 
         valid_row = True
-        selected_row = self.rowAt(event.pos().y())
         selected_row = self.rowAt(event.pos().y())
         idx = self.proxymodel.index(selected_row, 0)
         idx = self.proxymodel.mapToSource(idx)
@@ -346,7 +355,8 @@ class GlobalTableView(QTableView):
                 return
 
             menu.addSeparator()
-            menu.addAction("Sync", filler_func(user_name))
+            action = menu.addAction("Sync")
+            action.triggered.connect(filler_func(user_name))
             from_menu = menu.addMenu("Sync from...")
             for username in self._get_valid_users_for_global(global_name, global_type):
                 action = from_menu.addAction(username)

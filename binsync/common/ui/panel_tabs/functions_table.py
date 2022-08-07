@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime
 from typing import Dict
 
@@ -37,7 +38,6 @@ class FunctionTableModel(QAbstractTableModel):
         'Last Push'
     ]
 
-    # This is *most likely* alright, definitely works on linux, could use a macos/windows pass.
     # Custom defined role for sorting (since we shouldn't sort hex numbers alphabetically)
     SortRole = Qt.UserRole + 1000
 
@@ -85,8 +85,11 @@ class FunctionTableModel(QAbstractTableModel):
                 return self.row_data[index.row()][1]
             elif index.column() == 2:
                 return self.row_data[index.row()][2]
-            elif index.column() == 3:  # dont filter based on time
-                return None
+            elif index.column() == 3:
+                if isinstance(self.row_data[index.row()][0], int):
+                    return self.row_data[index.row()][3]
+                elif isinstance(self.row_data[index.row()][0], datetime):
+                    return time.mktime(self.row_data[index.row()][3].timetuple())
         elif role == Qt.BackgroundRole:
             if len(self.row_data) != len(self.data_bgcolors) or not (0 <= index.row() < len(self.data_bgcolors)):
                 return None
@@ -252,8 +255,6 @@ class FunctionTableView(QTableView):
         self.doubleClicked.connect(self._doubleclick_handler)
         self.column_visibility = []
 
-        self.right_click_allowed = True
-
         self._init_settings()
 
     def _doubleclick_handler(self):
@@ -267,11 +268,11 @@ class FunctionTableView(QTableView):
         """ Helper function for getting users that have changes in a given function """
         for user in self.controller.users(priority=SchedSpeed.FAST):
             # only populate with cached items to prevent main thread waiting on atomic actions
-            cache_item = self.controller.client._check_cache_(self.controller.client.get_state, user=user.name, priority=SchedSpeed.FAST)
+            cache_item = self.controller.client.check_cache_(self.controller.client.get_state, user=user.name, priority=SchedSpeed.FAST)
             if cache_item is not None:
                 user_state = cache_item
             else:
-                return
+                continue
 
             user_func = user_state.get_function(func_addr)
 
@@ -292,18 +293,12 @@ class FunctionTableView(QTableView):
 
     def update_table(self):
         """ Update the model of the table with new data from the controller """
-        self.right_click_allowed = False
         self.model.update_table()
-        self.right_click_allowed = True
 
     def reload(self):
         pass
 
     def contextMenuEvent(self, event):
-        # disable right-clicking during table updates, prevents ui freezing due to waiting on git actions
-        if not self.right_click_allowed:
-            return
-
         menu = QMenu(self)
         menu.setObjectName("binsync_function_table_context_menu")
         valid_row = True
@@ -338,7 +333,6 @@ class FunctionTableView(QTableView):
                 action = from_menu.addAction(username)
                 action.triggered.connect(
                     lambda chck, name=username: self.controller.fill_function(func_addr, user=name))
-
         menu.popup(self.mapToGlobal(event.pos()))
 
     def _init_settings(self):
