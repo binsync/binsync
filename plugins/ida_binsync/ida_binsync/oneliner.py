@@ -33,7 +33,7 @@ def plugin_install_binsync(plugins_path):
 
     # install ida_binsync/*
     github_url_base += "ida_binsync/"
-    files_to_download = ["__init__.py", "compat.py", "controller.py", "hooks.py", "plugin.py"]
+    files_to_download = ["__init__.py", "compat.py", "controller.py", "hooks.py", "plugin.py", "artifact_lifter.py"]
     try:
         os.mkdir(ida_binsync_folder)
     except FileExistsError:

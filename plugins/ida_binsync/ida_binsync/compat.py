@@ -96,12 +96,15 @@ def convert_type_str_to_ida_type(type_str) -> typing.Optional['ida_typeinf']:
 
 
 @execute_read
-def ida_to_angr_stack_offset(func_addr, angr_stack_offset):
+def ida_to_angr_stack_offset(func_addr, ida_stack_off):
     frame = idaapi.get_frame(func_addr)
+    if not frame:
+        return ida_stack_off
+
     frame_size = idc.get_struc_size(frame)
     last_member_size = idaapi.get_member_size(frame.get_member(frame.memqty - 1))
-    ida_stack_offset = angr_stack_offset - frame_size + last_member_size
-    return ida_stack_offset
+    angr_stack_off = ida_stack_off - frame_size + last_member_size
+    return angr_stack_off
 
 
 @execute_read
