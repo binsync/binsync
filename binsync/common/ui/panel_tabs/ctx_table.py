@@ -61,7 +61,7 @@ class CTXTableModel(QAbstractTableModel):
 
     def columnCount(self, index=QModelIndex()):
         """ Returns number of columns the model holds. """
-        return 4
+        return 3
 
     def data(self, index, role=Qt.DisplayRole):
         """ Returns information about the data at a specified index based
