@@ -293,3 +293,21 @@ class IDABinSyncController(BinSyncController):
 
     def struct(self, name) -> Optional[Struct]:
         return compat.struct(name)
+
+    def enums(self) -> Dict[str, Enum]:
+        return compat.enums()
+
+    def enum(self, name) -> Optional[Enum]:
+        return compat.enum(name)
+    #
+    # Utils
+    #
+
+    @init_checker
+    def _typestr_in_state_structs(self, type_str, user=None, state=None):
+        binsync_structs = state.get_structs()
+        for struct in binsync_structs:
+            if struct.name in type_str:
+                return True
+
+        return False

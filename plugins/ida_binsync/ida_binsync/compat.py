@@ -13,13 +13,14 @@ import functools
 import threading
 import typing
 import logging
-from time import time
+from time import time, sleep
 
-import idc, idaapi, ida_kernwin, ida_hexrays, ida_funcs, ida_bytes, ida_struct, ida_idaapi, ida_typeinf, idautils
+import idc, idaapi, ida_kernwin, ida_hexrays, ida_funcs, \
+    ida_bytes, ida_struct, ida_idaapi, ida_typeinf, idautils, ida_enum
 
 import binsync
 from binsync.data import (
-    Struct, FunctionHeader, FunctionArgument, StackVariable, StackOffsetType, Function, GlobalVariable
+    Struct, FunctionHeader, FunctionArgument, StackVariable, StackOffsetType, Function, GlobalVariable, Enum
 )
 from .controller import IDABinSyncController
 
@@ -598,6 +599,55 @@ def global_var(addr):
 @execute_write
 def set_global_var_name(var_addr, name):
     return idaapi.set_name(var_addr, name)
+
+#
+# Enums
+#
+
+def get_enum_members(_enum) -> typing.Dict[str, int]:
+    enum_members = {}
+    for j in range(1, ida_enum.get_enum_size(_enum) + 1):
+        name = ida_enum.get_enum_member_name(_enum + j)
+        value = ida_enum.get_enum_member_value(_enum + j)
+        enum_members[name] = value
+    return enum_members
+
+@execute_read
+def enums() -> typing.Dict[str, Enum]:
+    _enums: typing.Dict[str, Enum] = {}
+    for i in range(ida_enum.get_enum_qty()):
+        _enum = ida_enum.getn_enum(i)
+        enum_name = ida_enum.get_enum_name(_enum)
+        enum_members = get_enum_members(_enum)
+        _enums[enum_name] = Enum(enum_name, enum_members)
+    return _enums
+
+@execute_read
+def enum(name) -> typing.Optional[Enum]:
+    _enum = ida_enum.get_enum(name)
+    if not _enum:
+        return None
+    enum_name = ida_enum.get_enum_name(_enum)
+    enum_members = get_enum_members(_enum)
+    return Enum(enum_name, enum_members)
+
+@execute_write
+def set_enum(bs_enum: Enum):
+    _enum = ida_enum.get_enum(bs_enum.name)
+    if not _enum:
+        return False
+
+    ida_enum.delete_enum(_enum)
+    enum_id = ida_enum.add_enum(bs_enum.name)
+
+    if enum_id is None:
+        l.warning(f"IDA failed to create a new enum with {bs_enum.name}")
+        return False
+
+    for member_name, value in bs_enum.value_map.items():
+        ida_enum.add_enum_member(enum_id, member_name, value)
+
+    return True
 
 #
 #   IDA GUI r/w
