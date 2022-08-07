@@ -888,13 +888,14 @@ class BinSyncController:
             Function: "functions",
             Comment: "comments",
             GlobalVariable: "global_vars",
-            Struct: "structs"
+            Struct: "structs",
+            Enum: "enums"
         }
 
         try:
             prop_name = prop_map[type_]
         except KeyError:
-            _l.info(f"Attempted to get changed artifacts of type {type_} which is unsupported")
+            _l.warning(f"Attempted to get changed artifacts of type {type_} which is unsupported")
             return set()
 
         known_arts = set()
