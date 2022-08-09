@@ -7,11 +7,26 @@ import unittest
 import binsync
 from binsync import FunctionArgument, FunctionHeader, StackVariable
 import logging
+from decompile_angr import parse_binary
 
 _l = logging.getLogger(name=__name__)
 
 class TestClient(unittest.TestCase):
     def test_large_state_creation(self):
+        def generate_json_files():
+            binaries_directory = os.path.abspath('binaries')
+            json_directory = os.path.abspath('json')
+            for filename in os.listdir(binaries_directory):
+                binary_path = os.path.join(binaries_directory, filename)
+                json_path = os.path.join(json_directory, filename + '.json')
+                # checking if it is a file
+                if os.path.isfile(binary_path):
+                    # check if the json file already exists
+                    if not os.path.exists(json_path):
+                        print("Generating the json file for %s" % filename)
+                        parse_binary(binary_path, json_path)
+
+        generate_json_files()
         with tempfile.TemporaryDirectory() as tmpdir:
             master_client = binsync.Client("user0", tmpdir, "fake_hash", init_repo=True)
             self.assertTrue(os.path.isdir(os.path.join(tmpdir, ".git")))
