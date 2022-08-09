@@ -158,8 +158,8 @@ class SyncConfig(QDialog):
             remote_url = None
 
         if remote_url and not path:
-            path = os.path.join(os.path.dirname(self.controller.binary_path()),
-                                os.path.basename(self.controller.binary_path()) + "_bs"
+            path = os.path.join(os.path.dirname(self.controller.binary_path() or ""),
+                                os.path.basename(self.controller.binary_path() or "") + "_bs"
                                 )
 
         try:
@@ -215,7 +215,7 @@ class SyncConfig(QDialog):
     #
 
     def load_saved_config(self) -> bool:
-        config = ProjectConfig.load_from_file(self.controller.binary_path())
+        config = ProjectConfig.load_from_file(self.controller.binary_path() or "")
         if not config:
             return False
 
@@ -237,11 +237,14 @@ class SyncConfig(QDialog):
             repo = str(pathlib.Path(self.controller.client.repo_root).absolute())
 
         config = ProjectConfig(
-            self.controller.binary_path(),
+            self.controller.binary_path() or "",
             user=user,
             repo_path=repo,
             remote=remote
         )
+        if not config:
+            return config
+
         return config.save()
 
 
@@ -259,9 +262,9 @@ class SyncConfig(QDialog):
 
         for warning in warnings:
             if warning == ConnectionWarnings.HASH_MISMATCH:
-                warning_text += "Warning: the hash stored for this BinSync project does not match"
-                warning_text += " the hash of the binary you are attempting to analyze. It's possible"
-                warning_text += " you are working on a different binary.\n"
+                warning_text += "Warning: the hash stored for this BinSync project does not match " \
+                                "the hash of the binary you are attempting to analyze. It's possible " \
+                                "you are working on a different binary.\n"
 
         if len(warning_text) > 0:
             QMessageBox.warning(

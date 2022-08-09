@@ -81,7 +81,13 @@ class BinjaBinSyncController(BinSyncController):
         self.bv = None
 
     def binary_hash(self) -> str:
-        return hashlib.md5(self.bv.file.raw[:]).hexdigest()
+        hash_ = ""
+        try:
+            hash_ = hashlib.md5(self.bv.file.raw[:]).hexdigest()
+        except Exception:
+            pass
+
+        return hash_
 
     def active_context(self):
         all_contexts = UIContext.allContexts()
