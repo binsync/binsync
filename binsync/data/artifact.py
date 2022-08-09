@@ -118,7 +118,7 @@ class Artifact:
 
         return inverted_diff
 
-    def nonconflict_merge(self, obj2: "Artifact"):
+    def nonconflict_merge(self, obj2: "Artifact", **kwargs):
         obj1 = self.copy()
         if not obj2 or obj1 == obj2:
             return obj1

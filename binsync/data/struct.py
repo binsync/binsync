@@ -149,7 +149,7 @@ class Struct(Artifact):
         s.__setstate__(struct_toml)
         return s
 
-    def nonconflict_merge(self, struct2: "Struct") -> "Struct":
+    def nonconflict_merge(self, struct2: "Struct", **kwargs) -> "Struct":
         struct1: "Struct" = self.copy()
         if not struct2 or struct1 == struct2:
             return struct1

@@ -102,22 +102,21 @@ class QGlobalsTable(QTableWidget):
         user_name = item2.text()
 
         if global_type == "Struct":
-            filler_func = lambda username: lambda chk: self.controller.fill_struct(global_name, user=username)
+            filler_func = self.controller.fill_struct
         elif global_type == "Variable":
-            var_addr = int(re.findall(r'0x[a-f,0-9]+', global_name.split(" ")[1])[0], 16)
-            global_name = var_addr
-            filler_func = lambda username: lambda chk: self.controller.fill_global_var(global_name, user=username)
+            global_name = int(re.findall(r'0x[a-f,0-9]+', global_name.split(" ")[1])[0], 16)
+            filler_func = self.controller.fill_global_var
         elif global_type == "Enum":
-            filler_func = lambda username: lambda chk: self.controller.fill_enum(global_name, user=username)
+            filler_func = self.controller.fill_enum
         else:
             l.warning(f"Invalid global table sync option: {global_type}")
             return
 
-        menu.addAction("Sync", filler_func(user_name))
+        menu.addAction("Sync", lambda: filler_func(global_name, user=username))
         from_menu = menu.addMenu("Sync from...")
         for username in self._get_valid_users_for_global(global_name, global_type):
             action = from_menu.addAction(username)
-            action.triggered.connect(filler_func(username))
+            action.triggered.connect(lambda chck, name=username: filler_func(global_name, user=name))
 
         menu.popup(self.mapToGlobal(event.pos()))
 
