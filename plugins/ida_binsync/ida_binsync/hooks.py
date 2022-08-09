@@ -104,7 +104,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
     #   Enum Hooks
     #
 
-    def enum_modifier(self, enum):
+    def bs_enum_modified(self, enum):
         name = ida_enum.get_enum_name(enum)
         _enum = compat.enum(name)
         self.binsync_state_change(
@@ -115,7 +115,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
     @quite_init_checker
     @stop_if_syncing
     def enum_created(self, enum):
-        self.enum_modifier(enum)
+        self.bs_enum_modified(enum)
         return 0
 
     # XXX - use enum_deleted(self, id) instead?
@@ -135,9 +135,9 @@ class IDBHooks(ida_idp.IDB_Hooks):
     @stop_if_syncing
     def renaming_enum(self, id, is_enum, newname):
         if is_enum:
-            self.enum_modifier(id)
+            self.bs_enum_modified(id)
         else:
-            self.enum_modifier(ida_enum.get_enum_member_enum(id))
+            self.bs_enum_modified(ida_enum.get_enum_member_enum(id))
         return 0
 
     @quite_init_checker
@@ -155,14 +155,14 @@ class IDBHooks(ida_idp.IDB_Hooks):
     @quite_init_checker
     @stop_if_syncing
     def enum_member_created(self, id, cid):
-        self.enum_modifier(id)
+        self.bs_enum_modified(id)
         return 0
 
     # XXX - use enum_member_deleted(self, id, cid) instead?
     @quite_init_checker
     @stop_if_syncing
     def deleting_enum_member(self, id, cid):
-        self.enum_modifier(id)
+        self.bs_enum_modified(id)
         return 0
 
     #
