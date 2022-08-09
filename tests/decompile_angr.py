@@ -21,8 +21,8 @@ def parse_binary(binary_path, output_path):
             if not decomp.codegen:
                 continue
             func_addrs_variables[addr]['return_type'] = decomp.codegen.cfunc.functy.returnty.c_repr()
-            for arg_type, arg_cvar in zip(decomp.codegen.cfunc.functy.args, decomp.codegen.cfunc.arg_list):
-                func_addrs_variables[addr]['arguments'].append({"name": arg_cvar.c_repr(), "type": arg_type.c_repr()})
+            for idx, (arg_type, arg_cvar) in enumerate(zip(decomp.codegen.cfunc.functy.args, decomp.codegen.cfunc.arg_list)):
+                func_addrs_variables[addr]['arguments'].append({"idx": idx, "name": arg_cvar.c_repr(), "type": arg_type.c_repr(), "size": arg_type.size // 8})
             for i in decomp.codegen.cfunc.variables_in_use:
                 var = decomp.codegen.cfunc.variable_manager.unified_variable(i)
                 var_info = {}
