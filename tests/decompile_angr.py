@@ -7,6 +7,7 @@ import sys
 def parse_binary(binary_path, output_path):
     p = angr.Project(binary_path, load_options={"auto_load_libs": False})
     cfg = p.analyses.CFG(data_references=True, normalize=True)
+    p.analyses[angr.analyses.CompleteCallingConventionsAnalysis].prep()(recover_variables=True, analyze_callsites=True)
     
     func_addrs_variables = defaultdict(dict)
     for addr, func in cfg.functions.items():
@@ -15,9 +16,13 @@ def parse_binary(binary_path, output_path):
                 continue
             func_addrs_variables[addr]['name'] = func.name
             func_addrs_variables[addr]['variables'] = []
+            func_addrs_variables[addr]['arguments'] = []
             decomp = p.analyses.Decompiler(func, cfg=cfg.model)
             if not decomp.codegen:
                 continue
+            func_addrs_variables[addr]['return_type'] = decomp.codegen.cfunc.functy.returnty.c_repr()
+            for arg_type, arg_cvar in zip(decomp.codegen.cfunc.functy.args, decomp.codegen.cfunc.arg_list):
+                func_addrs_variables[addr]['arguments'].append({"name": arg_cvar.c_repr(), "type": arg_type.c_repr()})
             for i in decomp.codegen.cfunc.variables_in_use:
                 var = decomp.codegen.cfunc.variable_manager.unified_variable(i)
                 var_info = {}
