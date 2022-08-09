@@ -14,8 +14,9 @@ _l = logging.getLogger(name=__name__)
 class TestClient(unittest.TestCase):
     def test_large_state_creation(self):
         def generate_json_files():
-            binaries_directory = os.path.abspath('binaries')
-            json_directory = os.path.abspath('json')
+            base_directory = os.path.dirname(os.path.abspath(__file__))
+            binaries_directory = os.path.join(base_directory, 'binaries')
+            json_directory = os.path.join(base_directory, 'json')
             for filename in os.listdir(binaries_directory):
                 binary_path = os.path.join(binaries_directory, filename)
                 json_path = os.path.join(json_directory, filename + '.json')
