@@ -21,7 +21,7 @@ class GhidraBinSyncController(BinSyncController):
         self.bridge = BSBridgeClient()
 
     def binary_hash(self) -> str:
-        return "temp"
+        return ""
 
     def active_context(self):
         out = self.bridge.server.context()
@@ -31,7 +31,7 @@ class GhidraBinSyncController(BinSyncController):
         return Function(out['func_addr'], 0, header=FunctionHeader(out["name"], out['func_addr']))
 
     def binary_path(self) -> Optional[str]:
-        return "tmp"
+        return ""
 
     def get_func_size(self, func_addr) -> int:
         return 0
