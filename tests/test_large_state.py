@@ -11,6 +11,9 @@ from decompile_angr import parse_binary
 
 _l = logging.getLogger(name=__name__)
 
+# blacklist: binaries not supported by angr
+blacklist = ['gopher_coin_go']
+
 class TestClient(unittest.TestCase):
     def test_large_state_creation(self):
         def generate_json_files():
@@ -18,6 +21,9 @@ class TestClient(unittest.TestCase):
             binaries_directory = os.path.join(base_directory, 'binaries')
             json_directory = os.path.join(base_directory, 'json')
             for filename in os.listdir(binaries_directory):
+                # Skip binaries in blacklist
+                if filename in blacklist:
+                    continue
                 binary_path = os.path.join(binaries_directory, filename)
                 json_path = os.path.join(json_directory, filename + '.json')
                 # checking if it is a file
