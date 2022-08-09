@@ -548,7 +548,7 @@ class BinSyncController:
         art_getter = self.ARTIFACT_GET_MAP.get(artifact_type)
         merged_artifact = self.merge_artifacts(
             art_getter(master_state, *identifiers), art_getter(state, *identifiers),
-            merge_level=merge_level
+            merge_level=merge_level, master_state=master_state
         )
 
         if artifact is None:
@@ -864,7 +864,7 @@ class BinSyncController:
     # Utils
     #
 
-    def merge_artifacts(self, art1: Artifact, art2: Artifact, merge_level=None):
+    def merge_artifacts(self, art1: Artifact, art2: Artifact, merge_level=None, **kwargs):
         if merge_level is None:
             merge_level = self.sync_level
 
@@ -872,11 +872,11 @@ class BinSyncController:
             return art2
 
         if merge_level == SyncLevel.NON_CONFLICTING:
-            merge_art = art1.nonconflict_merge(art2)
+            merge_art = art1.nonconflict_merge(art2, **kwargs)
 
         elif merge_level == SyncLevel.MERGE:
             _l.warning("Manual Merging is not currently supported, using non-conflict syncing...")
-            merge_art = art1.nonconflict_merge(art2)
+            merge_art = art1.nonconflict_merge(art2, **kwargs)
 
         else:
             raise Exception("Your BinSync Client has an unsupported Sync Level activated")

@@ -157,8 +157,9 @@ class GlobalTableModel(QAbstractTableModel):
     def update_table(self):
         decompiler_structs = self.controller.structs()
         decompiler_gvars = self.controller.global_vars()
+        decompiler_enums = self.controller.enums()
         self.gvar_name_to_addr_map = {gvar.name: addr for addr, gvar in decompiler_gvars.items()}
-        all_artifacts = [(decompiler_structs, "Struct"), (decompiler_gvars, "Variable")]
+        all_artifacts = [(decompiler_structs, "Struct"), (decompiler_gvars, "Variable"), (decompiler_enums, "Enum")]
         
         for type_artifacts, type_ in all_artifacts:
             for _, artifact in type_artifacts.items():                      
@@ -278,6 +279,7 @@ class GlobalTableView(QTableView):
                 type_ = self.model.data(mappedIndex)
                 name = self.model.data(mappedIndex.sibling(mappedIndex.row(), 1))
                 lookup_item = self._lookup_addr_for_gvar(name) if type_ == "Variable" else name
+                print(f"\npushing {lookup_item}\n")
                 self.controller.force_push_global_artifact(lookup_item)
 
     def connect_select_all(self, checkbox):

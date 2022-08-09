@@ -299,7 +299,7 @@ class Function(Artifact):
         f.__setstate__(func_toml)
         return f
 
-    def nonconflict_merge(self, func2: "Function") -> "Function":
+    def nonconflict_merge(self, func2: "Function", **kwargs) -> "Function":
         func1: "Function" = self.copy()
 
         if not func2 or func1 == func2:

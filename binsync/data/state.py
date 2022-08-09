@@ -616,7 +616,7 @@ class State:
         return enum
 
     def get_enums(self):
-        return self.enums.values()
+        return self.enums
 
     def get_last_push_for_artifact_type(self, artifact_type):
         last_change = -1

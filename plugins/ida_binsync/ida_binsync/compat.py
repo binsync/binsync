@@ -606,10 +606,17 @@ def set_global_var_name(var_addr, name):
 
 def get_enum_members(_enum) -> typing.Dict[str, int]:
     enum_members = {}
-    for j in range(1, ida_enum.get_enum_size(_enum) + 1):
-        name = ida_enum.get_enum_member_name(_enum + j)
-        value = ida_enum.get_enum_member_value(_enum + j)
-        enum_members[name] = value
+
+    member = ida_enum.get_first_enum_member(_enum)
+    member_addr = ida_enum.get_enum_member(_enum, member, 0, 0)
+    member_name = ida_enum.get_enum_member_name(member_addr)
+    enum_members[member_name] = member
+
+    while member := ida_enum.get_next_enum_member(_enum, member, 0):
+        if member == 0xffffffffffffffff: break
+        member_addr = ida_enum.get_enum_member(_enum, member, 0, 0)
+        member_name = ida_enum.get_enum_member_name(member_addr)
+        enum_members[member_name] = member
     return enum_members
 
 @execute_read

@@ -60,7 +60,7 @@ class Comment(Artifact):
             last_change=self.last_change
         )
 
-    def nonconflict_merge(self, obj2: "Comment") -> "Comment":
+    def nonconflict_merge(self, obj2: "Comment", **kwargs) -> "Comment":
         obj1: "Comment" = self.copy()
         if not obj2 or obj1 == obj2:
             return obj1
