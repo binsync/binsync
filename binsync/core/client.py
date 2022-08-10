@@ -287,7 +287,6 @@ class Client:
         except Exception as e:
             l.warning(f"Internal Git Commit Error: {e}")
             return
-
         self._last_commit_ts = time.time()
         master_user_branch.commit = commit
         state._dirty = False

@@ -152,7 +152,7 @@ class FunctionNotification(BinaryDataNotification):
 
             # Check return type
             if self._function_saved.header.ret_type != bs_func.header.ret_type:
-                self._controller.make_controller_cmd(
+                self._controller.schedule_job(
                     self._controller.push_artifact,
                     bs_func.header
                 )
@@ -175,7 +175,7 @@ class FunctionNotification(BinaryDataNotification):
                     break
 
             if arg_changed:
-                self._controller.make_controller_cmd(
+                self._controller.schedule_job(
                     self._controller.push_artifact,
                     bs_func.header
                 )
@@ -191,7 +191,7 @@ class FunctionNotification(BinaryDataNotification):
                             or new_var.name in {'__saved_rbp', '__return_addr',}:
                         continue
 
-                    self._controller.make_controller_cmd(
+                    self._controller.schedule_job(
                         self._controller.push_artifact,
                         new_var
                     )
@@ -211,7 +211,7 @@ class FunctionNotification(BinaryDataNotification):
         if sym.type == SymbolType.FunctionSymbol:
             func = view.get_function_at(sym.address)
             bs_func = conv_func_binja_to_binsync(func)
-            self._controller.make_controller_cmd(
+            self._controller.schedule_job(
                 self._controller.push_artifact,
                 FunctionHeader(sym.name, sym.address, ret_type=bs_func.header.ret_type, args=bs_func.header.args)
             )

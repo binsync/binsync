@@ -97,7 +97,7 @@ class AngrBinSyncController(BinSyncController):
     @fill_event
     def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
         func: Function = artifact
-        func = self._instance.kb.functions[self.artifact_lifer.lower_addr(func.addr)]
+        func = self._instance.kb.functions[func.addr]
 
         # re-decompile a function if needed
         decompilation = self.decompile_function(func)

@@ -1,6 +1,6 @@
 import logging
 
-from binsync.common.controller import BinSyncController, SyncLevel
+from binsync.common.controller import BinSyncController, MergeLevel
 from binsync.common.ui.qt_objects import (
     QCheckBox,
     QComboBox,
@@ -51,8 +51,8 @@ class QUtilPanel(QWidget):
         sync_options_group.setTitle("Sync Options")
         sync_options_group.setLayout(sync_options_layout)
 
-        self._sync_level_label = QLabel("Sync Level")
-        self._sync_level_label.setToolTip(
+        self._merge_level_label = QLabel("Sync Merge Level")
+        self._merge_level_label.setToolTip(
             """<html>
             <p>
             Defines which method is used to sync artifacts from another user.<br>
@@ -62,15 +62,15 @@ class QUtilPanel(QWidget):
             </p>
             </html>
             """)
-        self._sync_level_label.setTextFormat(Qt.RichText)
-        self._sync_level_combobox = QComboBox()
-        self._sync_level_combobox.addItems(["Non-Conflicting", "Overwrite", "Merge"])
-        self._sync_level_combobox.currentIndexChanged.connect(self._handle_sync_level_change)
+        self._merge_level_label.setTextFormat(Qt.RichText)
+        self._merge_level_combobox = QComboBox()
+        self._merge_level_combobox.addItems(["Non-Conflicting", "Overwrite", "Merge"])
+        self._merge_level_combobox.currentIndexChanged.connect(self._handle_sync_level_change)
 
         sync_level_layout = QHBoxLayout()
         #sync_level_group.layout().setContentsMargins(0, 0, 0, 0)
-        sync_level_layout.addWidget(self._sync_level_label)
-        sync_level_layout.addWidget(self._sync_level_combobox)
+        sync_level_layout.addWidget(self._merge_level_label)
+        sync_level_layout.addWidget(self._merge_level_combobox)
 
         self._magic_sync_button = QPushButton("Initiate Magic Sync")
         self._magic_sync_button.clicked.connect(self._handle_magic_sync_button)
@@ -113,13 +113,13 @@ class QUtilPanel(QWidget):
             l.info("Logger has been set to level: INFO")
 
     def _handle_sync_level_change(self, index):
-        selected_opt = self._sync_level_combobox.itemText(index)
+        selected_opt = self._merge_level_combobox.itemText(index)
         if selected_opt == "Non-Conflicting":
-            self.controller.sync_level = SyncLevel.NON_CONFLICTING
+            self.controller.merge_level = MergeLevel.NON_CONFLICTING
         elif selected_opt == "Overwrite":
-            self.controller.sync_level = SyncLevel.OVERWRITE
+            self.controller.merge_level = MergeLevel.OVERWRITE
         elif selected_opt == "Merge":
-            self.controller.sync_level = SyncLevel.MERGE
+            self.controller.merge_level = MergeLevel.MERGE
         else:
             return
         l.debug(f"Sync level changed to: {selected_opt}")
