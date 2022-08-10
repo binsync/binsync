@@ -1,6 +1,6 @@
 import logging
 
-from binsync.common.controller import BinSyncController, SyncLevel
+from binsync.common.controller import BinSyncController, MergeLevel
 from binsync.common.ui.qt_objects import (
     QCheckBox,
     QComboBox,
@@ -115,11 +115,11 @@ class QUtilPanel(QWidget):
     def _handle_sync_level_change(self, index):
         selected_opt = self._sync_level_combobox.itemText(index)
         if selected_opt == "Non-Conflicting":
-            self.controller.sync_level = SyncLevel.NON_CONFLICTING
+            self.controller.merge_level = MergeLevel.NON_CONFLICTING
         elif selected_opt == "Overwrite":
-            self.controller.sync_level = SyncLevel.OVERWRITE
+            self.controller.merge_level = MergeLevel.OVERWRITE
         elif selected_opt == "Merge":
-            self.controller.sync_level = SyncLevel.MERGE
+            self.controller.merge_level = MergeLevel.MERGE
         else:
             return
         l.debug(f"Sync level changed to: {selected_opt}")

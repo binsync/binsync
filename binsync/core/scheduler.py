@@ -30,6 +30,12 @@ class Job:
         self.ret_value = self.function(*self.args, **self.kwargs)
         self.finish_event.set()
 
+    def __str__(self):
+        return f"<Job: {self.function}({self.args}, {self.kwargs})>"
+
+    def __repr__(self):
+        return self.__str__()
+
     def __lt__(self, other):
         return True
 
@@ -54,6 +60,7 @@ class Scheduler:
             self._complete_a_job(block=True)
 
     def schedule_job(self, job: Job, priority=SchedSpeed.SLOW):
+        l.info(f"Job scheduled {job}")
         self._job_queue.put_nowait(
             (priority, job,)
         )

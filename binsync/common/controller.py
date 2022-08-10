@@ -7,7 +7,7 @@ from typing import Dict, Iterable, List, Optional, Union
 
 import binsync.data
 from binsync.common.artifact_lifter import ArtifactLifter
-from binsync.core.client import Client, SchedSpeed
+from binsync.core.client import Client, SchedSpeed, Scheduler, Job
 from binsync.data.type_parser import BSTypeParser, BSType
 from binsync.data import (
     State, User, Artifact,
@@ -54,7 +54,7 @@ class SyncControlStatus:
     DISCONNECTED = 2
 
 
-class SyncLevel:
+class MergeLevel:
     OVERWRITE = 0
     NON_CONFLICTING = 1
     MERGE = 2
@@ -125,15 +125,15 @@ class BinSyncController:
         self.last_ctx = None
 
         # settings
-        self.sync_level: int = SyncLevel.NON_CONFLICTING
+        self.merge_level: int = MergeLevel.NON_CONFLICTING
 
         # command locks
-        self.queue_lock = threading.Lock()
-        self.cmd_queue = OrderedDict()
+        self.job_scheduler = Scheduler()
         self.sync_lock = threading.Lock()
 
         # create a pulling thread, but start on connection
         self.updater_thread = threading.Thread(target=self.updater_routine)
+        self._run_updater_threads = False
 
         # TODO: make the initialization of this with types of decompiler
         self.type_parser = BSTypeParser()
@@ -142,33 +142,19 @@ class BinSyncController:
     #   Multithreading updaters, locks, and evaluators
     #
 
-    def make_controller_cmd(self, cmd_func, *args, **kwargs):
-        with self.queue_lock:
-            self.cmd_queue[time.time()] = (cmd_func, args, kwargs)
+    def schedule_job(self, cmd_func, *args, blocking=False, **kwargs):
+        if blocking:
+            return self.job_scheduler.schedule_and_wait_job(
+                Job(cmd_func, *args, **kwargs)
+            )
 
-    def _eval_cmd(self, cmd):
-        # parse the command if present
-        if not cmd:
-            return
-
-        func, f_args, f_kargs = cmd[:]
-        func(*f_args, **f_kargs)
-
-    def _eval_cmd_queue(self):
-        with self.queue_lock:
-            if not self.cmd_queue:
-                return
-
-            job_count = 1
-            jobs = [
-                self.cmd_queue.popitem(last=False)[1] for _ in range(job_count)
-            ]
-
-        for job in jobs:
-            self._eval_cmd(job)
+        self.job_scheduler.schedule_job(
+            Job(cmd_func, *args, **kwargs)
+        )
+        return None
 
     def updater_routine(self):
-        while True:
+        while self._run_updater_threads:
             time.sleep(BUSY_LOOP_COOLDOWN)
 
             # validate a client is connected to this controller (may not have remote )
@@ -177,10 +163,12 @@ class BinSyncController:
 
             # do git pull/push operations if a remote exist for the client
             if self.client.last_pull_attempt_ts is None:
+                _l.info(f"Updating since last pull_attempt is None")
                 self.client.update(commit_msg="User created")
 
             # update every reload_time
             elif time.time() - self.client.last_pull_attempt_ts > self.reload_time:
+                _l.info(f"Updating since last pull_attempt is less greater than {self.reload_time}")
                 self.client.update()
 
             if not self.headless:
@@ -194,18 +182,11 @@ class BinSyncController:
                     self._last_reload = time.time()
                     self._update_ui()
 
-            # evaluate commands started by the user
-            self._eval_cmd_queue()
-
     def _update_ui(self):
         if not self.ui_callback:
             return
 
         self.ui_callback()
-
-    def start_updater_routine(self):
-        self.updater_thread.setDaemon(True)
-        self.updater_thread.start()
 
     def _check_and_notify_ctx(self):
         active_ctx = self.active_context()
@@ -214,6 +195,17 @@ class BinSyncController:
 
         self.last_ctx = active_ctx
         self.ctx_change_callback()
+
+    def start_worker_routines(self):
+        self._run_updater_threads = True
+        self.updater_thread.setDaemon(True)
+        self.updater_thread.start()
+
+        self.job_scheduler.start_worker_thread()
+
+    def stop_worker_routines(self):
+        self._run_updater_threads = False
+        self.job_scheduler.stop_worker_thread()
 
     #
     # Client Interaction Functions
@@ -225,7 +217,7 @@ class BinSyncController:
             user, path, binary_hash, init_repo=init_repo, remote_url=remote_url
         )
 
-        self.start_updater_routine()
+        self.start_worker_routines()
         return self.client.connection_warnings
 
     def check_client(self):
@@ -570,7 +562,7 @@ class BinSyncController:
         if blocking:
             self.push_artifact(merged_artifact, state=master_state, set_last_change=False, commit_msg=commit_msg)
         else:
-            self.make_controller_cmd(
+            self.schedule_job(
                 self.push_artifact,
                 merged_artifact,
                 state=master_state,
@@ -865,15 +857,15 @@ class BinSyncController:
 
     def merge_artifacts(self, art1: Artifact, art2: Artifact, merge_level=None, **kwargs):
         if merge_level is None:
-            merge_level = self.sync_level
+            merge_level = self.merge_level
 
-        if merge_level == SyncLevel.OVERWRITE or not art1 or art1 == art2:
+        if merge_level == MergeLevel.OVERWRITE or not art1 or art1 == art2:
             return art2
 
-        if merge_level == SyncLevel.NON_CONFLICTING:
+        if merge_level == MergeLevel.NON_CONFLICTING:
             merge_art = art1.nonconflict_merge(art2, **kwargs)
 
-        elif merge_level == SyncLevel.MERGE:
+        elif merge_level == MergeLevel.MERGE:
             _l.warning("Manual Merging is not currently supported, using non-conflict syncing...")
             merge_art = art1.nonconflict_merge(art2, **kwargs)
 
