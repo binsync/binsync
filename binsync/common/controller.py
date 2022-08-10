@@ -536,9 +536,9 @@ class BinSyncController:
             return None
 
         art_getter = self.ARTIFACT_GET_MAP.get(artifact_type)
-        master_artifact = artifact if artifact else art_getter(master_state, *identifiers)
+        master_artifact = artifact if artifact else self.lower_artifact(art_getter(master_state, *identifiers))
         merged_artifact = self.merge_artifacts(
-            master_artifact, art_getter(state, *identifiers),
+            master_artifact,  self.lower_artifact(art_getter(state, *identifiers)),
             merge_level=merge_level, master_state=master_state
         )
 
@@ -547,7 +547,7 @@ class BinSyncController:
             fill_changes = filler_func(
                 self,
                 *identifiers,
-                artifact=artifact, user=user, state=state, master_state=master_state, merge_level=merge_level,
+                artifact=merged_artifact, user=user, state=state, master_state=master_state, merge_level=merge_level,
                 **kwargs
             )
 
