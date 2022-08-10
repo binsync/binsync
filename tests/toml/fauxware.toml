@@ -17,14 +17,9 @@ offset = -8
 
 [functions.4195712]
 name = "_start"
+variables = []
 arguments = []
 return_type = "int"
-[[functions.4195712.variables]]
-name = "v0"
-offset = 0
-
-[[functions.4195712.variables]]
-name = "v3"
 
 [functions.4195756]
 name = "call_gmon_start"
@@ -62,41 +57,21 @@ name = "a1"
 
 [[functions.4195940.variables]]
 name = "v1"
-offset = -32
-
-[[functions.4195940.variables]]
-name = "v0"
-offset = -40
-
-[[functions.4195940.variables]]
-name = "v3"
 offset = -16
 
 [[functions.4195940.variables]]
 name = "v7"
 
 [[functions.4195940.variables]]
-name = "v9"
-
-[[functions.4195940.variables]]
-name = "v9"
-
-[[functions.4195940.variables]]
-name = "v4"
-offset = -12
-
-[[functions.4195940.variables]]
-name = "v10"
+name = "v5"
 
 [[functions.4195940.variables]]
 name = "v2"
+offset = -12
+
+[[functions.4195940.variables]]
+name = "v0"
 offset = -24
-
-[[functions.4195940.variables]]
-name = "v9"
-
-[[functions.4195940.variables]]
-name = "v9"
 
 [[functions.4195940.arguments]]
 idx = 0
@@ -126,81 +101,55 @@ return_type = "int"
 name = "main"
 return_type = "int"
 [[functions.4196125.variables]]
-name = "a0"
-
-[[functions.4196125.variables]]
-name = "a1"
-
-[[functions.4196125.variables]]
-name = "v1"
-offset = -60
-
-[[functions.4196125.variables]]
-name = "v0"
-offset = -72
-
-[[functions.4196125.variables]]
-name = "v6"
+name = "v4"
 offset = -16
 
 [[functions.4196125.variables]]
-name = "v4"
+name = "v2"
 offset = -32
 
 [[functions.4196125.variables]]
-name = "v5"
+name = "v3"
 offset = -24
 
 [[functions.4196125.variables]]
-name = "v2"
+name = "v0"
 offset = -44
 
 [[functions.4196125.variables]]
-name = "v3"
+name = "v1"
 offset = -40
 
 [[functions.4196125.variables]]
-name = "v2"
+name = "v0"
 offset = -44
 
 [[functions.4196125.arguments]]
 idx = 0
 name = "a0"
-type = "unsigned long"
+type = "long long"
 size = 8
 
 [[functions.4196125.arguments]]
 idx = 1
 name = "a1"
-type = "unsigned long"
+type = "long long"
 size = 8
 
 [functions.4196320]
 name = "__libc_csu_init"
 return_type = "int"
 [[functions.4196320.variables]]
-name = "v5"
+name = "a0"
 
 [[functions.4196320.variables]]
-name = "v4"
+name = "a1"
 
 [[functions.4196320.variables]]
-name = "v2"
+name = "a2"
 
 [[functions.4196320.variables]]
-name = "v6"
-
-[[functions.4196320.variables]]
-name = "v7"
-
-[[functions.4196320.variables]]
-name = "v8"
-
-[[functions.4196320.variables]]
-name = "v1"
-
-[[functions.4196320.variables]]
-name = "v1"
+name = "v0"
 
 [[functions.4196320.variables]]
 name = "v3"
@@ -225,19 +174,19 @@ name = "v3"
 
 [[functions.4196320.arguments]]
 idx = 0
-name = "v5"
+name = "a0"
 type = "unsigned long long"
 size = 8
 
 [[functions.4196320.arguments]]
 idx = 1
-name = "v4"
+name = "a1"
 type = "unsigned long long"
 size = 8
 
 [[functions.4196320.arguments]]
 idx = 2
-name = "v2"
+name = "a2"
 type = "unsigned long long"
 size = 8
 
@@ -246,7 +195,7 @@ name = "__libc_csu_fini"
 arguments = []
 return_type = "int"
 [[functions.4196464.variables]]
-name = "v1"
+name = "v0"
 
 [functions.4196480]
 name = "__do_global_ctors_aux"
@@ -256,13 +205,7 @@ return_type = "int"
 name = "v1"
 
 [[functions.4196480.variables]]
-name = "v3"
-
-[[functions.4196480.variables]]
-name = "v3"
-
-[[functions.4196480.variables]]
-name = "v3"
+name = "v1"
 
 [[functions.4196480.variables]]
 name = "v1"
@@ -276,7 +219,7 @@ return_type = "int"
 [globals.6295640]
 name = "dtor_idx.6533"
 size = 8
-type = "struct_0"
+type = "struct_0 *"
 
 [globals.6295632]
 name = "__bss_start"
@@ -286,14 +229,14 @@ type = "char"
 [globals.6295112]
 name = "__JCR_END__"
 size = 8
-type = "struct_0"
+type = "struct_0 *"
 
 [globals.6295624]
 name = "sneaky"
 size = 8
-type = "struct_0"
+type = "struct_0 *"
 
 [globals.6295080]
 name = "__CTOR_LIST__"
 size = 8
-type = "struct_0"
+type = "struct_0 *"

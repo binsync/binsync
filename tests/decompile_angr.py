@@ -2,7 +2,7 @@ import angr
 import sys
 import subprocess
 import os
-from angr.knowledge_plugins.cfg.memory_data import MemoryDataSort
+import toml
 
 
 def parse_binary(binary_path, output_path):
