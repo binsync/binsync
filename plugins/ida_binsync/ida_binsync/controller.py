@@ -141,19 +141,6 @@ class IDABinSyncController(BinSyncController):
         self.update_states = defaultdict(UpdateTaskState)
 
     #
-    #   Multithreaded locks and setters
-    #
-
-    """
-    def schedule_job(self, cmd_func, *args, **kwargs):
-        with self.queue_lock:
-            if isinstance(args[0], Struct):
-                self.cmd_queue[args[0].name] = (cmd_func, args, kwargs)
-            else:
-                self.cmd_queue[time.time()] = (cmd_func, args, kwargs)
-    """
-
-    #
     # Controller Interaction
     #
 
