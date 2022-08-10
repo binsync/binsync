@@ -149,7 +149,8 @@ class TestClient(unittest.TestCase):
                         fc.name = f"{fc.name}_{user}"
                         fc.last_change = self.random_ts()
                         _l.info(f"{user} {fc.name}: {fc.last_change}")
-                        ustate.set_function_header(fc)
+                        ustate.set_function_header(fc, set_last_change=False)
+                        ustate.functions[fc.addr].last_change = fc.last_change
                     uc.commit_state(ustate)
                 master_client.update()
 
