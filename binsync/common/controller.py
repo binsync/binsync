@@ -545,6 +545,10 @@ class BinSyncController:
             return None
 
         art_getter = self.ARTIFACT_GET_MAP.get(artifact_type)
+
+        # Make a copy of the state before merging artifacts
+        state_bak = state.copy()
+
         merged_artifact = self.merge_artifacts(
             art_getter(master_state, *identifiers), art_getter(state, *identifiers),
             merge_level=merge_level, master_state=master_state
@@ -566,6 +570,13 @@ class BinSyncController:
             f"Successfully synced new changes from {state.user} for {merged_artifact}" if fill_changes
             else f"No new changes or failed to sync from {state.user} for {merged_artifact}"
         )
+
+        # Whether state gets updated or not?
+        no_change_sync_flag = state.__eq__(state_bak)
+        if no_change_sync_flag:
+            _l.warning(
+                f"No change detected: Set sync level to 'over-write' and retry if you want to sync this change anyway"
+            )
 
         if blocking:
             self.push_artifact(merged_artifact, state=master_state, set_last_change=False, commit_msg=commit_msg)
