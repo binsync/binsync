@@ -43,7 +43,7 @@ class ScreenHook(ida_kernwin.View_Hooks):
         super(ScreenHook, self).__init__()
         self.hooked = False
 
-    def view_activated(self, view):
+    def view_click(self, view, event):
         form_type = idaapi.get_widget_type(view)
         decomp_view = idaapi.get_widget_vdui(view)
         if not form_type:

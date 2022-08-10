@@ -1,7 +1,7 @@
 from typing import Optional
 import logging
 
-from binsync.common.controller import BinSyncController, make_and_commit_states, init_checker
+from binsync.common.controller import BinSyncController, init_checker
 from binsync.core.scheduler import SchedSpeed
 from binsync.data import (
     Function, FunctionHeader
@@ -59,7 +59,6 @@ class GhidraBinSyncController(BinSyncController):
     #
 
     @init_checker
-    @make_and_commit_states
     def fill_function(self, func_addr, user=None, state=None):
         l.info("Inside fill function!")
         sync_func = self.pull_function(func_addr, user=user)

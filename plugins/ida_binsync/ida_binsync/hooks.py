@@ -498,6 +498,21 @@ class IDPHooks(ida_idp.IDP_Hooks):
     def ev_adjust_argloc(self, *args):
         return ida_idp.IDP_Hooks.ev_adjust_argloc(self, *args)
 
+    def ev_ending_undo(self, action_name, is_undo):
+        """
+        This is the hook called by IDA when an undo event occurs
+        action name is a vague String description of what changes occured
+        is_undo specifies if this action was an undo or a redo
+        """
+        return 0
+
+    def ev_replaying_undo(self, action_name, vec, is_undo):
+        """
+        This hook is also called by IDA during the undo
+        contains the same information as ev_ending_undo
+        vec also contains a short summary of changes incurred
+        """
+        return 0
 
 class HexRaysHooks:
     def __init__(self, controller):
