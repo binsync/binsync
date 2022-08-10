@@ -32,6 +32,7 @@ BINSYNC_RELOAD_TIME = 10
 # Test Utilities
 #
 
+
 def config_and_connect(binsync_plugin, username, sync_dir_path):
     config = SyncConfig(binsync_plugin.controller, open_magic_sync=False)
     config._user_edit.setText("")
@@ -222,6 +223,10 @@ class TestBinSyncPluginGUI(unittest.TestCase):
 
             # check to ensure function name synced properly
             self.assertEqual(func.name, new_function_name)
+            
+            controller = binsync_plugin.controller
+            controller.stop_worker_routines()
+            time.sleep(1)
 
             app.exit(0)
 
@@ -289,6 +294,10 @@ class TestBinSyncPluginGUI(unittest.TestCase):
 
             # assure stack variable synced properly
             self.assertEqual(self.get_stack_variable(main, func, var_offset, var_man).name, new_var_name)
+
+            controller = binsync_plugin.controller
+            controller.stop_worker_routines()
+            time.sleep(1)
 
             app.exit(0)
 
