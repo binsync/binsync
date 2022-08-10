@@ -965,7 +965,7 @@ class BinSyncController:
         if self.binary_path() is None:
             _l.warning(f"Tried to load binary-specific config when no binary is loaded!")
             return
-        self.config = ProjectConfig.load_from_file(self.binary_path())
+        self.config = ProjectConfig.load_from_file(self.binary_path() or "")
         if not self.config:
             return None
 
@@ -976,11 +976,9 @@ class BinSyncController:
         if hasattr(self.config, "log_level") and self.config.log_level is not None:
             if self.config.log_level == "DEBUG":
                 logging.getLogger("binsync").setLevel("DEBUG")
-                logging.getLogger("ida_binsync").setLevel("DEBUG")
                 _l.info("Logger has been set to level: DEBUG")
             elif self.config.log_level == "INFO":
                 logging.getLogger("binsync").setLevel("INFO")
-                logging.getLogger("ida_binsync").setLevel("INFO")
                 _l.info("Logger has been set to level: INFO")
 
         return self.config
