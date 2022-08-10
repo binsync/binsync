@@ -10,7 +10,7 @@ import binsync
 from binsync import FunctionArgument, FunctionHeader, StackVariable
 import logging
 from decompile_angr import parse_binary
-
+import toml
 import json
 
 _l = logging.getLogger(name=__name__)
@@ -28,26 +28,26 @@ test_start = int(time.time())
 class TestClient(unittest.TestCase):
     def random_ts(self):
         return test_start + random.randint(0, 120*60)
-
+    
     def test_large_state_creation(self):
-        def generate_json_files():
+        def generate_toml_files():
             base_directory = os.path.dirname(os.path.abspath(__file__))
             binaries_directory = os.path.join(base_directory, 'binaries')
-            json_directory = os.path.join(base_directory, 'json')
+            toml_directory = os.path.join(base_directory, 'toml')
             for filename in os.listdir(binaries_directory):
                 # Skip binaries in blacklist
                 if filename in blacklist:
                     continue
                 binary_path = os.path.join(binaries_directory, filename)
-                json_path = os.path.join(json_directory, filename + '.json')
+                toml_path = os.path.join(toml_directory, filename + '.toml')
                 # checking if it is a file
                 if os.path.isfile(binary_path):
-                    # check if the json file already exists
-                    if not os.path.exists(json_path):
-                        print("Generating the json file for %s" % filename)
-                        parse_binary(binary_path, json_path)
+                    # check if the toml file already exists
+                    if not os.path.exists(toml_path):
+                        print("Generating the toml file for %s" % filename)
+                        parse_binary(binary_path, toml_path)
 
-        generate_json_files()
+        generate_toml_files()
         with tempfile.TemporaryDirectory() as tmpdir:
             master_client = binsync.Client("user0", tmpdir, "fake_hash", init_repo=True)
             self.assertTrue(os.path.isdir(os.path.join(tmpdir, ".git")))
@@ -83,26 +83,26 @@ class TestClient(unittest.TestCase):
                 func = state.get_function(func1.addr)
                 print(f"USER {user} FNAME {func.name}")
 
-
-    def test_json_to_binsync_state(self):
+    
+    def test_toml_to_binsync_state(self):
         _l.info("\n")
-        files = glob.glob("json/*")
+        files = glob.glob("toml/*")
 
         for filename in files:
             with open(filename) as f:
-                data = json.loads(f.read())
-                _l.info(f"Loaded JSON file {filename}")
+                data = toml.loads(f.read())
+                _l.info(f"Loaded TOML file {filename}")
             if data is None:
-                assert False, f"ERROR loading supplied json file {filename}"
+                assert False, f"ERROR loading supplied toml file {filename}"
 
             functions = data.get("functions", None)
             if not functions:
-                assert False, "Failed to find functions in loaded json file"
+                assert False, "Failed to find functions in loaded toml file"
 
             binname = data.get("binary", "UNKNOWN")
             binhash = data.get("md5", None)
             if not binhash:
-                assert False, "Failed to find md5 hash in loaded json file (key 'md5')"
+                assert False, "Failed to find md5 hash in loaded toml file (key 'md5')"
 
             func_list = []
             for addr, func in functions.items():
