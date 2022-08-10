@@ -138,7 +138,7 @@ class FunctionHeader(Artifact):
         fh.args = {k: v.copy() for k, v in self.args.items()}
         return fh
 
-    def nonconflict_merge(self, fh2: "FunctionHeader"):
+    def nonconflict_merge(self, fh2: "FunctionHeader", **kwargs):
         fh1: "FunctionHeader" = self.copy()
         if not fh2 or not isinstance(fh2, FunctionHeader):
             return fh1
@@ -299,7 +299,7 @@ class Function(Artifact):
         f.__setstate__(func_toml)
         return f
 
-    def nonconflict_merge(self, func2: "Function", **kwargs) -> "Function":
+    def nonconflict_merge(self, func2: "Artifact", **kwargs):
         func1: "Function" = self.copy()
 
         if not func2 or func1 == func2:

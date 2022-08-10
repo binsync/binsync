@@ -163,12 +163,10 @@ class BinSyncController:
 
             # do git pull/push operations if a remote exist for the client
             if self.client.last_pull_attempt_ts is None:
-                _l.info(f"Updating since last pull_attempt is None")
                 self.client.update(commit_msg="User created")
 
             # update every reload_time
             elif time.time() - self.client.last_pull_attempt_ts > self.reload_time:
-                _l.info(f"Updating since last pull_attempt is less greater than {self.reload_time}")
                 self.client.update()
 
             if not self.headless:
@@ -483,9 +481,10 @@ class BinSyncController:
         # set the artifact in the target state, likely master
         _l.debug(f"Setting an artifact now into {state} as {artifact}")
         was_set = set_artifact_func(state, artifact, set_last_change=set_last_change)
-        if was_set:
-            _l.debug(f"{state} committing now with {commit_msg or artifact.commit_msg}")
-            self.client.commit_state(state, msg=commit_msg or artifact.commit_msg)
+
+        # TODO: make was_set reliable
+        _l.debug(f"{state} committing now with {commit_msg or artifact.commit_msg}")
+        self.client.commit_state(state, msg=commit_msg or artifact.commit_msg)
 
         return was_set
 
@@ -537,13 +536,11 @@ class BinSyncController:
             return None
 
         art_getter = self.ARTIFACT_GET_MAP.get(artifact_type)
+        master_artifact = artifact if artifact else art_getter(master_state, *identifiers)
         merged_artifact = self.merge_artifacts(
-            art_getter(master_state, *identifiers), art_getter(state, *identifiers),
+            master_artifact, art_getter(state, *identifiers),
             merge_level=merge_level, master_state=master_state
         )
-
-        if artifact is None:
-            artifact = self.lower_artifact(merged_artifact)
 
         lock = self.sync_lock if not self.sync_lock.locked() else FakeSyncLock()
         with lock:

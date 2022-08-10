@@ -60,7 +60,6 @@ class Scheduler:
             self._complete_a_job(block=True)
 
     def schedule_job(self, job: Job, priority=SchedSpeed.SLOW):
-        l.info(f"Job scheduled {job}")
         self._job_queue.put_nowait(
             (priority, job,)
         )
