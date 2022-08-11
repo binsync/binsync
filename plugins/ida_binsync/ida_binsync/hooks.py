@@ -447,7 +447,6 @@ class IDBHooks(ida_idp.IDB_Hooks):
         @param deleted:     True only when the entire struct has been deleted.
         @return:
         """
-        l.info(f"IDA STRUCT CHANGE being called with {sid} and {new_name}")
         # parse the info of the current struct
         s_name = new_name if new_name else ida_struct.get_struc_name(sid)
 
