@@ -494,13 +494,11 @@ def set_struct_member_name(ida_struct, frame, offset, name):
 
 @execute_write
 def set_ida_struct(struct: Struct, controller) -> bool:
-    data_changed = False
-
     # first, delete any struct by the same name if it exists
     sid = ida_struct.get_struc_id(struct.name)
     if sid != 0xffffffffffffffff:
         sptr = ida_struct.get_struc(sid)
-        data_changed |= ida_struct.del_struc(sptr)
+        ida_struct.del_struc(sptr)
 
     # now make a struct header
     ida_struct.add_struc(ida_idaapi.BADADDR, struct.name, False)
@@ -517,7 +515,7 @@ def set_ida_struct(struct: Struct, controller) -> bool:
         mflag = convert_size_to_flag(member.size)
 
         # create the new member
-        data_changed |= ida_struct.add_struc_member(
+        ida_struct.add_struc_member(
             sptr,
             member.member_name,
             member.offset,
@@ -526,7 +524,7 @@ def set_ida_struct(struct: Struct, controller) -> bool:
             member.size,
         )
 
-    return data_changed
+    return True
 
 
 @execute_write
