@@ -65,7 +65,7 @@ class Struct(Artifact):
     def __init__(self, name: str, size: int, struct_members: Dict[int, StructMember], last_change=None):
         super(Struct, self).__init__(last_change=last_change)
         self.name = name
-        self.size = size
+        self.size = size or 0
         self.struct_members: Dict[int, StructMember] = struct_members
 
     def __str__(self):

@@ -460,7 +460,6 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
         # if deleted, finish early
         if deleted:
-            l.info(f"struct was deleted so pushing a deleted struct :(")
             self.binsync_state_change(
                 self.controller.push_artifact,
                 Struct(s_name, None, {})
@@ -479,7 +478,6 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
         # make the controller update the local state and push
         old_s_name = old_name if old_name else s_name
-        l.info(f"struct ready to push, pushing now {binsync_struct}")
         self.binsync_state_change(
             self.controller.push_artifact,
             binsync_struct
