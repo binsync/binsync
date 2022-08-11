@@ -90,6 +90,8 @@ If neither does not show, it means the plugin is not in the plugins folder.
 4. Give a username and find the example_repo from earlier, click ok
    <img src="/assets/images/demo1.png" width="50%" height="50%">
 
+The Git repo refers to the local path of the BinSync repo. If you do not create a BinSync repo locally, you should leave it blank. In this exmaple, you should copy the git URL (git@github.com:mahaloz/binsync_example_repo.git) to "Remote URL".
+
 5. Verify your terminal says (with your username):
 ```bash
 [BinSync]: Client has connected to sync repo with user: <username>.
