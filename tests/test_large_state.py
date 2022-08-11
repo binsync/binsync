@@ -11,8 +11,15 @@ from binsync import FunctionArgument, FunctionHeader, StackVariable
 import logging
 from decompile_angr import parse_binary
 import toml
-import json
+from angrmanagement.ui.main_window import MainWindow
+from PySide2.QtWidgets import QApplication
+from angrmanagement.config import Conf
+import angr
+from binsync.common.ui.config_dialog import SyncConfig
+from PySide2.QtTest import QTest
+from PySide2.QtCore import Qt, QPoint, QTimer
 
+app = None
 _l = logging.getLogger(name=__name__)
 handler = logging.StreamHandler(sys.stdout)
 _l.addHandler(handler)
@@ -25,16 +32,54 @@ filename = "fauxware"
 user_count = 3
 test_start = int(time.time())
 
+
+# 
+# Test Utilities
+#
+
+def config_and_connect(binsync_plugin, username, sync_dir_path):
+    config = SyncConfig(binsync_plugin.controller, open_magic_sync=False)
+    config._user_edit.setText("")
+    config._repo_edit.setText("")
+    QTest.keyClicks(config._user_edit, username)
+    QTest.keyClicks(config._repo_edit, sync_dir_path)
+    QTest.mouseClick(config._initrepo_checkbox, Qt.MouseButton.LeftButton)
+    QTest.mouseClick(config._ok_button, Qt.MouseButton.LeftButton)
+
+def get_binsync_am_plugin(main_window):
+    _plugin = [plugin for plugin in main_window.workspace.plugins.loaded_plugins if "BinSyncPlugin" in str(plugin)][0]
+    main_window.workspace.plugins.activate_plugin(_plugin)
+    binsync_plugin = next(iter([p for p in main_window.workspace.plugins.active_plugins if "BinSync" in str(p)]))
+    return binsync_plugin
+
+def start_am_gui(binpath):
+    main = MainWindow(show=False) 
+    main.workspace.instance.project.am_obj = angr.Project(binpath, auto_load_libs=False)
+    main.workspace.instance.project.am_event()
+    main.workspace.instance.join_all_jobs()
+    return main
+
+def am_setUp():
+    global app
+    if app is None:
+        app = QApplication([])
+        Conf.init_font_config()
+
 class TestClient(unittest.TestCase):
+    
+    def setUp(self):
+        am_setUp()
+
     def random_ts(self):
         return test_start + random.randint(0, 120*60)
     
     def test_large_state_creation(self):
+        
         def generate_toml_files():
             base_directory = os.path.dirname(os.path.abspath(__file__))
             binaries_directory = os.path.join(base_directory, 'binaries')
             toml_directory = os.path.join(base_directory, 'toml')
-            for filename in os.listdir(binaries_directory):
+            for filename in os.listdir(binaries_directory)[1:2]:
                 # Skip binaries in blacklist
                 if filename in blacklist:
                     continue
@@ -49,7 +94,19 @@ class TestClient(unittest.TestCase):
 
         generate_toml_files()
         with tempfile.TemporaryDirectory() as tmpdir:
-            master_client = binsync.Client("user0", tmpdir, "fake_hash", init_repo=True)
+            test_location = os.path.join(os.path.dirname(os.path.realpath(__file__)),'binaries')
+            # TODO: update for all binaries!
+            binpath = os.path.join(test_location, "fauxware")
+
+            # setup GUI
+            main = start_am_gui(binpath)
+            func = main.workspace.instance.project.kb.functions['main']
+            
+            
+            # find the binsync plugin and connect
+            binsync_plugin = get_binsync_am_plugin(main)
+            config_and_connect(binsync_plugin, "user0", tmpdir)
+            master_client = binsync_plugin.controller.client 
             self.assertTrue(os.path.isdir(os.path.join(tmpdir, ".git")))
 
             func1 = FunctionHeader("func", 0x400000, ret_type="int *", args={
@@ -82,8 +139,15 @@ class TestClient(unittest.TestCase):
                 state = master_client.get_state(user=user)
                 func = state.get_function(func1.addr)
                 print(f"USER {user} FNAME {func.name}")
+            
+            control_panel = binsync_plugin.control_panel_view.control_panel
+            utility_panel = control_panel._utilities_panel
+            magic_sync_button = utility_panel._magic_sync_button
+            magic_sync_button.click()
 
-    
+
+            app.exit(0)
+            
     def test_toml_to_binsync_state(self):
         _l.info("\n")
         files = glob.glob("toml/*")
