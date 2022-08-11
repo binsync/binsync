@@ -150,8 +150,5 @@ class QFunctionTable(QTableWidget):
     def _doubleclick_handler(self):
         # Doubleclick only allows for a single item select so just take first one from list
         row_idx = self.selectionModel().selectedIndexes()[0].row()
-        row = self.items[row_idx]
-        self.controller.goto_address(row.addr)
-
-
-
+        row_addr = self.item(row_idx, 0).data(Qt.UserRole)
+        self.controller.goto_address(row_addr)
