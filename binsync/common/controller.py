@@ -762,6 +762,10 @@ class BinSyncController:
         @return:
         """
         _l.info(f"Staring a Magic Sync with a preference for {preference_user}")
+
+        if self.merge_level == MergeLevel.OVERWRITE:
+            _l.warning(f"Using Magic Sync with OVERWRITE is not supported, switching to NON-CONFLICTING")
+
         # re-order users for the prefered user to be at the front of the queue (if they exist)
         all_users = list(self.usernames(priority=SchedSpeed.FAST))
         preference_user = preference_user if preference_user else self.client.master_user
@@ -798,7 +802,10 @@ class BinSyncController:
                     pref_art = pref_art.nonconflict_merge(user_art)
                     pref_art.last_change = None
 
-                filler_func(identifier, artifact=pref_art, state=master_state,  commit_msg=f"Magic Synced {pref_art}")
+                filler_func(
+                    identifier, artifact=pref_art, state=master_state,  commit_msg=f"Magic Synced {pref_art}",
+                    merge_level=MergeLevel.NON_CONFLICTING
+                )
 
         _l.info(f"Magic Syncing Completed!")
 
@@ -856,8 +863,11 @@ class BinSyncController:
         if merge_level is None:
             merge_level = self.merge_level
 
-        if merge_level == MergeLevel.OVERWRITE or not art1 or art1 == art2:
-            return art2
+        if art2 is None:
+            return art1.copy()
+
+        if merge_level == MergeLevel.OVERWRITE or (not art1) or (art1 == art2):
+            return art2.copy() if art2 else None
 
         if merge_level == MergeLevel.NON_CONFLICTING:
             merge_art = art1.nonconflict_merge(art2, **kwargs)
