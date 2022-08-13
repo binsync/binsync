@@ -213,7 +213,11 @@ class IDABinSyncController(BinSyncController):
     @fill_event
     def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
         func: Function = artifact
-        ida_code_view = compat.acquire_pseudocode_vdui(func.addr)
+        try:
+            ida_code_view = compat.acquire_pseudocode_vdui(func.addr)
+        except Exception:
+            ida_code_view = None
+
         changes = super(IDABinSyncController, self).fill_function(
             func_addr, user=user, artifact=artifact, ida_code_view=ida_code_view, **kwargs
         )
@@ -233,6 +237,9 @@ class IDABinSyncController(BinSyncController):
     @init_checker
     @fill_event
     def fill_stack_variable(self, func_addr, offset, user=None, artifact=None, ida_code_view=None, **kwargs):
+        if ida_code_view is None:
+            return False
+
         stack_var: StackVariable = artifact
         frame = idaapi.get_frame(stack_var.addr)
         changes = False
@@ -255,6 +262,10 @@ class IDABinSyncController(BinSyncController):
     @fill_event
     def fill_function_header(self, func_addr, user=None, artifact=None, ida_code_view=None, **kwargs):
         func_header: FunctionHeader = artifact
+        if ida_code_view is None:
+            compat.set_ida_func_name(func_addr, func_header.name)
+            return False
+
         updated_header = compat.set_function_header(ida_code_view, func_header)
         return updated_header
 

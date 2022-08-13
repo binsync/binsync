@@ -197,10 +197,15 @@ def function(addr):
         return None
 
     func_addr = ida_func.start_ea
-    ida_cfunc = idaapi.decompile(func_addr)
+
+    try:
+        ida_cfunc = idaapi.decompile(func_addr)
+    except Exception:
+        ida_cfunc = None
+
     if not ida_cfunc:
         l.warning(f"IDA function {hex(func_addr)} is not decompilable")
-        return None
+        return Function(func_addr, get_func_size(func_addr), last_change=int(time()))
 
     func = Function(func_addr, get_func_size(func_addr), last_change=int(time()))
     func_header: FunctionHeader = function_header(ida_cfunc)
@@ -340,7 +345,12 @@ def set_ida_comment(addr, cmt, decompiled=False):
 
     # a comment in decompilation
     elif decompiled:
-        cfunc = idaapi.decompile(addr)
+        try:
+            cfunc = idaapi.decompile(addr)
+        except Exception:
+            ida_bytes.set_cmt(addr, cmt, rpt)
+            return True
+
         eamap = cfunc.get_eamap()
         decomp_obj_addr = eamap[addr][0].ea
         tl = idaapi.treeloc_t()
