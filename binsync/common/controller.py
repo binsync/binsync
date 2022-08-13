@@ -802,10 +802,13 @@ class BinSyncController:
                     pref_art = pref_art.nonconflict_merge(user_art)
                     pref_art.last_change = None
 
-                filler_func(
-                    identifier, artifact=pref_art, state=master_state,  commit_msg=f"Magic Synced {pref_art}",
-                    merge_level=MergeLevel.NON_CONFLICTING
-                )
+                try:
+                    filler_func(
+                        identifier, artifact=pref_art, state=master_state,  commit_msg=f"Magic Synced {pref_art}",
+                        merge_level=MergeLevel.NON_CONFLICTING
+                    )
+                except Exception as e:
+                    _l.info(f"Banishing exception: {e}")
 
         _l.info(f"Magic Syncing Completed!")
 
