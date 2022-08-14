@@ -135,11 +135,8 @@ class QFunctionTable(QTableWidget):
                     continue
 
                 func_change_time = sync_func.last_change
-                # check if we already know about it
-                if func_addr in known_funcs:
-                    # compare this users change time to the store change time
-                    if not func_change_time or func_change_time < known_funcs[func_addr][3]:
-                        continue
+                # compare this users change time to the store change time
+                if func_addr not in self.items or func_change_time >= self.items[func_addr].last_push:
                     remote_func_name = sync_func.name if sync_func.name else ""
                     self.items[func_addr] = QFunctionItem(func_addr, remote_func_name, user.name, func_change_time)
 
