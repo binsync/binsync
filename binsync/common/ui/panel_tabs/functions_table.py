@@ -1,6 +1,5 @@
 import logging
 from typing import Dict
-import time
 
 from binsync.common.controller import BinSyncController
 from binsync.common.ui.qt_objects import (
