@@ -163,7 +163,7 @@ class TestBinSyncPluginGUI(unittest.TestCase):
         """
         time.sleep(BINSYNC_RELOAD_TIME + BINSYNC_RELOAD_TIME // 2)
         control_panel = binsync_plugin.control_panel_view.control_panel
-        top_change_func = list(control_panel._func_table.items)[0]
+        top_change_func = list(control_panel._func_table.items.values())[0]
         top_change_activity = control_panel._activity_table.items[0]
         self.assertEqual(top_change_func.user, user)
         if func_name is not None:
@@ -283,13 +283,13 @@ class TestBinSyncPluginGUI(unittest.TestCase):
 
             # assure functions did not change
             func_table = control_panel._func_table
-            self.assertIsNotNone(list(func_table.items)[0].name)
+            self.assertIsNotNone(list(func_table.items.values())[0].name)
 
             # make a click event to sync new data from the first row in the table
             self.click_sync_menu(control_panel._activity_table, "binsync_activity_table_context_menu")
 
             # assure function name did not change
-            self.assertEqual(list(func_table.items)[0].name, "")
+            self.assertEqual(list(func_table.items.values())[0].name, "")
             self.assertEqual(func.name, old_name)
 
             # assure stack variable synced properly
