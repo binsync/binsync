@@ -24,6 +24,12 @@ class QFunctionItem:
         self.user = user
         self.last_push = last_push
 
+    def __eq__(self, other):
+        return self.addr == other.addr
+
+    def __hash__(self):
+        return self.addr
+
     def widgets(self):
         # sort by int value
         addr = QNumericItem(hex(self.addr))
@@ -61,7 +67,7 @@ class QFunctionTable(QTableWidget):
     def __init__(self, controller: BinSyncController, parent=None):
         super(QFunctionTable, self).__init__(parent)
         self.controller = controller
-        self.items = []
+        self.items = dict()
 
         self.setColumnCount(len(self.HEADER))
         self.setHorizontalHeaderLabels(self.HEADER)
@@ -80,15 +86,19 @@ class QFunctionTable(QTableWidget):
         self.setSortingEnabled(True)
 
         self.doubleClicked.connect(self._doubleclick_handler)
+        self.last_table = set()
 
     def reload(self):
         self.setSortingEnabled(False)
         self.setRowCount(len(self.items))
+        new_table = set(self.items.values())
+        new_entries = new_table.difference(self.last_table)
 
-        for idx, item in enumerate(self.items):
-            for i, it in enumerate(item.widgets()):
-                self.setItem(idx, i, it)
+        for idx, item in enumerate(new_entries):
+            for i, attr in enumerate(item.widgets()):
+                self.setItem(idx, i, attr)
 
+        self.last_table = new_table
         self.viewport().update()
         self.setSortingEnabled(True)
 
@@ -112,29 +122,21 @@ class QFunctionTable(QTableWidget):
         menu.popup(self.mapToGlobal(event.pos()))
 
     def update_table(self):
-        known_funcs = {}  # addr: (addr, name, user_name, push_time)
-
         # first check if any functions are unknown to the table
         for user in self.controller.users():
             state = self.controller.client.get_state(user=user.name)
             user_funcs: Dict[int, Function] = state.functions
 
             for func_addr, sync_func in user_funcs.items():
-                func_change_time = sync_func.last_change
-
                 # don't add functions that were never changed by the user
                 if not sync_func.last_change:
                     continue
 
-                # check if we already know about it
-                if func_addr in known_funcs:
-                    # compare this users change time to the store change time
-                    if not func_change_time or func_change_time < known_funcs[func_addr][3]:
-                        continue
-                remote_func_name = sync_func.name if sync_func.name else ""
-                known_funcs[func_addr] = [func_addr, remote_func_name, user.name, func_change_time]
-
-        self.items = [QFunctionItem(*row) for row in known_funcs.values()]
+                func_change_time = sync_func.last_change
+                # compare this users change time to the store change time
+                if func_addr not in self.items or func_change_time >= self.items[func_addr].last_push:
+                    remote_func_name = sync_func.name if sync_func.name else ""
+                    self.items[func_addr] = QFunctionItem(func_addr, remote_func_name, user.name, func_change_time)
 
     def _get_valid_users_for_func(self, func_addr):
         for user in self.controller.users(priority=SchedSpeed.FAST):
