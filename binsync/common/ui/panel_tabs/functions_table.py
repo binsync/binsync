@@ -137,12 +137,11 @@ class QFunctionTable(QTableWidget):
                 func_change_time = sync_func.last_change
                 # check if we already know about it
                 if func_addr in known_funcs:
-
                     # compare this users change time to the store change time
                     if not func_change_time or func_change_time < known_funcs[func_addr][3]:
                         continue
-                remote_func_name = sync_func.name if sync_func.name else ""
-                self.items[func_addr] = QFunctionItem(func_addr, remote_func_name, user.name, func_change_time)
+                    remote_func_name = sync_func.name if sync_func.name else ""
+                    self.items[func_addr] = QFunctionItem(func_addr, remote_func_name, user.name, func_change_time)
 
     def _get_valid_users_for_func(self, func_addr):
         for user in self.controller.users(priority=SchedSpeed.FAST):
