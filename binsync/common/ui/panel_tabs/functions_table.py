@@ -122,8 +122,6 @@ class QFunctionTable(QTableWidget):
         menu.popup(self.mapToGlobal(event.pos()))
 
     def update_table(self):
-        known_funcs = {}  # addr: (addr, name, user_name, push_time)
-
         # first check if any functions are unknown to the table
         for user in self.controller.users():
             state = self.controller.client.get_state(user=user.name)
