@@ -34,7 +34,7 @@ BINSYNC_RELOAD_TIME = 10
 
 
 def config_and_connect(binsync_plugin, username, sync_dir_path, init=False):
-    config = SyncConfig(binsync_plugin.controller, open_magic_sync=False)
+    config = SyncConfig(binsync_plugin.controller, open_magic_sync=False, load_config=not init)
     config._user_edit.setText("")
     config._repo_edit.setText("")
     QTest.keyClicks(config._user_edit, username)
