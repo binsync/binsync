@@ -10,6 +10,7 @@ from binsync.common.ui.qt_objects import (
     QTableWidgetItem,
 )
 from binsync.common.ui.utils import QNumericItem, friendly_datetime
+from binsync.data import State
 
 l = logging.getLogger(__name__)
 
@@ -106,6 +107,7 @@ class QCTXTable(QTableWidget):
             return
         username = item.text()
         menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=username))
+        #menu.addAction("Manual Merge", lambda: manual_merge(self.controller, func_addr, user=username))
 
         menu.popup(self.mapToGlobal(event.pos()))
 
