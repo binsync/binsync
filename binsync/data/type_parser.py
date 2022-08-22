@@ -180,6 +180,9 @@ class BSTypeParser:
 
         >>> self.parse_type_with_name('int *foo')
         """
+        if not defn:
+            return None
+
         if pycparser is None:
             raise ImportError("Please install pycparser in order to parse C definitions")
 
@@ -211,24 +214,26 @@ class BSTypeParser:
         return self._decl_to_type(decl, extra_types=extra_types), node.name
 
     def _decl_to_type(self, decl, extra_types=None) -> Optional[BSType]:
+        if not decl:
+            return decl
+
         if extra_types is None: extra_types = {}
 
         if isinstance(decl, pycparser.c_ast.FuncDecl):
             return None
 
         elif isinstance(decl, pycparser.c_ast.TypeDecl):
-            print("IN TYPE DECL")
             return self._decl_to_type(decl.type, extra_types)
 
         elif isinstance(decl, pycparser.c_ast.PtrDecl):
-            print("IN PTR DECL")
             pts_to = self._decl_to_type(decl.type, extra_types)
-            return BSType(type_=pts_to.type, size=self.sizeof_ptr, is_ptr=True)
+            if not pts_to:
+                return None
+
+            return BSType(type_=pts_to.type, size=self.sizeof_ptr, is_ptr=True, is_unknown=pts_to.is_unknown)
 
         elif isinstance(decl, pycparser.c_ast.ArrayDecl):
-            print("IN ARRAY DECL")
             elem_type = self._decl_to_type(decl.type, extra_types)
-            print(elem_type)
 
             if decl.dim is None:
                 """
@@ -258,16 +263,13 @@ class BSTypeParser:
             return None
 
         elif isinstance(decl, pycparser.c_ast.IdentifierType):
-            print("IN IDENTIFIER")
             key = ' '.join(decl.names)
             if key in extra_types:
                 return extra_types[key]
             elif key in self.ALL_TYPES:
-                print(f"FOUND WITH KEY {key}")
                 return self.ALL_TYPES[key]
             else:
                 #raise TypeError("Unknown type '%s'" % key)
-                print(f"TYPE IS UNKNOWN {key}")
                 return BSType(type_=key, is_unknown=True)
 
         elif isinstance(decl, pycparser.c_ast.Enum):

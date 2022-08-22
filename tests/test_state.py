@@ -58,7 +58,7 @@ class TestState(unittest.TestCase):
         struct = binsync.data.Struct("some_struct", 8, [])
 
         state.set_function_header(func1, set_last_change=True)
-        state.set_struct(struct, None)
+        state.set_struct(struct)
         # simulate pulling from another user
         state.set_function_header(func2, set_last_change=False)
 
@@ -94,14 +94,13 @@ class TestState(unittest.TestCase):
         stack_vars2 = {
             0x0: StackVariable(0, 3, "v0", "int", 4, func1.addr),
             0x4: StackVariable(4, 3, "v4", "long", 8, func1.addr),
-            0x8: StackVariable(4, 3, "v8", "long", 8, func1.addr)
+            0x8: StackVariable(8, 3, "v8", "long", 8, func1.addr)
         }
 
         for stack_vars_info in [(stack_vars1, state1), (stack_vars2, state2)]:
-            state = stack_vars_info[1]
-            stack_vars = stack_vars_info[0]
+            stack_vars, state = stack_vars_info[:]
             for off, var in stack_vars.items():
-                state.set_stack_variable(var, off, var.addr)
+                state.set_stack_variable(var)
 
         func1 = state1.get_function(func1.addr)
         func2 = state2.get_function(func1.addr)
@@ -126,7 +125,9 @@ class TestState(unittest.TestCase):
         self.assertNotEqual(header_diff["args"][1]["type_str"]["before"], header_diff["args"][1]["type_str"]["after"])
 
         # v4 and v8 should differ
-        for off, var_diff in vars_diff.items():
+        offsets = [0, 4, 8]
+        for off in offsets:
+            var_diff = vars_diff[off]
             if off == 0:
                 self.assertFalse(var_diff)
             if off == 0x4:
@@ -157,17 +158,17 @@ class TestState(unittest.TestCase):
         stack_vars2 = {
             0x0: StackVariable(0, 3, "v0", "int", 4, func1.addr),
             0x4: StackVariable(4, 3, "v4", "long", 8, func1.addr),
-            0x8: StackVariable(4, 3, "v8", "long", 8, func1.addr)
+            0x8: StackVariable(8, 3, "v8", "long", 8, func1.addr)
         }
 
         for stack_vars_info in [(stack_vars1, state1), (stack_vars2, state2)]:
             state = stack_vars_info[1]
             stack_vars = stack_vars_info[0]
             for off, var in stack_vars.items():
-                state.set_stack_variable(var, off, var.addr)
+                state.set_stack_variable(var)
         
         func1, func2 = state1.get_function(0x400000), state2.get_function(0x400000) 
-        merge_func = Function.from_nonconflicting_merge(func1, func2)
+        merge_func = func1.nonconflict_merge(func2)
 
         self.assertEqual(merge_func.name, "user1_func")
         self.assertEqual(merge_func.header.ret_type, "int *")

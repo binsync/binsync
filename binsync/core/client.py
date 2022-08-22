@@ -56,7 +56,6 @@ def atomic_git_action(f):
             priority=priority
         )
 
-        # set cache
         self._set_cache(f, ret_val, **kwargs)
 
         return ret_val
@@ -288,7 +287,6 @@ class Client:
         except Exception as e:
             l.warning(f"Internal Git Commit Error: {e}")
             return
-
         self._last_commit_ts = time.time()
         master_user_branch.commit = commit
         state._dirty = False
@@ -365,7 +363,8 @@ class Client:
             try:
                 self.repo.git.merge()
             except Exception as e:
-                l.debug(f"Failed to merge on {branch} with {e}")
+                #l.debug(f"Failed to merge on {branch} with {e}")
+                pass
 
         self._update_cache()
 
@@ -384,7 +383,7 @@ class Client:
                 self.repo.remotes[self.remote].push(BINSYNC_ROOT_BRANCH)
                 self.repo.remotes[self.remote].push(self.user_branch_name)
             self._last_push_ts = time.time()
-            l.debug("Push completed successfully at %s", self._last_push_ts)
+            #l.debug("Push completed successfully at %s", self._last_push_ts)
             self.active_remote = True
         except git.exc.GitCommandError as ex:
             self.active_remote = False
@@ -410,14 +409,16 @@ class Client:
         in the case of dirty files.
         """
         # attempt to commit dirty files in a update phase
-        master_state = self.get_state(user=self.master_user, no_cache=True)
+        master_state = self.get_state(no_cache=True)
         if master_state and master_state.dirty:
             self.commit_state(master_state, msg=commit_msg)
 
         # do a pull if there is a remote repo connected
+        self.last_pull_attempt_ts = time.time()
         if self.has_remote:
             self.pull()
 
+        self.last_push_attempt_ts = time.time()
         if self.has_remote:
             self.push()
 

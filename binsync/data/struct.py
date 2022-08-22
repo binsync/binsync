@@ -4,6 +4,8 @@ import toml
 
 from binsync.data.artifact import Artifact
 
+import logging
+l = logging.getLogger(name=__name__)
 
 class StructMember(Artifact):
     """
@@ -63,8 +65,8 @@ class Struct(Artifact):
     def __init__(self, name: str, size: int, struct_members: Dict[int, StructMember], last_change=None):
         super(Struct, self).__init__(last_change=last_change)
         self.name = name
-        self.size = size
-        self.struct_members = struct_members
+        self.size = size or 0
+        self.struct_members: Dict[int, StructMember] = struct_members
 
     def __str__(self):
         return f"<Struct: {self.name} membs={len(self.struct_members)} ({hex(self.size)})>"
@@ -128,6 +130,8 @@ class Struct(Artifact):
 
             diff_dict["struct_members"][off] = self.invert_diff(other_mem.diff(None))
 
+        return diff_dict
+
     def copy(self):
         struct_members = {offset: member.copy() for offset, member in self.struct_members.items()}
         struct = Struct(self.name, self.size, struct_members, last_change=self.last_change)
@@ -145,10 +149,13 @@ class Struct(Artifact):
         s.__setstate__(struct_toml)
         return s
 
-    @classmethod
-    def from_nonconflicting_merge(cls, struct1: "Struct", struct2: "Struct") -> "Struct":
+    def nonconflict_merge(self, struct2: "Struct", **kwargs) -> "Struct":
+        struct1: "Struct" = self.copy()
+        if not struct2 or struct1 == struct2:
+            return struct1
+
         struct_diff = struct1.diff(struct2)
-        merge_struct = struct1.copy()
+        merge_struct = struct1
 
         members_diff = struct_diff["struct_members"]
         for off, mem in struct2.struct_members.items():
@@ -159,7 +166,7 @@ class Struct(Artifact):
             mem_diff = members_diff[off]
 
             # struct member is newly created
-            if mem_diff["before"] is None:
+            if "before" in mem_diff and mem_diff["before"] is None:
                 # check for overlap
                 new_mem_size = mem.size
                 new_mem_offset = mem.offset
@@ -173,10 +180,13 @@ class Struct(Artifact):
                 continue
 
             # member differs
-            merge_mem = merge_struct.struct_members[off].copy()
-            merge_mem = StructMember.from_nonconflicting_merge(merge_mem, mem)
+            merge_mem = merge_struct.struct_members.get(off, None)
+            if not merge_mem:
+                merge_mem = mem
+
+            merge_mem = StructMember.nonconflict_merge(merge_mem, mem)
+            merge_struct.struct_members[off] = merge_mem
 
         # compute the new size
         merge_struct.size = sum(mem.size for mem in merge_struct.struct_members.values())
-
         return merge_struct

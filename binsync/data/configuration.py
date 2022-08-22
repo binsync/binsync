@@ -14,6 +14,12 @@ class Config:
         self.path = path
 
     def save(self):
+        if isinstance(self.path, str):
+            path = pathlib.Path(self.path)
+
+        if not path.parent.exists():
+            return None
+
         dump_dict = {
             attr: getattr(self, attr) for attr in self.__slots__
         }

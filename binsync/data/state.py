@@ -79,6 +79,10 @@ def update_last_change(f):
             artifact_type = ArtifactType.FUNCTION
             func.last_change = artifact.last_change
 
+        elif isinstance(artifact, Function):
+            artifact_loc = artifact.addr
+            artifact_type = ArtifactType.FUNCTION
+
         # Function Header
         elif isinstance(artifact, FunctionHeader):
             artifact_loc = artifact.addr
@@ -365,8 +369,17 @@ class State:
 
     @dirty_checker
     @update_last_change
+    def set_function(self, function: Function, set_last_change=True):
+        if function.addr in self.functions and self.functions[function.addr] == function:
+            return False
+
+        self.functions[function.addr] = function
+        return True
+
+    @dirty_checker
+    @update_last_change
     def set_function_header(self, func_header: FunctionHeader, set_last_change=True):
-        if self.functions[func_header.addr] == func_header:
+        if func_header.addr in self.functions and self.functions[func_header.addr] == func_header:
             return False
 
         self.functions[func_header.addr].header = func_header
@@ -408,28 +421,28 @@ class State:
 
     @dirty_checker
     @update_last_change
-    def set_stack_variable(self, variable, offset, func_addr, set_last_change=True):
+    def set_stack_variable(self, variable: StackVariable, set_last_change=True):
         if not variable:
             return False
 
-        func = self.get_function(func_addr)
+        func = self.get_function(variable.addr)
         if not func:
             return False
 
         try:
-            old_var = func.stack_vars[offset]
+            old_var = func.stack_vars[variable.stack_offset]
         except KeyError:
             old_var = None
 
         if old_var != variable:
-            func.stack_vars[offset] = variable
+            func.stack_vars[variable.stack_offset] = variable
             return True
 
         return False
 
     @dirty_checker
     @update_last_change
-    def set_struct(self, struct: Struct, old_name: Optional[str], set_last_change=True):
+    def set_struct(self, struct: Struct, old_name=None, set_last_change=True):
         """
         Sets a struct in the current state. If old_name is not defined (None), then
         this indicates that the struct has not changed names. In that case, simply overwrite the
@@ -459,6 +472,9 @@ class State:
         # set the new struct
         if struct.name is not None:
             self.structs[struct.name] = struct
+            return True
+
+        return False
 
     @dirty_checker
     @update_last_change
@@ -502,12 +518,23 @@ class State:
         return func
 
     def get_function(self, addr) -> Function:
-        try:
-            func = self.functions[addr]
-        except KeyError:
-            func = None
+        return self.functions.get(addr, None)
 
-        return func
+    def get_functions(self) -> Dict[int, Function]:
+        return self.functions
+
+    def get_function_header(self, addr) -> Optional[FunctionHeader]:
+        func = self.get_function(addr)
+        if not func:
+            return None
+
+        return func.header
+
+    def get_function_headers(self) -> Dict[int, FunctionHeader]:
+        return {
+            addr: func.header
+            for addr, func in self.functions.items() if func.header
+        }
 
     def get_comment(self, addr) -> Comment:
         try:
@@ -517,17 +544,15 @@ class State:
 
         return cmt
 
-    def get_comments(self) -> Dict[int, Comment]:
-        return self.comments
-
-    def get_func_comments(self, func_addr):
+    def get_func_comments(self, func_addr) -> Dict[int, Comment]:
         try:
             func = self.functions[func_addr]
         except KeyError:
             return {}
 
         return {
-            addr: cmt for addr, cmt in self.comments.items() if addr <= func.addr + func.size
+            addr: cmt for addr, cmt in self.comments.items()
+            if func.addr <= addr <= func.addr + func.size
         }
 
     def get_patch(self, addr) -> Patch:
@@ -568,8 +593,8 @@ class State:
 
         return struct
 
-    def get_structs(self) -> Iterable[Struct]:
-        return self.structs.values()
+    def get_structs(self) -> Dict[str, Struct]:
+        return self.structs
 
     def get_global_var(self, addr):
         try:
@@ -578,6 +603,9 @@ class State:
             gvar = None
 
         return gvar
+
+    def get_global_vars(self):
+        return self.global_vars
 
     def get_enum(self, name):
         try:
@@ -588,7 +616,7 @@ class State:
         return enum
 
     def get_enums(self):
-        return self.enums.values()
+        return self.enums
 
     def get_last_push_for_artifact_type(self, artifact_type):
         last_change = -1
@@ -654,11 +682,3 @@ class State:
                 return func
         else:
             return None
-
-    def find_latest_comment_for_func(self, func: Function) -> Optional[Comment]:
-        cmts = [cmt for addr, cmt in self.comments.items() if addr <= func.addr + func.size]
-        if not cmts:
-            return None
-
-        lastest_cmt = max(cmts, key=lambda c: c.last_change if c.last_change else -1)
-        return lastest_cmt

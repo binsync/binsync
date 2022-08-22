@@ -11,10 +11,11 @@ from binsync import Function
 from binsync.common.controller import (
     BinSyncController,
     init_checker,
-    make_ro_state,
-    make_state_with_func
+    fill_event
 )
-from binsync.data import FunctionHeader, StackOffsetType
+from binsync.data import (
+    FunctionHeader, StackOffsetType, Comment, StackVariable
+)
 
 from .artifact_lifter import AngrArtifactLifter
 
@@ -29,7 +30,7 @@ class AngrBinSyncController(BinSyncController):
     """
 
     def __init__(self, workspace):
-        super(AngrBinSyncController, self).__init__(AngrArtifactLifter(self))
+        super(AngrBinSyncController, self).__init__(artifact_lifter=AngrArtifactLifter(self))
         self._workspace = workspace
         self._instance = workspace.instance
 
@@ -84,99 +85,88 @@ class AngrBinSyncController(BinSyncController):
     #
     # Display Fillers
     #
-
-    def fill_struct(self, struct_name, user=None, state=None):
-        pass
+    @init_checker
+    def fill_global_var(self, var_addr, user=None, artifact=None, **kwargs):
+        return False
 
     @init_checker
-    @make_ro_state
-    def fill_function(self, func_addr, user=None, state=None, manual=False):
-        func = self._instance.kb.functions[self.rebase_addr(func_addr, up=True)]
+    def fill_struct(self, struct_name, user=None, artifact=None, **kwargs):
+        return False
+
+    @init_checker
+    @fill_event
+    def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
+        func: Function = artifact
+        func = self._instance.kb.functions[func.addr]
 
         # re-decompile a function if needed
         decompilation = self.decompile_function(func)
 
-        sync_func: binsync.data.Function = self.pull_function(self.rebase_addr(func.addr), user=user, state=state)
-        if sync_func is None:
-            # the function does not exist for that user's state
-            return False
-
-        if not manual:
-            sync_func = self.generate_func_for_sync_level(sync_func)
-
-        #
-        # Function Header
-        #
-
-        if sync_func.header:
-            if sync_func.name and sync_func.name != func.name:
-                func.name = sync_func.name
-                decompilation.cfunc.name = sync_func.name
-                decompilation.cfunc.demangled_name = sync_func.name
-
-            if sync_func.header.args:
-                for i, arg in sync_func.header.args.items():
-                    if i >= len(decompilation.cfunc.arg_list):
-                        break
-
-                    decompilation.cfunc.arg_list[i].variable.name = arg.name
-
-        #
-        # Comments
-        #
-
-        for addr, cmt in self.pull_func_comments(self.rebase_addr(func_addr)).items():
-            if not cmt or not cmt.comment:
-                continue
-
-            if cmt.decompiled:
-                try:
-                    pos = decompilation.map_addr_to_pos.get_nearest_pos(addr)
-                    corrected_addr = decompilation.map_pos_to_addr.get_node(pos).tags['ins_addr']
-                # pylint: disable=broad-except
-                except Exception:
-                    break
-
-                decompilation.stmt_comments[corrected_addr] = cmt.comment
-            else:
-                self._instance.kb.comments[cmt.addr] = cmt.comment
-
-        # ==== Stack Vars ==== #
-        sync_vars = self.pull_stack_variables(self.rebase_addr(func.addr), user=user)
-        for offset, sync_var in sync_vars.items():
-            code_var = AngrBinSyncController.find_stack_var_in_codegen(decompilation, offset)
-            if code_var:
-                code_var.name = sync_var.name
-                code_var.renamed = True
+        changes = super(AngrBinSyncController, self).fill_function(
+            func_addr, user=user, artifact=artifact, decompilation=decompilation, **kwargs
+        )
 
         decompilation.regenerate_text()
         self.decompile_function(func, refresh_gui=True)
-        return True
-
-    #
-    #   Pushers
-    #
+        return changes
 
     @init_checker
-    @make_state_with_func
-    # pylint: disable=arguments-differ
-    def push_function_header(self, addr, new_name, ret_type=None, args=None, user=None, state=None):
-        func_header = FunctionHeader(new_name, addr, ret_type=ret_type, args=args)
-        return state.set_function_header(func_header)
+    @fill_event
+    def fill_comment(self, addr, user=None, artifact=None, decompilation=None, **kwargs):
+        cmt: Comment = artifact
+        changed = False
+
+        if cmt.decompiled:
+            try:
+                pos = decompilation.map_addr_to_pos.get_nearest_pos(addr)
+                corrected_addr = decompilation.map_pos_to_addr.get_node(pos).tags['ins_addr']
+            # pylint: disable=broad-except
+            except Exception:
+                return False
+
+            if decompilation.stmt_comments[corrected_addr] != cmt.comment:
+                decompilation.stmt_comments[corrected_addr] = cmt.comment
+                changed = True
+        else:
+            if self._instance.kb.comments[cmt.addr] != cmt.comment:
+                self._instance.kb.comments[cmt.addr] = cmt.comment
+                changed = True
+        return changed
 
     @init_checker
-    @make_state_with_func
-    # pylint: disable=arguments-differ
-    def push_stack_variable(self, func_addr, offset, name, type_, size_, user=None, state=None):
-        sync_var = binsync.data.StackVariable(offset, StackOffsetType.ANGR, name, type_, size_, func_addr)
-        return state.set_stack_variable(sync_var, offset, func_addr)
+    @fill_event
+    def fill_stack_variable(self, func_addr, offset, user=None, artifact=None, decompilation=None, **kwargs):
+        sync_var: StackVariable = artifact
+        changed = False
+        code_var = AngrBinSyncController.find_stack_var_in_codegen(decompilation, offset)
+        if code_var:
+            code_var.name = sync_var.name
+            code_var.renamed = True
+            changed = True
+
+        return changed
 
     @init_checker
-    @make_state_with_func
-    # pylint: disable=unused-argument,arguments-differ
-    def push_comment(self, addr, cmt, decompiled, func_addr=None, user=None, state=None):
-        sync_cmt = binsync.data.Comment(addr, cmt, decompiled=decompiled)
-        return state.set_comment(sync_cmt)
+    @fill_event
+    def fill_function_header(self, func_addr, user=None, artifact=None, decompilation=None, **kwargs):
+        func_header: FunctionHeader = artifact
+        angr_func = self._instance.kb.functions[self.artifact_lifer.lower_addr(func_addr)]
+        changes = False
+        if func_header:
+            if func_header.name and func_header.name != angr_func.name:
+                angr_func.name = func_header.name
+                decompilation.cfunc.name = func_header.name
+                decompilation.cfunc.demangled_name = func_header.name
+                changes = True
+
+            if func_header.args:
+                for i, arg in func_header.args.items():
+                    if i >= len(decompilation.cfunc.arg_list):
+                        break
+                    if decompilation.cfunc.args_list[i].variable.name != arg.name:
+                        decompilation.cfunc.arg_list[i].variable.name = arg.name
+                        changes = True
+        return changes
 
     #
     # Artifact

@@ -1,17 +1,19 @@
-import datetime
 import logging
 import threading
 import time
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from functools import wraps
 from typing import Dict, Iterable, List, Optional, Union
 
 import binsync.data
 from binsync.common.artifact_lifter import ArtifactLifter
-from binsync.core.client import Client, SchedSpeed
+from binsync.core.client import Client, SchedSpeed, Scheduler, Job
+from binsync.data.type_parser import BSTypeParser, BSType
 from binsync.data import (
-    Comment, Enum, Function, GlobalVariable, State,
-    StackVariable, Struct, User, Patch,
+    State, User, Artifact,
+    Function, FunctionHeader, FunctionArgument, StackVariable,
+    Comment, GlobalVariable, Patch,
+    Enum, Struct
 )
 
 _l = logging.getLogger(name=__name__)
@@ -20,17 +22,6 @@ _l = logging.getLogger(name=__name__)
 #
 # State Checking Decorators
 #
-
-def lift_artifact(f):
-    @wraps(f)
-    def _lift_artifact(self: BinSyncController, *args, **kwargs):
-        artifact = args[0]
-        lifted_art = self.artifact_lifer.lift(artifact)
-        args = (lifted_art, ) + args[1:]
-        return f(self, *args, **kwargs)
-
-    return _lift_artifact
-
 
 def init_checker(f):
     @wraps(f)
@@ -41,74 +32,12 @@ def init_checker(f):
 
     return _init_check
 
-
-def make_and_commit_state(f):
-    """
-    Build a writeable State instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
-    Function `f` should have at least two kwargs, `user` and `state`. After executing `f`, the `state`
-    will be commited to the BS repo.
-    """
-
+def fill_event(f):
     @wraps(f)
-    def _make_and_commit_check(self, *args, **kwargs):
-        state = kwargs.pop('state', None)
-        user = kwargs.pop('user', None)
-        if state is None:
-            state = self.client.get_state(user=user)
+    def _fill_event(self: "BinSyncController", *args, **kwargs):
+        return self.fill_event_handler(f, *args, **kwargs)
 
-        kwargs['state'] = state
-        r = f(self, *args, **kwargs)
-        self.client.commit_state(state, msg=self._generate_commit_message(f, *args, **kwargs))
-        return r
-
-    return _make_and_commit_check
-
-
-def make_state_with_func(f):
-    @wraps(f)
-    def _make_state_with_func(self, *args, **kwargs):
-        state: binsync.State = kwargs.pop('state', None)
-        user = kwargs.pop('user', None)
-        if state is None:
-            state = self.client.get_state(user=user)
-
-        # a comment
-        if "func_addr" in kwargs:
-            func_addr = kwargs["func_addr"]
-            if func_addr and not state.get_function(func_addr):
-                state.functions[func_addr] = Function(func_addr, self.get_func_size(func_addr))
-        # a func_header or stack_var
-        else:
-            func_addr = args[0]
-            if not state.get_function(func_addr):
-                state.functions[func_addr] = Function(func_addr, self.get_func_size(func_addr))
-
-        kwargs['state'] = state
-        r = f(self, *args, **kwargs)
-        self.client.commit_state(state, msg=self._generate_commit_message(f, *args, **kwargs))
-        return r
-
-    return _make_state_with_func
-
-
-def make_ro_state(f):
-    """
-    Build a read-only State _instance and pass to `f` as the `state` kwarg if the `state` kwarg is None.
-    Function `f` should have have at least two kwargs, `user` and `state`.
-    """
-
-    @wraps(f)
-    def state_check(self, *args, **kwargs):
-        state = kwargs.pop('state', None)
-        user = kwargs.pop('user', None)
-        if state is None:
-            state = self.client.get_state(user=user)
-        kwargs['state'] = state
-        kwargs['user'] = user
-        return f(self, *args, **kwargs)
-
-    return state_check
-
+    return _fill_event
 
 #
 # Description Constants
@@ -116,7 +45,8 @@ def make_ro_state(f):
 
 # https://stackoverflow.com/questions/10926328
 BUSY_LOOP_COOLDOWN = 0.5
-
+GET_MANY = True
+FILL_MANY = True
 
 class SyncControlStatus:
     CONNECTED = 0
@@ -124,10 +54,18 @@ class SyncControlStatus:
     DISCONNECTED = 2
 
 
-class SyncLevel:
+class MergeLevel:
     OVERWRITE = 0
     NON_CONFLICTING = 1
     MERGE = 2
+
+
+class FakeSyncLock:
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
 
 
 #
@@ -135,6 +73,34 @@ class SyncLevel:
 #
 
 class BinSyncController:
+
+    ARTIFACT_SET_MAP = {
+        Function: State.set_function,
+        FunctionHeader: State.set_function_header,
+        StackVariable: State.set_stack_variable,
+        Comment: State.set_comment,
+        GlobalVariable: State.set_global_var,
+        Struct: State.set_struct,
+        Enum: State.set_enum
+    }
+
+    ARTIFACT_GET_MAP = {
+        Function: State.get_function,
+        (Function, GET_MANY): State.get_functions,
+        FunctionHeader: State.get_function_header,
+        (FunctionHeader, GET_MANY): State.get_function_headers,
+        StackVariable: State.get_stack_variable,
+        (StackVariable, GET_MANY): State.get_stack_variables,
+        Comment: State.get_comment,
+        (Comment, GET_MANY): State.get_func_comments,
+        GlobalVariable: State.get_global_var,
+        (GlobalVariable, GET_MANY): State.get_global_vars,
+        Struct: State.get_struct,
+        (Struct, GET_MANY): State.get_structs,
+        Enum: State.get_enum,
+        (Enum, GET_MANY): State.get_enums,
+    }
+
     """
     The BinSync Controller is the main interface for syncing with the BinSync Client which preforms git tasks
     such as pull and push. In the Controller higher-level tasks are done such as updating UI with changes
@@ -144,7 +110,7 @@ class BinSyncController:
     The client will be set on connection. The ctx_change_callback will be set by an outside UI
 
     """
-    def __init__(self, artifact_lifter, headless=False, reload_time=10):
+    def __init__(self, artifact_lifter=None, headless=False, reload_time=10):
         self.headless = headless
         self.reload_time = reload_time
         self.artifact_lifer: ArtifactLifter = artifact_lifter
@@ -159,46 +125,36 @@ class BinSyncController:
         self.last_ctx = None
 
         # settings
-        self.sync_level: int = SyncLevel.NON_CONFLICTING
+        self.merge_level: int = MergeLevel.NON_CONFLICTING
 
         # command locks
-        self.queue_lock = threading.Lock()
-        self.cmd_queue = OrderedDict()
+        self.job_scheduler = Scheduler()
+        self.sync_lock = threading.Lock()
 
         # create a pulling thread, but start on connection
         self.updater_thread = threading.Thread(target=self.updater_routine)
+        self._run_updater_threads = False
+
+        # TODO: make the initialization of this with types of decompiler
+        self.type_parser = BSTypeParser()
 
     #
     #   Multithreading updaters, locks, and evaluators
     #
 
-    def make_controller_cmd(self, cmd_func, *args, **kwargs):
-        with self.queue_lock:
-            self.cmd_queue[time.time()] = (cmd_func, args, kwargs)
+    def schedule_job(self, cmd_func, *args, blocking=False, **kwargs):
+        if blocking:
+            return self.job_scheduler.schedule_and_wait_job(
+                Job(cmd_func, *args, **kwargs)
+            )
 
-    def _eval_cmd(self, cmd):
-        # parse the command if present
-        if not cmd:
-            return
-
-        func, f_args, f_kargs = cmd[:]
-        func(*f_args, **f_kargs)
-
-    def _eval_cmd_queue(self):
-        with self.queue_lock:
-            if not self.cmd_queue:
-                return
-
-            job_count = 1
-            jobs = [
-                self.cmd_queue.popitem(last=False)[1] for _ in range(job_count)
-            ]
-
-        for job in jobs:
-            self._eval_cmd(job)
+        self.job_scheduler.schedule_job(
+            Job(cmd_func, *args, **kwargs)
+        )
+        return None
 
     def updater_routine(self):
-        while True:
+        while self._run_updater_threads:
             time.sleep(BUSY_LOOP_COOLDOWN)
 
             # validate a client is connected to this controller (may not have remote )
@@ -206,13 +162,12 @@ class BinSyncController:
                 continue
 
             # do git pull/push operations if a remote exist for the client
-            if self.client.has_remote:
-                if self.client.last_pull_attempt_ts is None:
-                    self.client.update(commit_msg="User created")
+            if self.client.last_pull_attempt_ts is None:
+                self.client.update(commit_msg="User created")
 
-                # update every reload_time
-                elif time.time() - self.client.last_pull_attempt_ts > self.reload_time:
-                    self.client.update()
+            # update every reload_time
+            elif time.time() - self.client.last_pull_attempt_ts > self.reload_time:
+                self.client.update()
 
             if not self.headless:
                 # update context knowledge every loop iteration
@@ -225,18 +180,11 @@ class BinSyncController:
                     self._last_reload = time.time()
                     self._update_ui()
 
-            # evaluate commands started by the user
-            self._eval_cmd_queue()
-
     def _update_ui(self):
         if not self.ui_callback:
             return
 
         self.ui_callback()
-
-    def start_updater_routine(self):
-        self.updater_thread.setDaemon(True)
-        self.updater_thread.start()
 
     def _check_and_notify_ctx(self):
         active_ctx = self.active_context()
@@ -245,6 +193,17 @@ class BinSyncController:
 
         self.last_ctx = active_ctx
         self.ctx_change_callback()
+
+    def start_worker_routines(self):
+        self._run_updater_threads = True
+        self.updater_thread.setDaemon(True)
+        self.updater_thread.start()
+
+        self.job_scheduler.start_worker_thread()
+
+    def stop_worker_routines(self):
+        self._run_updater_threads = False
+        self.job_scheduler.stop_worker_thread()
 
     #
     # Client Interaction Functions
@@ -256,7 +215,7 @@ class BinSyncController:
             user, path, binary_hash, init_repo=init_repo, remote_url=remote_url
         )
 
-        self.start_updater_routine()
+        self.start_worker_routines()
         return self.client.connection_warnings
 
     def check_client(self):
@@ -447,6 +406,89 @@ class BinSyncController:
         return None
 
     #
+    # Client API & Shortcuts
+    #
+
+    def lift_artifact(self, artifact: Artifact) -> Artifact:
+        return self.artifact_lifer.lift(artifact)
+
+    def lower_artifact(self, artifact: Artifact) -> Artifact:
+        return self.artifact_lifer.lower(artifact)
+
+    @init_checker
+    def get_state(self, user=None, version=None, priority=None, no_cache=False) -> State:
+        return self.client.get_state(user=user, version=version, priority=priority, no_cache=no_cache)
+
+    @init_checker
+    def pull_artifact(self, type_: Artifact, *identifiers, many=False, user=None, state=None) -> Optional[Artifact]:
+        try:
+            get_artifact_func = self.ARTIFACT_GET_MAP[type_] if not many else self.ARTIFACT_GET_MAP[(type_, GET_MANY)]
+        except KeyError:
+            _l.info(f"Attempting to pull an unsupported Artifact of type {type_} with {identifiers}")
+            return None
+
+        # assure a state exists
+        if not state:
+            state = self.get_state(user=user)
+
+        try:
+            artifact = get_artifact_func(state, *identifiers)
+        except Exception:
+            _l.warning(f"Failed to pull an supported Artifact of type {type_} with {identifiers}")
+            return None
+
+        if not artifact:
+            return artifact
+
+        return self.lower_artifact(artifact)
+
+    @init_checker
+    def push_artifact(self, artifact: Artifact, user=None, state=None, commit_msg=None, set_last_change=True, **kwargs) -> bool:
+        """
+        Every pusher artifact does three things
+        1. Get the state setter function based on the class of the Obj
+        2. Get the commit msg of the obj based on the class
+        3. Lift the obj based on the Controller lifters
+
+        @param artifact:
+        @param user:
+        @param state:
+        @return:
+        """
+        _l.debug(f"Running push now for {artifact}")
+        if not artifact:
+            return False
+
+        try:
+            set_artifact_func = self.ARTIFACT_SET_MAP[artifact.__class__]
+        except KeyError:
+            _l.info(f"Attempting to push an unsupported Artifact of type {artifact}")
+            return False
+
+        # assure state exists
+        if not state:
+            state = self.get_state(user=user)
+
+        # assure function existence for artifacts requiring a function
+        if isinstance(artifact, (FunctionHeader, StackVariable, Comment)):
+            func_addr = artifact.func_addr if hasattr(artifact, "func_addr") else artifact.addr
+            if func_addr and not state.get_function(func_addr):
+                self.push_artifact(Function(func_addr, self.get_func_size(func_addr)), state=state, set_last_change=set_last_change)
+
+        # lift artifact into standard BinSync format
+        artifact = self.lift_artifact(artifact)
+
+        # set the artifact in the target state, likely master
+        _l.debug(f"Setting an artifact now into {state} as {artifact}")
+        was_set = set_artifact_func(state, artifact, set_last_change=set_last_change)
+
+        # TODO: make was_set reliable
+        _l.debug(f"{state} committing now with {commit_msg or artifact.commit_msg}")
+        self.client.commit_state(state, msg=commit_msg or artifact.commit_msg)
+
+        return was_set
+
+    #
     # Fillers:
     # A filler function is generally responsible for pulling down data from a specific user state
     # and reflecting those changes in decompiler view (like the text on the screen). Normally, these changes
@@ -455,34 +497,97 @@ class BinSyncController:
     # cause a save of the BS state.
     #
 
-    @init_checker
-    @make_ro_state
-    def fill_struct(self, struct_name, user=None, state=None):
+    def fill_event_handler(self, filler_func, *identifiers,
+                           artifact=None, user=None, state=None, master_state=None, merge_level=None, blocking=False,
+                           commit_msg=None,
+                           **kwargs
+                           ):
         """
-        Fill a single specific struct from the user
+        fill_event_handler is the function called before every `fill_<artifact>` function. This handler is responsible
+        for assuring a variety of things exist for subsequent call to `fill_<artifact>`.
+
+        @param filler_func:
+        @param identifiers:
+        @param artifact:
+        @param user:
+        @param state:
+        @param master_state:
+        @param merge_level:
+        @param blocking:
+        @param kwargs:
+        @return:
+        """
+
+        ARTIFACT_FILL_MAP = {
+            self.fill_function.__name__: Function,
+            self.fill_function_header.__name__: FunctionHeader,
+            self.fill_stack_variable.__name__: StackVariable,
+            self.fill_comment.__name__: Comment,
+            self.fill_global_var.__name__: GlobalVariable,
+            self.fill_struct.__name__: Struct,
+            self.fill_enum.__name__: Enum
+        }
+
+        state = state if state is not None else self.get_state(user=user, priority=SchedSpeed.FAST)
+        master_state = master_state if master_state is not None else self.get_state(priority=SchedSpeed.FAST)
+        artifact_type = ARTIFACT_FILL_MAP.get(filler_func.__name__, None)
+        if not artifact_type:
+            _l.warning(f"Attempting to Fill an unknown type! Stopping Fill...")
+            return None
+
+        art_getter = self.ARTIFACT_GET_MAP.get(artifact_type)
+        master_artifact = artifact if artifact else self.lower_artifact(art_getter(master_state, *identifiers))
+        merged_artifact = self.merge_artifacts(
+            master_artifact,  self.lower_artifact(art_getter(state, *identifiers)),
+            merge_level=merge_level, master_state=master_state
+        )
+
+        lock = self.sync_lock if not self.sync_lock.locked() else FakeSyncLock()
+        with lock:
+            fill_changes = filler_func(
+                self,
+                *identifiers,
+                artifact=merged_artifact, user=user, state=state, master_state=master_state, merge_level=merge_level,
+                **kwargs
+            )
+
+        _l.info(
+            f"Successfully synced new changes from {state.user} for {merged_artifact}" if fill_changes
+            else f"No new changes or failed to sync from {state.user} for {merged_artifact}"
+        )
+
+        if blocking:
+            self.push_artifact(merged_artifact, state=master_state, set_last_change=False, commit_msg=commit_msg)
+        else:
+            self.schedule_job(
+                self.push_artifact,
+                merged_artifact,
+                state=master_state,
+                set_last_change=False,
+                commit_msg=commit_msg
+            )
+
+        return fill_changes
+
+
+    @init_checker
+    @fill_event
+    def fill_struct(self, struct_name, header=True, members=True, artifact=None, **kwargs):
+        """
 
         @param struct_name:
         @param user:
         @param state:
+        @param header:
+        @param members:
         @return:
         """
-        raise NotImplementedError
+        _l.debug(f"Fill Struct is not implemented in your decompiler.")
+        return False
 
     @init_checker
-    @make_ro_state
-    def fill_structs(self, user=None, state=None):
-        """
-        Grab all the structs from a specified user, then fill them locally
-
-        @param user:
-        @param state:
-        @return:
-        """
-        raise NotImplementedError
-
-    @init_checker
-    @make_ro_state
-    def fill_global_var(self, var_addr, user=None, state=None):
+    @fill_event
+    def fill_global_var(self, var_addr, user=None, artifact=None, **kwargs):
         """
         Grab a global variable for a specified address and fill it locally
 
@@ -491,19 +596,13 @@ class BinSyncController:
         @param state:
         @return:
         """
-        raise NotImplementedError
+        _l.debug(f"Fill Global Var is not implemented in your decompiler.")
+        return False
+
 
     @init_checker
-    @make_ro_state
-    def fill_global_vars(self, user=None, state=None):
-        for off, gvar in state.global_vars.items():
-            self.fill_global_var(off, user=user, state=state)
-
-        return True
-
-    @init_checker
-    @make_ro_state
-    def fill_enum(self, enum_name, user=None, state=None):
+    @fill_event
+    def fill_enum(self, enum_name, user=None, artifact=None, **kwargs):
         """
         Grab an enum and fill it locally
 
@@ -512,11 +611,93 @@ class BinSyncController:
         @param state:
         @return:
         """
-        pass
+        _l.debug(f"Fill Enum is not implemented in your decompiler.")
+        return False
+
+    @fill_event
+    def fill_stack_variable(self, func_addr, offset, user=None, artifact=None, **kwargs):
+        _l.debug(f"Fill Stack Var is not implemented in your decompiler.")
+        return False
+
+    @fill_event
+    def fill_function_header(self, func_addr, user=None, artifact=None, **kwargs):
+        _l.debug(f"Fill Function Header is not implemented in your decompiler.")
+        return False
+
+    @fill_event
+    def fill_comment(self, addr, user=None, artifact=None, **kwargs):
+        _l.debug(f"Fill Comments is not implemented in your decompiler.")
+        return False
 
     @init_checker
-    @make_ro_state
-    def fill_enums(self, user=None, state=None):
+    @fill_event
+    def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
+        """
+        Grab all relevant information from the specified user and fill the @func_addr.
+        """
+        dec_func: Function = self.function(func_addr)
+        if not dec_func:
+            _l.warning(f"The function at {hex(func_addr)} does not exist in your decompiler. Stopping sync.")
+            return False
+
+        master_func: Function = artifact
+        changes = False
+
+        # function header
+        if master_func.header and master_func.header != dec_func.header:
+            # type is user made (a struct)
+            changes |= self.import_user_defined_type(master_func.header.ret_type, **kwargs)
+            changes |= self.fill_function_header(func_addr, artifact=master_func.header, **kwargs)
+
+        # stack vars
+        if master_func.stack_vars and master_func.stack_vars != dec_func.stack_vars:
+            for offset, sv in master_func.stack_vars.items():
+                dec_sv = dec_func.stack_vars.get(offset, None)
+                if not dec_sv or sv == dec_sv:
+                    _l.info(f"Decompiler stack var not found at {offset}")
+                    continue
+
+                changes |= self.import_user_defined_type(sv.type, **kwargs)
+                print(f"Doing a fill now for {sv}")
+                changes |= self.fill_stack_variable(func_addr, dec_sv.stack_offset, artifact=sv, **kwargs)
+
+        # comments
+        for addr, cmt in kwargs['state'].get_func_comments(func_addr).items():
+            changes |= self.fill_comment(addr, artifact=cmt, **kwargs)
+
+        return changes
+
+    @init_checker
+    def fill_functions(self, user=None, **kwargs):
+        change = False
+        master_state, state = self.get_master_and_user_state(user=user, **kwargs)
+        for addr, func in state.functions.items():
+            change |= self.fill_function(addr, state=state, master_state=master_state)
+
+        return change
+
+    @init_checker
+    def fill_structs(self, user=None, **kwargs):
+        """
+        Grab all the structs from a specified user, then fill them locally
+
+        @param user:
+        @param state:
+        @return:
+        """
+        changes = False
+        # only do struct headers for circular references
+        master_state, state = self.get_master_and_user_state(user=user, **kwargs)
+        for name, struct in state.structs.items():
+            changes |= self.fill_struct(name, user=user, state=state, master_state=master_state, members=False)
+
+        for name, struct in state.structs.items():
+            changes |= self.fill_struct(name, user=user, state=state, master_state=master_state, header=False)
+
+        return changes
+
+    @init_checker
+    def fill_enums(self, user=None, **kwargs):
         """
         Grab all enums and fill it locally
 
@@ -524,49 +705,47 @@ class BinSyncController:
         @param state:
         @return:
         """
-        pass
+        changes = False
+        master_state, state = self.get_master_and_user_state(user=user, **kwargs)
+        for name, enum in state.enums.items():
+            changes |= self.fill_enum(name, user=user, state=state, master_state=master_state)
+
+        return changes
 
     @init_checker
-    @make_ro_state
-    def fill_function(self, func_addr, user=None, state=None, manual=False):
-        """
-        Grab all relevant information from the specified user and fill the @func_adrr.
-        """
-        raise NotImplementedError
+    def fill_global_vars(self, user=None, **kwargs):
+        changes = False
+        master_state, state = self.get_master_and_user_state(user=user, **kwargs)
+        for off, gvar in state.global_vars.items():
+            changes |= self.fill_global_var(off, user=user, state=state, master_state=master_state)
 
-    def fill_functions(self, user=None, state=None):
-        change = False
-        for addr, func in state.functions.items():
-            change |= self.fill_function(addr, user=user, state=state)
-
-        return change
+        return changes
 
     @init_checker
-    @make_ro_state
-    def fill_all(self, user=None, state=None):
+    def fill_all(self, user=None, **kwargs):
         """
         Connected to the Sync All action:
         syncs in all the data from the targeted user
 
-        TODO:
-        - add support for enums
-
         @param user:
         @param state:
-        @param no_functions:
         @return:
         """
         _l.info(f"Filling all data from user {user}...")
 
+        master_state, state = self.get_master_and_user_state(user=user, **kwargs)
         fillers = [
-            self.fill_structs, self.fill_enums, self.fill_global_vars
+            self.fill_structs, self.fill_enums, self.fill_global_vars, self.fill_functions
         ]
 
+        changes = False
         for filler in fillers:
-            filler(user=user, state=state)
+            changes |= filler(user=user, state=state, master_state=master_state)
+
+        return changes
 
     @init_checker
-    def magic_fill(self, preference_user=None):
+    def magic_fill(self, preference_user=None, target_artifacts=None):
         """
         Traverses all the data in the BinSync repo, starting with an optional preference user,
         and sequentially merges that data together in a non-conflicting way. This also means that the prefrence
@@ -574,145 +753,64 @@ class BinSyncController:
 
         This process supports: functions (header, stack vars), structs, and global vars
         TODO:
-        - support for comments
         - support for enums
         - refactor fill_function to stop attempting to set master state after we do
         -
 
         @param preference_user:
+        @param target_artifacts:
         @return:
         """
+        _l.info(f"Staring a Magic Sync with a preference for {preference_user}")
 
-        _l.info(f"Staring a magic sync with a preference for {preference_user}")
+        if self.merge_level == MergeLevel.OVERWRITE:
+            _l.warning(f"Using Magic Sync with OVERWRITE is not supported, switching to NON-CONFLICTING")
+
         # re-order users for the prefered user to be at the front of the queue (if they exist)
         all_users = list(self.usernames(priority=SchedSpeed.FAST))
         preference_user = preference_user if preference_user else self.client.master_user
+        master_state = self.client.get_state(user=self.client.master_user, priority=SchedSpeed.FAST)
+        users_state_map = {
+            user: self.get_state(user=user, priority=SchedSpeed.FAST)
+            for user in all_users
+        }
         all_users.remove(preference_user)
-        master_state = self.client.get_state(user=self.client.master_user, priority=SchedSpeed.FAST)
 
-        #
-        # structs
-        #
+        target_artifacts = target_artifacts or {
+            Struct: self.fill_struct,
+            Comment: lambda *x, **y: None,
+            Function: self.fill_function,
+            GlobalVariable: self.fill_global_var,
+            Enum: self.fill_enum
+        }
 
-        _l.info(f"Magic Syncing Structs...")
-        pref_state = self.client.get_state(user=preference_user, priority=SchedSpeed.FAST)
-        for struct_name in self.get_all_changed_structs():
-            _l.info(f"Looking at strunct {struct_name}")
-            pref_struct = pref_state.get_struct(struct_name)
-            for user in all_users:
-                user_state = self.client.get_state(user=user, priority=SchedSpeed.FAST)
-                user_struct = user_state.get_struct(user)
+        for artifact_type, filler_func in target_artifacts.items():
+            _l.info(f"Magic Syncing artifacts of type {artifact_type.__name__} now...")
+            pref_state = users_state_map[preference_user]
+            for identifier in self.changed_artifacts_of_type(artifact_type, users=all_users + [preference_user], states=users_state_map):
+                pref_art = self.pull_artifact(artifact_type, identifier, state=pref_state)
+                for user in all_users:
+                    user_state = users_state_map[user]
+                    user_art = self.pull_artifact(artifact_type, identifier, state=user_state)
 
-                if not user_struct:
-                    continue
+                    if not user_art:
+                        continue
 
-                if not pref_struct:
-                    pref_struct = user_struct.copy()
-                    continue
+                    if not pref_art:
+                        pref_art = user_art.copy()
 
-                pref_struct = Struct.from_nonconflicting_merge(pref_struct, user_struct)
-                pref_struct.last_change = None
+                    pref_art = pref_art.nonconflict_merge(user_art)
+                    pref_art.last_change = None
 
-            if pref_struct:
-                pref_struct = self.artifact_lifer.lift(pref_struct)
-                master_state.structs[struct_name] = pref_struct
+                try:
+                    filler_func(
+                        identifier, artifact=pref_art, state=master_state,  commit_msg=f"Magic Synced {pref_art}",
+                        merge_level=MergeLevel.NON_CONFLICTING
+                    )
+                except Exception as e:
+                    _l.info(f"Banishing exception: {e}")
 
-            self.fill_struct(struct_name, state=master_state)
-        self.client.commit_state(master_state, msg="Magic Sync Structs Merged")
-
-        #
-        # functions
-        #
-
-        master_state = self.client.get_state(user=self.client.master_user, priority=SchedSpeed.FAST)
-
-        _l.info(f"Magic Syncing Functions...")
-        pref_state = self.client.get_state(user=preference_user, priority=SchedSpeed.FAST)
-        for func_addr in self.get_all_changed_funcs():
-            _l.info(f"Looking at func {hex(func_addr)}")
-            pref_func = pref_state.get_function(addr=func_addr)
-            for user in all_users:
-                user_state = self.client.get_state(user=user, priority=SchedSpeed.FAST)
-                user_func = user_state.get_function(func_addr)
-
-                if not user_func:
-                    continue
-
-                if not pref_func:
-                    pref_func = user_func.copy()
-                    continue
-
-                pref_func = Function.from_nonconflicting_merge(pref_func, user_func)
-                pref_func.last_change = None
-
-            pref_func = self.artifact_lifer.lift(pref_func)
-            master_state.functions[pref_func.addr] = pref_func
-            self.fill_function(pref_func.addr, state=master_state)
-
-        self.client.commit_state(master_state, msg="Magic Sync Funcs Merged")
-
-        #
-        # global vars
-        #
-
-        _l.info(f"Magic Syncing Global Vars...")
-        master_state = self.client.get_state(user=self.client.master_user, priority=SchedSpeed.FAST)
-        pref_state = self.client.get_state(user=preference_user, priority=SchedSpeed.FAST)
-        for gvar_addr in self.get_all_changed_global_vars():
-            pref_gvar = pref_state.get_global_var(gvar_addr)
-            for user in all_users:
-                user_state = self.client.get_state(user=user, priority=SchedSpeed.FAST)
-                user_gvar = user_state.get_global_var(gvar_addr)
-
-                if not user_gvar:
-                    continue
-
-                if not pref_gvar:
-                    pref_gvar = user_gvar.copy()
-                    continue
-
-                pref_gvar = GlobalVariable.from_nonconflicting_merge(pref_gvar, user_gvar)
-                pref_gvar.last_change = None
-
-            pref_gvar = self.artifact_lifer.lift(pref_gvar)
-            master_state.global_vars[pref_gvar.addr] = pref_gvar
-            self.fill_global_var(pref_gvar.addr, state=master_state)
-
-        self.client.commit_state(master_state, msg="Magic Sync Global Vars Merged")
         _l.info(f"Magic Syncing Completed!")
-    #
-    # Pushers
-    #
-
-    @init_checker
-    @make_and_commit_state
-    def push_comment(self, *args, user=None, state=None, **kwargs):
-        raise NotImplementedError
-
-    @init_checker
-    @make_state_with_func
-    def push_function_header(self, *args, user=None, state=None, **kwargs):
-        raise NotImplementedError
-
-    @init_checker
-    @make_state_with_func
-    def push_stack_variable(self, *args, user=None, state=None, **kwargs):
-        raise NotImplementedError
-
-    @init_checker
-    @make_and_commit_state
-    def push_struct(self, *args, user=None, state=None, **kwargs):
-        raise NotImplementedError
-
-    @init_checker
-    @make_and_commit_state
-    def push_global_var(self, *args, user=None, state=None, **kwargs):
-        raise NotImplementedError
-
-    @init_checker
-    @make_and_commit_state
-    def push_enum(self, *args, user=None, state=None, **kwargs):
-        raise NotImplementedError
 
     #
     # Force Push
@@ -736,11 +834,9 @@ class BinSyncController:
             return False
 
         master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
-        func = self.artifact_lifer.lift(func)
-        master_state.functions[func.addr] = func
-        self.client.commit_state(master_state, msg=f"Force pushed function {hex(func.addr)}")
-        _l.info(f"Pushing function {hex(addr)} was Successful")
-        return True
+        pushed = self.push_artifact(func, state=master_state, commit_msg=f"Forced pushed function {func}")
+        return pushed
+
 
     @init_checker
     def force_push_global_artifact(self, lookup_item):
@@ -759,176 +855,106 @@ class BinSyncController:
 
         master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
         global_art = self.artifact_lifer.lift(global_art)
-        if isinstance(global_art, GlobalVariable):
-            master_state.global_vars[global_art.addr] = global_art
-        elif isinstance(global_art, Struct):
-            master_state.structs[global_art.name] = global_art
-        elif isinstance(global_art, Enum):
-            master_state.enums[global_art.name] = global_art
-        else:
-            return False
-
-        global_art_reference = global_art.name or hex(global_art.addr)
-        self.client.commit_state(
-            master_state, msg=f"Force pushed global artifact {global_art_reference}"
-        )
-        _l.info(f"Pushing global artifact {global_art_reference} was Successful")
-        return True
-
-    #
-    # Pullers
-    #
-
-    @init_checker
-    @make_ro_state
-    def pull_function(self, func_addr, user=None, state=None) -> Optional[Function]:
-        if not func_addr:
-            return None
-
-        return state.get_function(func_addr)
-
-    @init_checker
-    @make_ro_state
-    def pull_stack_variables(self, func_addr, user=None, state=None) -> Dict[int, StackVariable]:
-        return state.get_stack_variables(func_addr)
-
-    @init_checker
-    @make_ro_state
-    def pull_stack_variable(self, func_addr, offset, user=None, state=None) -> StackVariable:
-        return state.get_stack_variable(func_addr, offset)
-
-    @init_checker
-    @make_ro_state
-    def pull_func_comments(self, func_addr, user=None, state=None) -> Dict[int, Comment]:
-        return state.get_func_comments(func_addr)
-
-    @init_checker
-    @make_ro_state
-    def pull_comment(self, addr, user=None, state=None) -> Comment:
-        return state.get_comment(addr)
-
-    @init_checker
-    @make_ro_state
-    def pull_comments(self, user=None, state=None) -> Comment:
-        return state.comments()
-
-    @init_checker
-    @make_ro_state
-    def pull_struct(self, struct_name, user=None, state=None) -> Struct:
-        return state.get_struct(struct_name)
-
-    @init_checker
-    @make_ro_state
-    def pull_structs(self, user=None, state=None) -> List[Struct]:
-        return state.get_structs()
-
-    @init_checker
-    @make_ro_state
-    def pull_global_var(self, addr, user=None, state=None) -> GlobalVariable:
-        return state.get_global_var(addr)
-
-    @init_checker
-    @make_ro_state
-    def pull_enum(self, enum_name, user=None, state=None) -> Enum:
-        return state.get_enum(enum_name)
-
-    @init_checker
-    @make_ro_state
-    def pull_enums(self, user=None, state=None) -> List[Enum]:
-        return state.get_enums()
+        pushed = self.push_artifact(global_art, state=master_state, commit_msg=f"Force pushed {global_art}")
+        return pushed
 
     #
     # Utils
     #
 
-    def generate_func_for_sync_level(self, sync_func: Function) -> Function:
-        if self.sync_level == SyncLevel.OVERWRITE:
-            return sync_func
+    def merge_artifacts(self, art1: Artifact, art2: Artifact, merge_level=None, **kwargs):
+        if merge_level is None:
+            merge_level = self.merge_level
 
-        master_state = self.client.get_state()
-        master_func = master_state.get_function(sync_func.addr)
-        if not master_func:
-            return sync_func
+        if art2 is None:
+            return art1.copy()
 
-        if self.sync_level == SyncLevel.NON_CONFLICTING:
-            new_func = Function.from_nonconflicting_merge(master_func, sync_func)
+        if merge_level == MergeLevel.OVERWRITE or (not art1) or (art1 == art2):
+            return art2.copy() if art2 else None
 
-        elif self.sync_level == SyncLevel.MERGE:
+        if merge_level == MergeLevel.NON_CONFLICTING:
+            merge_art = art1.nonconflict_merge(art2, **kwargs)
+
+        elif merge_level == MergeLevel.MERGE:
             _l.warning("Manual Merging is not currently supported, using non-conflict syncing...")
-            new_func = Function.from_nonconflicting_merge(master_func, sync_func)
+            merge_art = art1.nonconflict_merge(art2, **kwargs)
 
         else:
             raise Exception("Your BinSync Client has an unsupported Sync Level activated")
 
-        return new_func
+        return merge_art
 
-    @staticmethod
-    def get_default_type_str(size):
-        if size == 1:
-            return "unsigned char"
-        elif size == 2:
-            return "unsigned short"
-        elif size == 4:
-            return "unsigned int"
-        elif size == 8:
-            return "unsigned long long"
-        else:
-            raise Exception("Unable to decide default type string!")
+    def changed_artifacts_of_type(self, type_: Artifact, users=[], states={}):
+        prop_map = {
+            Function: "functions",
+            Comment: "comments",
+            GlobalVariable: "global_vars",
+            Struct: "structs",
+            Enum: "enums"
+        }
 
-    def _generate_commit_message(self, pusher, *args, **kwargs):
-        from_user = kwargs.get("user", None)
-        msg = "Synced " if from_user else "Updated "
+        try:
+            prop_name = prop_map[type_]
+        except KeyError:
+            _l.warning(f"Attempted to get changed artifacts of type {type_} which is unsupported")
+            return set()
 
-        if pusher.__qualname__ == self.push_function_header.__qualname__:
-            addr = args[0]
-            sync_type = "function"
-            sync_data = hex(addr)
-        elif pusher.__qualname__ == self.push_comment.__qualname__:
-            addr = args[0]
-            sync_type = "comment"
-            sync_data = hex(addr)
-        elif pusher.__qualname__ == self.push_stack_variable.__qualname__:
-            func_addr = args[0]
-            offset = args[1]
-            sync_type = "stack_var"
-            sync_data = f"{hex(offset)}@{hex(func_addr)}"
-        elif pusher.__qualname__ == self.push_struct.__qualname__:
-            struct_name = args[0].name
-            sync_type = "struct"
-            sync_data = struct_name
-        else:
-            sync_type = ""
-            sync_data = ""
+        known_arts = set()
+        for username in users:
+            state = states[username]
+            artifact_dict: Dict = getattr(state, prop_name)
+            for identifier in artifact_dict:
+                known_arts.add(identifier)
 
-        msg += f"{sync_type}:{sync_data}"
-        msg += f"from {from_user}" if from_user else ""
-        if not sync_data:
-            msg = "Generic Update"
-        return msg
+        return known_arts
 
-    def get_all_changed_funcs(self):
-        known_funcs = set()
-        for username in self.usernames(priority=SchedSpeed.FAST):
-            state = self.client.get_state(user=username, priority=SchedSpeed.FAST)
-            for func_addr in state.functions:
-                known_funcs.add(func_addr)
+    def type_is_user_defined(self, type_str, state=None):
+        if not type_str:
+            return None
 
-        return known_funcs
+        type_: BSType = self.type_parser.parse_type(type_str)
+        if not type_:
+            # it was not parseable
+            return None
 
-    def get_all_changed_structs(self):
-        known_structs = set()
-        for username in self.usernames(priority=SchedSpeed.FAST):
-            state = self.client.get_state(user=username, priority=SchedSpeed.FAST)
-            for struct_name in state.structs:
-                known_structs.add(struct_name)
+        # type is known and parseable
+        if not type_.is_unknown:
+            return None
 
-        return known_structs
+        base_type_str = type_.base_type.type_str
+        return base_type_str if base_type_str in state.structs.keys() else None
 
-    def get_all_changed_global_vars(self):
-        known_gvars = set()
-        for username in self.usernames(priority=SchedSpeed.FAST):
-            state = self.client.get_state(user=username, priority=SchedSpeed.FAST)
-            for offset in state.global_vars:
-                known_gvars.add(offset)
+    def import_user_defined_type(self, type_str, **kwargs):
+        state = kwargs.pop('state')
+        master_state = kwargs['master_state']
+        base_type_str = self.type_is_user_defined(type_str, state=state)
+        if not base_type_str:
+            return False
 
-        return known_gvars
+        struct: Struct = state.get_struct(base_type_str)
+        if not struct:
+            return False
+
+        nested_undefined_structs = False
+        for off, memb in struct.struct_members.items():
+            user_type = self.type_is_user_defined(memb.type, state=state)
+            if user_type and user_type not in master_state.structs.keys():
+                # should we ever happen to have a struct with a nested type that is
+                # also a struct that we don't have in our master_state, then we give up
+                # and attempt to fill all structs to resolve type issues
+                nested_undefined_structs = True
+                _l.info(f"Nested undefined structs detected, pulling all structs from {state.user}")
+                break
+
+        changes = self.fill_struct(base_type_str, state=state, **kwargs) if not nested_undefined_structs \
+            else self.fill_structs(state=state, **kwargs)
+        return changes
+
+    def get_master_and_user_state(self, user=None, **kwargs):
+        state = kwargs.get("state", None) \
+            or self.get_state(user=user, priority=SchedSpeed.FAST)
+
+        master_state = kwargs.get("master_state", None) \
+            or self.get_state(priority=SchedSpeed.FAST)
+
+        return master_state, state

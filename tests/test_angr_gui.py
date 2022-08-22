@@ -32,14 +32,17 @@ BINSYNC_RELOAD_TIME = 10
 # Test Utilities
 #
 
-def config_and_connect(binsync_plugin, username, sync_dir_path):
-    config = SyncConfig(binsync_plugin.controller, open_magic_sync=False)
+
+def config_and_connect(binsync_plugin, username, sync_dir_path, init=False):
+    config = SyncConfig(binsync_plugin.controller, open_magic_sync=False, load_config=not init)
     config._user_edit.setText("")
     config._repo_edit.setText("")
     QTest.keyClicks(config._user_edit, username)
     QTest.keyClicks(config._repo_edit, sync_dir_path)
     # always init for first user
-    QTest.mouseClick(config._initrepo_checkbox, Qt.MouseButton.LeftButton)
+    if init:
+        QTest.mouseClick(config._initrepo_checkbox, Qt.MouseButton.LeftButton)
+
     QTest.mouseClick(config._ok_button, Qt.MouseButton.LeftButton)
 
 
@@ -162,7 +165,7 @@ class TestBinSyncPluginGUI(unittest.TestCase):
         """
         time.sleep(BINSYNC_RELOAD_TIME + BINSYNC_RELOAD_TIME // 2)
         control_panel = binsync_plugin.control_panel_view.control_panel
-        top_change_func = control_panel._func_table.items[0]
+        top_change_func = list(control_panel._func_table.items.values())[0]
         top_change_activity = control_panel._activity_table.items[0]
         self.assertEqual(top_change_func.user, user)
         if func_name is not None:
@@ -187,7 +190,7 @@ class TestBinSyncPluginGUI(unittest.TestCase):
 
             # find the binsync plugin and connect
             binsync_plugin = get_binsync_am_plugin(main)
-            config_and_connect(binsync_plugin, user_1, sync_dir_path)
+            config_and_connect(binsync_plugin, user_1, sync_dir_path, init=True)
             self.assertEqual(binsync_plugin.controller.status(), SyncControlStatus.CONNECTED_NO_REMOTE)
             self.assertEqual(binsync_plugin.controller.client.master_user, user_1)
 
@@ -222,6 +225,10 @@ class TestBinSyncPluginGUI(unittest.TestCase):
 
             # check to ensure function name synced properly
             self.assertEqual(func.name, new_function_name)
+            
+            controller = binsync_plugin.controller
+            controller.stop_worker_routines()
+            time.sleep(1)
 
             app.exit(0)
 
@@ -242,7 +249,7 @@ class TestBinSyncPluginGUI(unittest.TestCase):
 
             # find the binsync plugin and connect
             binsync_plugin = get_binsync_am_plugin(main)
-            config_and_connect(binsync_plugin, user_1, sync_dir_path)
+            config_and_connect(binsync_plugin, user_1, sync_dir_path, init=True)
             self.assertEqual(binsync_plugin.controller.status(), SyncControlStatus.CONNECTED_NO_REMOTE)
             self.assertEqual(binsync_plugin.controller.client.master_user, user_1)
 
@@ -278,17 +285,21 @@ class TestBinSyncPluginGUI(unittest.TestCase):
 
             # assure functions did not change
             func_table = control_panel._func_table
-            self.assertIsNotNone(func_table.items[0].name)
+            self.assertIsNotNone(list(func_table.items.values())[0].name)
 
             # make a click event to sync new data from the first row in the table
             self.click_sync_menu(control_panel._activity_table, "binsync_activity_table_context_menu")
 
             # assure function name did not change
-            self.assertEqual(func_table.items[0].name, "")
+            self.assertEqual(list(func_table.items.values())[0].name, "")
             self.assertEqual(func.name, old_name)
 
             # assure stack variable synced properly
             self.assertEqual(self.get_stack_variable(main, func, var_offset, var_man).name, new_var_name)
+
+            controller = binsync_plugin.controller
+            controller.stop_worker_routines()
+            time.sleep(1)
 
             app.exit(0)
 

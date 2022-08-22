@@ -35,7 +35,7 @@ class ArtifactLifter:
         return self.lift_type(type_str)
 
     def lower_type_str(self, type_str):
-        return self.lower_type_str(type_str)
+        return self.lower_type(type_str)
 
     #
     # Override Mandatory Funcs
@@ -49,7 +49,7 @@ class ArtifactLifter:
         #raise NotImplementedError
         print("lift addr called")
 
-    def lift_stack_offset(self, offset: int) -> int:
+    def lift_stack_offset(self, offset: int, func_addr: int) -> int:
         #raise NotImplementedError
         print("lift stack off called")
 
@@ -61,7 +61,7 @@ class ArtifactLifter:
         #raise NotImplementedError
         print("lower addr called")
 
-    def lower_stack_offset(self, offset: int) -> int:
+    def lower_stack_offset(self, offset: int, func_addr: int) -> int:
         #raise NotImplementedError
         print("lower stack off called")
 
@@ -86,7 +86,11 @@ class ArtifactLifter:
                     continue
 
                 lifting_func = getattr(self, f"{mode}_{attr}")
-                setattr(lifted_art, attr, lifting_func(curr_val))
+
+                if attr == "stack_offset":
+                    setattr(lifted_art, attr, lifting_func(curr_val, lifted_art.addr))
+                else:
+                    setattr(lifted_art, attr, lifting_func(curr_val))
 
         # recursively correct nested artifacts
         for attr in lifted_art.__slots__:

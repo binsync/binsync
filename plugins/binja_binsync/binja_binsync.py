@@ -1,4 +1,5 @@
 import threading
+import re
 
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtCore import Qt
@@ -27,7 +28,12 @@ from binsync.common.ui.control_panel import ControlPanel
 from .ui_tools import find_main_window, BinjaDockWidget, create_widget
 from .controller import BinjaBinSyncController
 from copy import deepcopy
-from binsync import data
+from binsync.data import (
+    State, User, Artifact,
+    Function, FunctionHeader, FunctionArgument, StackVariable,
+    Comment, GlobalVariable, Patch,
+    Enum, Struct
+)
 
 l = logging.getLogger(__name__)
 
@@ -73,11 +79,11 @@ def conv_func_binja_to_binsync(binja_func):
     #
     
     args = {
-        i: data.FunctionArgument(i, parameter.name, parameter.type.get_string_before_name(), parameter.type.width)
+        i: FunctionArgument(i, parameter.name, parameter.type.get_string_before_name(), parameter.type.width)
         for i, parameter in enumerate(binja_func.parameter_vars)
     }
 
-    sync_header = data.FunctionHeader(
+    sync_header = FunctionHeader(
         binja_func.name,
         binja_func.start,
         ret_type=binja_func.return_type.get_string_before_name(),
@@ -113,7 +119,7 @@ def conv_func_binja_to_binsync(binja_func):
     }
 
     size = binja_func.address_ranges[0].end - binja_func.address_ranges[0].start
-    return data.Function(binja_func.start, size, header=sync_header, stack_vars=bs_stack_vars)
+    return Function(binja_func.start, size, header=sync_header, stack_vars=bs_stack_vars)
 
 
 class FunctionNotification(BinaryDataNotification):
@@ -125,6 +131,9 @@ class FunctionNotification(BinaryDataNotification):
         self._function_saved = None
 
     def function_updated(self, view, func_):
+        if self._controller.sync_lock.locked():
+            return
+
         # Service requested function only
         if self._function_requested == func_.start:
             #print(f"[BinSync] Servicing function: {func_.start:#x}")
@@ -143,13 +152,11 @@ class FunctionNotification(BinaryDataNotification):
 
             # Check return type
             if self._function_saved.header.ret_type != bs_func.header.ret_type:
-                self._controller.make_controller_cmd(
-                    self._controller.push_function_header,
-                    bs_func.addr,
+                self._controller.schedule_job(
+                    self._controller.push_artifact,
                     bs_func.header
                 )
                 
-
             # Check arguments
             arg_changed = False
             for key, old_arg in self._function_saved.header.args.items():
@@ -168,9 +175,8 @@ class FunctionNotification(BinaryDataNotification):
                     break
 
             if arg_changed:
-                self._controller.make_controller_cmd(
-                    self._controller.push_function_header,
-                    bs_func.addr,
+                self._controller.schedule_job(
+                    self._controller.push_artifact,
                     bs_func.header
                 )
 
@@ -181,31 +187,33 @@ class FunctionNotification(BinaryDataNotification):
             for off, var in self._function_saved.stack_vars.items():
                 if off in bs_func.stack_vars and var != bs_func.stack_vars[off]:
                     new_var = bs_func.stack_vars[off]
-                    self._controller.make_controller_cmd(
-                        self._controller.push_stack_variable,
-                        bs_func.addr,
-                        off,
-                        new_var.name,
-                        new_var.type,
-                        new_var.size
+                    if re.match(r"var_\d+[_\d+]{0,1}", new_var.name) \
+                            or new_var.name in {'__saved_rbp', '__return_addr',}:
+                        continue
+
+                    self._controller.schedule_job(
+                        self._controller.push_artifact,
+                        new_var
                     )
 
             self._function_saved = None
 
     def function_update_requested(self, view, func):
-        if not self._controller.sync_lock and self._function_requested is None:
+        if not self._controller.sync_lock.locked() and self._function_requested is None:
             #print(f"[BinSync] Function requested {func.start:#x}")
             self._function_requested = func.start
             self._function_saved = conv_func_binja_to_binsync(func)
     
     def symbol_updated(self, view, sym):
+        if self._controller.sync_lock.locked():
+            return
+
         if sym.type == SymbolType.FunctionSymbol:
             func = view.get_function_at(sym.address)
             bs_func = conv_func_binja_to_binsync(func)
-            self._controller.make_controller_cmd(
-                self._controller.push_function_header,
-                sym.address,
-                data.FunctionHeader(sym.name, sym.address, ret_type=bs_func.header.ret_type, args=bs_func.header.args)
+            self._controller.schedule_job(
+                self._controller.push_artifact,
+                FunctionHeader(sym.name, sym.address, ret_type=bs_func.header.ret_type, args=bs_func.header.args)
             )
 
         elif sym.type == SymbolType.DataSymbol:
@@ -288,7 +296,7 @@ class BinjaPlugin:
         controller_bv = self.controllers[bv]
 
         # exit early if we already configed
-        if controller_bv.bv is not None:
+        if controller_bv.bv is not None or bv is None:
             return
         controller_bv.bv = bv
 

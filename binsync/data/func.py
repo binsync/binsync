@@ -138,6 +138,24 @@ class FunctionHeader(Artifact):
         fh.args = {k: v.copy() for k, v in self.args.items()}
         return fh
 
+    def nonconflict_merge(self, fh2: "FunctionHeader", **kwargs):
+        fh1: "FunctionHeader" = self.copy()
+        if not fh2 or not isinstance(fh2, FunctionHeader):
+            return fh1
+
+        if fh1.name is None:
+            fh1.name = fh2.name
+
+        if fh1.ret_type is None:
+            fh1.ret_type = fh2.ret_type
+
+        # header args
+        for off, var in fh2.args.items():
+            merge_var: FunctionArgument = fh1.args[off].copy() if off in fh1.args else var
+            merge_var = merge_var.nonconflict_merge(var)
+            fh1.args[off] = merge_var
+
+        return fh1
 
 #
 # Full Function Class
@@ -281,33 +299,24 @@ class Function(Artifact):
         f.__setstate__(func_toml)
         return f
 
-    @classmethod
-    def from_nonconflicting_merge(cls, func1: "Function", func2: "Function") -> "Function":
+    def nonconflict_merge(self, func2: "Artifact", **kwargs):
+        func1: "Function" = self.copy()
+
+        if not func2 or func1 == func2:
+            return func1
+
         func_diff = func1.diff(func2)
         merge_func = func1.copy()
 
         if merge_func.header is None:
             merge_func.header = func2.header.copy() if func2.header else None
         elif func2.header is not None:
-            # name
-            if merge_func.name is None and func2.header.name:
-                merge_func.header.name = func2.name
-
-            # type_str
-            if merge_func.header.ret_type is None and func2.header.ret_type:
-                merge_func.header.ret_type = func2.header.ret_type
-
-            # header args
-            for off, var in func2.header.args.items():
-                merge_var = func1.header.args[off].copy() if off in func1.header.args else var
-                merge_var = FunctionArgument.from_nonconflicting_merge(merge_var, var)
-
-                merge_func.header.args[off]= merge_var
+            merge_func.header = merge_func.header.nonconflict_merge(func2.header)
 
         # stack vars
         for off, var in func2.stack_vars.items():
             merge_var = func1.stack_vars[off].copy() if off in func1.stack_vars else var
-            merge_var = StackVariable.from_nonconflicting_merge(merge_var, var)
+            merge_var = StackVariable.nonconflict_merge(merge_var, var)
 
             merge_func.stack_vars[off] = merge_var
 

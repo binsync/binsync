@@ -43,7 +43,7 @@ class ScreenHook(ida_kernwin.View_Hooks):
         super(ScreenHook, self).__init__()
         self.hooked = False
 
-    def view_activated(self, view):
+    def view_click(self, view, event):
         form_type = idaapi.get_widget_type(view)
         decomp_view = idaapi.get_widget_vdui(view)
         if not form_type:
@@ -79,7 +79,7 @@ class IDAActionHandler(idaapi.action_handler_t):
 #
 
 class ControlPanelViewWrapper(object):
-    NAME = "BinSync: Info Panel"
+    NAME = "BinSync"
 
     def __init__(self, controller):
         # create a dockable view
@@ -146,26 +146,38 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
 
         wrapper = ControlPanelViewWrapper(controller)
         if not wrapper.twidget:
-            l.info("BinSync is unable to find a widget to attach to. You are likely running headlessly") 
+            l.info("BinSync is unable to find a widget to attach to. You are likely running headlessly")
             return None
 
         flags = idaapi.PluginForm.WOPN_TAB | idaapi.PluginForm.WOPN_RESTORE | idaapi.PluginForm.WOPN_PERSIST
         idaapi.display_widget(wrapper.twidget, flags)
         wrapper.widget.visible = True
 
-        # prioritize attaching the binsync panel to a decompilation window
-        target = "Pseudocode-A"
-        dwidget = idaapi.find_widget(target)
-        if not dwidget:
-            func_addr = next(idautils.Functions())
-            ida_hexrays.open_pseudocode(func_addr, 0)
+        # casually open a pseudocode window, this prevents magic sync from spawning pseudocode windows
+        # in weird locations upon an initial run
+        func_addr = next(idautils.Functions())
+        ida_hexrays.open_pseudocode(func_addr, ida_hexrays.OPF_NO_WAIT | ida_hexrays.OPF_REUSE)
+        # then attempt to flip back to IDA View-A
+        twidget = idaapi.find_widget("IDA View-A")
+        if twidget is not None:
+            ida_kernwin.activate_widget(twidget, True)
+
+        target = "Functions"
+        fwidget = idaapi.find_widget(target)
+
+        if not fwidget:
+            # prioritize attaching the binsync panel to a decompilation window
+            target = "Pseudocode-A"
             dwidget = idaapi.find_widget(target)
 
             if not dwidget:
                 target = "IDA View-A"
 
-        # attach the panel to the found target
-        idaapi.set_dock_pos(ControlPanelViewWrapper.NAME, target, idaapi.DP_RIGHT)
+        if target == "Functions":
+            idaapi.set_dock_pos(ControlPanelViewWrapper.NAME, target, idaapi.DP_INSIDE)
+        else:
+            # attach the panel to the found target
+            idaapi.set_dock_pos(ControlPanelViewWrapper.NAME, target, idaapi.DP_RIGHT)
 
     def install_actions(self):
         self.install_control_panel_action()
@@ -181,7 +193,7 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         )
         result = idaapi.register_action(action_desc)
         if not result:
-            l.info("BinSync is unable to find a widget to attach to. You are likely running headlessly") 
+            l.info("BinSync is unable to find a widget to attach to. You are likely running headlessly")
             return None
 
         result = idaapi.attach_action_to_menu(
@@ -190,7 +202,7 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
             idaapi.SETMENU_INS,
         )
         if not result:
-            l.info("BinSync is unable to find a widget to attach to. You are likely running headlessly") 
+            l.info("BinSync is unable to find a widget to attach to. You are likely running headlessly")
             return None
 
     def _init_hooks(self):

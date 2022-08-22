@@ -13,13 +13,14 @@ import functools
 import threading
 import typing
 import logging
-from time import time
+from time import time, sleep
 
-import idc, idaapi, ida_kernwin, ida_hexrays, ida_funcs, ida_bytes, ida_struct, ida_idaapi, ida_typeinf, idautils
+import idc, idaapi, ida_kernwin, ida_hexrays, ida_funcs, \
+    ida_bytes, ida_struct, ida_idaapi, ida_typeinf, idautils, ida_enum
 
 import binsync
 from binsync.data import (
-    Struct, FunctionHeader, FunctionArgument, StackVariable, StackOffsetType, Function, GlobalVariable
+    Struct, FunctionHeader, FunctionArgument, StackVariable, StackOffsetType, Function, GlobalVariable, Enum
 )
 from .controller import IDABinSyncController
 
@@ -96,12 +97,15 @@ def convert_type_str_to_ida_type(type_str) -> typing.Optional['ida_typeinf']:
 
 
 @execute_read
-def ida_to_angr_stack_offset(func_addr, angr_stack_offset):
+def ida_to_angr_stack_offset(func_addr, ida_stack_off):
     frame = idaapi.get_frame(func_addr)
+    if not frame:
+        return ida_stack_off
+
     frame_size = idc.get_struc_size(frame)
     last_member_size = idaapi.get_member_size(frame.get_member(frame.memqty - 1))
-    ida_stack_offset = angr_stack_offset - frame_size + last_member_size
-    return ida_stack_offset
+    angr_stack_off = ida_stack_off - frame_size + last_member_size
+    return angr_stack_off
 
 
 @execute_read
@@ -193,10 +197,15 @@ def function(addr):
         return None
 
     func_addr = ida_func.start_ea
-    ida_cfunc = idaapi.decompile(func_addr)
+
+    try:
+        ida_cfunc = idaapi.decompile(func_addr)
+    except Exception:
+        ida_cfunc = None
+
     if not ida_cfunc:
         l.warning(f"IDA function {hex(func_addr)} is not decompilable")
-        return None
+        return Function(func_addr, get_func_size(func_addr), last_change=int(time()))
 
     func = Function(func_addr, get_func_size(func_addr), last_change=int(time()))
     func_header: FunctionHeader = function_header(ida_cfunc)
@@ -234,8 +243,7 @@ def function_header(ida_cfunc) -> FunctionHeader:
 
 
 @execute_write
-def set_function_header(ida_func_code_view, binsync_header: binsync.data.FunctionHeader,
-                        controller, exit_on_bad_type=False):
+def set_function_header(ida_func_code_view, binsync_header: binsync.data.FunctionHeader, exit_on_bad_type=False):
     data_changed = False
     ida_cfunc = ida_func_code_view.cfunc
     func_addr = ida_cfunc.entry_ea
@@ -247,7 +255,6 @@ def set_function_header(ida_func_code_view, binsync_header: binsync.data.Functio
     #
 
     if binsync_header.name and binsync_header.name != cur_ida_func.name:
-        controller.inc_api_count()
         set_ida_func_name(func_addr, binsync_header.name)
 
     #
@@ -259,7 +266,6 @@ def set_function_header(ida_func_code_view, binsync_header: binsync.data.Functio
     if binsync_header.ret_type and binsync_header.ret_type != cur_ret_type_str:
         old_prototype = str(ida_cfunc.type).replace("(", f" {func_name}(", 1)
         new_prototype = old_prototype.replace(cur_ret_type_str, binsync_header.ret_type, 1)
-        controller.inc_api_count()
         success = idc.SetType(func_addr, new_prototype)
 
         # we may need to reload types
@@ -282,7 +288,6 @@ def set_function_header(ida_func_code_view, binsync_header: binsync.data.Functio
 
         # change the name
         if binsync_arg.name and binsync_arg.name != cur_ida_arg.name:
-            controller.inc_api_count()
             success = ida_func_code_view.rename_lvar(ida_cfunc.arguments[idx], binsync_arg.name, 1)
             data_changed |= success is True
             refresh_pseudocode_view(func_addr)
@@ -309,7 +314,6 @@ def set_function_header(ida_func_code_view, binsync_header: binsync.data.Functio
     # set the change
     proto_body = ",".join(arg_strs)
     new_prototype = proto_head + proto_body
-    controller.inc_api_count()
     success = idc.SetType(func_addr, new_prototype)
 
     # we may need to reload types
@@ -341,7 +345,12 @@ def set_ida_comment(addr, cmt, decompiled=False):
 
     # a comment in decompilation
     elif decompiled:
-        cfunc = idaapi.decompile(addr)
+        try:
+            cfunc = idaapi.decompile(addr)
+        except Exception:
+            ida_bytes.set_cmt(addr, cmt, rpt)
+            return True
+
         eamap = cfunc.get_eamap()
         decomp_obj_addr = eamap[addr][0].ea
         tl = idaapi.treeloc_t()
@@ -404,10 +413,12 @@ def get_func_stack_var_info(func_addr) -> typing.Dict[int, StackVariable]:
 
         size = var.width
         name = var.name
-        offset = var.location.stkoff() - decompilation.get_stkoff_delta()
+        
+        ida_offset = var.location.stkoff() - decompilation.get_stkoff_delta()
+        bs_offset = ida_to_angr_stack_offset(func_addr, ida_offset)
         type_str = str(var.type())
-        stack_var_info[offset] = StackVariable(
-            offset, StackOffsetType.IDA, name, type_str, size, func_addr
+        stack_var_info[bs_offset] = StackVariable(
+            ida_offset, StackOffsetType.IDA, name, type_str, size, func_addr
         )
 
     return stack_var_info
@@ -441,7 +452,6 @@ def set_stack_vars_types(var_type_dict, code_view, controller: "IDABinSyncContro
             cur_off = lvar.location.stkoff() - code_view.cfunc.get_stkoff_delta()
             if lvar.is_stk_var() and cur_off in var_type_dict:
                 if str(lvar.type()) != str(var_type_dict[cur_off]):
-                    controller.inc_api_count()
                     data_changed |= code_view.set_lvar_type(lvar, var_type_dict.pop(cur_off))
                     fixed_point = False
                     # make sure to break, in case the size of lvars array has now changed
@@ -494,17 +504,13 @@ def set_struct_member_name(ida_struct, frame, offset, name):
 
 @execute_write
 def set_ida_struct(struct: Struct, controller) -> bool:
-    data_changed = False
-
     # first, delete any struct by the same name if it exists
     sid = ida_struct.get_struc_id(struct.name)
     if sid != 0xffffffffffffffff:
         sptr = ida_struct.get_struc(sid)
-        controller.inc_api_count()
-        data_changed |= ida_struct.del_struc(sptr)
+        ida_struct.del_struc(sptr)
 
     # now make a struct header
-    controller.inc_api_count()
     ida_struct.add_struc(ida_idaapi.BADADDR, struct.name, False)
     sid = ida_struct.get_struc_id(struct.name)
     sptr = ida_struct.get_struc(sid)
@@ -519,8 +525,7 @@ def set_ida_struct(struct: Struct, controller) -> bool:
         mflag = convert_size_to_flag(member.size)
 
         # create the new member
-        controller.inc_api_count()
-        data_changed |= ida_struct.add_struc_member(
+        ida_struct.add_struc_member(
             sptr,
             member.member_name,
             member.offset,
@@ -529,7 +534,7 @@ def set_ida_struct(struct: Struct, controller) -> bool:
             member.size,
         )
 
-    return data_changed
+    return True
 
 
 @execute_write
@@ -551,7 +556,6 @@ def set_ida_struct_member_types(struct: Struct, controller) -> bool:
 
         # set the type
         mptr = sptr.get_member(idx)
-        controller.inc_api_count()
         was_set = ida_struct.set_member_tinfo(
             sptr,
             mptr,
@@ -606,6 +610,62 @@ def global_var(addr):
 @execute_write
 def set_global_var_name(var_addr, name):
     return idaapi.set_name(var_addr, name)
+
+#
+# Enums
+#
+
+def get_enum_members(_enum) -> typing.Dict[str, int]:
+    enum_members = {}
+
+    member = ida_enum.get_first_enum_member(_enum)
+    member_addr = ida_enum.get_enum_member(_enum, member, 0, 0)
+    member_name = ida_enum.get_enum_member_name(member_addr)
+    enum_members[member_name] = member
+
+    while member := ida_enum.get_next_enum_member(_enum, member, 0):
+        if member == 0xffffffffffffffff: break
+        member_addr = ida_enum.get_enum_member(_enum, member, 0, 0)
+        member_name = ida_enum.get_enum_member_name(member_addr)
+        enum_members[member_name] = member
+    return enum_members
+
+@execute_read
+def enums() -> typing.Dict[str, Enum]:
+    _enums: typing.Dict[str, Enum] = {}
+    for i in range(ida_enum.get_enum_qty()):
+        _enum = ida_enum.getn_enum(i)
+        enum_name = ida_enum.get_enum_name(_enum)
+        enum_members = get_enum_members(_enum)
+        _enums[enum_name] = Enum(enum_name, enum_members)
+    return _enums
+
+@execute_read
+def enum(name) -> typing.Optional[Enum]:
+    _enum = ida_enum.get_enum(name)
+    if not _enum:
+        return None
+    enum_name = ida_enum.get_enum_name(_enum)
+    enum_members = get_enum_members(_enum)
+    return Enum(enum_name, enum_members)
+
+@execute_write
+def set_enum(bs_enum: Enum):
+    _enum = ida_enum.get_enum(bs_enum.name)
+    if not _enum:
+        return False
+
+    ida_enum.del_enum(_enum)
+    enum_id = ida_enum.add_enum(ida_enum.get_enum_qty(), bs_enum.name, 0)
+
+    if enum_id is None:
+        l.warning(f"IDA failed to create a new enum with {bs_enum.name}")
+        return False
+
+    for member_name, value in bs_enum.members.items():
+        ida_enum.add_enum_member(enum_id, member_name, value)
+
+    return True
 
 #
 #   IDA GUI r/w

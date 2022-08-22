@@ -6,16 +6,16 @@
 </p>
 
 BinSync is a decompiler collaboration tool built on the Git versioning system to enable fined grained reverse
-engineering collaboration regardless of decompiler. 
+engineering collaboration regardless of decompiler.
 
-All good decompilers share common objects called Reverse Engineering Artifacts (REAs). These REAs are the 
+All good decompilers share common objects called Reverse Engineering Artifacts (REAs). These REAs are the
 center of BinSync's syncing ability. Here are the supported REAs:
 - Function headers (symbol, args, type)
 - Stack Variables (symbol, type)
-- Structs   
+- Structs
 - Comments
 
-Note: all types support user-created types like structs. 
+Note: all types support user-created types like structs.
 **DISCLAIMER**: The current version of BinSync is highly developmental. If you are looking for a highly stable version with full support for the listed decompilers, check back in a few months.
 
 **Join our discord below for more online help**:
@@ -28,7 +28,7 @@ Note: all types support user-created types like structs.
 - angr-management: **>= 9.0**
 - Ghidra: **>= 10.1**
 
-All versions require **Python >= 3.4** and **Git** installed on your system. Ghidra support is stil very much in early stage, so only expect the minimal features like artifact name syncing and comments.  
+All versions require **Python >= 3.4** and **Git** installed on your system. Ghidra support is stil very much in early stage, so only expect the minimal features like artifact name syncing and comments.
 
 ## Installing
 ### Oneliner (IDA only)
@@ -45,48 +45,53 @@ Use the installation script provided in the repo:
 
 Use `--help`, for more information.
 
-### Manual 
+### Manual
 If you are unable to install BinSync with the script above, you are probably on Windows. In that case, installing
-BinSync is a two-step process. 
+BinSync is a two-step process.
 1. Install the core with the Python version associated with your decompiler: `pip3 install binsync`
 2. Install the decompiler plugin directly into your decompilers `plugin` folder.
 
-For step 2, you copy all files (and folders) found under the plugin folder in BinSync. An an example, for IDA, 
+For step 2, you copy all files (and folders) found under the plugin folder in BinSync. An an example, for IDA,
 you would copy everything in `plugins/ida_binsync/*` to the plugins folder.
 
 
 ## Usage
 Although BinSync supports various decompilers, which may have not so subtle differences, a lot of the way you interact
-with BinSync is standard across all versions. In each decompiler we use the same UI regardless of QT version. 
+with BinSync is standard across all versions. In each decompiler we use the same UI regardless of QT version.
 
 For decompiler specific intricacies, please see our supported decompilers usage manual in our [Wiki](https://github.com/angr/binsync/wiki).
 If you are using Binja, see our extra install steps. Lastly, before attempting to use the BinSync for its pushing
-features, **assure you have an unlocked (non-password protected) ssh key associated with the repo you plan on 
+features, **assure you have an unlocked (non-password protected) ssh key associated with the repo you plan on
 editing**.
 
 After validating your install below, it is very helpful to read our user [Manual](https://github.com/angr/binsync/wiki/Manual) in our [Wiki](https://github.com/angr/binsync/wiki).
 
 ### Validation
 1. Copy down a local version of the testing repo and grab the `fauxware` binary
-```bash 
+```bash
 git clone git@github.com:mahaloz/binsync_example_repo.git
 cp binsync_example_repo/fauxware .
 ```
 
 2. Open the fauxware binary in your decompiler, verify it has loaded in the decompiler terminal
 ```
-[BinSync] 2.5.0 loaded
+[BinSync] 2.7.0 loaded
 ```
+Or check your plugin menu. For example, if you are using IDA, you should see this option:
 
-If it does not show, it means the plugin is not in the plugins folder. 
+   <img src="/assets/images/binsync_idaplugin.png" width="50%" height="50%">
+
+If neither does not show, it means the plugin is not in the plugins folder.
 
 3. Open the BinSync Config Pane
    1. You can hit `Ctrl+Shift+B` to open it, OR
    2. You can click your decompiler menu: `Edit -> Plugins -> Binsync: settings`. On Binja it's under `Tools`.
-   
+
 4. Give a username and find the example_repo from earlier, click ok
    <img src="/assets/images/demo1.png" width="50%" height="50%">
-   
+
+The Git repo refers to the local path of the BinSync repo. If you do not create a BinSync repo locally, you should leave it blank. In this exmaple, you should copy the git URL (`git@github.com:mahaloz/binsync_example_repo.git`) to "Remote URL".
+
 5. Verify your terminal says (with your username):
 ```bash
 [BinSync]: Client has connected to sync repo with user: <username>.
@@ -97,30 +102,30 @@ If it does not show, it means the plugin is not in the plugins folder.
    <img src="/assets/images/demo2.png" width="50%" height="50%">
 
 Congrats, your BinSync seems to connect to a repo, and recognize you as a user.
-Let's test pulling to verify you can actually do stuff with your install. 
+Let's test pulling to verify you can actually do stuff with your install.
 
 7. In your decompiler, click anywhere in the function `main` once. After a second or two you should notice on the
    Info Panel that the words on the bottom left say `main@0x40071d`. This is your context.
-   
+
 8. Now click on the `Context` tab, and right click on the user `mahaloz`. Click the `Sync` popup.
    <img src="/assets/images/demo3.png" width="50%" height="50%">
-   
+
 9. If everything works out, your decompilation should've changed for `main`. Now the function should be named
    `mahaloz_main`, and it should look something like:
-   
+
 ```c
 // ***
 // This is a function comment:
-// 
+//
 // Thanks for using BinSync <3
-// 
+//
 // - mahaloz
 // ***
 int __cdecl mahaloz_main(int argc, const char **argv, const char **envp)
 {
-  int buf; 
-  mahalo_struct special_stack_var; 
-  char username[16]; 
+  int buf;
+  mahalo_struct special_stack_var;
+  char username[16];
 
   username[8] = 0;
   LOBYTE(special_stack_var.field_8) = 0;
@@ -134,7 +139,7 @@ int __cdecl mahaloz_main(int argc, const char **argv, const char **envp)
   if ( !buf )
     rejected(username);
   return accepted(username);
-} 
+}
 ```
 
 Take note of the variable names & types, and the comments. This will look different per-decompiler, but the symbols and
@@ -145,7 +150,7 @@ For more general use, tips, and advice, see our [Wiki Manual](https://github.com
 ### Making your own BinSync Repo
 
 Like in the [validation](#validation) section above, you can create your own repo for a BinSync project. BinSync
-will work with any git url, but for this tutorial we will only show how to do it on GitHub. 
+will work with any git url, but for this tutorial we will only show how to do it on GitHub.
 
 1. Make a GitHub repo; it does not matter if you init it or add a README
 <img src="/assets/images/demo4.png" width="50%" height="50%">
