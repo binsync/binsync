@@ -11,4 +11,4 @@ del logging
 
 from binsync.data import *
 from binsync import common
-from binsync.core.client import Client, ConnectionWarnings
+from binsync.core.client import Client, ConnectionWarnings, BINSYNC_ROOT_BRANCH
