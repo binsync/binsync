@@ -17,7 +17,7 @@ class Config:
         if isinstance(self.path, str):
             path = pathlib.Path(self.path)
 
-        if not path.exists():
+        if not path.parent.exists():
             return None
 
         dump_dict = {
