@@ -33,14 +33,16 @@ BINSYNC_RELOAD_TIME = 10
 #
 
 
-def config_and_connect(binsync_plugin, username, sync_dir_path):
+def config_and_connect(binsync_plugin, username, sync_dir_path, init=False):
     config = SyncConfig(binsync_plugin.controller, open_magic_sync=False)
     config._user_edit.setText("")
     config._repo_edit.setText("")
     QTest.keyClicks(config._user_edit, username)
     QTest.keyClicks(config._repo_edit, sync_dir_path)
     # always init for first user
-    QTest.mouseClick(config._initrepo_checkbox, Qt.MouseButton.LeftButton)
+    if init:
+        QTest.mouseClick(config._initrepo_checkbox, Qt.MouseButton.LeftButton)
+
     QTest.mouseClick(config._ok_button, Qt.MouseButton.LeftButton)
 
 
@@ -188,7 +190,7 @@ class TestBinSyncPluginGUI(unittest.TestCase):
 
             # find the binsync plugin and connect
             binsync_plugin = get_binsync_am_plugin(main)
-            config_and_connect(binsync_plugin, user_1, sync_dir_path)
+            config_and_connect(binsync_plugin, user_1, sync_dir_path, init=True)
             self.assertEqual(binsync_plugin.controller.status(), SyncControlStatus.CONNECTED_NO_REMOTE)
             self.assertEqual(binsync_plugin.controller.client.master_user, user_1)
 
@@ -247,7 +249,7 @@ class TestBinSyncPluginGUI(unittest.TestCase):
 
             # find the binsync plugin and connect
             binsync_plugin = get_binsync_am_plugin(main)
-            config_and_connect(binsync_plugin, user_1, sync_dir_path)
+            config_and_connect(binsync_plugin, user_1, sync_dir_path, init=True)
             self.assertEqual(binsync_plugin.controller.status(), SyncControlStatus.CONNECTED_NO_REMOTE)
             self.assertEqual(binsync_plugin.controller.client.master_user, user_1)
 

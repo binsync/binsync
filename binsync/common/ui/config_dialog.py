@@ -249,7 +249,13 @@ class SyncConfig(QDialog):
                     'QCheckBox::checked { color: white }'
                 )
         else:
+            self._remote_edit.setEnabled(True)
+            self._initrepo_checkbox.setEnabled(True)
             self.remote_label.setStyleSheet('color: white')
+            self._initrepo_checkbox.setStyleSheet(
+                'QCheckBox::unchecked { color: white } '
+                'QCheckBox::checked { color: white }'
+            )
 
     def _on_cancel_clicked(self):
         self.close()
