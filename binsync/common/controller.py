@@ -1,7 +1,6 @@
 import logging
 import threading
 import time
-from collections import OrderedDict, defaultdict
 from functools import wraps
 from typing import Dict, Iterable, List, Optional, Union
 
@@ -14,6 +13,9 @@ from binsync.data import (
     Function, FunctionHeader, FunctionArgument, StackVariable,
     Comment, GlobalVariable, Patch,
     Enum, Struct
+)
+from binsync.common.ui.qt_objects import (
+    QThread
 )
 
 _l = logging.getLogger(name=__name__)
