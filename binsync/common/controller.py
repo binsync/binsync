@@ -1,7 +1,6 @@
 import logging
 import threading
 import time
-from collections import OrderedDict, defaultdict
 from functools import wraps
 from typing import Dict, Iterable, List, Optional, Union
 
@@ -123,6 +122,7 @@ class BinSyncController:
         self.ctx_change_callback = None  # func()
         self._last_reload = None
         self.last_ctx = None
+        self._init_ui_components()
 
         # settings
         self.merge_level: int = MergeLevel.NON_CONFLICTING
@@ -141,6 +141,15 @@ class BinSyncController:
     #
     #   Multithreading updaters, locks, and evaluators
     #
+
+    def _init_ui_components(self):
+        if self.headless:
+            return
+
+        # after this point you can import anything from UI and it is safe!
+        from binsync.common.ui.qt_objects import (
+            QThread
+        )
 
     def schedule_job(self, cmd_func, *args, blocking=False, **kwargs):
         if blocking:

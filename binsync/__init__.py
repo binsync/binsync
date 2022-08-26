@@ -11,4 +11,5 @@ del logging
 
 from binsync.data import *
 from binsync import common
+from binsync.common import BinSyncController, SyncControlStatus
 from binsync.core.client import Client, ConnectionWarnings, BINSYNC_ROOT_BRANCH
