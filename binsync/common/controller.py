@@ -146,6 +146,7 @@ class BinSyncController:
         if self.headless:
             return
 
+        # after this point you can import anything from UI and it is safe!
         from binsync.common.ui.qt_objects import (
             QThread
         )
