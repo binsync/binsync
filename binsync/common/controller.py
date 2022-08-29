@@ -4,8 +4,8 @@ import time
 from collections import OrderedDict, defaultdict
 from functools import wraps
 from typing import Dict, Iterable, List, Optional, Union
-
 import binsync.data
+from binsync.data.db_model import Binary
 from binsync.common.artifact_lifter import ArtifactLifter
 from binsync.core.client import Client, SchedSpeed, Scheduler, Job
 from binsync.data.type_parser import BSTypeParser, BSType
@@ -137,10 +137,17 @@ class BinSyncController:
 
         # TODO: make the initialization of this with types of decompiler
         self.type_parser = BSTypeParser()
+        self.binary_id = None
 
     #
     #   Multithreading updaters, locks, and evaluators
     #
+
+    def initialize(self, binary_path, binary_hash):
+
+        self.binary_id = Binary.binary_info(binary_path, binary_hash.hex())
+        _l.info(f"Setting binary ID = {self.binary_id} {binary_path}")
+
 
     def schedule_job(self, cmd_func, *args, blocking=False, **kwargs):
         if blocking:
@@ -154,6 +161,7 @@ class BinSyncController:
         return None
 
     def updater_routine(self):
+        _l.debug("STARTING updater_routine")
         while self._run_updater_threads:
             time.sleep(BUSY_LOOP_COOLDOWN)
 
@@ -211,8 +219,9 @@ class BinSyncController:
 
     def connect(self, user, path, init_repo=False, remote_url=None):
         binary_hash = self.binary_hash()
+        _l.debug(f"CONTROLLER:  binary id = {self.binary_id}")
         self.client = Client(
-            user, path, binary_hash, init_repo=init_repo, remote_url=remote_url
+            user, path, binary_hash, init_repo=init_repo, remote_url=remote_url, binary_id=self.binary_id
         )
 
         self.start_worker_routines()
@@ -417,7 +426,13 @@ class BinSyncController:
 
     @init_checker
     def get_state(self, user=None, version=None, priority=None, no_cache=False) -> State:
-        return self.client.get_state(user=user, version=version, priority=priority, no_cache=no_cache)
+
+        state = self.client.get_state(user=user, version=version, priority=priority, no_cache=no_cache)
+        _l.info(f"getting state {self.binary_id=} ...................")
+        # not sure if this belongs here or in get_state, who should be responsible?
+        if self.binary_id is not None:
+            state.set_binary(self.binary_id)
+        return state
 
     @init_checker
     def pull_artifact(self, type_: Artifact, *identifiers, many=False, user=None, state=None) -> Optional[Artifact]:

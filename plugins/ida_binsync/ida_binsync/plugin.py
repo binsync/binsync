@@ -34,6 +34,11 @@ controller = IDABinSyncController()
 idaapi.set_script_timeout(0)
 
 
+def callback_func(nw_code, is_old_db):
+    l.info(f"CALLBACK for {nw_code} received")
+    controller.initialize(idaapi.get_input_file_path(), idautils.GetInputFileMD5())
+
+
 #
 #   UI Hook, placed here for convenience of reading UI implementation
 #
@@ -104,7 +109,6 @@ class ControlPanelViewWrapper(object):
 #   Base Plugin
 #
 
-
 class BinsyncPlugin(QObject, idaapi.plugin_t):
     """Plugin entry point. Does most of the skinning magic."""
 
@@ -117,6 +121,9 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
 
     def __init__(self, *args, **kwargs):
         print("[BinSync] {} loaded!".format(VERSION))
+
+        #Add callback once a binary is selected for analysis
+        idaapi.notify_when(idaapi.NW_OPENIDB, callback_func)
 
         QObject.__init__(self, *args, **kwargs)
         idaapi.plugin_t.__init__(self)

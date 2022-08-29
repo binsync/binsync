@@ -17,7 +17,8 @@ setup(
         "toml",
         "GitPython",
         "filelock",
-        "pycparser"
+        "pycparser",
+        "sqlalchemy"
     ],
     description='Collaboration framework for binary analysis tasks.',
     long_description='Collaboration framework for binary analysis tasks.',

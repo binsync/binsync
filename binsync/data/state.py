@@ -20,7 +20,7 @@ from binsync.data import (
     Struct
 )
 from binsync.core.errors import MetadataNotFoundError
-
+import binsync.data.db_model as ldb
 
 l = logging.getLogger(__name__)
 
@@ -168,6 +168,7 @@ class State:
     def __init__(self, user, version=None, client=None):
         # metadata info
         self.user = user  # type: str
+        self.user_id = ldb.User.get(user)
         self.version = version if version is not None else 0  # type: int
         self.last_push_artifact = -1
         self.last_push_artifact_type = -1
@@ -177,6 +178,7 @@ class State:
         self.client = client  # type: Optional[Client]
 
         # data
+        self.binary_id: str = ""
         self.functions: Dict[int, Function] = {}
         self.comments: Dict[int, Comment] = {}
         self.structs: Dict[str, Struct] = {}
@@ -186,6 +188,7 @@ class State:
 
         # state is dirty on creation (metadata)
         self._dirty = True  # type: bool
+
 
     def __eq__(self, other):
         if isinstance(other, State):
@@ -255,6 +258,9 @@ class State:
 
         # dump metadata
         self.dump_metadata(dst)
+        l.info(f"CLIENT:: {self.binary_id=} {[f.name for f in list(self.functions.values())]} ") # TODO: erikt remove
+        ldb.Function.save(self.binary_id, self.user, self.functions)
+
 
         # dump functions, one file per function in ./functions/
         for addr, func in self.functions.items():
@@ -279,11 +285,12 @@ class State:
         self._dump_data(dst, 'enums.toml', toml.dumps(Enum.dump_many(self.enums)).encode())
 
     @classmethod
-    def parse(cls, src: Union[pathlib.Path, git.Tree], version=None, client=None):
+    def parse(cls, src: Union[pathlib.Path, git.Tree], version=None, client=None, binary_id=None):
         if isinstance(src, str):
             src = pathlib.Path(src)
 
         state = cls(None, version=version, client=client)
+        state.set_binary(binary_id)
 
         # load metadata
         try:
@@ -366,6 +373,10 @@ class State:
     #
     # Setters
     #
+
+    def set_binary(self, binary_id):
+        self.binary_id = binary_id
+        return True
 
     @dirty_checker
     @update_last_change

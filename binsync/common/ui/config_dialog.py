@@ -21,6 +21,7 @@ from binsync.common.ui.qt_objects import (
     QPushButton,
     QVBoxLayout,
 )
+from binsync.data.db_model import User
 
 l = logging.getLogger(__name__)
 
@@ -244,6 +245,8 @@ class SyncConfig(QDialog):
         )
         if not config:
             return config
+
+        User.save(user)
 
         return config.save()
 

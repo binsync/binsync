@@ -74,7 +74,8 @@ class Client:
         init_repo: bool = False,
         remote_url: Optional[str] = None,
         ssh_agent_pid: Optional[int] = None,
-        ssh_auth_sock: Optional[str] = None
+        ssh_auth_sock: Optional[str] = None,
+        binary_id: str = ""
     ):
         """
         The Client class is responsible for making the low-level Git operations for the BinSync environment.
@@ -129,6 +130,9 @@ class Client:
 
         self.active_remote = True
 
+        self.binary_id = binary_id
+
+
     def __del__(self):
         if self.repo_lock is not None:
             self.repo_lock.release()
@@ -178,6 +182,7 @@ class Client:
         @param init_repo:
         @return:
         """
+        l.info(f"{remote_url=}")
         if remote_url:
             # given a remove URL and no local folder, make it based on the URL name
             if not self.repo_root:
@@ -192,8 +197,9 @@ class Client:
                 self._setup_repo()
         else:
             try:
+                l.info(f"REPO ROOT = {self.repo_root}")
                 self.repo = git.Repo(self.repo_root)
-
+                l.info(f"REPO REMOTE: {[u for u in self.repo.remote().urls]}")
                 # update view of remote branches (which may be new)
                 self._localize_remote_branches()
 
@@ -317,11 +323,13 @@ class Client:
             state = State.parse(
                 self._get_tree(user, repo),
                 version=version,
-                client=self
+                client=self,
+                binary_id=self.binary_id
             )
         except MetadataNotFoundError:
             if user == self.master_user:
                 state = State(self.master_user, client=self)
+
 
         return state
 
@@ -360,6 +368,7 @@ class Client:
                 continue
 
             self.repo.git.checkout(branch)
+            l.info(f"Checking out branch {branch}")
             try:
                 self.repo.git.merge()
             except Exception as e:
@@ -616,6 +625,7 @@ class Client:
         index.remove([fullpath], working_tree=True)
 
     def load_file_from_tree(self, tree: git.Tree, filename):
+        #print(f"{filename} :: {tree[filename].data_stream.read()}")
         return tree[filename].data_stream.read().decode()
 
     def _get_tree(self, user, repo: git.Repo):
