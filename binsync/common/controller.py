@@ -1,9 +1,9 @@
 import logging
 import threading
 import time
-from collections import OrderedDict, defaultdict
 from functools import wraps
 from typing import Dict, Iterable, List, Optional, Union
+
 import binsync.data
 from binsync.data.db_model import Binary
 from binsync.common.artifact_lifter import ArtifactLifter
@@ -123,6 +123,7 @@ class BinSyncController:
         self.ctx_change_callback = None  # func()
         self._last_reload = None
         self.last_ctx = None
+        self._init_ui_components()
 
         # settings
         self.merge_level: int = MergeLevel.NON_CONFLICTING
@@ -143,6 +144,15 @@ class BinSyncController:
     #   Multithreading updaters, locks, and evaluators
     #
 
+    def _init_ui_components(self):
+        if self.headless:
+            return
+
+        # after this point you can import anything from UI and it is safe!
+        from binsync.common.ui.qt_objects import (
+            QThread
+        )
+
     def initialize(self, binary_path, binary_hash):
 
         self.binary_id = Binary.binary_info(binary_path, binary_hash.hex())
@@ -161,7 +171,6 @@ class BinSyncController:
         return None
 
     def updater_routine(self):
-        _l.debug("STARTING updater_routine")
         while self._run_updater_threads:
             time.sleep(BUSY_LOOP_COOLDOWN)
 

@@ -20,9 +20,9 @@ from binaryninja.binaryview import BinaryDataNotification
 from collections import defaultdict
 import logging
 
-import binsync
 from binsync.common.ui.version import set_ui_version
 set_ui_version("PySide6")
+import binsync
 from binsync.common.ui.config_dialog import SyncConfig
 from binsync.common.ui.control_panel import ControlPanel
 from .ui_tools import find_main_window, BinjaDockWidget, create_widget
