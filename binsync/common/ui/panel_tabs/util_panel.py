@@ -11,6 +11,8 @@ from binsync.common.ui.qt_objects import (
     Qt,
     QVBoxLayout,
     QWidget,
+    QLineEdit,
+    QIntValidator
 )
 from binsync.common.ui.magic_sync_dialog import MagicSyncDialog
 from binsync.common.ui.force_push import ForcePushUI
@@ -87,6 +89,39 @@ class QUtilPanel(QWidget):
         sync_options_group.layout().addWidget(self._force_push_button)
 
         #
+        # UI Options Group
+        #
+
+        ui_options_group = QGroupBox()
+        ui_options_layout = QVBoxLayout()
+        ui_options_group.setTitle("UI Options")
+        ui_options_group.setLayout(ui_options_layout)
+
+        _table_coloring_window_group = QHBoxLayout()
+        _table_coloring_window_level_label = QLabel("Table Coloring Window (s)")
+        _table_coloring_window_level_label.setToolTip("Window (in seconds) over which recently updated table entries are colored.")
+
+        self._table_coloring_window_lineedit = QLineEdit()
+        self._table_coloring_window_lineedit.setText(f"{self.controller.table_coloring_window}")
+        intval = QIntValidator()
+        intval.setRange(0, 60 * 60 * 24 * 7 * 52) #1 year in seconds
+        self._table_coloring_window_lineedit.setValidator(intval)
+        self._table_coloring_window_lineedit.setMaximumWidth(200)
+        self._table_coloring_window_lineedit.textChanged.connect(self._handle_table_coloring_change)
+
+        _table_coloring_window_group.addWidget(_table_coloring_window_level_label)
+        _table_coloring_window_group.addWidget(self._table_coloring_window_lineedit)
+
+        ui_options_layout.addLayout(_table_coloring_window_group)
+
+        #
+        # Save/Apply Options Group
+        #
+
+        self._save_apply_config_option = QPushButton("Save Config")
+        self._save_apply_config_option.clicked.connect(self._handle_save_config_button)
+
+        #
         # Final Layout
         #
 
@@ -96,11 +131,37 @@ class QUtilPanel(QWidget):
         main_layout.setAlignment(Qt.AlignTop)
         main_layout.addWidget(sync_options_group)
         main_layout.addWidget(dev_options_group)
+        main_layout.addWidget(ui_options_group)
+        main_layout.addWidget(self._save_apply_config_option)
         self.setLayout(main_layout)
 
     #
     # Event Handlers
     #
+    def _handle_table_coloring_change(self):
+        try:
+            val = int(self._table_coloring_window_lineedit.text())
+            self.controller.table_coloring_window = val
+        except ValueError:
+            pass
+
+    def _handle_save_config_button(self):
+        if not self.controller.config:
+            return
+
+        if self._debug_log_toggle.isChecked():
+            self.controller.config.log_level = "debug"
+        else:
+            self.controller.config.log_level = "info"
+
+        self.controller.config.merge_level = self.controller.merge_level
+
+        self.controller.config.table_coloring_window = self.controller.table_coloring_window
+
+        if self.controller.config.save() is None:
+            l.info(f"Error saving configuration file, check that the path '{self.controller.config.path}' is valid.")
+        else:
+            l.info(f"Saved configuration file '{self.controller.config.path}'")
 
     def _handle_debug_toggle(self):
         if self._debug_log_toggle.isChecked():

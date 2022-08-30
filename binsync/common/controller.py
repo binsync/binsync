@@ -3,15 +3,16 @@ import threading
 import datetime
 import time
 from functools import wraps
-from typing import Dict, Iterable, List, Optional, Union
+from typing import Dict, Iterable, Optional, Union
 
 import binsync.data
+from binsync import ProjectConfig
 from binsync.common.artifact_lifter import ArtifactLifter
 from binsync.core.client import Client, SchedSpeed, Scheduler, Job
 from binsync.data.type_parser import BSTypeParser, BSType
 from binsync.data import (
     State, User, Artifact,
-    Function, FunctionHeader, FunctionArgument, StackVariable,
+    Function, FunctionHeader, StackVariable,
     Comment, GlobalVariable, Patch,
     Enum, Struct
 )
@@ -123,9 +124,10 @@ class BinSyncController:
         self.ctx_change_callback = None  # func()
         self._last_reload = None
         self.last_ctx = None
-        self._init_ui_components()
 
         # settings
+        self.config = None
+        self.table_coloring_window = 2 * 60 * 60  # 2 hours in seconds
         self.merge_level: int = MergeLevel.NON_CONFLICTING
 
         # command locks
@@ -135,7 +137,8 @@ class BinSyncController:
         # create a pulling thread, but start on connection
         self.updater_thread = threading.Thread(target=self.updater_routine)
         self._run_updater_threads = False
-
+        self.ui_updater_thread = None
+        self.ui_thread_worker = None
         # TODO: make the initialization of this with types of decompiler
         self.type_parser = BSTypeParser()
 
@@ -151,6 +154,26 @@ class BinSyncController:
         from binsync.common.ui.qt_objects import (
             QThread
         )
+        from binsync.common.ui.ui_worker_thread import BinSyncUIWorker
+        # spawns a qthread/worker
+        self.ui_updater_thread = QThread()
+        self.ui_thread_worker = BinSyncUIWorker(self, BUSY_LOOP_COOLDOWN)
+
+        self.ui_thread_worker.moveToThread(self.ui_updater_thread)
+        self.ui_updater_thread.started.connect(self.ui_thread_worker.run)
+        self.ui_updater_thread.finished.connect(self.ui_updater_thread.deleteLater)
+
+        self.ui_updater_thread.start()
+
+    def _stop_ui_components(self):
+        if self.headless:
+            return
+        #stop the worker, quit the thread, wait for it to exit
+        self.ui_thread_worker.stop()
+        self.ui_updater_thread.quit()
+        _l.debug("Waiting for QThread ui_updater_thread to exit..")
+        self.ui_updater_thread.wait()
+
 
     def schedule_job(self, cmd_func, *args, blocking=False, **kwargs):
         if blocking:
@@ -182,16 +205,7 @@ class BinSyncController:
             elif (now - self.client.last_pull_attempt_time).seconds > self.reload_time:
                 self.client.update()
 
-            if not self.headless:
-                # update context knowledge every loop iteration
-                if self.ctx_change_callback:
-                    self._check_and_notify_ctx()
 
-                # update the control panel with new info every BINSYNC_RELOAD_TIME seconds
-                if self._last_reload is None or \
-                        (now - self._last_reload).seconds > self.reload_time:
-                    self._last_reload = datetime.datetime.now(tz=datetime.timezone.utc)
-                    self._update_ui()
 
     def _update_ui(self):
         if not self.ui_callback:
@@ -214,9 +228,12 @@ class BinSyncController:
 
         self.job_scheduler.start_worker_thread()
 
+        self._init_ui_components()
+
     def stop_worker_routines(self):
         self._run_updater_threads = False
         self.job_scheduler.stop_worker_thread()
+        self._stop_ui_components()
 
     #
     # Client Interaction Functions
@@ -254,8 +271,8 @@ class BinSyncController:
         self.headless = not self.headless
 
     @init_checker
-    def users(self, priority=None) -> Iterable[User]:
-        return self.client.users(priority=priority)
+    def users(self, priority=None, no_cache=True) -> Iterable[User]:  # TODO: fix no_cache user bug
+        return self.client.users(priority=priority, no_cache=no_cache)
 
     def usernames(self, priority=None) -> Iterable[str]:
         for user in self.users(priority=priority):
@@ -982,3 +999,31 @@ class BinSyncController:
             or self.get_state(priority=SchedSpeed.FAST)
 
         return master_state, state
+
+    #
+    # Config Utils
+    #
+
+    def load_saved_config(self):
+        config = ProjectConfig.load_from_file(self.binary_path() or "")
+        if not config:
+            return
+        self.config = config
+        _l.info(f"Loaded configuration file: '{self.config.path}'")
+
+        self.config = config
+        self.table_coloring_window = self.config.table_coloring_window or self.table_coloring_window
+        self.merge_level = self.config.merge_level or self.merge_level
+
+        if self.config.log_level == "debug":
+            logging.getLogger("binsync").setLevel("DEBUG")
+            logging.getLogger("ida_binsync").setLevel("DEBUG")
+
+        else:
+            logging.getLogger("binsync").setLevel("INFO")
+            logging.getLogger("ida_binsync").setLevel("INFO")
+
+        return self.config
+
+
+
