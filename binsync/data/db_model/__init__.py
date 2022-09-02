@@ -13,7 +13,9 @@ import logging
 
 from binsync.data.db_model.base_session import Base, get_session
 from binsync.data.db_model.binary_user import Binary, User
+
 from binsync.data.db_model.function import Function, FunctionInfo
+from binsync.data.db_model.variables import Variable, VariableInfo, VariableType, StructMember, StructMemberInfo, VariableUses, ComplexityTypes
 
 
 

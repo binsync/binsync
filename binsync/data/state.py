@@ -258,21 +258,25 @@ class State:
 
         # dump metadata
         self.dump_metadata(dst)
-        l.info(f"CLIENT:: {self.binary_id=} {[f.name for f in list(self.functions.values())]} ") # TODO: erikt remove
-        ldb.Function.save(self.binary_id, self.user, self.functions)
 
-
-        # dump functions, one file per function in ./functions/
-        for addr, func in self.functions.items():
-            path = pathlib.Path('functions').joinpath("%08x.toml" % addr)
-            self._dump_data(dst, path, func.dump().encode())
+        ldb.VariableType.save_structs(self.structs, self.binary_id, self.user)
 
         # dump structs, one file per struct in ./structs/
         for s_name, struct in self.structs.items():
             path = pathlib.Path('structs').joinpath(f"{s_name}.toml")
             self._dump_data(dst, path, struct.dump().encode())
 
+        l.info(f"CLIENT:: {self.binary_id=} {[f.name for f in list(self.functions.values())]} ") # TODO: erikt remove
+        ldb.Function.save(self.binary_id, self.user, self.functions)
+
+        # dump functions, one file per function in ./functions/
+        for addr, func in self.functions.items():
+            path = pathlib.Path('functions').joinpath("%08x.toml" % addr)
+            self._dump_data(dst, path, func.dump().encode())
+
+
         # dump comments
+        #ldb.DBComment.save_comments(self.comments, self.binary_id, self.user)
         self._dump_data(dst, 'comments.toml', toml.dumps(Comment.dump_many(self.comments)).encode())
 
         # dump patches
@@ -280,6 +284,8 @@ class State:
 
         # dump global vars
         self._dump_data(dst, 'global_vars.toml', toml.dumps(GlobalVariable.dump_many(self.global_vars)).encode())
+        print(self.global_vars)
+        ldb.Variable.save_list(self.global_vars, ldb.VariableUses.GLOBAL_VARIABLE, self.binary_id, self.user)
 
         # dump enums
         self._dump_data(dst, 'enums.toml', toml.dumps(Enum.dump_many(self.enums)).encode())

@@ -1,8 +1,11 @@
+
 from sqlalchemy import create_engine, update, Column, Index, ForeignKey, UniqueConstraint, event, desc, func, or_, and_
-from sqlalchemy import DateTime, String, Integer,  Text, Float, Enum, Boolean
+from sqlalchemy import DateTime, String, Integer,  Text, Float, Enum, Boolean, BigInteger
 
 from binsync.data.db_model import get_session
 from binsync.data.db_model.base_session import Base
+
+import traceback
 import logging
 import os
 
@@ -52,7 +55,6 @@ class Binary(Base):
                 return b.id
         except Exception as ex:
             print("ERROR"*20)
-            import traceback
             traceback.print_exc()
             print(ex)
 
@@ -95,5 +97,3 @@ class User(Base):
             import traceback
             traceback.print_exc()
             print(ex)
-
-

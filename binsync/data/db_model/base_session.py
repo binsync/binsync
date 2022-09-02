@@ -16,6 +16,7 @@ class BBase:
 
     id = Column(String(128), primary_key=True, default=lambda: str(uuid4()))
     created_on = Column(DateTime, nullable=False, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
 Base = declarative_base(cls=BBase)

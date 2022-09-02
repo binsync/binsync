@@ -2,10 +2,10 @@
 from sqlalchemy import create_engine, update, Column, Index, ForeignKey, UniqueConstraint, event, desc, func, or_, and_
 from sqlalchemy import DateTime, String, Integer,  Text, Float, Enum, Boolean
 
-from sqlalchemy.orm import relationship
 from binsync.data.db_model.base_session import Base, get_session
 from binsync.data.db_model.binary_user import Binary, User
-from binsync.data.db_model.variables import Variable, VariableInfo, VariableUses
+
+
 
 class Function(Base):
     """
@@ -24,38 +24,37 @@ class Function(Base):
         self.size = size
         self.fk_binary_id = fk_binary_id
 
-
     def __repr__(self):
         return f"Function (addr={self.address}, size={self.size})"
 
     @staticmethod
     def save(binary_id, user_id, functions):
+        from binsync.data.db_model.variables import Variable, VariableUses
         with get_session() as session:
             session.begin()
             try:
                 db_functions = session.query(Function).where(Function.fk_binary_id == binary_id).all()
                 db_dict_functions = {db_function.address: db_function for db_function in db_functions}  # just for Z
                 for address, function in functions.items():
+
                     if address in db_dict_functions:
                         db_function = db_dict_functions[address]
-                        db_fi = FunctionInfo.get_(session, db_function.id, user_id)
-                        if db_fi.name != function.name and db_fi.is_root:
-                            user_fi = FunctionInfo(function.name, db_function.id, is_root=False, fk_user_id = user_id)
-                            session.add(user_fi)
                     else:
                         db_function = Function(address, function.size, binary_id)
                         session.add(db_function)
                         session.flush()
-                        print(f"\t\t {binary_id=} ,{db_function.id=}")
-                        user_fi = FunctionInfo(function.name,  db_function.id, is_root=True, fk_user_id=user_id)
-                        session.add(user_fi)
-                    session.flush()
+                    print(f"{function.name=}")
+                    FunctionInfo.save(function.name, db_function.id, user_id, session)
+
                     if function.header:
-                        print(f"THE HEADER= {function.header}")
                         return_var_name = f"{function.name}_return_var"
-                        header = function.header
-                        ret_var = Variable(header.addr, 0, VariableUses.RETURN_VALUE, fk_function_id=db_function.id)
-                        session.add(ret_var)
+                        Variable.save(address, VariableUses.RETURN_VALUE, user_id, db_function.id, binary_id=binary_id,
+                                      var_name=return_var_name, variable_type=function.header.ret_type, session=session)
+
+                    for key, val in function.stack_vars.items():
+
+                        print(f"{key=} {val=}")
+
                 session.commit()
             except Exception as ex:
                 print("ERROR" * 20)
@@ -84,6 +83,20 @@ class FunctionInfo(Base):
         self.fk_function_id = fk_function_id
         self.is_root = is_root
         self.fk_user_id = fk_user_id
+
+    @staticmethod
+    def save(function_name: str, function_id: str, user_id: str, session):
+        user_fi = FunctionInfo.get_(session, function_id, user_id)
+        if user_fi is None:
+            user_fi = FunctionInfo(function_name, function_id, is_root=True, fk_user_id=user_id)
+            session.add(user_fi)
+        elif user_fi.name != function_name and user_fi.is_root:
+            user_fi = FunctionInfo(function_name, function_id, is_root=False, fk_user_id=user_id)
+            session.add(user_fi)
+        else:
+            user_fi.name = function_name
+        session.flush()
+        return user_fi.id
 
     @staticmethod
     def get_(session, fk_function_id, fk_user_id):
