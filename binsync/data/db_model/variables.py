@@ -131,7 +131,8 @@ class VariableInfo(Base):
                         var_type_id = r.fk_variable_type_id
                     break
             if var_type_id is None:
-                var_type_id = VariableType.save(var_type_name, 0, binary_id, session=session)
+                # may need something more here with Complexity Type to figure out when not just primative.
+                var_type_id = VariableType.save(var_type_name, 0, binary_id=binary_id, var_complexity=ComplexityTypes.PRIMATIVE, session=session)
 
 
             # if no results then add a root object, else add a
