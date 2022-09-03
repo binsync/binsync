@@ -1,8 +1,12 @@
 import xmlrpc.client
 
+from binsync.data import (
+    Function, FunctionHeader
+)
+
 
 class BSBridgeClient:
-    def __init__(self, host="localhost", port=9466):
+    def __init__(self, host="localhost", port=6683):
         self.host = host
         self.port = port
 
@@ -32,6 +36,26 @@ class BSBridgeClient:
             return False
 
         return True
-    
+
     def set_controller_status(self, status):
         self.server.set_controller_status(status)
+
+    #
+    # Public Facing API
+    #
+
+    #
+    # Function Operations
+    #
+
+    def set_func_header(self, addr, fh: FunctionHeader):
+        pass
+
+    def _set_func_name(self, addr, name):
+        pass
+
+    def _set_func_type(self, addr, type_):
+        pass
+
+    def _set_func_arg(self, addr, offset, name, type_):
+        pass
