@@ -45,13 +45,14 @@ class ControlPanelWindow(QMainWindow):
         client_connected = self.controller.check_client()
 
         # setup bridge and alert it we are configuring
-        self.controller.connect_ghidra_bridge()
-        self.controller.bridge.set_controller_status(client_connected)
+        bridge_connected = self.controller.connect_ghidra_bridge()
+        if bridge_connected:
+            self.controller.bridge.set_controller_status(client_connected)
 
-        return client_connected
+        return client_connected and bridge_connected
 
     def closeEvent(self, event):
-        self.controller.bridge.server.shutdown()
+        self.controller.bridge.server.stop()
 
 
 def start_ui():

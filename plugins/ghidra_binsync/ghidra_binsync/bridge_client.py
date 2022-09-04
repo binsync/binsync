@@ -29,7 +29,7 @@ class BSBridgeClient:
 
         # create a server connection and test it
         try:
-            self.server = xmlrpc.client.ServerProxy(f"http://{host}:{port}")
+            self.server = xmlrpc.client.ServerProxy(f"http://{host}:{port}").bs
             self.server.ping()
         except (ConnectionRefusedError, AttributeError) as e:
             self.server = None
@@ -38,7 +38,7 @@ class BSBridgeClient:
         return True
 
     def set_controller_status(self, status):
-        self.server.set_controller_status(status)
+        self.server.alertUIConfigured(status)
 
     #
     # Public Facing API
@@ -51,8 +51,8 @@ class BSBridgeClient:
     def set_func_header(self, addr, fh: FunctionHeader):
         pass
 
-    def _set_func_name(self, addr, name):
-        pass
+    def set_func_name(self, addr, name):
+        return self.server.setFunctionName(str(addr), name)
 
     def _set_func_type(self, addr, type_):
         pass

@@ -28,7 +28,9 @@ class GhidraBinSyncController(BinSyncController):
         if not out:
             return Function(0, 0, header=FunctionHeader("", 0))
 
-        return Function(out['func_addr'], 0, header=FunctionHeader(out["name"], out['func_addr']))
+        #return Function(out['func_addr'], 0, header=FunctionHeader(out["name"], out['func_addr']))
+        addr = int(out, 16)
+        return Function(addr, 0, header=FunctionHeader("", addr))
 
     def binary_path(self) -> Optional[str]:
         return ""
@@ -48,7 +50,7 @@ class GhidraBinSyncController(BinSyncController):
     #
 
     def connect_ghidra_bridge(self):
-        self.bridge.connect()
+        return self.bridge.connect()
 
     def alert_ghidra_of_config(self):
         status = True if self.check_client() else False
