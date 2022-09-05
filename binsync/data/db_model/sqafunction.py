@@ -48,20 +48,22 @@ class SQAFunction(Base):
                         session.flush()
                     if function.name is None:
                         function.name = f"func_{function.addr}"
-                    print(f"{function.name=} {function.addr}")
+                    print(f"{SQAFunction.__name__} ::: Saving function info {function.name=} {function.addr}")
                     SQAFunctionInfo.save(function.name, db_function.id, user_id, session)
 
                     if function.header:
                         return_var_name = f"{function.name}_return_var"
                         # defaulting size to 4
+                        ret_type = "void" if function.header.ret_type is None else function.header.ret_type
                         SQAVariable.save(address, VariableUses.RETURN_VALUE, user_id, db_function.id, binary_id=binary_id,
-                                         var_name=return_var_name, variable_type=function.header.ret_type, size=4, session=session)
+                                         var_name=return_var_name, variable_type=ret_type, size=4, session=session)
+                        print(f"{SQAFunction.__name__} ::: Added RETURN VAR {address=} {return_var_name=} {ret_type=} ")
 
                     for key, val in function.stack_vars.items():
                         SQAVariable.save(val.addr, VariableUses.STACK_VARIABLE, user_id, db_function.id, binary_id=binary_id,
-                                         var_name=val.name, variable_type=val.type, size=val.size, session=session)
-                        print(f"{key=} {val=}")
-
+                                         var_name=val.name, variable_type=val.type, size=val.size, offset=val.stack_offset, session=session)
+                        print(f"{SQAFunction.__name__} ::: Added STACK VAR {key=} {val.addr=} {val.name=} {val.type=} {val.size=}")
+                print(f"{SQAFunction.__name__} ::: session COMMIT!!!")
                 session.commit()
             except Exception as ex:
                 print("ERROR" * 20)

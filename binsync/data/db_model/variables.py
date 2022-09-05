@@ -43,7 +43,7 @@ class SQAVariable(Base):
     """
     from binsync.data.db_model.sqafunction import SQAFunction
     address = Column(BigInteger, nullable=False)
-
+    offset = Column(Integer, nullable=False, default=0)
     used_as = Column(Enum(VariableUses), nullable=False)
 
     fk_function_id = Column(String(128), ForeignKey(SQAFunction.id), nullable=True)
@@ -64,25 +64,31 @@ class SQAVariable(Base):
 
     @staticmethod
     def save(address: int, used_as: VariableUses, user_id: str, function_id: str = None, binary_id: str = None,
-             var_name: str = None, variable_type="void", size: int = 0, session: Session = None):
+             var_name: str = None, variable_type="void", size: int = 0, offset: int = 0, session: Session = None):
         if variable_type is None:
             return None
         if session is None:
             with get_session() as session:
-                SQAVariable._save(address, used_as, user_id, function_id, binary_id, var_name, variable_type, session=session)
+                SQAVariable._save(address, used_as, user_id, function_id, binary_id, var_name, variable_type, size=size, offset=offset, session=session)
                 session.commit()
         else:
-            SQAVariable._save(address, used_as, user_id, function_id, binary_id, var_name, variable_type, session=session)
+            SQAVariable._save(address, used_as, user_id, function_id, binary_id, var_name, variable_type, size=size, offset=offset, session=session)
 
     @staticmethod
     def _save(address: int, used_as: VariableUses, user_id: str, function_id: str = None, binary_id: str = None,
-              var_name: str = None, variable_type: str ="void", size: int = 0, session: Session = None):
+              var_name: str = None, variable_type: str = "void", size: int = 0, offset: int = 0, session: Session = None):
 
-        ret_var = session.query(SQAVariable).where(and_(SQAVariable.fk_binary_id == binary_id, SQAVariable.fk_function_id == function_id)).first()
+        ret_var = session.query(SQAVariable).where(and_(SQAVariable.fk_binary_id == binary_id,
+                                                        SQAVariable.fk_function_id == function_id,
+                                                        SQAVariable.address == address,
+                                                        SQAVariable.offset == offset)).first()
         if ret_var is None:
             ret_var = SQAVariable(address, used_as, fk_function_id=function_id, fk_binary_id=binary_id)
             session.add(ret_var)
             session.flush()
+            _l.info(f"{SQAVariable.__name__} ::: Added SQL Variable {var_name} {variable_type} {ret_var.id}")
+        else:
+            _l.info(f"{SQAVariable.__name__} ::: {var_name=} {ret_var.address=} ALREADY EXISTS")
 
         SQAVariableInfo.save(var_name, variable_type, size, user_id, ret_var.id, binary_id, session)
 
@@ -91,8 +97,9 @@ class SQAVariable(Base):
         with get_session() as session:
             for v in variables.values():
                 var_type = "void" if v.type_str is None else v.type_str
+                print(f"Saving global {v.name=} {var_type=} {v.addr}")
                 SQAVariable._save(v.addr, used_as, user_id, binary_id=binary_id, var_name=v.name, variable_type=var_type, size=v.size, session=session)
-
+            session.commit()
 
 class SQAVariableInfo(Base):
     """
@@ -200,7 +207,7 @@ class SQAVariableType(Base):
             var_type = SQAVariableType(var_type_name, size, var_complexity, binary_id)
             session.add(var_type)
             session.flush()
-        print(f"{var_type=} {var_type.id=}")
+        print(f"{SQAVariableType.__name__} ::: {var_type.id=} {var_type.name=} {var_type.complexity=}")
         return var_type.id
 
     @staticmethod

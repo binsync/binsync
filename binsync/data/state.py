@@ -267,7 +267,6 @@ class State:
             path = pathlib.Path('structs').joinpath(f"{s_name}.toml")
             self._dump_data(dst, path, struct.dump().encode())
 
-        l.info(f"CLIENT:: {self.binary_id=} {[f.name for f in list(self.functions.values())]} ") # TODO: erikt remove
         ldb.SQAFunction.save(self.binary_id, self.user, self.functions)
 
         # dump functions, one file per function in ./functions/
