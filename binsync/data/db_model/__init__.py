@@ -14,6 +14,7 @@ import logging
 from binsync.data.db_model.base_session import Base, get_session
 from binsync.data.db_model.binary_user import SQABinary, SQAUser
 from binsync.data.db_model.sqacomment import SQAComment
+from binsync.data.db_model.sqametadata import SQAMetadata
 from binsync.data.db_model.sqafunction import SQAFunction, SQAFunctionInfo
 from binsync.data.db_model.variables import SQAVariable, SQAVariableInfo, SQAVariableType, SQAStructMember, SQAStructMemberInfo, VariableUses, ComplexityTypes
 

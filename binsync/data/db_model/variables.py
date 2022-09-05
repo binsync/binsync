@@ -101,6 +101,7 @@ class SQAVariable(Base):
                 SQAVariable._save(v.addr, used_as, user_id, binary_id=binary_id, var_name=v.name, variable_type=var_type, size=v.size, session=session)
             session.commit()
 
+
 class SQAVariableInfo(Base):
     """
     Specific data about a particular variable

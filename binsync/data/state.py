@@ -251,6 +251,7 @@ class State:
             "last_push_artifact_type": self.last_push_artifact_type,
         }
         self._dump_data(dst, 'metadata.toml', toml.dumps(d).encode())
+        ldb.SQAMetadata.save(dict(d))
 
     def dump(self, dst: Union[pathlib.Path, git.IndexFile]):
         if isinstance(dst, str):
@@ -303,6 +304,7 @@ class State:
         except:
             # metadata is not found
             raise MetadataNotFoundError()
+
         state.user = metadata["user"]
         state.version = version if version is not None else metadata["version"]
 
