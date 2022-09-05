@@ -168,7 +168,7 @@ class State:
     def __init__(self, user, version=None, client=None):
         # metadata info
         self.user = user  # type: str
-        self.user_id = ldb.User.get(user)
+        self.user_id = ldb.SQAUser.get(user)
         self.version = version if version is not None else 0  # type: int
         self.last_push_artifact = -1
         self.last_push_artifact_type = -1
@@ -256,10 +256,11 @@ class State:
         if isinstance(dst, str):
             dst = pathlib.Path(dst)
 
+        l.info(f"dump()::: {self.binary_id=} .... ")  # TODO: erikt remove
         # dump metadata
         self.dump_metadata(dst)
 
-        ldb.VariableType.save_structs(self.structs, self.binary_id, self.user)
+        ldb.SQAVariableType.save_structs(self.structs, self.binary_id, self.user)
 
         # dump structs, one file per struct in ./structs/
         for s_name, struct in self.structs.items():
@@ -267,16 +268,15 @@ class State:
             self._dump_data(dst, path, struct.dump().encode())
 
         l.info(f"CLIENT:: {self.binary_id=} {[f.name for f in list(self.functions.values())]} ") # TODO: erikt remove
-        ldb.Function.save(self.binary_id, self.user, self.functions)
+        ldb.SQAFunction.save(self.binary_id, self.user, self.functions)
 
         # dump functions, one file per function in ./functions/
         for addr, func in self.functions.items():
             path = pathlib.Path('functions').joinpath("%08x.toml" % addr)
             self._dump_data(dst, path, func.dump().encode())
 
-
         # dump comments
-        #ldb.DBComment.save_comments(self.comments, self.binary_id, self.user)
+        ldb.SQAComment.save_comments(self.comments, self.binary_id, self.user)
         self._dump_data(dst, 'comments.toml', toml.dumps(Comment.dump_many(self.comments)).encode())
 
         # dump patches
@@ -285,7 +285,7 @@ class State:
         # dump global vars
         self._dump_data(dst, 'global_vars.toml', toml.dumps(GlobalVariable.dump_many(self.global_vars)).encode())
         print(self.global_vars)
-        ldb.Variable.save_list(self.global_vars, ldb.VariableUses.GLOBAL_VARIABLE, self.binary_id, self.user)
+        ldb.SQAVariable.save_list(self.global_vars, ldb.VariableUses.GLOBAL_VARIABLE, self.binary_id, self.user)
 
         # dump enums
         self._dump_data(dst, 'enums.toml', toml.dumps(Enum.dump_many(self.enums)).encode())

@@ -12,7 +12,7 @@ SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 class BBase:
     @declared_attr
     def __tablename__(cls):
-        return cls.__name__.lower()
+        return cls.__name__.lower().replace("sqa", "")
 
     id = Column(String(128), primary_key=True, default=lambda: str(uuid4()))
     created_on = Column(DateTime, nullable=False, default=datetime.now)
@@ -23,8 +23,9 @@ Base = declarative_base(cls=BBase)
 
 
 def get_session():
-
-    db_path = f"{SCRIPT_DIR}/bs.db"
+    db_path = os.environ.get("DB_TEST_PATH", None)
+    if db_path is None:
+        db_path = f"{SCRIPT_DIR}/bs.db"
     engine = create_engine(f'sqlite:///{db_path}', echo=False, pool_pre_ping=True)
     if not os.path.exists(db_path):
         Base.metadata.create_all(engine)

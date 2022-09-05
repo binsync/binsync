@@ -5,7 +5,7 @@ from functools import wraps
 from typing import Dict, Iterable, List, Optional, Union
 
 import binsync.data
-from binsync.data.db_model import Binary
+from binsync.data.db_model import SQABinary
 from binsync.common.artifact_lifter import ArtifactLifter
 from binsync.core.client import Client, SchedSpeed, Scheduler, Job
 from binsync.data.type_parser import BSTypeParser, BSType
@@ -155,7 +155,7 @@ class BinSyncController:
 
     def initialize(self, binary_path, binary_hash):
 
-        self.binary_id = Binary.binary_info(binary_path, binary_hash.hex())
+        self.binary_id = SQABinary.binary_info(binary_path, binary_hash.hex())
         _l.info(f"Setting binary ID = {self.binary_id} {binary_path}")
 
 

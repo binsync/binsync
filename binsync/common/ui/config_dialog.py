@@ -22,7 +22,7 @@ from binsync.common.ui.qt_objects import (
     QPushButton,
     QVBoxLayout,
 )
-from binsync.data.db_model import User
+from binsync.data.db_model import SQAUser
 
 l = logging.getLogger(__name__)
 
@@ -299,7 +299,7 @@ class SyncConfig(QDialog):
         if not config:
             return config
 
-        User.save(user)
+        SQAUser.save(user)
 
         return config.save()
 

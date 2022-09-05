@@ -14,7 +14,7 @@ _l = logging.getLogger("DB")
 _l.setLevel(logging.DEBUG)
 
 
-class Binary(Base):
+class SQABinary(Base):
     """
     Name of a binary with meta information stored
     """
@@ -41,11 +41,11 @@ class Binary(Base):
         _l.info(f"Getting binary info {binary_path=} {binary_hash=}")
         try:
             with get_session() as session:
-                b = session.query(Binary).first()
+                b = session.query(SQABinary).first()
                 if b is None:
                     binary_name = os.path.basename(binary_path)
                     binary_size = os.path.getsize(binary_path)
-                    b = Binary(name=binary_name, path=binary_path, hash=binary_hash, size=binary_size)
+                    b = SQABinary(name=binary_name, path=binary_path, hash=binary_hash, size=binary_size)
                     session.add(b)
                     session.commit()
                     _l.info(f"ADDED {b} to DATABASE")
@@ -59,7 +59,7 @@ class Binary(Base):
             print(ex)
 
 
-class User(Base):
+class SQAUser(Base):
     """
     Name of a binary with meta information stored
     """
@@ -74,7 +74,7 @@ class User(Base):
     @staticmethod
     def get(username):
         with get_session() as session:
-            user = session.query(User).where(User.username == username).first()
+            user = session.query(SQAUser).where(SQAUser.username == username).first()
             return user
 
 
@@ -82,11 +82,11 @@ class User(Base):
     def save(username):
         try:
             with get_session() as session:
-                session.query(User).update({User.current_local_user: False}, synchronize_session=False)
+                session.query(SQAUser).update({SQAUser.current_local_user: False}, synchronize_session=False)
                 #update(User).values(User.current_local_user=False)
-                user = session.query(User).first()
+                user = session.query(SQAUser).first()
                 if user is None:
-                    user = User(username)
+                    user = SQAUser(username)
                     session.add(user)
                     _l.info(f"ADDED {user} to DATABASE")
                 else:

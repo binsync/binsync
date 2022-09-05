@@ -4,7 +4,7 @@ from sqlalchemy import create_engine, update, Column, Index, ForeignKey, UniqueC
 from sqlalchemy import DateTime, String, Integer,  Text, Float, Enum, Boolean, BigInteger
 
 from binsync.data import Comment
-from binsync.data.db_model.binary_user import Binary, User
+from binsync.data.db_model.binary_user import SQABinary, SQAUser
 from binsync.data.db_model import get_session
 from binsync.data.db_model.base_session import Base
 
@@ -17,7 +17,7 @@ _l = logging.getLogger("DB")
 _l.setLevel(logging.DEBUG)
 
 
-class DBComment(Base):
+class SQAComment(Base):
     """
         Comment added or updated by user
     """
@@ -26,8 +26,8 @@ class DBComment(Base):
     comment = Column(Text(), nullable=False)
     decompiled = Column(Boolean, nullable=False, default=False)
 
-    fk_binary_id = Column(String(128), ForeignKey(Binary.id), nullable=False)
-    fk_user_id = Column(String(128), ForeignKey(User.id), nullable=False)
+    fk_binary_id = Column(String(128), ForeignKey(SQABinary.id), nullable=False)
+    fk_user_id = Column(String(128), ForeignKey(SQAUser.id), nullable=False)
 
     comment_user_binary_address_index = Index('comment_user_binary_address_index', 'fk_user_id', 'fk_binary_id', 'address')
 
@@ -43,21 +43,26 @@ class DBComment(Base):
         self.fk_user_id = user_id
 
     @staticmethod
-    def save_comments(comments: Dict[int, Comment], binary_id, user_id):
+    def save_comments(comments: Dict[int, Comment], binary_id: str, user_id: str):
 
         with get_session() as session:
             session.begin()
             try:
+                added = []
                 for comment in comments.values():
-                    dbcmt = session.query(DBComment).where(and_(DBComment.fk_binary_id == binary_id,
-                                                                DBComment.fk_user_id == user_id,
-                                                                DBComment.address == comment.addr))
+                    dbcmt = session.query(SQAComment).where(and_(SQAComment.fk_binary_id == binary_id,
+                                                                 SQAComment.fk_user_id == user_id,
+                                                                 SQAComment.address == comment.addr)).first()
                     if dbcmt is None:
-                        dbcmt = DBComment(comment.addr, comment.comment, comment.decompiled, binary_id, user_id, comment.func_addr)
-                        session.new(dbcmt)
+                        dbcmt = SQAComment(comment.addr, comment.comment, comment.decompiled, binary_id, user_id, comment.func_addr)
+                        session.add(dbcmt)
+                        session.flush()
+                        added.append(dbcmt.id)
+                    else:
+                        print(f"comment = {dbcmt}")
 
                 session.commit()
-                _l.info("Added/Updated DB Comments ")
+                _l.info(f"Added/Updated DB Comments {added}")
 
             except Exception as ex:
                 session.rollback()

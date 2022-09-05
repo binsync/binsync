@@ -264,7 +264,7 @@ class AngrBinSyncController(BinSyncController):
         return arg_info
 
     @staticmethod
-    def func_insn_addrs(func: angr.knowledge_plugins.Function):
+    def func_insn_addrs(func: angr.knowledge_plugins.SQAFunction):
         insn_addrs = set()
         for block in func.blocks:
             insn_addrs.update(block.instruction_addrs)
