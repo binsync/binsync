@@ -2,11 +2,11 @@ import logging
 import traceback
 from typing import Dict
 
+from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, update, Column, Index, ForeignKey, UniqueConstraint, event, desc, func, or_, and_
 from sqlalchemy import DateTime, String, Integer, BigInteger, Text, Float, Enum, Boolean
 import enum
 from enum import unique
-from sqlalchemy.orm import relationship
 
 from binsync.data.db_model.base_session import Base, get_session
 from binsync.data.db_model.binary_user import SQABinary, SQAUser
@@ -64,7 +64,7 @@ class SQAVariable(Base):
 
     @staticmethod
     def save(address: int, used_as: VariableUses, user_id: str, function_id: str = None, binary_id: str = None,
-             var_name: str = None, variable_type="void", session=None):
+             var_name: str = None, variable_type="void", size: int = 0, session: Session = None):
         if variable_type is None:
             return None
         if session is None:
@@ -76,7 +76,7 @@ class SQAVariable(Base):
 
     @staticmethod
     def _save(address: int, used_as: VariableUses, user_id: str, function_id: str = None, binary_id: str = None,
-              var_name: str = None, variable_type="void", session=None):
+              var_name: str = None, variable_type: str ="void", size: int = 0, session: Session = None):
 
         ret_var = session.query(SQAVariable).where(and_(SQAVariable.fk_binary_id == binary_id, SQAVariable.fk_function_id == function_id)).first()
         if ret_var is None:
@@ -84,13 +84,14 @@ class SQAVariable(Base):
             session.add(ret_var)
             session.flush()
 
-        SQAVariableInfo.save(var_name, variable_type, user_id, ret_var.id, binary_id, session)
+        SQAVariableInfo.save(var_name, variable_type, size, user_id, ret_var.id, binary_id, session)
 
     @staticmethod
-    def save_list(variables: Dict[int, GlobalVariable], used_as: VariableUses, binary_id: str, user_id: str):
+    def save_global_vars(variables: Dict[int, GlobalVariable], used_as: VariableUses, binary_id: str, user_id: str):
         with get_session() as session:
             for v in variables.values():
-                SQAVariable.save(v.addr, used_as, user_id, binary_id=binary_id, var_name=v.name, variable_type="void", session=session)
+                var_type = "void" if v.type_str is None else v.type_str
+                SQAVariable._save(v.addr, used_as, user_id, binary_id=binary_id, var_name=v.name, variable_type=var_type, size=v.size, session=session)
 
 
 class SQAVariableInfo(Base):
@@ -118,16 +119,16 @@ class SQAVariableInfo(Base):
         self.fk_user_id = fk_user_id
 
     @staticmethod
-    def save(var_name: str, var_type_name: str , user_id: str, variable_id: str, binary_id: str = None, session=None):
+    def save(var_name: str, var_type_name: str, size: int, user_id: str, variable_id: str, binary_id: str = None, session: Session = None):
         if session is None:
             with get_session() as session:
-                SQAVariableInfo._save(var_name, var_type_name, user_id, variable_id, binary_id, session=session)
+                SQAVariableInfo._save(var_name, var_type_name, size, user_id, variable_id, binary_id, session=session)
         else:
-            SQAVariableInfo._save(var_name, var_type_name, user_id, variable_id, binary_id, session=session)
+            SQAVariableInfo._save(var_name, var_type_name, size, user_id, variable_id, binary_id, session=session)
 
 
     @staticmethod
-    def _save(var_name: str, var_type_name: str , user_id: str, variable_id: str, binary_id: str = None, session=None):
+    def _save(var_name: str, var_type_name: str, size: int, user_id: str, variable_id: str, binary_id: str = None, session: Session = None):
 
         if var_name is not None:
             save_new_entry_for_user = False
@@ -146,7 +147,7 @@ class SQAVariableInfo(Base):
                     break
             if var_type_id is None:
                 # may need something more here with Complexity Type to figure out when not just primative.
-                var_type_id = SQAVariableType.save(var_type_name, 0, binary_id=binary_id, var_complexity=ComplexityTypes.PRIMATIVE, session=session)
+                var_type_id = SQAVariableType.save(var_type_name, size, binary_id=binary_id, var_complexity=ComplexityTypes.PRIMATIVE, session=session)
 
             # if no results then add a root object, else add a
             if len(vi_results) == 0:
@@ -182,7 +183,7 @@ class SQAVariableType(Base):
         self.fk_binary_id = fk_binary_id
 
     @staticmethod
-    def save(var_type_name: str, size: int, binary_id: str, var_complexity: ComplexityTypes = ComplexityTypes.PRIMATIVE, session=None):
+    def save(var_type_name: str, size: int, binary_id: str, var_complexity: ComplexityTypes = ComplexityTypes.PRIMATIVE, session: Session = None):
 
         if session is None:
             with get_session() as session:
@@ -192,7 +193,7 @@ class SQAVariableType(Base):
         return var_type_id
 
     @staticmethod
-    def _save(var_type_name: str, size: int, binary_id: str, var_complexity: ComplexityTypes = ComplexityTypes.PRIMATIVE, session=None):
+    def _save(var_type_name: str, size: int, binary_id: str, var_complexity: ComplexityTypes = ComplexityTypes.PRIMATIVE, session: Session = None):
         print(f"{var_type_name=}, {binary_id=}")
         var_type = session.query(SQAVariableType).where(and_(SQAVariableType.name == var_type_name, SQAVariableType.fk_binary_id == binary_id)).first()
         if var_type is None:
@@ -222,7 +223,7 @@ class SQAVariableType(Base):
         return struct_list
 
     @staticmethod
-    def save_structs(structs: Dict[str, Struct], binary_id: str, user_id: str, session=None):
+    def save_structs(structs: Dict[str, Struct], binary_id: str, user_id: str, session: Session = None):
         if session is None:
             session = get_session()
         print(f"{session=}")
@@ -277,7 +278,7 @@ class SQAStructMember(Base):
         self.fk_variable_type_id = variable_type_id
 
     @staticmethod
-    def save(offset: int, structure_type_id: str, member_name: str, member_type_id, user_id: str, session=None):
+    def save(offset: int, structure_type_id: str, member_name: str, member_type_id, user_id: str, session: Session = None):
         if session is None:
             with get_session() as session:
                 SQAStructMember._save(offset, structure_type_id, member_name, member_type_id, user_id, session=session)
@@ -285,7 +286,7 @@ class SQAStructMember(Base):
             SQAStructMember._save(offset, structure_type_id, member_name, member_type_id, user_id, session=session)
 
     @staticmethod
-    def _save(offset: int, structure_type_id: str, member_name: str, member_type_id, user_id: str, session=None):
+    def _save(offset: int, structure_type_id: str, member_name: str, member_type_id, user_id: str, session: Session = None):
 
         struct_member = session.query(SQAStructMember).where(and_(SQAStructMember.fk_variable_type_id == structure_type_id, SQAStructMember.offset == offset)).first()
         if struct_member is None:
@@ -320,7 +321,7 @@ class SQAStructMemberInfo(Base):
         self.fk_member_var_type_id = member_var_type_id
 
     @staticmethod
-    def save(name: str, struct_member_id: str, member_var_type_id: str, user_id: str, is_root: bool, session=None):
+    def save(name: str, struct_member_id: str, member_var_type_id: str, user_id: str, is_root: bool, session: Session = None):
 
         if session is None:
             raise Exception("SQAStructMemberInfo session=None is not supported")

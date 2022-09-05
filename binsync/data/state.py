@@ -285,7 +285,7 @@ class State:
         # dump global vars
         self._dump_data(dst, 'global_vars.toml', toml.dumps(GlobalVariable.dump_many(self.global_vars)).encode())
         print(self.global_vars)
-        ldb.SQAVariable.save_list(self.global_vars, ldb.VariableUses.GLOBAL_VARIABLE, self.binary_id, self.user)
+        ldb.SQAVariable.save_global_vars(self.global_vars, ldb.VariableUses.GLOBAL_VARIABLE, self.binary_id, self.user)
 
         # dump enums
         self._dump_data(dst, 'enums.toml', toml.dumps(Enum.dump_many(self.enums)).encode())

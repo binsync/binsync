@@ -2,7 +2,7 @@
 from sqlalchemy import create_engine, update, Column, Index, ForeignKey, UniqueConstraint, event, desc, func, or_, and_
 from sqlalchemy import DateTime, String, Integer,  Text, Float, Enum, Boolean
 from typing import Dict
-
+from sqlalchemy.orm import Session
 from binsync.data.db_model.base_session import Base, get_session
 from binsync.data.db_model.binary_user import SQABinary, SQAUser
 from binsync.data import Function
@@ -28,8 +28,10 @@ class SQAFunction(Base):
     def __repr__(self):
         return f"Function (addr={self.address}, size={self.size})"
 
+
     @staticmethod
-    def save(binary_id, user_id, functions: Dict[int, Function]):
+    def save(binary_id: str, user_id: str, functions: Dict[int, Function]):
+
         from binsync.data.db_model.variables import SQAVariable, VariableUses
         with get_session() as session:
             session.begin()
@@ -51,12 +53,13 @@ class SQAFunction(Base):
 
                     if function.header:
                         return_var_name = f"{function.name}_return_var"
+                        # defaulting size to 4
                         SQAVariable.save(address, VariableUses.RETURN_VALUE, user_id, db_function.id, binary_id=binary_id,
-                                         var_name=return_var_name, variable_type=function.header.ret_type, session=session)
+                                         var_name=return_var_name, variable_type=function.header.ret_type, size=4, session=session)
 
                     for key, val in function.stack_vars.items():
                         SQAVariable.save(val.addr, VariableUses.STACK_VARIABLE, user_id, db_function.id, binary_id=binary_id,
-                                         var_name=val.name, variable_type=val.type,  )
+                                         var_name=val.name, variable_type=val.type, size=val.size, session=session)
                         print(f"{key=} {val=}")
 
                 session.commit()
@@ -82,7 +85,7 @@ class SQAFunctionInfo(Base):
     function_id_index = Index('fk_function_id_index', 'fk_function_id')
     function_name_index = Index('function_name_index', 'name')
 
-    def __init__(self, name, fk_function_id, is_root, fk_user_id):
+    def __init__(self, name: str, fk_function_id: str, is_root: bool, fk_user_id: str):
 
         self.name = name
         self.fk_function_id = fk_function_id
@@ -90,8 +93,8 @@ class SQAFunctionInfo(Base):
         self.fk_user_id = fk_user_id
 
     @staticmethod
-    def save(function_name: str, function_id: str, user_id: str, session):
-        user_fi = SQAFunctionInfo.get_(session, function_id, user_id)
+    def save(function_name: str, function_id: str, user_id: str, session: Session):
+        user_fi = SQAFunctionInfo.get_(function_id, user_id, session)
         if user_fi is None:
             user_fi = SQAFunctionInfo(function_name, function_id, is_root=True, fk_user_id=user_id)
             session.add(user_fi)
@@ -104,7 +107,7 @@ class SQAFunctionInfo(Base):
         return user_fi.id
 
     @staticmethod
-    def get_(session, fk_function_id, fk_user_id):
+    def get_(fk_function_id, fk_user_id, session: Session):
         # we could pass in all the function_ids and get all at once for a speed up, if needed
         fiinfos = session.query(SQAFunctionInfo).where(SQAFunctionInfo.fk_function_id == fk_function_id).order_by(SQAFunctionInfo.is_root).all()
         root_fi = None
