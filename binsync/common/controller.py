@@ -647,7 +647,8 @@ class BinSyncController:
         dec_func: Function = self.function(func_addr)
         if not dec_func:
             _l.warning(f"The function at {hex(func_addr)} does not exist in your decompiler. Stopping sync.")
-            return False
+            dec_func = Function(None, None)
+            #return False
 
         master_func: Function = artifact
         changes = False
@@ -663,12 +664,12 @@ class BinSyncController:
             for offset, sv in master_func.stack_vars.items():
                 dec_sv = dec_func.stack_vars.get(offset, None)
                 if not dec_sv or sv == dec_sv:
-                    _l.info(f"Decompiler stack var not found at {offset}")
-                    continue
+                    _l.warning(f"Decompiler stack var not found at {offset}")
+                    #continue
 
+                corrected_off = dec_sv.stack_offset if dec_sv and dec_sv.stack_offset else sv.stack_offset
                 changes |= self.import_user_defined_type(sv.type, **kwargs)
-                print(f"Doing a fill now for {sv}")
-                changes |= self.fill_stack_variable(func_addr, dec_sv.stack_offset, artifact=sv, **kwargs)
+                changes |= self.fill_stack_variable(func_addr, corrected_off, artifact=sv, **kwargs)
 
         # comments
         for addr, cmt in kwargs['state'].get_func_comments(func_addr).items():

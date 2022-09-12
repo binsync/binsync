@@ -1,4 +1,5 @@
 import logging
+import sys
 
 from binsync.common.ui.qt_objects import QVBoxLayout, QMainWindow, QApplication
 from binsync.common.ui.control_panel import ControlPanel
@@ -45,14 +46,14 @@ class ControlPanelWindow(QMainWindow):
         client_connected = self.controller.check_client()
 
         # setup bridge and alert it we are configuring
-        bridge_connected = self.controller.connect_ghidra_bridge()
+        bridge_connected = self.controller.connect_ghidra_client()
         if bridge_connected:
-            self.controller.bridge.set_controller_status(client_connected)
+            self.controller.ghidra.alert_ui_configured(client_connected)
 
         return client_connected and bridge_connected
 
     def closeEvent(self, event):
-        self.controller.bridge.server.stop()
+        self.controller.ghidra.server.stop()
 
 
 def start_ui():
@@ -65,6 +66,6 @@ def start_ui():
     if connected:
         cp_window.show()
     else:
-        exit(1)
+        sys.exit(1)
 
     app.exec_()

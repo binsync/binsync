@@ -1,11 +1,32 @@
 import xmlrpc.client
+from functools import wraps
+
+import json
 
 from binsync.data import (
     Function, FunctionHeader
 )
 
 
-class BSBridgeClient:
+def stringify_args(f):
+    @wraps(f)
+    def _stringify_args(self, *args, **kwargs):
+        new_args = list()
+        for arg in args:
+            if isinstance(arg, int):
+                new_arg = hex(arg)
+            elif isinstance(arg, dict):
+                new_arg = json.loads(json.dumps(arg), parse_int=lambda o: hex(o))
+            else:
+                new_arg = arg
+
+            new_args.append(new_arg)
+
+        return f(self, *new_args, **kwargs)
+
+    return _stringify_args
+
+class BSGhidraClient:
     def __init__(self, host="localhost", port=6683):
         self.host = host
         self.port = port
@@ -37,7 +58,7 @@ class BSBridgeClient:
 
         return True
 
-    def set_controller_status(self, status):
+    def alert_ui_configured(self, status):
         self.server.alertUIConfigured(status)
 
     #
@@ -48,14 +69,14 @@ class BSBridgeClient:
     # Function Operations
     #
 
-    def set_func_header(self, addr, fh: FunctionHeader):
-        pass
-
+    @stringify_args
     def set_func_name(self, addr, name):
-        return self.server.setFunctionName(str(addr), name)
+        return self.server.setFunctionName(addr, name)
 
-    def _set_func_type(self, addr, type_):
-        pass
+    @stringify_args
+    def set_stack_var_name(self, addr, offset, name):
+        return self.server.setStackVarName(addr, offset, name)
 
-    def _set_func_arg(self, addr, offset, name, type_):
-        pass
+    @stringify_args
+    def set_stack_var_type(self, addr, offset, type_):
+        return self.server.setStackVarType(addr, offset, type_)
