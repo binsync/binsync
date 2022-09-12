@@ -1,14 +1,10 @@
 # pylint: disable=missing-class-docstring
-import glob
-import os
 import platform
 import shutil
-import subprocess
 import sys
 from distutils.command.build import build as st_build
 from distutils.util import get_platform
 
-import pkg_resources
 from setuptools import Command, setup
 from setuptools.command.develop import develop as st_develop
 

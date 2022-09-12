@@ -2,7 +2,6 @@ from typing import Optional
 import logging
 
 from binsync.common.controller import BinSyncController, init_checker, fill_event
-from binsync.core.scheduler import SchedSpeed
 from binsync.data import (
     Function, FunctionHeader, StackVariable, Comment
 )
