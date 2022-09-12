@@ -34,3 +34,4 @@ dist
 .vscode/
 *.db
 .DS_Store
+binsync/plugins/
