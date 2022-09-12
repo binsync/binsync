@@ -169,11 +169,12 @@ class BinSyncController:
         if self.headless:
             return
         #stop the worker, quit the thread, wait for it to exit
-        self.ui_thread_worker.stop()
-        self.ui_updater_thread.quit()
-        _l.debug("Waiting for QThread ui_updater_thread to exit..")
-        self.ui_updater_thread.wait()
-
+        if self.ui_thread_worker and self.ui_updater_thread:
+            self.ui_thread_worker.stop()
+            self.ui_updater_thread.quit()
+            _l.debug("Waiting for QThread ui_updater_thread to exit..")
+            self.ui_updater_thread.wait()
+        
 
     def schedule_job(self, cmd_func, *args, blocking=False, **kwargs):
         if blocking:

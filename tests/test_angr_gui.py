@@ -1,20 +1,21 @@
 import os
 import sys
 import tempfile
+
 import time
-import unittest
 import logging
-from unittest.mock import patch
+from datetime import datetime as datetime_, timedelta
 
 from PySide6.QtGui import QContextMenuEvent
 from PySide6.QtTest import QTest
 from PySide6.QtCore import Qt, QPoint, QTimer
 from PySide6.QtWidgets import QApplication, QMenu
+from pytestqt.qtbot import QtBot
+import pytest
 
 import angr
 from angrmanagement.ui.dialogs.rename_node import RenameNode
 from angrmanagement.ui.main_window import MainWindow
-from angrmanagement.config import Conf
 
 from binsync.common.ui.version import set_ui_version
 set_ui_version("PySide6")
@@ -29,290 +30,370 @@ app = None
 test_location = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'binaries')
 logging.disable(logging.CRITICAL)
 
-BINSYNC_RELOAD_TIME = 10
+BINSYNC_RELOAD_TIME = 10000
 
-#
-# Test Utilities
-#
+def get_timestamp():
+    return datetime_.utcfromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S.%f')
 
+def qWait(to_wait, app):
+    endtime = datetime_.now() + timedelta(milliseconds=to_wait)
+    while datetime_.now() < endtime:
+        app.processEvents()
 
-def config_and_connect(binsync_plugin, username, sync_dir_path, init=False):
-    config = SyncConfig(binsync_plugin.controller, open_magic_sync=False, load_config=not init)
-    config._user_edit.setText("")
-    config._repo_edit.setText("")
-    QTest.keyClicks(config._user_edit, username)
-    QTest.keyClicks(config._repo_edit, sync_dir_path)
-    # always init for first user
-    if init:
-        QTest.mouseClick(config._initrepo_checkbox, Qt.MouseButton.LeftButton)
-
-    QTest.mouseClick(config._ok_button, Qt.MouseButton.LeftButton)
-
-
-def get_binsync_am_plugin(main_window):
-    inactive_bs_plugin = main_window.workspace.plugins.loaded_plugins.get("binsync", None)
-    if not inactive_bs_plugin:
-        raise Exception("BinSync plugin is not present in AM plugins folder, or failed.")
-
-    main_window.workspace.plugins.activate_plugin_by_name(inactive_bs_plugin.name.lower())
-    binsync_plugin = main_window.workspace.plugins.active_plugins.get("binsync", None)
-    if not binsync_plugin:
-        raise Exception("Failed to activate BinSync plugin after load, probably because a newly"
-                        " broken import. Break before activating and step through to find it.")
-
-    return binsync_plugin
-
+def closeShim(event):
+    event.ignore()
 
 def start_am_gui(binpath):
     main = MainWindow(show=False)
     main.workspace.main_instance.project.am_obj = angr.Project(binpath, auto_load_libs=False)
     main.workspace.main_instance.project.am_event()
     main.workspace.main_instance.join_all_jobs()
+    main.closeEvent = closeShim
     return main
 
 
-def am_setUp():
-    global app
-    if app is None:
-        app = QApplication([])
-        Conf.init_font_config()
-#
-# Tests
-#
+def get_binsync_am_plugin(main):
+    _plugin = [plugin for plugin in main.workspace.plugins.loaded_plugins if "BinSyncPlugin" in str(plugin)][
+        0]
+    main.workspace.plugins.activate_plugin(_plugin)
+
+    binsync_plugin = next(iter(
+        [p for p in main.workspace.plugins.active_plugins if "BinSync" in str(p)]
+    ))
+    return binsync_plugin
 
 
-class TestBinSyncPluginGUI(unittest.TestCase):
+def configure_and_connect(qtbot: QtBot, binsync_plugin, sync_dir_path, username, init=False):
+    config = SyncConfig(binsync_plugin.controller, open_magic_sync=False, load_config=False)
+    qtbot.addWidget(config)
+    config._user_edit.setText("")
+    config._repo_edit.setText("")
+    qtbot.keyClicks(config._user_edit, username)
+    qtbot.keyClicks(config._repo_edit, sync_dir_path)
+    if init:
+        qtbot.mouseClick(config._initrepo_checkbox, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(config._ok_button, Qt.MouseButton.LeftButton)
+
+    assert binsync_plugin.controller.status() == SyncControlStatus.CONNECTED_NO_REMOTE
+    assert binsync_plugin.controller.client.master_user == username
+
+def click_sync_menu(qtbot: QtBot, table, obj_name):
     """
-    Unit Tests to test the BinSync Plugin for syncing across two users or more.
-    Done inside angr-management decompiler.
+    Syncs from the first entry in a context menu for a given table and menu object name
     """
+    table.contextMenuEvent(QContextMenuEvent(QContextMenuEvent.Mouse, QPoint(-1, -1)))
+    context_menu = next(
+        filter(lambda x: isinstance(x, QMenu) and x.objectName() == obj_name,
+               QApplication.topLevelWidgets()))
+    for widget in QApplication.topLevelWidgets():
+        if widget.objectName():
+            print(widget.objectName())
 
-    def setUp(self):
-        am_setUp()
+    print(context_menu)
+    # triple check we got the right menu
+    assert (context_menu.objectName() == obj_name)
+    sync_action = next(filter(lambda x: "Sync" == x.text(), context_menu.actions()))
+    print(sync_action)
+    sync_action.trigger()
+    context_menu.close()
 
-    #
-    # Helpers
-    #
-    def rename_function(self, main, func, new_function_name):
-        """
-        Renames a given function
-        """
-        disasm_view = main.workspace._get_or_create_disassembly_view()
-        disasm_view._t_flow_graph_visible = True
-        disasm_view.display_function(func)
-        disasm_view.decompile_current_function()
-        main.workspace.main_instance.join_all_jobs()
-        pseudocode_view = main.workspace._get_or_create_pseudocode_view()
-        for _, item in pseudocode_view.codegen.map_pos_to_node.items():
-            if isinstance(item.obj, angr.analyses.decompiler.structured_codegen.c.CFunction):
-                func_node = item.obj
-                break
-        else:
-            self.fail("The CFunction _instance is not found.")
-        rnode = RenameNode(code_view=pseudocode_view, node=func_node)
-        rnode._name_box.setText("")
-        QTest.keyClicks(rnode._name_box, new_function_name)
-        QTest.mouseClick(rnode._ok_button, Qt.MouseButton.LeftButton)
-        self.assertEqual(func.name, new_function_name)
 
-    def rename_stack_variable(self, main, func, var_offset, new_var_name):
-        """
-        Renames a stack variable at a given function and offset
-        """
-        disasm_view = main.workspace._get_or_create_disassembly_view()
-        disasm_view._t_flow_graph_visible = True
-        disasm_view.display_function(func)
-        disasm_view.decompile_current_function()
-        main.workspace.main_instance.join_all_jobs()
-        pseudocode_view = main.workspace._get_or_create_pseudocode_view()
-        for _, item in pseudocode_view.codegen.map_pos_to_node.items():
-            if isinstance(item.obj, angr.analyses.decompiler.structured_codegen.c.CVariable) and \
-                    isinstance(item.obj.variable, angr.sim_variable.SimStackVariable) and \
-                    item.obj.variable.offset == var_offset:
-                var_node = item.obj
-                break
-        else:
-            self.fail("The CVariable _instance is not found.")
+def rename_function(qtbot: QtBot, main, func, new_func_name):
+    disasm_view = main.workspace._get_or_create_disassembly_view()
+    disasm_view._t_flow_graph_visible = True
+    disasm_view.display_function(func)
+    disasm_view.decompile_current_function()
+    main.workspace.instance.join_all_jobs()
+    pseudocode_view = main.workspace._get_or_create_pseudocode_view()
+    for _, item in pseudocode_view.codegen.map_pos_to_node.items():
+        if isinstance(item.obj, angr.analyses.decompiler.structured_codegen.c.CFunction):
+            func_node = item.obj
+            break
+    else:
+        raise Exception("The CFunction _instance is not found.")
+    rnode = RenameNode(code_view=pseudocode_view, node=func_node)
+    qtbot.addWidget(rnode)
+    rnode._name_box.setText("")
+    qtbot.keyClicks(rnode._name_box, new_func_name)
+    qtbot.mouseClick(rnode._ok_button, Qt.MouseButton.LeftButton)
+    assert func.name == new_func_name
 
-        rnode = RenameNode(code_view=pseudocode_view, node=var_node)
-        rnode._name_box.setText("")
-        QTest.keyClicks(rnode._name_box, new_var_name)
-        QTest.mouseClick(rnode._ok_button, Qt.MouseButton.LeftButton)
 
-    def get_stack_variable(self, main, func, var_offset, var_man = None):
-        """
-        Gets a stack variable from a given function and offset
-        """
-        if var_man is None:
-            var_man = main.workspace.main_instance.pseudocode_variable_kb.variables.get_function_manager(func.addr)
-        for var in var_man._unified_variables:
-            if isinstance(var, angr.sim_variable.SimStackVariable) and var.offset == var_offset:
-                renamed_var = var
-                break
-        else:
-            return None
-        return renamed_var
+def rename_stack_variable(qtbot:QtBot, main, func, new_var_name, var_offset):
+    disasm_view = main.workspace._get_or_create_disassembly_view()
+    disasm_view._t_flow_graph_visible = True
+    disasm_view.display_function(func)
+    disasm_view.decompile_current_function()
+    main.workspace.main_instance.join_all_jobs()
+    pseudocode_view = main.workspace._get_or_create_pseudocode_view()
+    for _, item in pseudocode_view.codegen.map_pos_to_node.items():
+        if isinstance(item.obj, angr.analyses.decompiler.structured_codegen.c.CVariable) and \
+                isinstance(item.obj.variable, angr.sim_variable.SimStackVariable) and \
+                item.obj.variable.offset == var_offset:
+            var_node = item.obj
+            break
+    else:
+        raise Exception("The CFunction _instance is not found.")
 
-    def click_sync_menu(self, table, obj_name):
-        """
-        Syncs from the first entry in a context menu for a given table and menu object name
-        """
-        table.contextMenuEvent(QContextMenuEvent(QContextMenuEvent.Mouse, QPoint(0, 0)))
-        context_menu = next(
-            filter(lambda x: isinstance(x, QMenu) and x.objectName() == obj_name,
-                   QApplication.topLevelWidgets()))
-        # triple check we got the right menu
-        assert (context_menu.objectName() == obj_name)
-        sync_action = next(filter(lambda x: x.text() == "Sync", context_menu.actions()))
-        sync_action.trigger()
+    rnode = RenameNode(code_view=pseudocode_view, node=var_node)
+    rnode._name_box.setText("")
+    qtbot.keyClicks(rnode._name_box, new_var_name)
+    qtbot.mouseClick(rnode._ok_button, Qt.MouseButton.LeftButton)
 
-    def check_repo_update(self, binsync_plugin, user, func_name=None, func_addr=None):
-        """
-        Checks to ensure the repo has been updated correctly with either a function name or address
-        """
-        time.sleep(BINSYNC_RELOAD_TIME + BINSYNC_RELOAD_TIME // 2)
-        control_panel = binsync_plugin.control_panel_view.control_panel
-        top_change_func = list(control_panel._func_table.items.values())[0]
-        top_change_activity = control_panel._activity_table.items[0]
-        self.assertEqual(top_change_func.user, user)
-        if func_name is not None:
-            self.assertEqual(top_change_func.name, func_name)
-        if func_addr is not None:
-            self.assertEqual(top_change_activity.activity, func_addr)
-        self.assertIsNot(top_change_func.last_push, None)
-    #
-    # Tests
-    #
+def get_stack_variable(main, func, var_offset, var_man=None):
+    """
+    Gets a stack variable from a given function and offset
+    """
+    if var_man is None:
+        var_man = main.workspace.main_instance.pseudocode_variable_kb.variables.get_function_manager(func.addr)
+    for var in var_man._unified_variables:
+        if isinstance(var, angr.sim_variable.SimStackVariable) and var.offset == var_offset:
+            renamed_var = var
+            break
+    else:
+        return None
+    return renamed_var
 
-    @timeout_after
-    def test_function_rename(self, timeout=2*60):
+class TestBinsyncGUI(object):
+    app = None
+
+    @pytest.fixture(autouse=True)
+    def run_around_tests(self):
+        self.app = QApplication.instance()
+        if not self.app:
+            self.app = QApplication([])
+        yield
+        self.app.shutdown()
+
+    def test_function_rename(self, qtbot: QtBot):
+        print("\n")  # passing/failing doesn't add a newline sometimes
+
         binpath = os.path.join(test_location, "fauxware")
         new_function_name = "leet_main"
         user_1 = "user_1"
         user_2 = "user_2"
+        print(f"Running function renaming test with users: {user_1} and {user_2}, func name: {new_function_name}")
         with tempfile.TemporaryDirectory() as sync_dir_path:
-            # ========= USER 1 =========
-            # setup GUI
+            print(f"Generating new directory: {sync_dir_path}")
+            print("========= USER 1 =========")
+            print("Starting angr-management gui..")
             main = start_am_gui(binpath)
+
+            print("Grabbing main function..")
             func = main.workspace.main_instance.project.kb.functions['main']
-            self.assertIsNotNone(func)
+            assert func is not None
 
-            # find the binsync plugin and connect
+            print("Grabbing binsync plugin..")
             binsync_plugin = get_binsync_am_plugin(main)
-            config_and_connect(binsync_plugin, user_1, sync_dir_path, init=True)
-            self.assertEqual(binsync_plugin.controller.status(), SyncControlStatus.CONNECTED_NO_REMOTE)
-            self.assertEqual(binsync_plugin.controller.client.master_user, user_1)
 
-            # trigger a function rename in decompilation
-            self.rename_function(main, func, new_function_name)
+            print(f"Initializing/connecting to the repo in {sync_dir_path}")
+            configure_and_connect(qtbot, binsync_plugin, sync_dir_path, user_1, True)
 
-            # assure a new commit makes it to the repo
-            self.check_repo_update(binsync_plugin, user_1, func_name=new_function_name)
+            print(f"Renaming function '{func.name}' to '{new_function_name}'")
+            rename_function(qtbot, main, func, new_function_name)
 
-            # reset the repo
+            print("Blocking waiting for table updates..")
+            control_panel = binsync_plugin.control_panel_view.control_panel
+            for i in range(20):
+                qWait(BINSYNC_RELOAD_TIME // 10, self.app)
+                print(f"\tAttempt number {i + 1}/20..")
+                try:
+                    assert len(control_panel._func_table.table.model.row_data) == 1
+                    top_change_func = control_panel._func_table.table.model.row_data[0]
+                    assert len(control_panel._activity_table.table.model.row_data) == 1
+                    top_change_activity = control_panel._activity_table.table.model.row_data[0]
+                    assert top_change_func[3] != -1
+                    break
+                except AssertionError:
+                    continue
+            else:
+                raise Exception("Repo updates never made it to table!")
+
+            print("Checking data for correctness..")
+            assert top_change_func[0] == top_change_activity[1]
+            assert top_change_func[1] == new_function_name
+            assert top_change_func[2] == top_change_activity[0]
+            assert top_change_func[3] is not None
+
+            print("Exiting first angr-management instance..")
+            binsync_plugin.controller.stop_worker_routines()
+            qWait(1000, self.app)  # sleep 1s
+
+            main.close()
             os.remove(sync_dir_path + "/.git/binsync.lock")
 
-            # ========= USER 2 =========
-            # setup GUI
+            print("========= USER 2 =========")
+
+            print("Starting angr-management gui..")
             main = start_am_gui(binpath)
+
+            print("Grabbing main function..")
             func = main.workspace.main_instance.project.kb.functions['main']
-            self.assertIsNotNone(func)
+            assert func is not None
 
-            # find the binsync plugin and connect
+            print("Grabbing binsync plugin..")
             binsync_plugin = get_binsync_am_plugin(main)
-            config_and_connect(binsync_plugin, user_2, sync_dir_path)
-            self.assertEqual(binsync_plugin.controller.status(), SyncControlStatus.CONNECTED_NO_REMOTE)
-            self.assertEqual(binsync_plugin.controller.client.master_user, user_2)
 
-            # wait for the control panel to get new data and force UI reload
-            time.sleep(BINSYNC_RELOAD_TIME)
+            print(f"Initializing/connecting to the repo in {sync_dir_path}")
+            configure_and_connect(qtbot, binsync_plugin, sync_dir_path, user_2, init=False)
+
+            print("Blocking waiting for table updates..")
             control_panel = binsync_plugin.control_panel_view.control_panel
-            control_panel.reload()
+            for i in range(20):
+                qWait(BINSYNC_RELOAD_TIME // 10, self.app)
+                print(f"\tAttempt number {i + 1}/20..")
+                try:
+                    assert len(control_panel._func_table.table.model.row_data) == 1
+                    assert control_panel._func_table.table.model.row_data[0][3] != -1
+                    break
+                except AssertionError:
+                    continue
+            else:
+                raise Exception("Repo updates never made it to table!")
 
-            # make a click event to sync new data from the first row in the table
-            self.click_sync_menu(control_panel._func_table, "binsync_function_table_context_menu")
+            print("Syncing..")
+            click_sync_menu(qtbot, control_panel._func_table.table, "binsync_function_table_context_menu")
 
-            # check to ensure function name synced properly
-            self.assertEqual(func.name, new_function_name)
-            
-            controller = binsync_plugin.controller
-            controller.stop_worker_routines()
-            time.sleep(1)
+            print("Checking sync for correctness..")
+            for i in range(3):
+                try:
+                    assert func.name == new_function_name
+                    break
+                except AssertionError:
+                    pass
+                qWait(1000, self.app)
+            else:
+                raise Exception("Sync failed!")
 
-            app.exit(0)
+            print("Exiting second client..")
+            binsync_plugin.controller.stop_worker_routines()
+            qWait(1000, self.app)
 
-    @timeout_after
-    def test_stack_variable_rename(self, timeout=2*60):
+            main.close()
+
+    def test_stack_variable_rename(self, qtbot: QtBot):
+        print("\n")  # passing/failing doesn't add a newline sometimes
+
         binpath = os.path.join(test_location, "fauxware")
         var_offset = -0x18
         new_var_name = "leet_buff"
         user_1 = "user_1"
         user_2 = "user_2"
 
+        print(f"Running stack variable renaming test with users: {user_1} and {user_2}, var name: {new_var_name}")
         with tempfile.TemporaryDirectory() as sync_dir_path:
-            # ========= USER 1 =========
-            # setup GUI
+            print(f"Generating new directory: {sync_dir_path}")
+            print("========= USER 1 =========")
+            print("Starting angr-management gui..")
             main = start_am_gui(binpath)
+
+            print("Grabbing main function..")
             func = main.workspace.main_instance.project.kb.functions['main']
+            assert func is not None
             old_name = func.name
-            self.assertIsNotNone(func)
 
-            # find the binsync plugin and connect
+            print("Grabbing binsync plugin..")
             binsync_plugin = get_binsync_am_plugin(main)
-            config_and_connect(binsync_plugin, user_1, sync_dir_path, init=True)
-            self.assertEqual(binsync_plugin.controller.status(), SyncControlStatus.CONNECTED_NO_REMOTE)
-            self.assertEqual(binsync_plugin.controller.client.master_user, user_1)
 
-            # trigger a variable rename in decompilation
-            self.rename_stack_variable(main, func, var_offset, new_var_name)
+            print(f"Initializing/connecting to the repo in {sync_dir_path}")
+            configure_and_connect(qtbot, binsync_plugin, sync_dir_path, user_1, True)
 
-            # check renamed variable
+            print(f"Renaming variable to '{new_var_name}'")
+            rename_stack_variable(qtbot, main, func, new_var_name, var_offset)
+
+            print("Blocking waiting for table updates..")
+            control_panel = binsync_plugin.control_panel_view.control_panel
+            for i in range(20):
+                qWait(BINSYNC_RELOAD_TIME // 10, self.app)
+                print(f"\tAttempt number {i + 1}/20..")
+                try:
+                    assert len(control_panel._func_table.table.model.row_data) == 1
+                    top_change_func = control_panel._func_table.table.model.row_data[0]
+                    assert top_change_func[3] != -1
+                    break
+                except AssertionError:
+                    continue
+            else:
+                raise Exception("Repo updates never made it to table!")
+
+            print("Checking data for correctness..")
+            assert top_change_func[0] == func.addr
+            assert top_change_func[1] == ""
+            assert top_change_func[2] == user_1
+            assert top_change_func[3] is not None
+
+            # check for var correctness
             var_man = main.workspace.main_instance.pseudocode_variable_kb.variables.get_function_manager(func.addr)
-            self.assertEqual(self.get_stack_variable(main, func, var_offset, var_man).name, new_var_name)
+            print(main)
+            print(func)
+            print(var_offset)
+            print(var_man)
+            assert get_stack_variable(main, func, var_offset, var_man).name == new_var_name
 
-            # assure a new commit makes it to the repo
-            self.check_repo_update(binsync_plugin, user_1, func_addr=func.addr)
+            print("Exiting first angr-management instance..")
+            binsync_plugin.controller.stop_worker_routines()
+            qWait(1000, self.app)  # sleep 1s
 
-            # reset the repo
+            main.close()
             os.remove(sync_dir_path + "/.git/binsync.lock")
 
-            # ========= USER 2 =========
-            # setup GUI
+            print("========= USER 2 =========")
+
+            print("Starting angr-management gui..")
             main = start_am_gui(binpath)
+
+            print("Grabbing main function..")
             func = main.workspace.main_instance.project.kb.functions['main']
-            self.assertIsNotNone(func)
+            assert func is not None
 
-            # find the binsync plugin and connect
+            print("Grabbing binsync plugin..")
             binsync_plugin = get_binsync_am_plugin(main)
-            config_and_connect(binsync_plugin, user_2, sync_dir_path)
-            self.assertEqual(binsync_plugin.controller.status(), SyncControlStatus.CONNECTED_NO_REMOTE)
-            self.assertEqual(binsync_plugin.controller.client.master_user, user_2)
 
-            # wait for the control panel to get new data and force UI reload
-            time.sleep(BINSYNC_RELOAD_TIME)
+            print(f"Initializing/connecting to the repo in {sync_dir_path}")
+            configure_and_connect(qtbot, binsync_plugin, sync_dir_path, user_2, init=False)
+
+            print("Blocking waiting for table updates..")
             control_panel = binsync_plugin.control_panel_view.control_panel
-            control_panel.reload()
+            for i in range(20):
+                qWait(BINSYNC_RELOAD_TIME // 10, self.app)
+                print(f"\tAttempt number {i + 1}/20..")
+                try:
+                    assert len(control_panel._func_table.table.model.row_data) == 1
+                    top_change_func = control_panel._func_table.table.model.row_data[0]
+                    assert top_change_func[3] != -1
+                    break
+                except AssertionError:
+                    continue
+            else:
+                raise Exception("Repo updates never made it to table!")
 
-            # assure functions did not change
-            func_table = control_panel._func_table
-            self.assertIsNotNone(list(func_table.items.values())[0].name)
+            assert top_change_func[0] == func.addr
+            assert top_change_func[1] == ""
+            assert top_change_func[2] == user_1
+            assert top_change_func[3] is not None
 
-            # make a click event to sync new data from the first row in the table
-            self.click_sync_menu(control_panel._activity_table, "binsync_activity_table_context_menu")
+            print("Syncing..")
+            click_sync_menu(qtbot, control_panel._func_table.table, "binsync_function_table_context_menu")
 
-            # assure function name did not change
-            self.assertEqual(list(func_table.items.values())[0].name, "")
-            self.assertEqual(func.name, old_name)
+            print("Checking sync for correctness..")
+            for i in range(3):
+                try:
+                    assert func.name == old_name
+                    stkvar = get_stack_variable(main, func, var_offset, var_man)
+                    assert stkvar is not None
+                    assert stkvar.name == new_var_name
+                    break
+                except AssertionError:
+                    pass
+                qWait(1000, self.app)
+            else:
+                raise Exception("Sync failed!")
 
-            # assure stack variable synced properly
-            self.assertEqual(self.get_stack_variable(main, func, var_offset, var_man).name, new_var_name)
+            print("Exiting second client..")
+            binsync_plugin.controller.stop_worker_routines()
+            qWait(1000, self.app)
 
-            controller = binsync_plugin.controller
-            controller.stop_worker_routines()
-            time.sleep(1)
-
-            app.exit(0)
-
+            main.close()
 
 if __name__ == "__main__":
-    unittest.main(argv=sys.argv)
+    pytest.main(args=sys.argv)
