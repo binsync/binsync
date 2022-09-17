@@ -1,5 +1,5 @@
 import os
-from binsync import VERSION as _VERSION
+from binsync import __version__ as _VERSION
 
 VERSION = _VERSION
 PLUGIN_DIR = os.path.dirname(os.path.realpath(__file__))
