@@ -54,6 +54,8 @@ BinSync is a two-step process.
 For step 2, you copy all files (and folders) found under the plugin folder in BinSync. An an example, for IDA,
 you would copy everything in `plugins/ida_binsync/*` to the plugins folder.
 
+To install the Ghidra plugin, please follow the [plugin specific README](https://github.com/mahaloz/binsync-ghidra-plugin).
+
 
 ## Usage
 Although BinSync supports various decompilers, which may have not so subtle differences, a lot of the way you interact
@@ -75,7 +77,7 @@ cp binsync_example_repo/fauxware .
 
 2. Open the fauxware binary in your decompiler, verify it has loaded in the decompiler terminal
 ```
-[BinSync] 2.7.0 loaded
+[BinSync] 2.7.1 loaded
 ```
 Or check your plugin menu. For example, if you are using IDA, you should see this option:
 
