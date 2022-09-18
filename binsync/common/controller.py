@@ -308,6 +308,13 @@ class BinSyncController:
         """
         raise NotImplementedError
 
+    @property
+    def decompiler_available(self) -> bool:
+        """
+        @return: True if decompiler is available for decompilation, False if otherwise
+        """
+        return True
+
     #
     # Optional Artifact API:
     # A series of functions that allow public access to live artifacts in the decompiler. As an example,

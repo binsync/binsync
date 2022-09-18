@@ -136,6 +136,7 @@ class IDABinSyncController(BinSyncController):
 
         # view change callback
         self._updated_ctx = None
+        self._decompiler_available = None
 
         # update state for only updating when needed
         self.update_states = defaultdict(UpdateTaskState)
@@ -171,6 +172,13 @@ class IDABinSyncController(BinSyncController):
 
     def goto_address(self, func_addr) -> None:
         compat.jumpto(func_addr)
+
+    @property
+    def decompiler_available(self) -> bool:
+        if self._decompiler_available is None:
+            self._decompiler_available = ida_hexrays.init_hexrays_plugin()
+
+        return self._decompiler_available
 
     #
     # IDA DataBase Fillers
@@ -284,7 +292,7 @@ class IDABinSyncController(BinSyncController):
         return compat.functions()
 
     def function(self, addr) -> Optional[Function]:
-        return compat.function(addr)
+        return compat.function(addr, decompiler_available=self.decompiler_available)
 
     def global_vars(self) -> Dict[int, GlobalVariable]:
         return compat.global_vars()

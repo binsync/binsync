@@ -9,8 +9,8 @@
 #
 # ----------------------------------------------------------------------------
 
-import functools
 import threading
+from functools import wraps
 import typing
 import logging
 from time import time, sleep
@@ -34,6 +34,7 @@ l = logging.getLogger(__name__)
 # things are done in the controller and just setters and getters are done here.
 #
 
+
 def is_mainthread():
     """
     Return a bool that indicates if this is the main application thread.
@@ -41,53 +42,30 @@ def is_mainthread():
     return isinstance(threading.current_thread(), threading._MainThread)
 
 
-def execute_sync(func, sync_type):
-    """
-    Synchronize with the disassembler for safe database access.
-    Modified from https://github.com/vrtadmin/FIRST-plugin-ida
-    """
-
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
+def execute_write(f):
+    @wraps(f)
+    def _execute_write(*args, **kwargs):
         output = [None]
 
-        #
-        # this inline function definition is technically what will execute
-        # in the context of the main thread. we use this thunk to capture
-        # any output the function may want to return to the user.
-        #
-
         def thunk():
-            output[0] = func(*args, **kwargs)
+            output[0] = f(*args, **kwargs)
             return 1
 
         if is_mainthread():
             thunk()
         else:
-            idaapi.execute_sync(thunk, sync_type)
+            idaapi.execute_sync(thunk, idaapi.MFF_WRITE)
 
         # return the output of the synchronized execution
         return output[0]
-    return wrapper
 
-
-def execute_read(func):
-    return execute_sync(func, idaapi.MFF_READ)
-
-
-def execute_write(func):
-    return execute_sync(func, idaapi.MFF_WRITE)
-
-
-def execute_ui(func):
-    return execute_sync(func, idaapi.MFF_FAST)
-
+    return _execute_write
 
 #
 #   Data Type Converters
 #
 
-@execute_read
+@execute_write
 def convert_type_str_to_ida_type(type_str) -> typing.Optional['ida_typeinf']:
     ida_type_str = type_str + ";"
     tif = ida_typeinf.tinfo_t()
@@ -96,7 +74,7 @@ def convert_type_str_to_ida_type(type_str) -> typing.Optional['ida_typeinf']:
     return tif if valid_parse is not None else None
 
 
-@execute_read
+@execute_write
 def ida_to_angr_stack_offset(func_addr, ida_stack_off):
     frame = idaapi.get_frame(func_addr)
     if not frame:
@@ -108,7 +86,7 @@ def ida_to_angr_stack_offset(func_addr, ida_stack_off):
     return angr_stack_off
 
 
-@execute_read
+@execute_write
 def convert_size_to_flag(size):
     """
     Converts a size to the arch specific flag.
@@ -139,7 +117,7 @@ def convert_size_to_flag(size):
 #   IDA Function r/w
 #
 
-@execute_read
+@execute_write
 def ida_func_addr(addr):
     ida_func = ida_funcs.get_func(addr)
     if ida_func is None:
@@ -149,12 +127,12 @@ def ida_func_addr(addr):
     return func_addr
 
 
-@execute_read
+@execute_write
 def get_func_name(ea) -> typing.Optional[str]:
     return idc.get_func_name(ea)
 
 
-@execute_read
+@execute_write
 def get_func_size(ea):
     func = idaapi.get_func(ea)
     if not func:
@@ -171,7 +149,7 @@ def set_ida_func_name(func_addr, new_name):
     ida_kernwin.request_refresh(ida_kernwin.IWID_STKVIEW)
 
 
-@execute_read
+@execute_write
 def functions():
     blacklisted_segs = ["extern", ".plt", ".plt.sec"]
     func_addrs = list(idautils.Functions())
@@ -189,8 +167,9 @@ def functions():
 
     return funcs
 
-@execute_read
-def function(addr):
+
+@execute_write
+def function(addr, decompiler_available=True):
     ida_func = ida_funcs.get_func(addr)
     if ida_func is None:
         l.warning(f"IDA function does not exist for {hex(addr)}.")
@@ -198,18 +177,25 @@ def function(addr):
 
     func_addr = ida_func.start_ea
 
-    try:
-        ida_cfunc = idaapi.decompile(func_addr)
-    except Exception:
+    if decompiler_available:
+        try:
+            ida_cfunc = idaapi.decompile(func_addr)
+        except Exception:
+            ida_cfunc = None
+    else:
         ida_cfunc = None
 
-    if not ida_cfunc:
-        l.warning(f"IDA function {hex(func_addr)} is not decompilable")
-        return Function(func_addr, get_func_size(func_addr), last_change=int(time()))
+    change_time = int(time())
+    func = Function(func_addr, get_func_size(func_addr), last_change=change_time)
+    if ida_cfunc is None:
+        if not decompiler_available:
+            l.warning(f"IDA function {hex(func_addr)} is not decompilable")
 
-    func = Function(func_addr, get_func_size(func_addr), last_change=int(time()))
+        func.header = FunctionHeader(get_func_name(func_addr), func_addr, last_change=change_time)
+        return func
+
+    # decompilation is available
     func_header: FunctionHeader = function_header(ida_cfunc)
-
     stack_vars = {
         offset: var
         for offset, var in get_func_stack_var_info(ida_func.start_ea).items()
@@ -219,7 +205,8 @@ def function(addr):
 
     return func
 
-@execute_read
+
+@execute_write
 def function_header(ida_cfunc) -> FunctionHeader:
     func_addr = ida_cfunc.entry_ea
 
@@ -397,7 +384,7 @@ def set_decomp_comments(func_addr, cmt_dict: typing.Dict[int, str]):
 #   IDA Stack Var r/w
 #
 
-@execute_read
+@execute_write
 def get_func_stack_var_info(func_addr) -> typing.Dict[int, StackVariable]:
     try:
         decompilation = ida_hexrays.decompile(func_addr)
@@ -459,7 +446,7 @@ def set_stack_vars_types(var_type_dict, code_view, controller: "IDABinSyncContro
 
     return data_changed
 
-@execute_read
+@execute_write
 def ida_get_frame(func_addr):
     return idaapi.get_frame(func_addr)
 
@@ -468,7 +455,7 @@ def ida_get_frame(func_addr):
 #   IDA Struct r/w
 #
 
-@execute_read
+@execute_write
 def structs():
     _structs = {}
     for struct_item in idautils.Structs():
@@ -479,7 +466,7 @@ def structs():
         
     return _structs
 
-@execute_read
+@execute_write
 def struct(name):
     sid = ida_struct.get_struc_id(name)
     if sid == 0xffffffffffffffff:
@@ -572,7 +559,7 @@ def set_ida_struct_member_types(struct: Struct, controller) -> bool:
 #
 
 
-@execute_read
+@execute_write
 def global_vars():
     gvars = {}
     known_segs = [".data", ".bss"]
@@ -597,7 +584,7 @@ def global_vars():
     return gvars
 
 
-@execute_read
+@execute_write
 def global_var(addr):
     name = idaapi.get_name(addr)
     if not name:
@@ -630,7 +617,8 @@ def get_enum_members(_enum) -> typing.Dict[str, int]:
         enum_members[member_name] = member
     return enum_members
 
-@execute_read
+
+@execute_write
 def enums() -> typing.Dict[str, Enum]:
     _enums: typing.Dict[str, Enum] = {}
     for i in range(ida_enum.get_enum_qty()):
@@ -640,7 +628,8 @@ def enums() -> typing.Dict[str, Enum]:
         _enums[enum_name] = Enum(enum_name, enum_members)
     return _enums
 
-@execute_read
+
+@execute_write
 def enum(name) -> typing.Optional[Enum]:
     _enum = ida_enum.get_enum(name)
     if not _enum:
@@ -648,6 +637,7 @@ def enum(name) -> typing.Optional[Enum]:
     enum_name = ida_enum.get_enum_name(_enum)
     enum_members = get_enum_members(_enum)
     return Enum(enum_name, enum_members)
+
 
 @execute_write
 def set_enum(bs_enum: Enum):
@@ -667,11 +657,12 @@ def set_enum(bs_enum: Enum):
 
     return True
 
+
 #
 #   IDA GUI r/w
 #
 
-@execute_ui
+@execute_write
 def acquire_pseudocode_vdui(addr):
     """
     Acquires a IDA HexRays vdui pointer, which is a pointer to a pseudocode view that contains
@@ -703,7 +694,7 @@ def acquire_pseudocode_vdui(addr):
     return vu
 
 
-@execute_ui
+@execute_write
 def refresh_pseudocode_view(ea, set_focus=True):
     """Refreshes the pseudocode view in IDA."""
     names = ["Pseudocode-%c" % chr(ord("A") + i) for i in range(5)]
@@ -721,18 +712,18 @@ def refresh_pseudocode_view(ea, set_focus=True):
 
 
 class IDAViewCTX:
-    @execute_ui
+    @execute_write
     def __init__(self, func_addr):
         self.view = ida_hexrays.open_pseudocode(func_addr, 0)
 
     def __enter__(self):
         return self.view
 
-    @execute_ui
+    @execute_write
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close_pseudocode_view(self.view)
 
-    @execute_ui
+    @execute_write
     def close_pseudocode_view(self, ida_vdui_t):
         widget = ida_vdui_t.toplevel
         idaapi.close_pseudocode(widget)
@@ -742,7 +733,7 @@ def get_screen_ea():
     return idc.get_screen_ea()
 
 
-@execute_read
+@execute_write
 def get_function_cursor_at():
     curr_addr = get_screen_ea()
     if curr_addr is None:
@@ -755,7 +746,7 @@ def get_function_cursor_at():
 # Other Utils
 #
 
-@execute_read
+@execute_write
 def get_ptr_size():
     """
     Gets the size of the ptr, which in affect tells you the bit size of the binary.
@@ -768,11 +759,12 @@ def get_ptr_size():
     return tif.get_size()
 
 
-@execute_read
+@execute_write
 def get_binary_path():
     return idaapi.get_input_file_path()
 
-@execute_ui
+
+@execute_write
 def jumpto(addr):
     """
     Changes the pseudocode view to the function address provided.

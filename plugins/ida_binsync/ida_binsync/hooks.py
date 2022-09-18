@@ -521,15 +521,12 @@ class HexRaysHooks:
         self.updating_states = threading.Lock()
 
     def hook(self):
-        if self._available is None:
-            if not ida_hexrays.init_hexrays_plugin():
-                self._available = False
-            else:
-                ida_hexrays.install_hexrays_callback(self._hxe_callback)
-                self._available = True
+        if not self.controller.decompiler_available:
+            return
 
-        if self._available:
-            self._installed = True
+        ida_hexrays.install_hexrays_callback(self._hxe_callback)
+        self._available = True
+        self._installed = True
 
     def unhook(self):
         if self._available:
