@@ -135,7 +135,6 @@ class FunctionTableView(BinsyncTableView):
             for username in self.model.context_menu_cache[func_addr]:
                 yield username
         else:
-            l.info("fetching")
             for user in self.controller.client.check_cache_(self.controller.client.users,
                                                             priority=SchedSpeed.FAST, no_cache=False):
                 # only populate with cached items to prevent main thread waiting on atomic actions
