@@ -65,6 +65,25 @@ class BSGhidraClient:
     # Public Facing API
     #
 
+    @property
+    def base_addr(self):
+        val = self.server.baseAddr()
+        if not val:
+            return None
+
+        return int(val, 16)
+
+    @property
+    def binary_hash(self):
+        return self.server.binaryHash()
+
+    @property
+    def binary_path(self):
+        return self.server.binaryPath()
+
+    def goto_address(self, addr):
+        return self.server.gotoAddress(addr)
+
     #
     # Function Operations
     #
@@ -74,9 +93,14 @@ class BSGhidraClient:
         return self.server.setFunctionName(addr, name)
 
     @stringify_args
+    def set_func_rettype(self, addr, type_str):
+        return self.server.setFunctionRetType(addr, type_str)
+
+    @stringify_args
     def set_stack_var_name(self, addr, offset, name):
         return self.server.setStackVarName(addr, offset, name)
 
     @stringify_args
     def set_stack_var_type(self, addr, offset, type_):
         return self.server.setStackVarType(addr, offset, type_)
+

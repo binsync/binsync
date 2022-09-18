@@ -16,9 +16,10 @@ class GhidraBinSyncController(BinSyncController):
     def __init__(self):
         super(GhidraBinSyncController, self).__init__(GhidraArtifactLifter(self))
         self.ghidra = BSGhidraClient()
+        self.base_addr = None
 
     def binary_hash(self) -> str:
-        return ""
+        return self.ghidra.binary_hash
 
     def active_context(self):
         if not self.ghidra.server:
@@ -33,20 +34,22 @@ class GhidraBinSyncController(BinSyncController):
         return Function(addr, 0, header=FunctionHeader("", addr))
 
     def binary_path(self) -> Optional[str]:
-        return ""
+        return self.ghidra.binary_path
 
     def get_func_size(self, func_addr) -> int:
         return 0
 
     def rebase_addr(self, addr, up=True):
-        base_addr = 0x100000
+        if self.base_addr is None:
+            self.base_addr = self.ghidra.base_addr
+
         if up:
-            return addr + base_addr
-        elif addr > base_addr:
-            return addr - base_addr
+            return addr + self.base_addr
+        elif addr > self.base_addr:
+            return addr - self.base_addr
 
     def goto_address(self, func_addr) -> None:
-        pass
+        self.ghidra.goto_address(func_addr)
 
     #
     # Ghidra Specific
@@ -65,19 +68,27 @@ class GhidraBinSyncController(BinSyncController):
 
     @fill_event
     def fill_stack_variable(self, func_addr, offset, user=None, artifact=None, **kwargs):
-        ret = False
+        update = False
         stack_var: StackVariable = artifact
         if stack_var.name:
-            ret |= self.ghidra.set_stack_var_name(stack_var.addr, stack_var.stack_offset, stack_var.name)
+            update |= self.ghidra.set_stack_var_name(stack_var.addr, stack_var.stack_offset, stack_var.name)
 
         if stack_var.type:
-            ret |= self.ghidra.set_stack_var_type(stack_var.addr, stack_var.stack_offset, stack_var.type)
-        return ret
+            update |= self.ghidra.set_stack_var_type(stack_var.addr, stack_var.stack_offset, stack_var.type)
+
+        return update
 
     @fill_event
     def fill_function_header(self, func_addr, user=None, artifact=None, **kwargs):
+        update = False
         func_header: FunctionHeader = artifact
-        return self.ghidra.set_func_name(func_header.addr, func_header.name)
+        if func_header.name:
+            update |= self.ghidra.set_func_name(func_header.addr, func_header.name)
+
+        if func_header.ret_type:
+            update |= self.ghidra.set_func_rettype(func_header.addr, func_header.ret_type)
+
+        return update
 
     @fill_event
     def fill_comment(self, addr, user=None, artifact=None, **kwargs):
