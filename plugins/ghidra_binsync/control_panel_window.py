@@ -40,14 +40,15 @@ class ControlPanelWindow(QMainWindow):
     #
 
     def configure(self):
+        # setup bridge and alert it we are configuring
+        bridge_connected = self.controller.connect_ghidra_client()
+
         config = SyncConfig(self.controller)
         config.show()
         config.exec_()
         client_connected = self.controller.check_client()
 
-        # setup bridge and alert it we are configuring
-        bridge_connected = self.controller.connect_ghidra_client()
-        if bridge_connected:
+        if bridge_connected and client_connected:
             self.controller.ghidra.alert_ui_configured(client_connected)
 
         return client_connected and bridge_connected

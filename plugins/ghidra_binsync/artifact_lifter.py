@@ -12,6 +12,7 @@ class GhidraArtifactLifter(ArtifactLifter):
         super(GhidraArtifactLifter, self).__init__(controller)
 
     def lift_addr(self, addr: int) -> int:
+        #return self.controller.rebase_addr(addr)
         return addr
 
     def lift_type(self, type_str: str) -> str:
@@ -21,6 +22,7 @@ class GhidraArtifactLifter(ArtifactLifter):
         return offset
 
     def lower_addr(self, addr: int) -> int:
+        #return self.controller.rebase_addr(addr, up=True)
         return addr
 
     def lower_type(self, type_str: str) -> str:
