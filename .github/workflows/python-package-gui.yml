@@ -24,7 +24,7 @@ jobs:
         pip install flake8 pytest
         pip install angr-management==9.2.25
         AM_INSTALL=$(dirname $(python3 -c "import angrmanagement; print(angrmanagement.__file__)"))
-        pip install -e .
+        pip install -e .[test]
         binsync --install-angr-only $AM_INSTALL 
 
     - name: Pytest
