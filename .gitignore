@@ -35,3 +35,4 @@ dist
 *.db
 .DS_Store
 binsync/plugins/
+.pytest_cache/

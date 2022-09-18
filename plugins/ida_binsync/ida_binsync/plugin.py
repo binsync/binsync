@@ -143,7 +143,6 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         """
         Open the control panel view and attach it to IDA View-A or Pseudocode-A.
         """
-
         wrapper = ControlPanelViewWrapper(controller)
         if not wrapper.twidget:
             l.info("BinSync is unable to find a widget to attach to. You are likely running headlessly")
@@ -156,7 +155,9 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         # casually open a pseudocode window, this prevents magic sync from spawning pseudocode windows
         # in weird locations upon an initial run
         func_addr = next(idautils.Functions())
-        ida_hexrays.open_pseudocode(func_addr, ida_hexrays.OPF_NO_WAIT | ida_hexrays.OPF_REUSE)
+        if controller.decompiler_available:
+            ida_hexrays.open_pseudocode(func_addr, ida_hexrays.OPF_NO_WAIT | ida_hexrays.OPF_REUSE)
+
         # then attempt to flip back to IDA View-A
         twidget = idaapi.find_widget("IDA View-A")
         if twidget is not None:
