@@ -55,6 +55,7 @@ class FunctionTableModel(BinsyncTableModel):
 
         touched_addrs = []
         # grab all the new info from user states
+        l.critical("UPDATING TABLE")
         for user in self.controller.users():
             state = self.controller.client.get_state(user=user.name)
             user_funcs: Dict[int, Function] = state.functions
@@ -112,7 +113,7 @@ class FunctionTableModel(BinsyncTableModel):
 
         for idx in idxs_to_update:
             self.dataChanged.emit(self.index(0, idx), self.index(self.rowCount() - 1, idx))
-
+        l.critical("ALL TABLE UPDATES FIRED!")
 
 class FunctionTableView(BinsyncTableView):
     HEADER = ['Addr', 'Remote Name', 'User', 'Last Push']

@@ -273,6 +273,7 @@ class BinSyncController:
 
     @init_checker
     def users(self, priority=None, no_cache=True) -> Iterable[User]:  # TODO: fix no_cache user bug
+        _l.critical("USERS_FUNCTION_CALLED")
         return self.client.users(priority=priority, no_cache=no_cache)
 
     def usernames(self, priority=None) -> Iterable[str]:
