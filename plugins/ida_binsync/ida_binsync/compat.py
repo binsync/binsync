@@ -188,7 +188,7 @@ def function(addr, decompiler_available=True):
     change_time = int(time())
     func = Function(func_addr, get_func_size(func_addr), last_change=change_time)
     if ida_cfunc is None:
-        if not decompiler_available:
+        if decompiler_available:
             l.warning(f"IDA function {hex(func_addr)} is not decompilable")
 
         func.header = FunctionHeader(get_func_name(func_addr), func_addr, last_change=change_time)
