@@ -44,6 +44,8 @@ class GhidraBinSyncController(BinSyncController):
             self.base_addr = self.ghidra.base_addr
 
         if up:
+            if addr > self.base_addr:
+                return
             return addr + self.base_addr
         elif addr > self.base_addr:
             return addr - self.base_addr

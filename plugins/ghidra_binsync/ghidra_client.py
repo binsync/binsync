@@ -81,6 +81,7 @@ class BSGhidraClient:
     def binary_path(self):
         return self.server.binaryPath()
 
+    @stringify_args
     def goto_address(self, addr):
         return self.server.gotoAddress(addr)
 
