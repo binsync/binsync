@@ -18,9 +18,6 @@ from binsync.common.ui.qt_objects import (
     Slot,
 )
 from binsync.common.ui.utils import friendly_datetime
-# no changes required, dont bother updating
-            if len(idxs_to_update) == 0 and self.controller.table_coloring_window == self.saved_color_window:
-                return
 l = logging.getLogger(__name__)
 
 
@@ -123,7 +120,6 @@ class BinsyncTableModel(QAbstractTableModel):
         new_rc = len(new_data)
         adding = prev_rc < new_rc
         removing = new_rc < prev_rc
-
         if adding:
             self.beginInsertRows(QModelIndex(), prev_rc, new_rc-1)
         elif removing:

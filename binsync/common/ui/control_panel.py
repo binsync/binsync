@@ -16,7 +16,8 @@ from binsync.common.ui.qt_objects import (
     QTabWidget,
     QVBoxLayout,
     QWidget,
-    Signal
+    Signal,
+    Slot
 )
 
 l = logging.getLogger(__name__)
@@ -36,7 +37,7 @@ class QContextStatusBar(QStatusBar):
             menu.popup(self.mapToGlobal(event.pos()))
 
 class ControlPanel(QWidget):
-    update_ready = Signal()
+    update_ready = Signal(str)
     ctx_change = Signal()
 
     def __init__(self, controller, parent=None):
@@ -61,7 +62,8 @@ class ControlPanel(QWidget):
         @return:
         """
         self._update_table_data()
-        self.update_ready.emit()
+        status = self.controller.status_string() if self.controller else "Disconnected"
+        self.update_ready.emit(status)
 
     def ctx_callback(self):
         if isinstance(self.controller.last_ctx, binsync.data.Function):
@@ -69,13 +71,9 @@ class ControlPanel(QWidget):
 
         self.ctx_change.emit()
 
-    def reload(self):
-        # check if connected
-        if self.controller and self.controller.check_client():
-            self._reload_tables()
-
+    @Slot(str)
+    def reload(self, status):
         # update status
-        status = self.controller.status_string() if self.controller else "Disconnected"
         self._status_label.setText(status)
 
     def closeEvent(self, event):
@@ -129,10 +127,6 @@ class ControlPanel(QWidget):
         self._status_bar.showMessage(f"{ctx_name}@{hex(self.controller.last_ctx.addr)}")
         self._ctx_table.reload()
 
-    def _reload_tables(self):
-        for _, table in self.tables.items():
-            table.reload()
-        self._ctx_table.reload()
 
     def _update_table_data(self):
         for _, table in self.tables.items():
