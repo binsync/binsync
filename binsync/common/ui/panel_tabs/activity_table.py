@@ -26,6 +26,7 @@ class ActivityTableModel(BinsyncTableModel):
         super().__init__(controller, col_headers, filter_cols, time_col, addr_col, parent)
         self.data_dict = {}
         self.saved_color_window = self.controller.table_coloring_window
+        self.context_menu_cache = {}
 
     def data(self, index, role=Qt.DisplayRole):
         if not index.isValid():
@@ -50,6 +51,7 @@ class ActivityTableModel(BinsyncTableModel):
         return None
 
     def update_table(self):
+        cmenu_cache = {}
         touched_users = []
 
         # first check if any functions are unknown to the table
@@ -64,6 +66,11 @@ class ActivityTableModel(BinsyncTableModel):
                 # don't add functions that were never changed by the user
                 if not sync_func.last_change:
                     continue
+
+                if user.name in cmenu_cache:
+                    cmenu_cache[user.name].append(func_addr)
+                else:
+                    cmenu_cache[user.name] = [func_addr]
 
                 # check if we already know about it
                 if func_addr in changed_funcs:
@@ -87,6 +94,7 @@ class ActivityTableModel(BinsyncTableModel):
             self.data_dict[user.name] = row
             touched_users.append(user.name)
 
+        self.context_menu_cache = cmenu_cache
         data_to_send = []
         colors_to_send = []
         idxs_to_update = []
@@ -136,19 +144,23 @@ class ActivityTableView(BinsyncTableView):
         self._init_settings()
 
     def _get_valid_funcs_for_user(self, username):
-        # only populate with cached items to prevent main thread waiting on atomic actions
-        cache_item = self.controller.client.check_cache_(self.controller.client.get_state, user=username,
-                                                         priority=SchedSpeed.FAST)
-        if cache_item is not None:
-            user_state = cache_item
+        if username in self.model.context_menu_cache:
+            for addr in self.model.context_menu_cache[username]:
+                yield hex(addr)
         else:
-            return
+            # only populate with cached items to prevent main thread waiting on atomic actions
+            cache_item = self.controller.client.check_cache_(self.controller.client.get_state, user=username,
+                                                             priority=SchedSpeed.FAST)
+            if cache_item is not None:
+                user_state = cache_item
+            else:
+                return
 
-        func_addrs = [addr for addr in user_state.functions]
+            func_addrs = [addr for addr in user_state.functions]
 
-        func_addrs.sort()
-        for func_addr in func_addrs:
-            yield hex(func_addr)
+            func_addrs.sort()
+            for func_addr in func_addrs:
+                yield hex(func_addr)
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
@@ -178,7 +190,6 @@ class ActivityTableView(BinsyncTableView):
             user_name = self.model.row_data[idx.row()][0]
 
             menu.addSeparator()
-            l.info(func_addr)
             if isinstance(func_addr, int) and func_addr > 0:
                 menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=user_name))
             menu.addAction("Sync-All", lambda: self.controller.fill_all(user=user_name))

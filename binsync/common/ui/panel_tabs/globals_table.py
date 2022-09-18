@@ -26,6 +26,7 @@ class GlobalsTableModel(BinsyncTableModel):
         super().__init__(controller, col_headers, filter_cols, time_col, addr_col, parent)
         self.data_dict = {}
         self.saved_color_window = self.controller.table_coloring_window
+        self.context_menu_cache = {}
 
     def data(self, index, role=Qt.DisplayRole):
         if not index.isValid():
@@ -49,6 +50,7 @@ class GlobalsTableModel(BinsyncTableModel):
         return None
 
     def update_table(self):
+        cmenu_cache = {}
         touched_globals = []
         for user in self.controller.users():
             state = self.controller.client.get_state(user=user.name)
@@ -64,17 +66,23 @@ class GlobalsTableModel(BinsyncTableModel):
                     if not change_time:
                         continue
 
+                    artifact_name = artifact.name if global_type != "Variable" \
+                        else f"{artifact.name} ({hex(artifact.addr)})"
+
+                    if artifact_name in cmenu_cache:
+                        cmenu_cache[artifact_name].append((user.name, global_type[0]))
+                    else:
+                        cmenu_cache[artifact_name] = [(user.name, global_type[0])]
+
                     if artifact.name in self.data_dict:
                         # change_time < artifact_stored_change_time
                         if not change_time or change_time < self.data_dict[artifact.name][3]:
                             continue
 
-                    artifact_name = artifact.name if global_type != "Variable" \
-                        else f"{artifact.name} ({hex(artifact.addr)})"
-
                     self.data_dict[artifact_name] = [global_type[0], artifact_name, user.name, change_time]
                     touched_globals.append(artifact_name)
 
+        self.context_menu_cache = cmenu_cache
         data_to_send = []
         colors_to_send = []
         idxs_to_update = []
@@ -123,34 +131,39 @@ class GlobalsTableView(BinsyncTableView):
 
     def _get_valid_users_for_global(self, global_name, global_type):
         """ Helper function for getting all valid users for a given global """
-        if global_type == "S":
-            global_getter = "get_struct"
-        elif global_type == "V":
-            global_getter = "get_global_var"
-        elif global_type == "E":
-            global_getter = "get_enum"
+        if global_name in self.model.context_menu_cache:
+            for username, gtype in self.model.context_menu_cache[global_name]:
+                if gtype == global_type:
+                    yield username
         else:
-            l.warning(f"Failed to get a valid type for global type '{global_type}'")
-            return
-
-        for user in self.controller.client.check_cache_(self.controller.client.users,
-                                                        priority=SchedSpeed.FAST, no_cache=False):
-            # only populate with cached items to prevent main thread waiting on atomic actions
-            cache_item = self.controller.client.check_cache_(self.controller.client.get_state, user=user.name,
-                                                             priority=SchedSpeed.FAST)
-            if cache_item is not None:
-                user_state = cache_item
+            if global_type == "S":
+                global_getter = "get_struct"
+            elif global_type == "V":
+                global_getter = "get_global_var"
+            elif global_type == "E":
+                global_getter = "get_enum"
             else:
-                continue
+                l.warning(f"Failed to get a valid type for global type '{global_type}'")
+                return
 
-            get_global = getattr(user_state, global_getter)
-            user_global = get_global(global_name)
+            for user in self.controller.client.check_cache_(self.controller.client.users,
+                                                            priority=SchedSpeed.FAST, no_cache=False):
+                # only populate with cached items to prevent main thread waiting on atomic actions
+                cache_item = self.controller.client.check_cache_(self.controller.client.get_state, user=user.name,
+                                                                 priority=SchedSpeed.FAST)
+                if cache_item is not None:
+                    user_state = cache_item
+                else:
+                    continue
 
-            # function must be changed by this user
-            if not user_global or not user_global.last_change:
-                continue
+                get_global = getattr(user_state, global_getter)
+                user_global = get_global(global_name)
 
-            yield user.name
+                # function must be changed by this user
+                if not user_global or not user_global.last_change:
+                    continue
+
+                yield user.name
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)

@@ -26,6 +26,7 @@ class FunctionTableModel(BinsyncTableModel):
         super().__init__(controller, col_headers, filter_cols, time_col, addr_col, parent)
         self.data_dict = {}
         self.saved_color_window = self.controller.table_coloring_window
+        self.context_menu_cache = {}
 
     def data(self, index, role=Qt.DisplayRole):
         if not index.isValid():
@@ -50,6 +51,8 @@ class FunctionTableModel(BinsyncTableModel):
         return None
 
     def update_table(self):
+        cmenu_cache = {}
+
         touched_addrs = []
         # grab all the new info from user states
         for user in self.controller.users():
@@ -61,6 +64,11 @@ class FunctionTableModel(BinsyncTableModel):
                 if not func_change_time:
                     continue
 
+                if func_addr in cmenu_cache:
+                    cmenu_cache[func_addr].append(user.name)
+                else:
+                    cmenu_cache[func_addr] = [user.name]
+
                 exists = func_addr in self.data_dict
                 if exists:
                     if not func_change_time or (func_change_time <= self.data_dict[func_addr][self.time_col]):
@@ -71,6 +79,7 @@ class FunctionTableModel(BinsyncTableModel):
                 self.data_dict[func_addr] = row
                 touched_addrs.append(func_addr)
 
+        self.context_menu_cache = cmenu_cache
         # parse new info to figure out what specifically needs updating, recalculate tooltips/coloring
         data_to_send = []
         colors_to_send = []
@@ -122,23 +131,28 @@ class FunctionTableView(BinsyncTableView):
 
     def _get_valid_users_for_func(self, func_addr):
         """ Helper function for getting users that have changes in a given function """
-        for user in self.controller.client.check_cache_(self.controller.client.users,
-                                                        priority=SchedSpeed.FAST, no_cache=False):
-            # only populate with cached items to prevent main thread waiting on atomic actions
-            cache_item = self.controller.client.check_cache_(self.controller.client.get_state, user=user.name,
-                                                             priority=SchedSpeed.FAST)
-            if cache_item is not None:
-                user_state = cache_item
-            else:
-                continue
+        if func_addr in self.model.context_menu_cache:
+            for username in self.model.context_menu_cache[func_addr]:
+                yield username
+        else:
+            l.info("fetching")
+            for user in self.controller.client.check_cache_(self.controller.client.users,
+                                                            priority=SchedSpeed.FAST, no_cache=False):
+                # only populate with cached items to prevent main thread waiting on atomic actions
+                cache_item = self.controller.client.check_cache_(self.controller.client.get_state, user=user.name,
+                                                                 priority=SchedSpeed.FAST)
+                if cache_item is not None:
+                    user_state = cache_item
+                else:
+                    continue
 
-            user_func = user_state.get_function(func_addr)
+                user_func = user_state.get_function(func_addr)
 
-            # function must be changed by this user
-            if not user_func or not user_func.last_change:
-                continue
+                # function must be changed by this user
+                if not user_func or not user_func.last_change:
+                    continue
 
-            yield user.name
+                yield user.name
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)

@@ -121,24 +121,6 @@ class QCTXTable(BinsyncTableView):
         # always init settings *after* loading the model
         self._init_settings()
 
-    def _get_valid_users_for_func(self, func_addr):
-        """ Helper function for getting users that have changes in a given function """
-        for user in self.controller.client.check_cache_(self.controller.client.users,
-                                                        priority=SchedSpeed.FAST, no_cache=False):
-            cache_item = self.controller.client.check_cache_(self.controller.client.get_state, user=user.name,
-                                                             priority=SchedSpeed.FAST)
-            if cache_item is not None:
-                user_state = cache_item
-            else:
-                continue
-            user_func = user_state.get_function(func_addr)
-
-            # function must be changed by this user
-            if not user_func or not user_func.last_change:
-                continue
-
-            yield user.name
-
     def contextMenuEvent(self, event):
         menu = QMenu(self)
         menu.setObjectName("binsync_context_table_context_menu")
