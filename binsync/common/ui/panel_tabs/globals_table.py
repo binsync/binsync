@@ -102,6 +102,10 @@ class GlobalsTableModel(BinsyncTableModel):
 
             self.data_tooltips.append(f"Age: {friendly_datetime(v[self.time_col])}")
 
+        # no changes required, dont bother updating
+        if len(idxs_to_update) == 0 and self.controller.table_coloring_window == self.saved_color_window:
+            return
+
         if len(data_to_send) != self.rowCount():
             idxs_to_update = []
 

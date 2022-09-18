@@ -55,7 +55,6 @@ class FunctionTableModel(BinsyncTableModel):
 
         touched_addrs = []
         # grab all the new info from user states
-        l.critical("UPDATING TABLE")
         for user in self.controller.users():
             state = self.controller.client.get_state(user=user.name)
             user_funcs: Dict[int, Function] = state.functions
@@ -79,7 +78,7 @@ class FunctionTableModel(BinsyncTableModel):
 
                 self.data_dict[func_addr] = row
                 touched_addrs.append(func_addr)
-
+        l.critical(touched_addrs)
         self.context_menu_cache = cmenu_cache
         # parse new info to figure out what specifically needs updating, recalculate tooltips/coloring
         data_to_send = []
@@ -101,6 +100,9 @@ class FunctionTableModel(BinsyncTableModel):
             colors_to_send.append(row_color)
 
             self.data_tooltips.append(f"Age: {friendly_datetime(v[self.time_col])}")
+        # no changes required, dont bother updating
+        if len(idxs_to_update) == 0 and self.controller.table_coloring_window == self.saved_color_window:
+            return
 
         if len(data_to_send) != self.rowCount():
             idxs_to_update = []
@@ -113,7 +115,6 @@ class FunctionTableModel(BinsyncTableModel):
 
         for idx in idxs_to_update:
             self.dataChanged.emit(self.index(0, idx), self.index(self.rowCount() - 1, idx))
-        l.critical("ALL TABLE UPDATES FIRED!")
 
 class FunctionTableView(BinsyncTableView):
     HEADER = ['Addr', 'Remote Name', 'User', 'Last Push']
