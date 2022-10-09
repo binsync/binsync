@@ -22,16 +22,7 @@ class GhidraBinSyncController(BinSyncController):
         return self.ghidra.binary_hash
 
     def active_context(self):
-        if not self.ghidra.server:
-            return Function(0, 0, header=FunctionHeader("", 0))
-
-        out = self.ghidra.server.context()
-        if not out:
-            return Function(0, 0, header=FunctionHeader("", 0))
-
-        #return Function(out['func_addr'], 0, header=FunctionHeader(out["name"], out['func_addr']))
-        addr = int(out, 16)
-        return Function(addr, 0, header=FunctionHeader("", addr))
+        return self.ghidra.context()
 
     def binary_path(self) -> Optional[str]:
         return self.ghidra.binary_path
@@ -94,7 +85,12 @@ class GhidraBinSyncController(BinSyncController):
 
     @fill_event
     def fill_comment(self, addr, user=None, artifact=None, **kwargs):
-        return False
+        update = False
+        comment: Comment = artifact
+        if comment.comment:
+            update |= self.ghidra.set_comment(comment.addr, comment.comment, comment.decompiled)
+
+        return update
 
     @init_checker
     def magic_fill(self, preference_user=None):
