@@ -22,8 +22,9 @@ jobs:
         python -m pip install --upgrade pip
         pip install flake8 pytest
         pip install angr-management
-        rm -rf /opt/hostedtoolcache/Python/3.8.13/x64/lib/python3.8/site-packages/angrmanagement/plugins/angr_binsync
-        ./install.sh --angr /opt/hostedtoolcache/Python/3.8.13/x64/lib/python3.8/site-packages/angrmanagement/plugins/ --link
+        AM_INSTALL=$(dirname $(python3 -c "import angrmanagement; print(angrmanagement.__file__)"))
+        rm -rf "$AM_INSTALL/angr_binsync"
+        ./install.sh --angr $AM_INSTALL/plugins/ --link
 
     - name: Pytest
       env:
