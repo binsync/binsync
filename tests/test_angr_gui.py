@@ -43,8 +43,8 @@ def qWait(to_wait, app):
 def closeShim(event):
     event.ignore()
 
-def start_am_gui(binpath):
-    main = MainWindow(show=False)
+def start_am_gui(binpath, app):
+    main = MainWindow(show=False, app=app)
     main.workspace.main_instance.project.am_obj = angr.Project(binpath, auto_load_libs=False)
     main.workspace.main_instance.project.am_event()
     main.workspace.main_instance.join_all_jobs()
@@ -163,7 +163,12 @@ class TestBinsyncGUI(object):
         if not self.app:
             self.app = QApplication([])
         yield
-        self.app.shutdown()
+        try:
+            self.app
+        except:
+            pass
+        else:
+            self.app.shutdown()
 
     def test_function_rename(self, qtbot: QtBot):
         print("\n")  # passing/failing doesn't add a newline sometimes
@@ -177,7 +182,7 @@ class TestBinsyncGUI(object):
             print(f"Generating new directory: {sync_dir_path}")
             print("========= USER 1 =========")
             print("Starting angr-management gui..")
-            main = start_am_gui(binpath)
+            main = start_am_gui(binpath, self.app)
 
             print("Grabbing main function..")
             func = main.workspace.main_instance.project.kb.functions['main']
@@ -195,7 +200,7 @@ class TestBinsyncGUI(object):
             print("Blocking waiting for table updates..")
             control_panel = binsync_plugin.control_panel_view.control_panel
             for i in range(20):
-                qWait(BINSYNC_RELOAD_TIME // 10, self.app)
+                qWait(BINSYNC_RELOAD_TIME // 10, main.app)
                 print(f"\tAttempt number {i + 1}/20..")
                 try:
                     assert len(control_panel._func_table.table.model.row_data) == 1
@@ -217,7 +222,7 @@ class TestBinsyncGUI(object):
 
             print("Exiting first angr-management instance..")
             binsync_plugin.controller.stop_worker_routines()
-            qWait(1000, self.app)  # sleep 1s
+            qWait(1000, main.app)  # sleep 1s
 
             main.close()
             os.remove(sync_dir_path + "/.git/binsync.lock")
@@ -225,7 +230,7 @@ class TestBinsyncGUI(object):
             print("========= USER 2 =========")
 
             print("Starting angr-management gui..")
-            main = start_am_gui(binpath)
+            main = start_am_gui(binpath, self.app)
 
             print("Grabbing main function..")
             func = main.workspace.main_instance.project.kb.functions['main']
@@ -240,7 +245,7 @@ class TestBinsyncGUI(object):
             print("Blocking waiting for table updates..")
             control_panel = binsync_plugin.control_panel_view.control_panel
             for i in range(20):
-                qWait(BINSYNC_RELOAD_TIME // 10, self.app)
+                qWait(BINSYNC_RELOAD_TIME // 10, main.app)
                 print(f"\tAttempt number {i + 1}/20..")
                 try:
                     assert len(control_panel._func_table.table.model.row_data) == 1
@@ -261,13 +266,13 @@ class TestBinsyncGUI(object):
                     break
                 except AssertionError:
                     pass
-                qWait(1000, self.app)
+                qWait(1000, main.app)
             else:
                 raise Exception("Sync failed!")
 
             print("Exiting second client..")
             binsync_plugin.controller.stop_worker_routines()
-            qWait(1000, self.app)
+            qWait(1000, main.app)
 
             main.close()
 
@@ -285,7 +290,7 @@ class TestBinsyncGUI(object):
             print(f"Generating new directory: {sync_dir_path}")
             print("========= USER 1 =========")
             print("Starting angr-management gui..")
-            main = start_am_gui(binpath)
+            main = start_am_gui(binpath, self.app)
 
             print("Grabbing main function..")
             func = main.workspace.main_instance.project.kb.functions['main']
@@ -304,7 +309,7 @@ class TestBinsyncGUI(object):
             print("Blocking waiting for table updates..")
             control_panel = binsync_plugin.control_panel_view.control_panel
             for i in range(20):
-                qWait(BINSYNC_RELOAD_TIME // 10, self.app)
+                qWait(BINSYNC_RELOAD_TIME // 10, main.app)
                 print(f"\tAttempt number {i + 1}/20..")
                 try:
                     assert len(control_panel._func_table.table.model.row_data) == 1
@@ -332,7 +337,7 @@ class TestBinsyncGUI(object):
 
             print("Exiting first angr-management instance..")
             binsync_plugin.controller.stop_worker_routines()
-            qWait(1000, self.app)  # sleep 1s
+            qWait(1000, main.app)  # sleep 1s
 
             main.close()
             os.remove(sync_dir_path + "/.git/binsync.lock")
@@ -340,7 +345,7 @@ class TestBinsyncGUI(object):
             print("========= USER 2 =========")
 
             print("Starting angr-management gui..")
-            main = start_am_gui(binpath)
+            main = start_am_gui(binpath, self.app)
 
             print("Grabbing main function..")
             func = main.workspace.main_instance.project.kb.functions['main']
@@ -355,7 +360,7 @@ class TestBinsyncGUI(object):
             print("Blocking waiting for table updates..")
             control_panel = binsync_plugin.control_panel_view.control_panel
             for i in range(20):
-                qWait(BINSYNC_RELOAD_TIME // 10, self.app)
+                qWait(BINSYNC_RELOAD_TIME // 10, main.app)
                 print(f"\tAttempt number {i + 1}/20..")
                 try:
                     assert len(control_panel._func_table.table.model.row_data) == 1
@@ -385,13 +390,13 @@ class TestBinsyncGUI(object):
                     break
                 except AssertionError:
                     pass
-                qWait(1000, self.app)
+                qWait(1000, main.app)
             else:
                 raise Exception("Sync failed!")
 
             print("Exiting second client..")
             binsync_plugin.controller.stop_worker_routines()
-            qWait(1000, self.app)
+            qWait(1000, main.app)
 
             main.close()
 
