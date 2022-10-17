@@ -6,11 +6,12 @@ import importlib
 import pkg_resources
 
 import binsync
+from binsync.installer import BinSyncInstaller
 
 l = logging.getLogger(__name__)
 
 
-def execute_plugin_entry(plugin_name):
+def run_plugin(plugin_name):
     plugins_path = Path(
         pkg_resources.resource_filename("binsync", f"plugins")
     )
@@ -24,17 +25,42 @@ def execute_plugin_entry(plugin_name):
     return plugin.start()
 
 
+def install():
+    BinSyncInstaller().install()
+
+
 def main():
-    parser = argparse.ArgumentParser(description="BinSync command line util")
+    parser = argparse.ArgumentParser(
+            description="""
+            The BinSync Command Line Util. This is the script interface to BinSync that allows you to
+            do a variety of things that are independent of running in a decompiler like installing, 
+            testing plugin code, and merging databases.
+            """,
+            epilog="""
+            Examples:
+            binsync --install
+            """
+    )
     parser.add_argument(
-        "-p", "--run-plugin", help="Execute BinSync decompiler plugin by command line, results may vary!"
+        "--install", action="store_true", help="""
+        Install the BinSync core to supported decompilers as plugins. This option will start an interactive
+        prompt asking for install paths for all supported decompilers. Each install path is optional and 
+        will be skipped if not path is provided during install. 
+        """
+    )
+    parser.add_argument(
+        "--run-plugin", help="""
+        Execute BinSync decompiler plugin by command line. This is a developer option.
+        """
     )
 
     args = parser.parse_args()
-    plugin_to_run = args.run_plugin
 
-    if plugin_to_run:
-        return execute_plugin_entry(plugin_to_run)
+    if args.install:
+        install()
+
+    if args.run_plugin:
+        return run_plugin(args.run_plugin)
 
 
 if __name__ == "__main__":
