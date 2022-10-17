@@ -33,7 +33,7 @@ class BinSyncPlugin(BasePlugin):
 
         # init the Sync View on load
         self.controller = AngrBinSyncController(self.workspace)
-        self.control_panel_view = ControlPanelView(workspace, 'right', self.controller)
+        self.control_panel_view = ControlPanelView(workspace.main_instance, 'right', self.controller)
 
         self.controller.control_panel = self.control_panel_view
 
@@ -61,7 +61,7 @@ class BinSyncPlugin(BasePlugin):
         if idx < 0 or idx >= len(self.MENU_BUTTONS):
             return
 
-        if self.workspace.instance.project.am_none:
+        if self.workspace.main_instance.project.am_none:
             return
 
         mapping = {
@@ -74,7 +74,7 @@ class BinSyncPlugin(BasePlugin):
 
 
     def open_sync_config_dialog(self):
-        if self.workspace.instance.project.am_none:
+        if self.workspace.main_instance.project.am_none:
             # project does not exist yet
             return
 
