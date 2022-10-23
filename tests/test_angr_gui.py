@@ -6,10 +6,10 @@ import unittest
 import logging
 from unittest.mock import patch
 
-from PySide2.QtGui import QContextMenuEvent
-from PySide2.QtTest import QTest
-from PySide2.QtCore import Qt, QPoint, QTimer
-from PySide2.QtWidgets import QApplication, QMenu
+from PySide6.QtGui import QContextMenuEvent
+from PySide6.QtTest import QTest
+from PySide6.QtCore import Qt, QPoint, QTimer
+from PySide6.QtWidgets import QApplication, QMenu
 
 import angr
 from angrmanagement.ui.dialogs.rename_node import RenameNode
@@ -19,7 +19,7 @@ from angrmanagement.config import Conf
 from binsync.common.controller import SyncControlStatus
 from binsync.common.ui import utils
 from binsync.common.ui.version import set_ui_version
-set_ui_version("PySide2")
+set_ui_version("PySide6")
 from binsync.common.ui.config_dialog import SyncConfig
 
 app = None

@@ -1,6 +1,9 @@
 import logging
 
 from angrmanagement.ui.views.view import BaseView
+from binsync.common.ui.version import set_ui_version
+
+set_ui_version("PySide6")
 from binsync.common.ui.control_panel import ControlPanel
 from binsync.common.ui.qt_objects import QVBoxLayout
 
