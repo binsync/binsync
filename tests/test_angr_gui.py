@@ -182,6 +182,7 @@ class TestBinsyncGUI(object):
             print(f"Generating new directory: {sync_dir_path}")
             print("========= USER 1 =========")
             print("Starting angr-management gui..")
+            print(self.app)
             main = start_am_gui(binpath, self.app)
 
             print("Grabbing main function..")
