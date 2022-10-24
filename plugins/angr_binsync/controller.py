@@ -32,10 +32,10 @@ class AngrBinSyncController(BinSyncController):
     def __init__(self, workspace):
         super(AngrBinSyncController, self).__init__(artifact_lifter=AngrArtifactLifter(self))
         self._workspace = workspace
-        self._instance = workspace.instance
+        self._main_instance = workspace.main_instance
 
     def binary_hash(self) -> str:
-        return self._instance.project.loader.main_object.md5.hex()
+        return self._main_instance.project.loader.main_object.md5.hex()
 
     def active_context(self):
         curr_view = self._workspace.view_manager.current_tab
@@ -58,21 +58,21 @@ class AngrBinSyncController(BinSyncController):
 
     def binary_path(self) -> Optional[str]:
         try:
-            return self._instance.project.loader.main_object.binary
+            return self._main_instance.project.loader.main_object.binary
         # pylint: disable=broad-except
         except Exception:
             return None
 
     def get_func_size(self, func_addr) -> int:
         try:
-            func = self._instance.kb.functions[func_addr]
+            func = self._main_instance.kb.functions[func_addr]
             return func.size
         except KeyError:
             return 0
 
     def rebase_addr(self, addr, up=False):
-        base_addr = self._instance.project.loader.main_object.mapped_base
-        is_pie = self._instance.project.loader.main_object.pic
+        base_addr = self._main_instance.project.loader.main_object.mapped_base
+        is_pie = self._main_instance.project.loader.main_object.pic
 
         if is_pie:
             if up:
@@ -97,7 +97,7 @@ class AngrBinSyncController(BinSyncController):
     @fill_event
     def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
         func: Function = artifact
-        func = self._instance.kb.functions[func.addr]
+        func = self._main_instance.kb.functions[func.addr]
 
         # re-decompile a function if needed
         decompilation = self.decompile_function(func)
@@ -128,8 +128,8 @@ class AngrBinSyncController(BinSyncController):
                 decompilation.stmt_comments[corrected_addr] = cmt.comment
                 changed = True
         else:
-            if self._instance.kb.comments[cmt.addr] != cmt.comment:
-                self._instance.kb.comments[cmt.addr] = cmt.comment
+            if self._main_instance.kb.comments[cmt.addr] != cmt.comment:
+                self._main_instance.kb.comments[cmt.addr] = cmt.comment
                 changed = True
         return changed
 
@@ -150,7 +150,7 @@ class AngrBinSyncController(BinSyncController):
     @fill_event
     def fill_function_header(self, func_addr, user=None, artifact=None, decompilation=None, **kwargs):
         func_header: FunctionHeader = artifact
-        angr_func = self._instance.kb.functions[self.artifact_lifer.lower_addr(func_addr)]
+        angr_func = self._main_instance.kb.functions[self.artifact_lifer.lower_addr(func_addr)]
         changes = False
         if func_header:
             if func_header.name and func_header.name != angr_func.name:
@@ -174,7 +174,7 @@ class AngrBinSyncController(BinSyncController):
 
     def functions(self) -> Dict[int, Function]:
         funcs = {}
-        for addr, func in self._instance.kb.functions.items():
+        for addr, func in self._main_instance.kb.functions.items():
             funcs[addr] = Function(addr, func.size)
             funcs[addr].name = func.name
 
@@ -188,7 +188,7 @@ class AngrBinSyncController(BinSyncController):
         @return:
         """
         try:
-            _func = self._instance.kb.functions[addr]
+            _func = self._main_instance.kb.functions[addr]
         except KeyError:
             return None
 
@@ -205,27 +205,27 @@ class AngrBinSyncController(BinSyncController):
 
     def decompile_function(self, func, refresh_gui=False):
         # check for known decompilation
-        available = self._instance.kb.structured_code.available_flavors(func.addr)
+        available = self._main_instance.kb.structured_code.available_flavors(func.addr)
         should_decompile = False
         if 'pseudocode' not in available:
             should_decompile = True
         else:
-            cached = self._instance.kb.structured_code[(func.addr, 'pseudocode')]
+            cached = self._main_instance.kb.structured_code[(func.addr, 'pseudocode')]
             if isinstance(cached, DummyStructuredCodeGenerator):
                 should_decompile = True
 
         if should_decompile:
             # recover direct pseudocode
-            self._instance.project.analyses.Decompiler(func, flavor='pseudocode')
+            self._main_instance.project.analyses.Decompiler(func, flavor='pseudocode')
 
             # attempt to get source code if its available
             source_root = None
-            if self._instance.original_binary_path:
-                source_root = os.path.dirname(self._instance.original_binary_path)
-            self._instance.project.analyses.ImportSourceCode(func, flavor='source', source_root=source_root)
+            if self._main_instance.original_binary_path:
+                source_root = os.path.dirname(self._main_instance.original_binary_path)
+            self._main_instance.project.analyses.ImportSourceCode(func, flavor='source', source_root=source_root)
 
         # grab newly cached pseudocode
-        decomp = self._instance.kb.structured_code[(func.addr, 'pseudocode')].codegen
+        decomp = self._main_instance.kb.structured_code[(func.addr, 'pseudocode')].codegen
         if refresh_gui:
             # refresh all views
             self._workspace.reload()
@@ -273,7 +273,7 @@ class AngrBinSyncController(BinSyncController):
 
     def get_func_addr_from_addr(self, addr):
         try:
-            func_addr = self._workspace.instance.kb.cfgs.get_most_accurate()\
+            func_addr = self._workspace.main_instance.kb.cfgs.get_most_accurate()\
                 .get_any_node(addr, anyaddr=True)\
                 .function_address
         except AttributeError:

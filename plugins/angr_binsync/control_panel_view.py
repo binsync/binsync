@@ -1,6 +1,9 @@
 import logging
 
 from angrmanagement.ui.views.view import BaseView
+from binsync.common.ui.version import set_ui_version
+
+set_ui_version("PySide6")
 from binsync.common.ui.control_panel import ControlPanel
 from binsync.common.ui.qt_objects import QVBoxLayout
 
@@ -16,8 +19,8 @@ class ControlPanelView(BaseView):
     changes to functions or structs.
     """
 
-    def __init__(self, workspace, default_docking_position, controller, *args, **kwargs):
-        super().__init__('sync', workspace, default_docking_position, *args, **kwargs)
+    def __init__(self, instance, default_docking_position, controller, *args, **kwargs):
+        super().__init__('sync', instance, default_docking_position, *args, **kwargs)
 
         self.base_caption = "BinSync: Control Panel"
 

@@ -6,20 +6,20 @@ import unittest
 import logging
 from unittest.mock import patch
 
-from PySide2.QtGui import QContextMenuEvent
-from PySide2.QtTest import QTest
-from PySide2.QtCore import Qt, QPoint, QTimer
-from PySide2.QtWidgets import QApplication, QMenu
+from PySide6.QtGui import QContextMenuEvent
+from PySide6.QtTest import QTest
+from PySide6.QtCore import Qt, QPoint, QTimer
+from PySide6.QtWidgets import QApplication, QMenu
 
 import angr
 from angrmanagement.ui.dialogs.rename_node import RenameNode
 from angrmanagement.ui.main_window import MainWindow
 from angrmanagement.config import Conf
 
+from binsync.common.ui.version import set_ui_version
+set_ui_version("PySide6")
 from binsync.common.controller import SyncControlStatus
 from binsync.common.ui import utils
-from binsync.common.ui.version import set_ui_version
-set_ui_version("PySide2")
 from binsync.common.ui.config_dialog import SyncConfig
 
 app = None
@@ -58,9 +58,9 @@ def get_binsync_am_plugin(main_window):
 
 def start_am_gui(binpath):
     main = MainWindow(show=False)
-    main.workspace.instance.project.am_obj = angr.Project(binpath, auto_load_libs=False)
-    main.workspace.instance.project.am_event()
-    main.workspace.instance.join_all_jobs()
+    main.workspace.main_instance.project.am_obj = angr.Project(binpath, auto_load_libs=False)
+    main.workspace.main_instance.project.am_event()
+    main.workspace.main_instance.join_all_jobs()
     return main
 
 
@@ -94,7 +94,7 @@ class TestBinSyncPluginGUI(unittest.TestCase):
         disasm_view._t_flow_graph_visible = True
         disasm_view.display_function(func)
         disasm_view.decompile_current_function()
-        main.workspace.instance.join_all_jobs()
+        main.workspace.main_instance.join_all_jobs()
         pseudocode_view = main.workspace._get_or_create_pseudocode_view()
         for _, item in pseudocode_view.codegen.map_pos_to_node.items():
             if isinstance(item.obj, angr.analyses.decompiler.structured_codegen.c.CFunction):
@@ -116,7 +116,7 @@ class TestBinSyncPluginGUI(unittest.TestCase):
         disasm_view._t_flow_graph_visible = True
         disasm_view.display_function(func)
         disasm_view.decompile_current_function()
-        main.workspace.instance.join_all_jobs()
+        main.workspace.main_instance.join_all_jobs()
         pseudocode_view = main.workspace._get_or_create_pseudocode_view()
         for _, item in pseudocode_view.codegen.map_pos_to_node.items():
             if isinstance(item.obj, angr.analyses.decompiler.structured_codegen.c.CVariable) and \
@@ -137,7 +137,7 @@ class TestBinSyncPluginGUI(unittest.TestCase):
         Gets a stack variable from a given function and offset
         """
         if var_man is None:
-            var_man = main.workspace.instance.pseudocode_variable_kb.variables.get_function_manager(func.addr)
+            var_man = main.workspace.main_instance.pseudocode_variable_kb.variables.get_function_manager(func.addr)
         for var in var_man._unified_variables:
             if isinstance(var, angr.sim_variable.SimStackVariable) and var.offset == var_offset:
                 renamed_var = var
@@ -185,7 +185,7 @@ class TestBinSyncPluginGUI(unittest.TestCase):
             # ========= USER 1 =========
             # setup GUI
             main = start_am_gui(binpath)
-            func = main.workspace.instance.project.kb.functions['main']
+            func = main.workspace.main_instance.project.kb.functions['main']
             self.assertIsNotNone(func)
 
             # find the binsync plugin and connect
@@ -206,7 +206,7 @@ class TestBinSyncPluginGUI(unittest.TestCase):
             # ========= USER 2 =========
             # setup GUI
             main = start_am_gui(binpath)
-            func = main.workspace.instance.project.kb.functions['main']
+            func = main.workspace.main_instance.project.kb.functions['main']
             self.assertIsNotNone(func)
 
             # find the binsync plugin and connect
@@ -243,7 +243,7 @@ class TestBinSyncPluginGUI(unittest.TestCase):
             # ========= USER 1 =========
             # setup GUI
             main = start_am_gui(binpath)
-            func = main.workspace.instance.project.kb.functions['main']
+            func = main.workspace.main_instance.project.kb.functions['main']
             old_name = func.name
             self.assertIsNotNone(func)
 
@@ -257,7 +257,7 @@ class TestBinSyncPluginGUI(unittest.TestCase):
             self.rename_stack_variable(main, func, var_offset, new_var_name)
 
             # check renamed variable
-            var_man = main.workspace.instance.pseudocode_variable_kb.variables.get_function_manager(func.addr)
+            var_man = main.workspace.main_instance.pseudocode_variable_kb.variables.get_function_manager(func.addr)
             self.assertEqual(self.get_stack_variable(main, func, var_offset, var_man).name, new_var_name)
 
             # assure a new commit makes it to the repo
@@ -269,7 +269,7 @@ class TestBinSyncPluginGUI(unittest.TestCase):
             # ========= USER 2 =========
             # setup GUI
             main = start_am_gui(binpath)
-            func = main.workspace.instance.project.kb.functions['main']
+            func = main.workspace.main_instance.project.kb.functions['main']
             self.assertIsNotNone(func)
 
             # find the binsync plugin and connect
