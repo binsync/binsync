@@ -36,19 +36,20 @@ class CTXTableModel(BinsyncTableModel):
             return None
 
         col = index.column()
+        row = index.row()
         if role == Qt.DisplayRole:
             if col == 0 or col == 1:
-                return self.row_data[index.row()][col]
+                return self.row_data[row][col]
             elif col == 2:
-                return friendly_datetime(self.row_data[index.row()][col])
+                return friendly_datetime(self.row_data[row][col])
         elif role == self.SortRole:
-            return self.row_data[index.row()][col]
+            return self.row_data[row][col]
         elif role == Qt.BackgroundRole:
-            return self.data_bgcolors[index.row()]
+            return self.data_bgcolors[row]
         elif role == self.FilterRole:
-            return self.row_data[0][col] + " " + self.row_data[1][col]
+            return self.row_data[row][0] + " " + self.row_data[row][1]
         elif role == Qt.ToolTipRole:
-            return self.data_tooltips[index.row()]
+            return self.data_tooltips[row]
         return None
 
     def update_table(self, new_ctx=None):

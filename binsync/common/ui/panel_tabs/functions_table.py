@@ -33,19 +33,20 @@ class FunctionTableModel(BinsyncTableModel):
             return None
 
         col = index.column()
+        row = index.row()
         if role == Qt.DisplayRole:
             if col == 0:
-                return hex(self.row_data[index.row()][col])
+                return hex(self.row_data[row][col])
             elif col == 1 or col == 2:
-                return self.row_data[index.row()][col]
+                return self.row_data[row][col]
             elif col == 3:
-                return friendly_datetime(self.row_data[index.row()][col])
+                return friendly_datetime(self.row_data[row][col])
         elif role == self.SortRole:
-            return self.row_data[index.row()][col]
+            return self.row_data[row][col]
         elif role == Qt.BackgroundRole:
-            return self.data_bgcolors[index.row()]
+            return self.data_bgcolors[row]
         elif role == self.FilterRole:
-            return f"{hex(self.row_data[0][col])} {self.row_data[1][col]} {self.row_data[2][col]}"
+            return f"{hex(self.row_data[row][0])} {self.row_data[row][1]} {self.row_data[row][2]}"
         elif role == Qt.ToolTipRole:
             return self.data_tooltips[index.row()]
         return None
@@ -190,7 +191,7 @@ class FunctionTableView(BinsyncTableView):
             for username in users:
                 action = from_menu.addAction(username)
                 action.triggered.connect(
-                    lambda chck, name=username: self.controller.fill_function(func_addr, user=name))
+                    lambda checked=False, name=username: self.controller.fill_function(func_addr, user=name))
         menu.popup(self.mapToGlobal(event.pos()))
 
 

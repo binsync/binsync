@@ -32,19 +32,22 @@ class GlobalsTableModel(BinsyncTableModel):
         if not index.isValid():
             return None
         col = index.column()
+        row = index.row()
         if role == Qt.DisplayRole:
             if col == 0:
-                return self.row_data[index.row()][col][0]
+                return self.row_data[row][col][0]
             elif col == 1 or col == 2:
-                return self.row_data[index.row()][col]
+                return self.row_data[row][col]
             elif col == 3:
-                return friendly_datetime(self.row_data[index.row()][col])
+                return friendly_datetime(self.row_data[row][col])
         elif role == self.SortRole:
-            return self.row_data[index.row()][col]
+            return self.row_data[row][col]
         elif role == Qt.BackgroundRole:
-            return self.data_bgcolors[index.row()]
+            return self.data_bgcolors[row]
         elif role == self.FilterRole:
-            return self.row_data[0][col] + " " + self.row_data[1][col] + " " + self.row_data[2][col]
+            print(self.row_data)
+            print(self.row_data[row][0] + " " + self.row_data[row][1] + " " + self.row_data[row][2])
+            return self.row_data[row][0] + " " + self.row_data[row][1] + " " + self.row_data[row][2]
         elif role == Qt.ToolTipRole:
             return self.data_tooltips[index.row()]
         return None
@@ -201,13 +204,13 @@ class GlobalsTableView(BinsyncTableView):
                 return
 
             if global_type == "S":
-                filler_func = lambda username: lambda chk: self.controller.fill_struct(global_name, user=username)
+                filler_func = lambda username: lambda chk=False: self.controller.fill_struct(global_name, user=username)
             elif global_type == "V":
                 var_addr = int(re.findall(r'0x[a-f,0-9]+', global_name.split(" ")[1])[0], 16)
                 global_name = var_addr
-                filler_func = lambda username: lambda chk: self.controller.fill_global_var(global_name, user=username)
+                filler_func = lambda username: lambda chk=False: self.controller.fill_global_var(global_name, user=username)
             elif global_type == "E":
-                filler_func = lambda username: lambda chk: self.controller.fill_enum(global_name, user=username)
+                filler_func = lambda username: lambda chk=False: self.controller.fill_enum(global_name, user=username)
             else:
                 l.warning(f"Invalid global table sync option: {global_type}")
                 return
