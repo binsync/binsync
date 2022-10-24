@@ -6,6 +6,8 @@ import time
 import logging
 from datetime import datetime as datetime_, timedelta
 
+from PySide6 import QtWidgets
+from PySide6.QtCore import Qt, QPoint
 from PySide6.QtGui import QContextMenuEvent
 from PySide6.QtTest import QTest
 from PySide6.QtCore import Qt, QPoint, QTimer
@@ -26,7 +28,6 @@ from binsync.common.ui.config_dialog import SyncConfig
 from common import timeout_after
 
 
-app = None
 test_location = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'binaries')
 logging.disable(logging.CRITICAL)
 
@@ -103,7 +104,7 @@ def rename_function(qtbot: QtBot, main, func, new_func_name):
     disasm_view._t_flow_graph_visible = True
     disasm_view.display_function(func)
     disasm_view.decompile_current_function()
-    main.workspace.instance.join_all_jobs()
+    main.workspace.main_instance.join_all_jobs()
     pseudocode_view = main.workspace._get_or_create_pseudocode_view()
     for _, item in pseudocode_view.codegen.map_pos_to_node.items():
         if isinstance(item.obj, angr.analyses.decompiler.structured_codegen.c.CFunction):
@@ -182,6 +183,7 @@ class TestBinsyncGUI(object):
             print(f"Generating new directory: {sync_dir_path}")
             print("========= USER 1 =========")
             print("Starting angr-management gui..")
+            assert QtWidgets.QApplication.instance() is not None
             print(self.app)
             main = start_am_gui(binpath, self.app)
 
