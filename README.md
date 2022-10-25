@@ -49,8 +49,8 @@ BinSync is a two-step process.
 1. Install the core with the Python version associated with your decompiler: `pip3 install binsync`
 2. Install the decompiler plugin directly into your decompilers `plugin` folder.
 
-For step 2, you copy all files (and folders) found under the plugin folder in BinSync. An an example, for IDA,
-Ayou would copy everything in `plugins/ida_binsync/*` to the plugins folder.
+For step 2, you copy all files (and folders) found under the plugin folder in BinSync. As an example, for IDA,
+you would copy everything in `plugins/ida_binsync/*` to the plugins folder.
 
 To install the Ghidra plugin, please follow the [plugin specific README](https://github.com/mahaloz/binsync-ghidra-plugin).
 
