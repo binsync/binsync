@@ -29,6 +29,15 @@ def install():
     BinSyncInstaller().install()
 
 
+def install_angr(path):
+    if not path.exists():
+        print("Path does not exist, please rerun with a valid path.")
+        return
+
+    installer = BinSyncInstaller()
+    installer.install_angr(path=path)
+
+
 def main():
     parser = argparse.ArgumentParser(
             description="""
@@ -49,6 +58,11 @@ def main():
         """
     )
     parser.add_argument(
+        "--install-angr-only", type=Path, help="""
+        Does a non-interactive install for angr only from the provided path.
+        """
+    )
+    parser.add_argument(
         "--run-plugin", help="""
         Execute BinSync decompiler plugin by command line. This is a developer option.
         """
@@ -58,6 +72,11 @@ def main():
 
     if args.install:
         install()
+
+    if args.install_angr_only:
+        path = Path(args.install_angr_only).expanduser().absolute()
+        install_angr(path)
+
 
     if args.run_plugin:
         return run_plugin(args.run_plugin)
