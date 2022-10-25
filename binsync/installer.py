@@ -200,7 +200,7 @@ class BinSyncInstaller(Installer):
         if ghidra_path is None:
             return None
         
-        download_url = "https://github.com/angr/binsync/releases/latest/download/ghidra_10.1.4_PUBLIC_20221009_binsync-ghidra-plugin.zip"
+        download_url = "https://github.com/angr/binsync/releases/latest/download/binsync-ghidra-plugin.zip"
         dst_path = ghidra_path.joinpath("binsync-ghidra-plugin.zip")
         urlretrieve(download_url, dst_path)
 
