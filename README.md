@@ -41,8 +41,10 @@ specific help, look to the decompilers section of the docs.
 
 **NOTE: you must pip install binsync to the python interpreter used in your decompiler**.
 
-### Manual
-If you are unable to install BinSync with the script above, you are probably on Windows. In that case, installing
+## Manual Install
+
+If you were able to use the built-in Python script, skip this. 
+If you are unable to install using the earlier method, you are probably on Windows. In that case, installing
 BinSync is a two-step process.
 1. Install the core with the Python version associated with your decompiler: `pip3 install binsync`
 2. Install the decompiler plugin directly into your decompilers `plugin` folder.
