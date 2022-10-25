@@ -7,6 +7,29 @@ import shutil
 from urllib.request import urlretrieve
 
 
+class Color:
+    """
+    Used to colorify terminal output.
+    Taken from: https://github.com/hugsy/gef/blob/dev/tests/utils.py
+    """
+    NORMAL = "\x1b[0m"
+    GRAY = "\x1b[1;38;5;240m"
+    LIGHT_GRAY = "\x1b[0;37m"
+    RED = "\x1b[31m"
+    GREEN = "\x1b[32m"
+    YELLOW = "\x1b[33m"
+    BLUE = "\x1b[34m"
+    PINK = "\x1b[35m"
+    CYAN = "\x1b[36m"
+    BOLD = "\x1b[1m"
+    UNDERLINE = "\x1b[4m"
+    UNDERLINE_OFF = "\x1b[24m"
+    HIGHLIGHT = "\x1b[3m"
+    HIGHLIGHT_OFF = "\x1b[23m"
+    BLINK = "\x1b[5m"
+    BLINK_OFF = "\x1b[25m"
+
+
 class Installer:
     DECOMPILERS = (
         "ida",
@@ -15,29 +38,46 @@ class Installer:
         "angr"
     )
 
-    def __init__(self, targets=DECOMPILERS, target_install_paths=None):
+    DEBUGGERS = (
+        "gdb",
+    )
+
+    def __init__(self, targets=None, target_install_paths=None):
         readline.set_completer_delims(' \t\n=')
         readline.parse_and_bind("tab: complete")
-        self.targets = targets
+        self.targets = targets or self.DECOMPILERS+self.DEBUGGERS
         self.target_install_paths = target_install_paths or {}
 
     def install(self):
         self.display_prologue()
         try:
             self.install_all_targets()
-        except KeyboardInterrupt:
-            print("Stopping Install...")
+        except Exception as e:
+            print(f"Stopping Install... because: {e}")
         self.display_epilogue()
 
     def display_prologue(self):
         pass
 
     def display_epilogue(self):
-        pass
+        self.good("Install completed! If anything was skipped by mistake, please manually install it.")
+
+    @staticmethod
+    def info(msg):
+        print(f"{Color.BLUE}{msg}{Color.NORMAL}")
+
+    @staticmethod
+    def good(msg):
+        print(f"{Color.GREEN}[+] {msg}{Color.NORMAL}")
+
+    @staticmethod
+    def warn(msg):
+        print(f"{Color.YELLOW}[!] {msg}{Color.NORMAL}")
 
     @staticmethod
     def ask_path(question):
-        filepath = input(question)
+        Installer.info(question)
+        filepath = input()
         if not filepath:
             return None
 
@@ -77,7 +117,11 @@ class Installer:
                 continue
 
             path = self.target_install_paths.get(target, None)
-            installer(path=path)
+            res = installer(path=path)
+            if res is None:
+                self.warn(f"Skipping or failed install for {target}... {Color.NORMAL}\n")
+            else:
+                self.good(f"Installed {target} to {res}\n")
 
     def install_ida(self, path=None):
         ida_plugin_path = Path("~/").joinpath(".idapro").joinpath("plugins").expanduser()
@@ -86,7 +130,7 @@ class Installer:
             ida_plugin_path = None
             default_str = ""
 
-        path = self.ask_path(f"IDA Plugins Path{default_str}:\n") if path is None else path
+        path = self.ask_path(f"IDA Plugins Path{default_str}:") if path is None else path
         if not path:
             if not ida_plugin_path:
                 return None
@@ -99,7 +143,7 @@ class Installer:
         return path
 
     def install_ghidra(self, path=None):
-        path = self.ask_path("Ghidra Install Path:\n") if path is None else path
+        path = self.ask_path("Ghidra Install Path:") if path is None else path
         if not path:
             return None
 
@@ -116,7 +160,7 @@ class Installer:
             binja_install_path = None
             default_str = ""
 
-        path = self.ask_path(f"Binary Ninja Plugins Path{default_str}:\n") if path is None else path
+        path = self.ask_path(f"Binary Ninja Plugins Path{default_str}:") if path is None else path
         if not path:
             if not binja_install_path:
                 return None
@@ -141,7 +185,7 @@ class Installer:
             default_str = f" [default = {angr_install_path}]"
 
         # use the default if possible
-        path = self.ask_path(f"angr-management Install Path{default_str}:\n") if path is None else path
+        path = self.ask_path(f"angr-management Install Path{default_str}:") if path is None else path
         if not path:
             if not angr_install_path:
                 return None
@@ -154,10 +198,22 @@ class Installer:
 
         return path
 
+    def install_gdb(self, path=None):
+        default_gdb_path = Path("~/").joinpath(".gdbinit").expanduser()
+        default_str = f" [default = {default_gdb_path}]"
+        path = self.ask_path(f"gdbinit path{default_str}:") if path is None else path
+        if not path:
+            if not default_gdb_path:
+                return None
+
+            path = default_gdb_path
+
+        return path
+
 
 class BinSyncInstaller(Installer):
     def __init__(self):
-        super().__init__()
+        super().__init__(targets=Installer.DECOMPILERS)
         self.plugins_path = Path(
             pkg_resources.resource_filename("binsync", f"plugins")
         )
@@ -177,7 +233,7 @@ class BinSyncInstaller(Installer):
     def install_ida(self, path=None):
         ida_plugin_path = super().install_ida(path=path)
         if ida_plugin_path is None:
-            return
+            return None
 
         src_ida_binsync_pkg = self.plugins_path.joinpath("ida_binsync").joinpath("ida_binsync")
         src_ida_binsync_py = self.plugins_path.joinpath("ida_binsync").joinpath("ida_binsync.py")
@@ -185,6 +241,7 @@ class BinSyncInstaller(Installer):
         dst_ida_binsync_py = ida_plugin_path.joinpath("ida_binsync.py")
         self.link_or_copy(src_ida_binsync_pkg, dst_ida_binsync_pkg, is_dir=True)
         self.link_or_copy(src_ida_binsync_py, dst_ida_binsync_py)
+        return dst_ida_binsync_pkg
 
     def install_angr(self, path=None):
         angr_plugin_path = super().install_angr(path=path)
@@ -194,6 +251,7 @@ class BinSyncInstaller(Installer):
         src_angr_binsync_pkg = self.plugins_path.joinpath("angr_binsync")
         dst_angr_binsync_pkg = angr_plugin_path.joinpath("angr_binsync")
         self.link_or_copy(src_angr_binsync_pkg, dst_angr_binsync_pkg, is_dir=True)
+        return dst_angr_binsync_pkg
 
     def install_ghidra(self, path=None):
         ghidra_path = super().install_ghidra(path=path)
@@ -203,6 +261,7 @@ class BinSyncInstaller(Installer):
         download_url = "https://github.com/angr/binsync/releases/latest/download/binsync-ghidra-plugin.zip"
         dst_path = ghidra_path.joinpath("binsync-ghidra-plugin.zip")
         urlretrieve(download_url, dst_path)
+        return dst_path
 
     def install_binja(self, path=None):
         binja_plugin_path = super().install_binja(path=path)
@@ -212,3 +271,4 @@ class BinSyncInstaller(Installer):
         src_path = self.plugins_path.joinpath("binja_binsync")
         dst_path = binja_plugin_path.joinpath("binja_binsync")
         self.link_or_copy(src_path, dst_path, is_dir=True)
+        return dst_path
