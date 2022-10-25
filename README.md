@@ -28,30 +28,28 @@ Note: all types support user-created types like structs.
 - angr-management: **>= 9.0**
 - Ghidra: **>= 10.1**
 
-All versions require **Python >= 3.4** and **Git** installed on your system. Ghidra support is stil very much in early stage, so only expect the minimal features like artifact name syncing and comments.
+All versions require **Python >= 3.4** and **Git** installed on your system. Ghidra support is still very much in early stage, so only expect the minimal features like artifact name syncing and comments.
 
 ## Installing
-### Oneliner (IDA only)
-If you are using IDA, paste this oneliner in your IDA terminal, let it run, and restart:
-```python
-import urllib.request, sys, os; sys.path.insert(1, os.getcwd()); urllib.request.urlretrieve("https://raw.githubusercontent.com/angr/binsync/master/plugins/ida_binsync/ida_binsync/oneliner.py", "oneliner.py"); from oneliner import install; install()
+```
+pip3 install binsync; binsync --install 
 ```
 
-### Script (Fast)
-Use the installation script provided in the repo:
-```bash
-./install.sh --ida /path/to/ida/plugins
-```
+After installing with pip, you should now have the `binsync` command in your terminal. If you do not, you can access it
+by doing `python3 -m binsync`. Use the `--install` flag to install the decompiler plugins of your choice. For decompiler
+specific help, look to the decompilers section of the docs. 
 
-Use `--help`, for more information.
+**NOTE: you must pip install binsync to the python interpreter used in your decompiler**.
 
-### Manual
-If you are unable to install BinSync with the script above, you are probably on Windows. In that case, installing
+## Manual Install
+
+If you were able to use the built-in Python script, skip this. 
+If you are unable to install using the earlier method, you are probably on Windows. In that case, installing
 BinSync is a two-step process.
 1. Install the core with the Python version associated with your decompiler: `pip3 install binsync`
 2. Install the decompiler plugin directly into your decompilers `plugin` folder.
 
-For step 2, you copy all files (and folders) found under the plugin folder in BinSync. An an example, for IDA,
+For step 2, you copy all files (and folders) found under the plugin folder in BinSync. As an example, for IDA,
 you would copy everything in `plugins/ida_binsync/*` to the plugins folder.
 
 To install the Ghidra plugin, please follow the [plugin specific README](https://github.com/mahaloz/binsync-ghidra-plugin).
