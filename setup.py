@@ -33,6 +33,12 @@ def _copy_decomp_plugins():
     shutil.copytree("plugins", "binsync/plugins")
 
 
+class build(st_build):
+    def run(self, *args):
+        self.execute(_copy_decomp_plugins, (), msg="Copying binsync plugins")
+        super().run(*args)
+
+
 class develop(st_develop):
     def run(self, *args):
         self.execute(_copy_decomp_plugins, (), msg="Linking or copying local plugins folder")
@@ -40,6 +46,7 @@ class develop(st_develop):
 
 
 cmdclass = {
+    "build": build,
     "develop": develop,
 }
 
