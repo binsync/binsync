@@ -47,12 +47,16 @@ def config_and_connect(binsync_plugin, username, sync_dir_path, init=False):
 
 
 def get_binsync_am_plugin(main_window):
-    _plugin = [plugin for plugin in main_window.workspace.plugins.loaded_plugins if "BinSyncPlugin" in str(plugin)][0]
-    main_window.workspace.plugins.activate_plugin(_plugin)
+    inactive_bs_plugin = main_window.workspace.plugins.loaded_plugins.get("binsync", None)
+    if not inactive_bs_plugin:
+        raise Exception("BinSync plugin is not present in AM plugins folder, or failed.")
 
-    binsync_plugin = next(iter(
-        [p for p in main_window.workspace.plugins.active_plugins if "BinSync" in str(p)]
-    ))
+    main_window.workspace.plugins.activate_plugin_by_name(inactive_bs_plugin.name.lower())
+    binsync_plugin = main_window.workspace.plugins.active_plugins.get("binsync", None)
+    if not binsync_plugin:
+        raise Exception("Failed to activate BinSync plugin after load, probably because a newly"
+                        " broken import. Break before activating and step through to find it.")
+
     return binsync_plugin
 
 

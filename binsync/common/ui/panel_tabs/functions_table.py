@@ -69,6 +69,8 @@ class QFunctionTable(QTableWidget):
         self.controller = controller
         self.items = dict()
 
+        self.ScrollPerPixel = self.ScrollPerPixel if hasattr(self, "ScrollPerPixel") \
+            else QTableWidget.ScrollMode.ScrollPerPixel
         self.setColumnCount(len(self.HEADER))
         self.setHorizontalHeaderLabels(self.HEADER)
         self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)

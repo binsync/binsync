@@ -58,6 +58,8 @@ class QGlobalsTable(QTableWidget):
         super(QGlobalsTable, self).__init__(parent)
         self.controller = controller
         self.items = []
+        self.ScrollPerPixel = self.ScrollPerPixel if hasattr(self, "ScrollPerPixel") \
+            else QTableWidget.ScrollMode.ScrollPerPixel
 
         self.setColumnCount(len(self.HEADER))
         self.setHorizontalHeaderLabels(self.HEADER)
