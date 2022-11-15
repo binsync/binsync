@@ -205,10 +205,6 @@ class AngrBinSyncController(BinSyncController):
     #
 
     def refresh_decompilation(self, func_addr):
-        """
-        TODO: find a work around eventuall for this.
-        It only works if you are looking at the view
-        """
         self._main_instance.workspace.jump_to(func_addr)
         view = self._main_instance.workspace._get_or_create_pseudocode_view()
         view.codegen.am_event()
