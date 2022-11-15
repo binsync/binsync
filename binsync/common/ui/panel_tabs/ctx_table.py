@@ -68,6 +68,8 @@ class QCTXTable(QTableWidget):
         self.items = []
         self.ctx = None
 
+        self.ScrollPerPixel = self.ScrollPerPixel if hasattr(self, "ScrollPerPixel") \
+            else QTableWidget.ScrollMode.ScrollPerPixel
         # header
         self.setColumnCount(len(self.HEADER))
         self.setHorizontalHeaderLabels(self.HEADER)

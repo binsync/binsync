@@ -97,17 +97,16 @@ class AngrBinSyncController(BinSyncController):
     @fill_event
     def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
         func: Function = artifact
-        func = self._main_instance.kb.functions[func.addr]
+        angr_func = self._main_instance.kb.functions[func.addr]
 
         # re-decompile a function if needed
-        decompilation = self.decompile_function(func)
+        decompilation = self.decompile_function(angr_func)
 
         changes = super(AngrBinSyncController, self).fill_function(
             func_addr, user=user, artifact=artifact, decompilation=decompilation, **kwargs
         )
 
-        decompilation.regenerate_text()
-        self.decompile_function(func, refresh_gui=True)
+        self.refresh_decompilation(func.addr)
         return changes
 
     @init_checker
@@ -118,17 +117,19 @@ class AngrBinSyncController(BinSyncController):
 
         if cmt.decompiled:
             try:
-                pos = decompilation.map_addr_to_pos.get_nearest_pos(addr)
+                pos = decompilation.map_addr_to_pos.get_nearest_pos(cmt.addr)
                 corrected_addr = decompilation.map_pos_to_addr.get_node(pos).tags['ins_addr']
             # pylint: disable=broad-except
             except Exception:
                 return False
 
-            if decompilation.stmt_comments[corrected_addr] != cmt.comment:
+            dec_cmt = decompilation.stmt_comments.get(corrected_addr, None)
+            if dec_cmt != cmt.comment:
                 decompilation.stmt_comments[corrected_addr] = cmt.comment
                 changed = True
         else:
-            if self._main_instance.kb.comments[cmt.addr] != cmt.comment:
+            kb_cmt = self._main_instance.kb.comments.get(cmt.addr, None)
+            if kb_cmt != cmt.comment:
                 self._main_instance.kb.comments[cmt.addr] = cmt.comment
                 changed = True
         return changed
@@ -163,7 +164,7 @@ class AngrBinSyncController(BinSyncController):
                 for i, arg in func_header.args.items():
                     if i >= len(decompilation.cfunc.arg_list):
                         break
-                    if decompilation.cfunc.args_list[i].variable.name != arg.name:
+                    if decompilation.cfunc.arg_list[i].variable.name != arg.name:
                         decompilation.cfunc.arg_list[i].variable.name = arg.name
                         changes = True
         return changes
@@ -202,6 +203,11 @@ class AngrBinSyncController(BinSyncController):
     #
     #   Utils
     #
+
+    def refresh_decompilation(self, func_addr):
+        self._main_instance.workspace.jump_to(func_addr)
+        view = self._main_instance.workspace._get_or_create_pseudocode_view()
+        view.codegen.am_event()
 
     def decompile_function(self, func, refresh_gui=False):
         # check for known decompilation
