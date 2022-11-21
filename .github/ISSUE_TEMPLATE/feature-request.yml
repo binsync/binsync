@@ -8,11 +8,11 @@ body:
         Thank you for taking the time to submit this feature request!
 
         Before submitting this feature request, please check the following:
-        * Have you checked that you are running the latest versions of angr and its components? angr is rapidly-evolving!
-        * Have you checked the [documentation](https://docs.angr.io/) to see if this feature exists already?
-        * Have you [searched existing issues](https://github.com/angr/binsync/issues?q=is%3Aissue+label%3Aenhancement+) to see if this feature has been requested before?
+        * Have you checked that you are running the latest versions of BinSync and its components? BinSync is rapidly-evolving!
+        * Have you [searched existing issues](https://github.com/binsync/binsync/issues?q=is%3Aopen+is%3Aissue+label%3Abug) to see if this bug has been reported before?
+        * Have you checked the [documentation](https://binsync.net/docs/home/)?
 
-        Please note: The angr suite is maintained by a small team. While we cannot guarantee any timeliness for fixes and enhancements, we will do our best. For more real-time help with angr, from us and the community, join our [Slack](https://angr.io/invite/).
+        Please note: The BinSync suite is maintained by a small team. While we cannot guarantee any timeliness for fixes and enhancements, we will do our best. For more real-time help with BinSync, from us and the community, join our [Discord](https://discord.gg/wZSCeXnEvR).
 
   - type: textarea
     attributes:
