@@ -1,0 +1,57 @@
+This is a POC, it is not clean at all
+
+There are 3 directories here:
+- core: this is binsync core
+- cli: this is the binsync cli
+- angr-plugin: this is binsync angr-management plugin
+
+Note: The directory names are not the same as name of the package the directory contains.
+This can trivially be changed, feel free.
+
+## Instructions
+
+Note: these are a bit more complicated than they need to be because packages are not on PyPi but local, so dependencies need to be installed manually.
+
+Make sure you have `angr-management` installed in some interpreter for testing.
+
+```bash
+# Env
+git clone https://github.com/binsync/binsync
+cd binsync
+git checkout poc
+mkvirtualenv poc
+
+# Remove existing angr-management binsync plugin (a PR to angr-management later should fix this)
+rm -rf /path/to/existing/binsync/angr/management/plugin
+
+# Install
+pip install ./cli
+binsync install ./binsync # Install core
+binsync install ./angr # Install plugin
+```
+
+The user will be prompted for their angr-management interpreter.
+If there already is a good way of detecting this, the POC can be edited not to prompt.
+
+For more info on what the CLI can do:
+```bash
+binsync --help
+```
+It should basically support `uninstall`, `list`, and `install [-e] [-U]`.
+
+### What the POC could be if it were not a POC
+
+If we put packages on pypi, and used namespace packaging instead of `_`'s:
+
+```bash
+pip install binsync
+binsync install angr-management
+```
+
+
+### Testing
+
+As I said, I need a workflow to test this with.
+I don't see errors while loading the project but I don't have a workflow to use binsync.
+The proxy hopefully should work as is and everything should just work, if not I'll need to debug why.
+I.e. I'll need a demo workflow I can use to test that binsync works
