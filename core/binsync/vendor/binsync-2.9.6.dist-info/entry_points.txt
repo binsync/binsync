@@ -1,0 +1,2 @@
+[console_scripts]
+binsync = binsync.__main__:main

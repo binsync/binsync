@@ -37,4 +37,3 @@ dist
 binsync/plugins/
 binsync/plugins
 .pytest_cache/
-binsync/vendor
