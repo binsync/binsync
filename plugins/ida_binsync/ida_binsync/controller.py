@@ -191,8 +191,8 @@ class IDABinSyncController(BinSyncController):
         struct: Struct = artifact
 
         if not struct:
-            _l.warning("Was not able to find the struct you requested in other users name")
-            return None
+            _l.warning(f"Unable to find the struct: {struct_name} in requested user.")
+            return False
 
         if header:
             data_changed |= compat.set_ida_struct(struct, self)
