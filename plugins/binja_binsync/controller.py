@@ -33,8 +33,10 @@ from binaryninjaui import (
     UIActionHandler,
     Menu,
 )
+import binaryninja
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourceType
 from binaryninja.mainthread import execute_on_main_thread, is_main_thread
+from binaryninja.types import StructureType, EnumerationType
 
 from binsync.common.controller import BinSyncController, fill_event, init_checker
 from binsync.data import (
@@ -46,6 +48,8 @@ from binsync.data import (
 import binsync
 
 from .artifact_lifter import BinjaArtifactLifter
+from .compat import bn_func_to_bs, bn_struct_to_bs
+
 
 l = logging.getLogger(__name__)
 
@@ -129,8 +133,36 @@ class BinjaBinSyncController(BinSyncController):
     #
 
     @init_checker
+    @fill_event
     def fill_struct(self, struct_name, header=True, members=True, artifact=None, **kwargs):
-        return False
+        bs_struct: Struct = artifact
+        if not bs_struct:
+            l.warning(f"Unable to find the struct: {struct_name} in requested user.")
+            return False
+
+        if header:
+            self.bv.define_user_type(struct_name, binaryninja.Type.structure())
+
+        if members:
+            # this scope assumes that the type is now defined... if it's not we will error
+            with binaryninja.Type.builder(self.bv, struct_name) as s:
+                s.width = bs_struct.size
+                members = list()
+                for offset in sorted(bs_struct.struct_members.keys()):
+                    bs_memb = bs_struct.struct_members[offset]
+                    try:
+                        bn_type = self.bv.parse_type_string(bs_memb.type) if bs_memb.type else None
+                    except Exception:
+                        bn_type = None
+                    finally:
+                        if bn_type is None:
+                            bn_type = binaryninja.Type.int(bs_memb.size)
+
+                    members.append((bn_type, bs_memb.member_name))
+
+                s.members = members
+
+        return True
 
     @init_checker
     def fill_global_var(self, var_addr, user=None, artifact=None, **kwargs):
@@ -143,8 +175,8 @@ class BinjaBinSyncController(BinSyncController):
         """
         Grab all relevant information from the specified user and fill the @bn_func.
         """
-        sync_func: Function = artifact
-        bn_func = self.bv.get_function_at(sync_func.addr)
+        bs_func: Function = artifact
+        bn_func = self.bv.get_function_at(bs_func.addr)
 
         changes = super(BinjaBinSyncController, self).fill_function(
             func_addr, user=user, artifact=artifact, bn_func=bn_func, **kwargs
@@ -156,21 +188,21 @@ class BinjaBinSyncController(BinSyncController):
     @fill_event
     def fill_function_header(self, func_addr, user=None, artifact=None, bn_func=None, **kwargs):
         updates = False
-        sync_header: FunctionHeader = artifact
+        bs_func_header: FunctionHeader = artifact
 
-        if sync_header:
+        if bs_func_header:
             # func name
-            if sync_header.name and sync_header.name != bn_func.name:
-                bn_func.name = sync_header.name
+            if bs_func_header.name and bs_func_header.name != bn_func.name:
+                bn_func.name = bs_func_header.name
                 updates |= True
 
             # ret type
-            if sync_header.ret_type and \
-                    sync_header.ret_type != bn_func.return_type.get_string_before_name():
+            if bs_func_header.ret_type and \
+                    bs_func_header.ret_type != bn_func.return_type.get_string_before_name():
 
                 valid_type = False
                 try:
-                    new_type, _ = self.bv.parse_type_string(sync_header.ret_type)
+                    new_type, _ = self.bv.parse_type_string(bs_func_header.ret_type)
                     valid_type = True
                 except Exception:
                     pass
@@ -180,12 +212,12 @@ class BinjaBinSyncController(BinSyncController):
                     updates |= True
 
             # parameters
-            if sync_header.args:
-                prototype_tokens = [sync_header.ret_type] if sync_header.ret_type \
+            if bs_func_header.args:
+                prototype_tokens = [bs_func_header.ret_type] if bs_func_header.ret_type \
                     else [bn_func.return_type.get_string_before_name()]
 
                 prototype_tokens.append("(")
-                for idx, func_arg in sync_header.args.items():
+                for idx, func_arg in bs_func_header.args.items():
                     prototype_tokens.append(func_arg.type_str)
                     prototype_tokens.append(func_arg.name)
                     prototype_tokens.append(",")
@@ -258,6 +290,13 @@ class BinjaBinSyncController(BinSyncController):
     # Artifact API
     #
 
+    def function(self, addr) -> Optional[Function]:
+        bn_func = self.bv.get_function_at(addr)
+        if not bn_func:
+            return None
+
+        return bn_func_to_bs(bn_func)
+
     def functions(self) -> Dict[int, Function]:
         funcs = {}
         for bn_func in self.bv.functions:
@@ -269,35 +308,18 @@ class BinjaBinSyncController(BinSyncController):
 
         return funcs
 
-    def function(self, addr) -> Optional[Function]:
-        """
-        TODO: fix how types and offsets are set
-
-        @param addr:
-        @return:
-        """
-        bn_func = self.bv.get_function_at(addr)
-        if not bn_func:
+    def struct(self, name) -> Optional[Struct]:
+        bn_struct = self.bv.types.get(name, None)
+        if bn_struct is None:
             return None
 
-        func = Function(bn_func.start, bn_func.total_bytes)
-        func_header = FunctionHeader(
-            bn_func.name,
-            func.addr,
-            ret_type=bn_func.return_type.get_string_before_name(),
-            args={
-                idx: FunctionArgument(idx, param.name, str(param.type), param.type.width)
-                for idx, param in enumerate(bn_func.function_type.parameters)
-            }
-        )
-        stack_vars = {
-            v.storage: StackVariable(v.storage, StackOffsetType.BINJA, v.name, str(v.type), v.type.width, func.addr)
-            for v in bn_func.stack_layout if v.source_type == VariableSourceType.StackVariableSourceType
-        }
-        func.header = func_header
-        func.stack_vars = stack_vars
+        return bn_struct_to_bs(name, bn_struct)
 
-        return func
+    def structs(self) -> Dict[str, Struct]:
+        return {
+            name: Struct(name, t.width, {}) for name, t in self.bv.types.items()
+            if isinstance(t, StructureType)
+        }
 
     def global_vars(self) -> Dict[int, GlobalVariable]:
         return {

@@ -23,12 +23,21 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from binaryninjaui import DockContextHandler
 import binaryninja
+from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourceType
+from binaryninja.mainthread import execute_on_main_thread, is_main_thread
+from binaryninja.types import StructureType, EnumerationType
 
-l = logging.getLogger(__name__)
+import binsync
+from binsync.data import (
+    State, User, Artifact,
+    Function, FunctionHeader, FunctionArgument, StackVariable, StackOffsetType,
+    Comment, GlobalVariable, Patch,
+    Enum, Struct, StructMember
+)
 
 # Some code is derived from https://github.com/NOPDev/BinjaDock/tree/master/defunct
 # Thanks @NOPDev
-import binsync.common.controller
+l = logging.getLogger(__name__)
 
 
 def find_main_window():
@@ -162,3 +171,70 @@ class BinjaWidget(QWidget):
         super(BinjaWidget, self).__init__()
         # self._core = _instance()
         # self._core.addTabWidget(self, tabname)
+
+#
+# Converters
+#
+
+
+def bn_struct_to_bs(name, bn_struct):
+    members = {
+        member.offset: StructMember(str(member.name), member.offset, str(member.type), member.type.width)
+        for member in bn_struct.members if member.offset is not None
+    }
+
+    return Struct(
+        str(name),
+        bn_struct.width if bn_struct.width is not None else 0,
+        members
+    )
+
+
+def bn_func_to_bs(bn_func):
+
+    #
+    # header: name, ret type, args
+    #
+
+    args = {
+        i: FunctionArgument(i, parameter.name, parameter.type.get_string_before_name(), parameter.type.width)
+        for i, parameter in enumerate(bn_func.parameter_vars)
+    }
+
+    sync_header = FunctionHeader(
+        bn_func.name,
+        bn_func.start,
+        ret_type=bn_func.return_type.get_string_before_name(),
+        args=args
+    )
+
+    #
+    # stack vars
+    #
+
+    binja_stack_vars = {
+        v.storage: v for v in bn_func.stack_layout if v.source_type == VariableSourceType.StackVariableSourceType
+    }
+    sorted_stack = sorted(bn_func.stack_layout, key=lambda x: x.storage)
+    var_sizes = {}
+
+    for off, var in binja_stack_vars.items():
+        i = sorted_stack.index(var)
+        if i + 1 >= len(sorted_stack):
+            var_sizes[var] = 0
+        else:
+            var_sizes[var] = var.storage - sorted_stack[i].storage
+
+    bs_stack_vars = {
+        off: binsync.StackVariable(
+            off, binsync.StackOffsetType.BINJA,
+            var.name,
+            var.type.get_string_before_name(),
+            var_sizes[var],
+            bn_func.start
+        )
+        for off, var in binja_stack_vars.items()
+    }
+
+    size = bn_func.address_ranges[0].end - bn_func.address_ranges[0].start
+    return Function(bn_func.start, size, header=sync_header, stack_vars=bs_stack_vars)

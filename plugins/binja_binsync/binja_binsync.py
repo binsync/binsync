@@ -12,6 +12,7 @@ from binaryninjaui import (
     Menu,
 )
 import binaryninja
+from binaryninja.types import StructureType, EnumerationType
 from binaryninja import PluginCommand, BinaryView, SymbolType
 from binaryninja.interaction import show_message_box
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourceType
@@ -25,14 +26,14 @@ set_ui_version("PySide6")
 import binsync
 from binsync.common.ui.config_dialog import SyncConfig
 from binsync.common.ui.control_panel import ControlPanel
-from .ui_tools import find_main_window, BinjaDockWidget, create_widget
+from .compat import find_main_window, BinjaDockWidget, create_widget, bn_struct_to_bs, bn_func_to_bs
 from .controller import BinjaBinSyncController
 from copy import deepcopy
 from binsync.data import (
     State, User, Artifact,
     Function, FunctionHeader, FunctionArgument, StackVariable,
     Comment, GlobalVariable, Patch,
-    Enum, Struct
+    Enum, Struct, StructMember
 )
 
 l = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ l = logging.getLogger(__name__)
 #
 # Binja UI
 #
+
 
 class ControlPanelDockWidget(BinjaDockWidget):
     def __init__(self, controller, parent=None, name=None, data=None):
@@ -71,120 +73,49 @@ def instance():
         dock = BinjaDockWidget("dummy")
     return dock
 
-
-def conv_func_binja_to_binsync(binja_func):
-
-    #
-    # header: name, ret type, args
-    #
-    
-    args = {
-        i: FunctionArgument(i, parameter.name, parameter.type.get_string_before_name(), parameter.type.width)
-        for i, parameter in enumerate(binja_func.parameter_vars)
-    }
-
-    sync_header = FunctionHeader(
-        binja_func.name,
-        binja_func.start,
-        ret_type=binja_func.return_type.get_string_before_name(),
-        args=args
-    )
-
-    #
-    # stack vars
-    #
-
-    binja_stack_vars = {
-        v.storage: v for v in binja_func.stack_layout if v.source_type == VariableSourceType.StackVariableSourceType
-    }
-    sorted_stack = sorted(binja_func.stack_layout, key=lambda x: x.storage)
-    var_sizes = {}
-
-    for off, var in binja_stack_vars.items():
-        i = sorted_stack.index(var)
-        if i + 1 >= len(sorted_stack):
-            var_sizes[var] = 0
-        else:
-            var_sizes[var] = var.storage - sorted_stack[i].storage
-
-    bs_stack_vars = {
-        off: binsync.StackVariable(
-            off, binsync.StackOffsetType.BINJA,
-            var.name,
-            var.type.get_string_before_name(),
-            var_sizes[var],
-            binja_func.start
-        )
-        for off, var in binja_stack_vars.items()
-    }
-
-    size = binja_func.address_ranges[0].end - binja_func.address_ranges[0].start
-    return Function(binja_func.start, size, header=sync_header, stack_vars=bs_stack_vars)
+#
+# Hooks (callbacks)
+#
 
 
-class FunctionNotification(BinaryDataNotification):
+class DataMonitor(BinaryDataNotification):
     def __init__(self, view, controller):
         super().__init__()
         self._view = view
         self._controller = controller
-        self._function_requested = None
-        self._function_saved = None
+        self._func_addr_requested = None
+        self._func_before_change = None
 
     def function_updated(self, view, func_):
         if self._controller.sync_lock.locked():
             return
 
-        # Service requested function only
-        if self._function_requested == func_.start:
-            #print(f"[BinSync] Servicing function: {func_.start:#x}")
-            # Found function clear request
-            self._function_requested = None
+        # service requested function only
+        if self._func_addr_requested == func_.start:
+            l.debug(f"Update on {hex(self._func_addr_requested)} being processed...")
+            self._func_addr_requested = None
 
-            # Convert to binsync Function type for diffing
-            func = view.get_function_at(func_.start)
-            bs_func = conv_func_binja_to_binsync(func)
+            # convert to binsync Function type for diffing
+            bn_func = view.get_function_at(func_.start)
+            bs_func = bn_func_to_bs(bn_func)
 
             #
             # header
-            #
-            # note: function name done inside symbol update hook
+            # NOTE: function name done inside symbol update hook
             #
 
-            # Check return type
-            if self._function_saved.header.ret_type != bs_func.header.ret_type:
+            # check if the headers differ
+            if self._func_before_change.header.diff(bs_func.header):
                 self._controller.schedule_job(
                     self._controller.push_artifact,
                     bs_func.header
                 )
                 
-            # Check arguments
-            arg_changed = False
-            for key, old_arg in self._function_saved.header.args.items():
-                try:
-                    new_arg = bs_func.header.args[key]
-                except KeyError:
-                    arg_changed = True
-                    break
-
-                if old_arg.name != new_arg.name:
-                    arg_changed = True
-                    break
-
-                if old_arg.type_str != new_arg.type_str:
-                    arg_changed = True
-                    break
-
-            if arg_changed:
-                self._controller.schedule_job(
-                    self._controller.push_artifact,
-                    bs_func.header
-                )
-
             #
             # stack vars
             #
 
-            for off, var in self._function_saved.stack_vars.items():
+            for off, var in self._func_before_change.stack_vars.items():
                 if off in bs_func.stack_vars and var != bs_func.stack_vars[off]:
                     new_var = bs_func.stack_vars[off]
                     if re.match(r"var_\d+[_\d+]{0,1}", new_var.name) \
@@ -196,64 +127,53 @@ class FunctionNotification(BinaryDataNotification):
                         new_var
                     )
 
-            self._function_saved = None
+            self._func_before_change = None
 
     def function_update_requested(self, view, func):
-        if not self._controller.sync_lock.locked() and self._function_requested is None:
-            #print(f"[BinSync] Function requested {func.start:#x}")
-            self._function_requested = func.start
-            self._function_saved = conv_func_binja_to_binsync(func)
+        if not self._controller.sync_lock.locked() and self._func_addr_requested is None:
+            l.debug(f"Update on {func} requested...")
+            self._func_addr_requested = func.start
+            self._func_before_change = bn_func_to_bs(func)
     
     def symbol_updated(self, view, sym):
         if self._controller.sync_lock.locked():
             return
 
+        l.debug(f"Symbol update Requested on {sym}...")
         if sym.type == SymbolType.FunctionSymbol:
+            l.debug(f"   -> Function Symbol")
             func = view.get_function_at(sym.address)
-            bs_func = conv_func_binja_to_binsync(func)
+            bs_func = bn_func_to_bs(func)
             self._controller.schedule_job(
                 self._controller.push_artifact,
                 FunctionHeader(sym.name, sym.address, ret_type=bs_func.header.ret_type, args=bs_func.header.args)
             )
 
         elif sym.type == SymbolType.DataSymbol:
+            l.debug(f"   -> Data Symbol")
+            pass
+        else:
+            l.debug(f"   -> Other Symbol: {sym.type}")
+            pass
+
+    def type_defined(self, view, name, type_):
+        l.debug(f"Type Defined: {name} {type_}")
+        if self._controller.sync_lock.locked():
+            return 
+        
+        if isinstance(type_, StructureType):
+            bs_struct = bn_struct_to_bs(name, type_)
+            self._controller.schedule_job(
+                self._controller.push_artifact,
+                bs_struct
+            )
+
+        elif isinstance(type_, EnumerationType):
             pass
 
 
-class DataNotification(BinaryDataNotification):
-    def __init__(self, view, controller):
-        super().__init__()
-        self._view = view
-        self._controller = controller
-        self._function_requested = None
-
-    def data_var_updated(self, view, var):
-        print(f"[BinSync] Data Updated Var: {var}, Type: {type(var)}")
-
-
-class StructNotification(BinaryDataNotification):
-    def __init__(self, view, controller):
-        super().__init__()
-        self._view = view
-        self._controller = controller
-
-    def type_defined(self, view:'BinaryView', name:'_types.QualifiedName', type:'_types.Type') -> None:
-        print(f"[BinSync] Type defined!")
-
-    def type_undefined(self, view:'BinaryView', name:'_types.QualifiedName', type:'_types.Type') -> None:
-        print(f"[BinSync] Type undefined!")
-
-
-def start_function_monitor(view, controller):
-    notification = FunctionNotification(view, controller)
-    view.register_notification(notification)
-
 def start_data_monitor(view, controller):
-    notification = DataNotification(view, controller)
-    view.register_notification(notification)
-
-def start_struct_monitor(view, controller):
-    notification = StructNotification(view, controller)
+    notification = DataMonitor(view, controller)
     view.register_notification(notification)
 
 
@@ -283,13 +203,8 @@ class BinjaPlugin:
         )
 
     def _init_bv_dependencies(self, bv):
-        l.debug(f"Starting function hook")
-        start_function_monitor(bv, self.controllers[bv])
-        #Creates to much noise removing for time being
-        #print(f"[BinSync] Starting data hook")
-        #start_data_monitor(bv, self.controllers[bv])
-        #print(f"[BinSync Starting struct hook")
-        #start_struct_monitor(bv, self.controllers[bv])
+        l.debug(f"Starting data hook")
+        start_data_monitor(bv, self.controllers[bv])
 
     def _launch_config(self, bn_context):
         bv = bn_context.binaryView
@@ -310,12 +225,3 @@ class BinjaPlugin:
 
 
 BinjaPlugin()
-
-"""
-PluginCommand.register(
-    "Start Sharing Patches", "Start Sharing Patches", start_patch_monitor
-)
-PluginCommand.register(
-    "Start Sharing Functions", "Start Sharing Functions", start_function_monitor
-)
-"""
