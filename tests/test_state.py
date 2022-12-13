@@ -5,22 +5,24 @@ import json
 
 import unittest
 
-import binsync
-from binsync.data import Function, FunctionHeader, StackVariable, FunctionArgument
+from binsync.core.client import Client
+from binsync.data import (
+    Function, FunctionHeader, StackVariable, FunctionArgument, State, Struct, ArtifactType
+)
 
 
 class TestState(unittest.TestCase):
 
     def test_state_creation(self):
-        state = binsync.State("user0")
+        state = State("user0")
         self.assertEqual(state.user, "user0")
 
     def test_state_dumping(self):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # create a client only for accurate git usage
-            client = binsync.Client("user0", tmpdir, "fake_hash", init_repo=True)
-            state = binsync.State("user0", client=client)
+            client = Client("user0", tmpdir, "fake_hash", init_repo=True)
+            state = State("user0", client=client)
 
             # dump to the current repo, current branch
             state.dump(client.repo.index)
@@ -30,12 +32,12 @@ class TestState(unittest.TestCase):
     def test_state_loading(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             # create a client only for accurate git usage
-            client = binsync.Client("user0", tmpdir, "fake_hash", init_repo=True)
-            state = binsync.State("user0", client=client)
+            client = Client("user0", tmpdir, "fake_hash", init_repo=True)
+            state = State("user0", client=client)
 
             # create a state for dumping
             state.version = 1
-            func_header = binsync.data.FunctionHeader("some_name", 0x400080)
+            func_header = FunctionHeader("some_name", 0x400080)
             state.set_function_header(func_header)
 
             # dump and commit state to tree
@@ -43,7 +45,7 @@ class TestState(unittest.TestCase):
 
             # load the state
             state_tree = client._get_tree(state.user, client.repo)
-            new_state = binsync.State.parse(state_tree, client=client)
+            new_state = State.parse(state_tree, client=client)
 
             self.assertEqual(new_state.user, "user0")
             self.assertEqual(new_state.version, 1)
@@ -51,11 +53,11 @@ class TestState(unittest.TestCase):
             self.assertEqual(new_state.functions[0x400080].header, func_header)
 
     def test_state_last_push(self):
-        state = binsync.State("user0")
+        state = State("user0")
 
-        func1 = binsync.data.FunctionHeader("some_name", 0x400080)
-        func2 = binsync.data.FunctionHeader("some_other_name", 0x400090)
-        struct = binsync.data.Struct("some_struct", 8, [])
+        func1 = FunctionHeader("some_name", 0x400080)
+        func2 = FunctionHeader("some_other_name", 0x400090)
+        struct = Struct("some_struct", 8, [])
 
         state.set_function_header(func1, set_last_change=True)
         state.set_struct(struct)
@@ -68,11 +70,11 @@ class TestState(unittest.TestCase):
 
         self.assertNotEqual(state.last_push_time, None)
         self.assertEqual(state.last_push_artifact, "some_struct")
-        self.assertEqual(state.last_push_artifact_type, binsync.data.state.ArtifactType.STRUCT)
+        self.assertEqual(state.last_push_artifact_type, ArtifactType.STRUCT)
 
     def test_func_diffing(self):
-        state1 = binsync.State("user1")
-        state2 = binsync.State("user2")
+        state1 = State("user1")
+        state2 = State("user2")
 
         # setup top
         func1 = FunctionHeader("func", 0x400000, ret_type="int *", args={
@@ -139,8 +141,8 @@ class TestState(unittest.TestCase):
         print(json.dumps(diff_dict, sort_keys=False, indent=4))
 
     def test_nonconflicting_funcs(self):
-        state1 = binsync.State("user1")
-        state2 = binsync.State("user2")
+        state1 = State("user1")
+        state2 = State("user2")
 
         # setup top
         func1 = FunctionHeader("user1_func", 0x400000, ret_type="int *", args={})

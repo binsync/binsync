@@ -4,18 +4,19 @@ import tempfile
 
 import unittest
 
-import binsync
+import binsync.data
+from binsync.core.client import Client
 
 
 class TestClient(unittest.TestCase):
     def test_client_creation(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            client = binsync.Client("user0", tmpdir, "fake_hash", init_repo=True)
+            client = Client("user0", tmpdir, "fake_hash", init_repo=True)
             self.assertTrue(os.path.isdir(os.path.join(tmpdir, ".git")))
 
     def test_client_state(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            client = binsync.Client("user0", tmpdir, "fake_hash", init_repo=True)
+            client = Client("user0", tmpdir, "fake_hash", init_repo=True)
 
             state = client.get_state()
             self.assertEqual(state.user, "user0")
