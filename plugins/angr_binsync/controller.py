@@ -3,18 +3,17 @@ import os
 from typing import Optional, Dict
 
 import angr
-import binsync
 from angr.analyses.decompiler.structured_codegen import DummyStructuredCodeGenerator
 from angrmanagement.ui.views import CodeView
 
-from binsync import Function
+import binsync
 from binsync.common.controller import (
     BinSyncController,
     init_checker,
     fill_event
 )
 from binsync.data import (
-    FunctionHeader, StackOffsetType, Comment, StackVariable
+    Function, FunctionHeader, StackOffsetType, Comment, StackVariable
 )
 
 from .artifact_lifter import AngrArtifactLifter
@@ -208,6 +207,7 @@ class AngrBinSyncController(BinSyncController):
         self._main_instance.workspace.jump_to(func_addr)
         view = self._main_instance.workspace._get_or_create_pseudocode_view()
         view.codegen.am_event()
+        view.focus()
 
     def decompile_function(self, func, refresh_gui=False):
         # check for known decompilation
