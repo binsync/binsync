@@ -21,7 +21,6 @@ from binsync.common.ui.version import set_ui_version
 set_ui_version("PyQt5")
 from binsync.common.ui.config_dialog import SyncConfig
 from binsync.common.ui.control_panel import ControlPanel
-from binsync.common.ui.magic_sync_dialog import display_magic_sync_dialog
 
 from .hooks import MasterHook
 from . import IDA_DIR, VERSION
