@@ -484,7 +484,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         return 0
 
     def binsync_state_change(self, *args, **kwargs):
-        self.controller.async_do_job(*args, **kwargs)
+        self.controller.schedule_job(*args, **kwargs)
 
 
 class IDPHooks(ida_idp.IDP_Hooks):
@@ -644,7 +644,7 @@ class HexRaysHooks:
                     vu.refresh_view(False)
 
     def binsync_state_change(self, *args, **kwargs):
-        self.controller.async_do_job(*args, **kwargs)
+        self.controller.schedule_job(*args, **kwargs)
 
 
 class MasterHook:

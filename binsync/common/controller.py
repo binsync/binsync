@@ -151,7 +151,13 @@ class BinSyncController:
             QThread
         )
 
-    def async_do_job(self, cmd_func, *args, **kwargs):
+    def schedule_job(self, cmd_func, *args, blocking=False, **kwargs):
+        if blocking:
+            return self.job_scheduler.schedule_and_wait_job(
+                Job(cmd_func, *args, **kwargs),
+                priority=SchedSpeed.FAST
+            )
+
         self.job_scheduler.schedule_job(
             Job(cmd_func, *args, **kwargs),
             priority=SchedSpeed.FAST
@@ -571,7 +577,7 @@ class BinSyncController:
         if blocking:
             self.push_artifact(merged_artifact, state=master_state, set_last_change=False, commit_msg=commit_msg)
         else:
-            self.async_do_job(
+            self.schedule_job(
                 self.push_artifact,
                 merged_artifact,
                 state=master_state,
