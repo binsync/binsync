@@ -52,7 +52,7 @@ class BinSyncPlugin(BasePlugin):
     # BinSync GUI Hooks
     #
 
-    MENU_BUTTONS = ('Configure Binsync...', 'Toggle Binsync Panel')
+    MENU_BUTTONS = (f'Configure Binsync ...', 'Toggle Binsync Panel')
     MENU_CONFIG_ID = 0
     MENU_TOGGLE_PANEL_ID = 1
 
@@ -99,11 +99,14 @@ class BinSyncPlugin(BasePlugin):
 
     # pylint: disable=unused-argument
     def handle_stack_var_renamed(self, func, offset, old_name, new_name):
+        if func is None:
+            return False
+
         decompilation = self.controller.decompile_function(func)
         stack_var = self.controller.find_stack_var_in_codegen(decompilation, offset)
         var_type = AngrBinSyncController.stack_var_type_str(decompilation, stack_var)
 
-        self.controller.schedule_job(
+        self.controller.async_do_job(
             self.controller.push_artifact,
             StackVariable(offset, StackOffsetType.ANGR, new_name, var_type, stack_var.size, func.addr)
         )
@@ -114,7 +117,7 @@ class BinSyncPlugin(BasePlugin):
         decompilation = self.controller.decompile_function(func)
         stack_var = self.controller.find_stack_var_in_codegen(decompilation, offset)
 
-        self.controller.schedule_job(
+        self.controller.async_do_job(
             self.controller.push_artifact,
             StackVariable(offset, StackOffsetType.ANGR, stack_var.name, new_type, stack_var.size, func.addr),
         )
@@ -130,7 +133,7 @@ class BinSyncPlugin(BasePlugin):
             for i, var_info in func_args.items()
         }
 
-        self.controller.schedule_job(
+        self.controller.async_do_job(
             self.controller.push_artifact,
             FunctionHeader(func.name, func.addr, ret_type=func_type, args=bs_args)
         )
@@ -146,7 +149,7 @@ class BinSyncPlugin(BasePlugin):
             for i, var_info in func_args.items()
         }
 
-        self.controller.schedule_job(
+        self.controller.async_do_job(
             self.controller.push_artifact,
             FunctionHeader(func.name, func.addr, ret_type=func_type, args=bs_args)
         )
@@ -162,7 +165,7 @@ class BinSyncPlugin(BasePlugin):
 
     # pylint: disable=unused-argument
     def handle_function_renamed(self, func, old_name, new_name):
-        self.controller.schedule_job(
+        self.controller.async_do_job(
             self.controller.push_artifact,
             FunctionHeader(new_name, func.addr)
         )
@@ -175,7 +178,7 @@ class BinSyncPlugin(BasePlugin):
     # pylint: disable=unused-argument
     def handle_comment_changed(self, address, old_cmt, new_cmt, created: bool, decomp: bool):
         func_addr = self.controller.get_func_addr_from_addr(address)
-        self.controller.schedule_job(
+        self.controller.async_do_job(
             self.controller.push_artifact,
             Comment(address, new_cmt, func_addr=func_addr, decompiled=decomp)
         )

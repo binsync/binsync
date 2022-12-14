@@ -104,7 +104,7 @@ class DataMonitor(BinaryDataNotification):
 
             # check if the headers differ
             if self._func_before_change.header.diff(bs_func.header):
-                self._controller.schedule_job(
+                self._controller.async_do_job(
                     self._controller.push_artifact,
                     bs_func.header
                 )
@@ -120,7 +120,7 @@ class DataMonitor(BinaryDataNotification):
                             or new_var.name in {'__saved_rbp', '__return_addr',}:
                         continue
 
-                    self._controller.schedule_job(
+                    self._controller.async_do_job(
                         self._controller.push_artifact,
                         new_var
                     )
@@ -142,7 +142,7 @@ class DataMonitor(BinaryDataNotification):
             l.debug(f"   -> Function Symbol")
             func = view.get_function_at(sym.address)
             bs_func = bn_func_to_bs(func)
-            self._controller.schedule_job(
+            self._controller.async_do_job(
                 self._controller.push_artifact,
                 FunctionHeader(sym.name, sym.address, ret_type=bs_func.header.ret_type, args=bs_func.header.args)
             )
@@ -161,7 +161,7 @@ class DataMonitor(BinaryDataNotification):
         
         if isinstance(type_, StructureType):
             bs_struct = bn_struct_to_bs(name, type_)
-            self._controller.schedule_job(
+            self._controller.async_do_job(
                 self._controller.push_artifact,
                 bs_struct
             )

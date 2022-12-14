@@ -22,6 +22,9 @@ from binsync.common.controller import SyncControlStatus
 from binsync.common.ui import utils
 from binsync.common.ui.config_dialog import SyncConfig
 
+from common import timeout_after
+
+
 app = None
 test_location = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'binaries')
 logging.disable(logging.CRITICAL)
@@ -180,7 +183,9 @@ class TestBinSyncPluginGUI(unittest.TestCase):
     #
     # Tests
     #
-    def test_function_rename(self):
+
+    @timeout_after
+    def test_function_rename(self, timeout=2*60):
         binpath = os.path.join(test_location, "fauxware")
         new_function_name = "leet_main"
         user_1 = "user_1"
@@ -236,7 +241,8 @@ class TestBinSyncPluginGUI(unittest.TestCase):
 
             app.exit(0)
 
-    def test_stack_variable_rename(self):
+    @timeout_after
+    def test_stack_variable_rename(self, timeout=2*60):
         binpath = os.path.join(test_location, "fauxware")
         var_offset = -0x18
         new_var_name = "leet_buff"

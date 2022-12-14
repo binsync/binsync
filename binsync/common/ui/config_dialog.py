@@ -186,9 +186,8 @@ class SyncConfig(QDialog):
 
         try:
             connection_warnings = self.controller.connect(user, path, init_repo=init_repo, remote_url=remote_url)
-            pass
         except Exception as e:
-            l.critical("Error connecting to specified repository!")
+            l.critical(f"Error connecting to specified repository: {e}!")
             QMessageBox(self).critical(None, "Error connecting to repository", str(e))
             traceback.print_exc()
             return
