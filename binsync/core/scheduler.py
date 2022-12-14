@@ -52,7 +52,7 @@ class Scheduler:
 
     def start_worker_thread(self):
         self._work = True
-        self._worker.setDaemon = True
+        self._worker.daemon = True
         self._worker.start()
 
     def _worker_thread(self):
