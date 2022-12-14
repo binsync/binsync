@@ -52,7 +52,7 @@ class BinSyncPlugin(BasePlugin):
     # BinSync GUI Hooks
     #
 
-    MENU_BUTTONS = ('Configure Binsync...', 'Toggle Binsync Panel')
+    MENU_BUTTONS = (f'Configure Binsync ...', 'Toggle Binsync Panel')
     MENU_CONFIG_ID = 0
     MENU_TOGGLE_PANEL_ID = 1
 
@@ -99,6 +99,9 @@ class BinSyncPlugin(BasePlugin):
 
     # pylint: disable=unused-argument
     def handle_stack_var_renamed(self, func, offset, old_name, new_name):
+        if func is None:
+            return False
+
         decompilation = self.controller.decompile_function(func)
         stack_var = self.controller.find_stack_var_in_codegen(decompilation, offset)
         var_type = AngrBinSyncController.stack_var_type_str(decompilation, stack_var)

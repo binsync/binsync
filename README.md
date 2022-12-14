@@ -17,7 +17,7 @@ center of BinSync's syncing ability. Here are the supported REAs:
 - Comments
 
 Note: all types support user-created types like structs.
-**DISCLAIMER**: The current version of BinSync is highly developmental. If you are looking for a highly stable version with full support for the listed decompilers, check back in a few months.
+**DISCLAIMER: The current version of BinSync is highly developmental. If you are looking for a highly stable version with full support for the listed decompilers, check back in a few months.**
 
 **Join our discord below for more online help**:
 
@@ -36,4 +36,4 @@ For all installs, it's best to use our two-part installer with Python:
 ```bash
 pip3 install binsync && binsync --install 
 ```
-For full install information, please read our [Docs Quickstart](https://binsync.net/docs/home)
+For full install information, please read our [Quickstart Docs](https://binsync.net/docs/home)

@@ -154,11 +154,13 @@ class BinSyncController:
     def schedule_job(self, cmd_func, *args, blocking=False, **kwargs):
         if blocking:
             return self.job_scheduler.schedule_and_wait_job(
-                Job(cmd_func, *args, **kwargs)
+                Job(cmd_func, *args, **kwargs),
+                priority=SchedSpeed.FAST
             )
 
         self.job_scheduler.schedule_job(
-            Job(cmd_func, *args, **kwargs)
+            Job(cmd_func, *args, **kwargs),
+            priority=SchedSpeed.FAST
         )
         return None
 
@@ -205,7 +207,7 @@ class BinSyncController:
 
     def start_worker_routines(self):
         self._run_updater_threads = True
-        self.updater_thread.setDaemon(True)
+        self.updater_thread.daemon = True
         self.updater_thread.start()
 
         self.job_scheduler.start_worker_thread()

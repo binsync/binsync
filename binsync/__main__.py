@@ -5,7 +5,6 @@ from pathlib import Path
 import importlib
 import pkg_resources
 
-import binsync
 from binsync.installer import BinSyncInstaller
 
 l = logging.getLogger(__name__)

@@ -22,7 +22,7 @@ jobs:
         sudo apt-get install libegl1 -y
         python -m pip install --upgrade pip
         pip install flake8 pytest
-        pip install angr-management
+        pip install angr-management==9.2.25
         AM_INSTALL=$(dirname $(python3 -c "import angrmanagement; print(angrmanagement.__file__)"))
         pip install -e .
         binsync --install-angr-only $AM_INSTALL 

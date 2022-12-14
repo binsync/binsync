@@ -23,12 +23,10 @@ import logging
 
 from binsync.common.ui.version import set_ui_version
 set_ui_version("PySide6")
-import binsync
 from binsync.common.ui.config_dialog import SyncConfig
 from binsync.common.ui.control_panel import ControlPanel
 from .compat import find_main_window, BinjaDockWidget, create_widget, bn_struct_to_bs, bn_func_to_bs
 from .controller import BinjaBinSyncController
-from copy import deepcopy
 from binsync.data import (
     State, User, Artifact,
     Function, FunctionHeader, FunctionArgument, StackVariable,
