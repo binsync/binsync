@@ -90,13 +90,13 @@ class TestState(unittest.TestCase):
         state2.functions[func1.addr].size = 0x150
 
         stack_vars1 = {
-            0x0: StackVariable(0, 3, "v0", "int", 4, func1.addr),
-            0x4: StackVariable(4, 3, "v4", "int", 4, func1.addr)
+            0x0: StackVariable(0, "v0", "int", 4, func1.addr),
+            0x4: StackVariable(4, "v4", "int", 4, func1.addr)
         }
         stack_vars2 = {
-            0x0: StackVariable(0, 3, "v0", "int", 4, func1.addr),
-            0x4: StackVariable(4, 3, "v4", "long", 8, func1.addr),
-            0x8: StackVariable(8, 3, "v8", "long", 8, func1.addr)
+            0x0: StackVariable(0, "v0", "int", 4, func1.addr),
+            0x4: StackVariable(4, "v4", "long", 8, func1.addr),
+            0x8: StackVariable(8, "v8", "long", 8, func1.addr)
         }
 
         for stack_vars_info in [(stack_vars1, state1), (stack_vars2, state2)]:
@@ -124,7 +124,7 @@ class TestState(unittest.TestCase):
         self.assertFalse(header_diff["args"][0])
 
         # arg2 should not match
-        self.assertNotEqual(header_diff["args"][1]["type_str"]["before"], header_diff["args"][1]["type_str"]["after"])
+        self.assertNotEqual(header_diff["args"][1]["type"]["before"], header_diff["args"][1]["type"]["after"])
 
         # v4 and v8 should differ
         offsets = [0, 4, 8]
@@ -154,13 +154,13 @@ class TestState(unittest.TestCase):
         state2.functions[func1.addr].size = 0x100
 
         stack_vars1 = {
-            0x0: StackVariable(0, 3, "v0", "int", 4, func1.addr),
-            0x4: StackVariable(4, 3, "my_var", "int", 4, func1.addr)
+            0x0: StackVariable(0, "v0", "int", 4, func1.addr),
+            0x4: StackVariable(4, "my_var", "int", 4, func1.addr)
         }
         stack_vars2 = {
-            0x0: StackVariable(0, 3, "v0", "int", 4, func1.addr),
-            0x4: StackVariable(4, 3, "v4", "long", 8, func1.addr),
-            0x8: StackVariable(8, 3, "v8", "long", 8, func1.addr)
+            0x0: StackVariable(0, "v0", "int", 4, func1.addr),
+            0x4: StackVariable(4, "v4", "long", 8, func1.addr),
+            0x8: StackVariable(8, "v8", "long", 8, func1.addr)
         }
 
         for stack_vars_info in [(stack_vars1, state1), (stack_vars2, state2)]:

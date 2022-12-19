@@ -340,5 +340,5 @@ class Function(Artifact):
     def args(self):
         return self.header.args
 
-    def set_stack_var(self, name, off: int, off_type: int, size: int, type_str, last_change):
-        self.stack_vars[off] = StackVariable(off, off_type, name, type_str, size, self.addr, last_change=last_change)
+    def set_stack_var(self, name, off: int, off_type: int, size: int, type_, last_change):
+        self.stack_vars[off] = StackVariable(off, off_type, name, type_, size, self.addr, last_change=last_change)
