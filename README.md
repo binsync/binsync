@@ -2,7 +2,7 @@
 # BinSync
 
 <p align="center">
-   <img src="https://i.imgur.com/zQcqqML.png" alt="BinSync Logo"/>
+   <img src="https://i.imgur.com/qdesKpg.png" alt="BinSync Logo"/>
 </p>
 
 BinSync is a decompiler collaboration tool built on the Git versioning system to enable fined-grained reverse
