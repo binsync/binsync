@@ -4,8 +4,7 @@ from binsync.data.artifact import Artifact
 
 
 class Comment(Artifact):
-    __slots__ = (
-        "last_change",
+    __slots__ = Artifact.__slots__ + (
         "addr",
         "func_addr",
         "comment",

@@ -5,28 +5,28 @@ import toml
 from binsync.data.artifact import Artifact
 from binsync.data.stack_variable import StackVariable
 
+
 #
 # Function Header Classes
 #
 
 class FunctionArgument(Artifact):
-    __slots__ = (
-        "last_change",
-        "idx",
+    __slots__ = Artifact.__slots__ + (
+        "offset",
         "name",
-        "type_str",
+        "type",
         "size"
     )
 
-    def __init__(self, idx, name, type_str, size, last_change=None):
+    def __init__(self, offset, name, type_, size, last_change=None):
         super(FunctionArgument, self).__init__(last_change=last_change)
-        self.idx = idx
+        self.offset = offset
         self.name = name
-        self.type_str = type_str
+        self.type = type_
         self.size = size
 
     def __str__(self):
-        return f"<FuncArg: {self.type_str} {self.name}; @{self.idx}>"
+        return f"<FuncArg: {self.type} {self.name}; @{self.offset}>"
 
     def __repr__(self):
         return self.__str__()
@@ -38,27 +38,26 @@ class FunctionArgument(Artifact):
         return fa
 
     def copy(self):
-        return FunctionArgument(self.idx, self.name, self.type_str, self.size, last_change=self.last_change)
+        return FunctionArgument(self.offset, self.name, self.type, self.size, last_change=self.last_change)
 
 
 class FunctionHeader(Artifact):
-    __slots__ = (
-        "last_change",
+    __slots__ = Artifact.__slots__ + (
         "name",
         "addr",
-        "ret_type",
+        "type",
         "args"
     )
 
-    def __init__(self, name, addr, ret_type=None, args=None, last_change=None):
+    def __init__(self, name, addr, type_=None, args=None, last_change=None):
         super(FunctionHeader, self).__init__(last_change=last_change)
         self.name = name
         self.addr = addr
-        self.ret_type = ret_type
+        self.type = type_
         self.args = args or {}
 
     def __str__(self):
-        return f"<FuncHeader: {self.ret_type} {self.name}(args={len(self.args)}); @{hex(self.addr)}>"
+        return f"<FuncHeader: {self.type} {self.name}(args={len(self.args)}); @{hex(self.addr)}>"
 
     def __repr__(self):
         return self.__str__()
@@ -70,7 +69,7 @@ class FunctionHeader(Artifact):
             "last_change": self.last_change,
             "name": self.name,
             "addr": self.addr,
-            "ret_type": self.ret_type,
+            "type": self.type,
             "args": args if len(args) > 0 else None,
         }
 
@@ -78,7 +77,7 @@ class FunctionHeader(Artifact):
         self.last_change = state.get("last_change", None)
         self.name = state.get("name", None)
         self.addr = state["addr"]
-        self.ret_type = state.get("ret_type", None)
+        self.type = state.get("type", None)
         args = state.get("args", {})
         self.args = {int(idx, 16): FunctionArgument.parse(toml.dumps(arg)) for idx, arg in args.items()}
 
@@ -96,7 +95,7 @@ class FunctionHeader(Artifact):
         diff_dict = {}
         # early exit if the two do not match type
         if not isinstance(other, FunctionHeader):
-            for k in ["name", "addr", "ret_type"]:
+            for k in ["name", "addr", "type"]:
                 diff_dict[k] = {
                     "before": getattr(self, k),
                     "after": None
@@ -106,7 +105,7 @@ class FunctionHeader(Artifact):
             return diff_dict
 
         # metadata
-        for k in ["name", "addr", "ret_type"]:
+        for k in ["name", "addr", "type"]:
             if getattr(self, k) == getattr(other, k):
                 continue
 
@@ -134,7 +133,7 @@ class FunctionHeader(Artifact):
         return diff_dict
 
     def copy(self):
-        fh = FunctionHeader(self.name, self.addr, ret_type=self.ret_type, last_change=self.last_change)
+        fh = FunctionHeader(self.name, self.addr, type_=self.type, last_change=self.last_change)
         fh.args = {k: v.copy() for k, v in self.args.items()}
         return fh
 
@@ -146,8 +145,8 @@ class FunctionHeader(Artifact):
         if fh1.name is None:
             fh1.name = fh2.name
 
-        if fh1.ret_type is None:
-            fh1.ret_type = fh2.ret_type
+        if fh1.type is None:
+            fh1.type = fh2.type
 
         # header args
         for off, var in fh2.args.items():
@@ -156,6 +155,7 @@ class FunctionHeader(Artifact):
             fh1.args[off] = merge_var
 
         return fh1
+
 
 #
 # Full Function Class
@@ -189,7 +189,7 @@ class Function(Artifact):
 
     def __str__(self):
         if self.header:
-            return f"<Function: {self.header.ret_type} {self.name}(args={len(self.args)}); @{hex(self.addr)} " \
+            return f"<Function: {self.header.type} {self.name}(args={len(self.args)}); @{hex(self.addr)} " \
                    f"vars={len(self.stack_vars)} len={hex(self.size)}>"
 
         return f"<Function: @{hex(self.addr)} len={hex(self.size)}>"
@@ -305,8 +305,7 @@ class Function(Artifact):
         if not func2 or func1 == func2:
             return func1
 
-        func_diff = func1.diff(func2)
-        merge_func = func1.copy()
+        merge_func: "Function" = func1.copy()
 
         if merge_func.header is None:
             merge_func.header = func2.header.copy() if func2.header else None

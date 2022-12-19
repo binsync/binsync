@@ -144,7 +144,7 @@ class DataMonitor(BinaryDataNotification):
             bs_func = bn_func_to_bs(func)
             self._controller.schedule_job(
                 self._controller.push_artifact,
-                FunctionHeader(sym.name, sym.address, ret_type=bs_func.header.ret_type, args=bs_func.header.args)
+                FunctionHeader(sym.name, sym.address, type_=bs_func.header.type, args=bs_func.header.args)
             )
 
         elif sym.type == SymbolType.DataSymbol:

@@ -12,7 +12,7 @@ from .control_panel_view import ControlPanelView
 from .controller import AngrBinSyncController
 
 from binsync.data import (
-    StackVariable, StackOffsetType, Function, FunctionHeader, Comment
+    StackVariable, Function, FunctionHeader, Comment
 )
 
 l = logging.getLogger(__name__)
@@ -108,7 +108,7 @@ class BinSyncPlugin(BasePlugin):
 
         self.controller.schedule_job(
             self.controller.push_artifact,
-            StackVariable(offset, StackOffsetType.ANGR, new_name, var_type, stack_var.size, func.addr)
+            StackVariable(offset, new_name, var_type, stack_var.size, func.addr)
         )
         return False
 
@@ -119,7 +119,7 @@ class BinSyncPlugin(BasePlugin):
 
         self.controller.schedule_job(
             self.controller.push_artifact,
-            StackVariable(offset, StackOffsetType.ANGR, stack_var.name, new_type, stack_var.size, func.addr),
+            StackVariable(offset, stack_var.name, new_type, stack_var.size, func.addr),
         )
         return False
 
@@ -135,7 +135,7 @@ class BinSyncPlugin(BasePlugin):
 
         self.controller.schedule_job(
             self.controller.push_artifact,
-            FunctionHeader(func.name, func.addr, ret_type=func_type, args=bs_args)
+            FunctionHeader(func.name, func.addr, type_=func_type, args=bs_args)
         )
         return False
 
@@ -151,7 +151,7 @@ class BinSyncPlugin(BasePlugin):
 
         self.controller.schedule_job(
             self.controller.push_artifact,
-            FunctionHeader(func.name, func.addr, ret_type=func_type, args=bs_args)
+            FunctionHeader(func.name, func.addr, type_=func_type, args=bs_args)
         )
         return False
 

@@ -46,7 +46,7 @@ import idc
 from . import compat
 from .controller import IDABinSyncController
 from binsync.data import (
-    Function, FunctionHeader, FunctionArgument, StackVariable, StackOffsetType,
+    Function, FunctionHeader, FunctionArgument, StackVariable,
     Comment, GlobalVariable, Patch,
     Enum, Struct
 )
@@ -254,7 +254,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
                 return 0
 
             # find the properties of the changed stack var
-            angr_offset = compat.ida_to_angr_stack_offset(func_addr, stack_var_info.stack_offset)
+            angr_offset = compat.ida_to_angr_stack_offset(func_addr, stack_var_info.offset)
             size = stack_var_info.size
             type_str = stack_var_info.type
 
@@ -263,7 +263,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
             # do the change on a new thread
             sv = StackVariable(
-                angr_offset, StackOffsetType.IDA, new_name, type_str, size, func_addr
+                angr_offset, new_name, type_str, size, func_addr
             )
             self.binsync_state_change(
                 self.controller.push_artifact,
@@ -293,7 +293,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
                 return 0
 
             # find the properties of the changed stack var
-            angr_offset = compat.ida_to_angr_stack_offset(func_addr, stack_var_info.stack_offset)
+            angr_offset = compat.ida_to_angr_stack_offset(func_addr, stack_var_info.offset)
             size = stack_var_info.size
             type_str = stack_var_info.type
 
@@ -301,7 +301,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
 
             # do the change on a new thread
             sv = StackVariable(
-                angr_offset, StackOffsetType.IDA, new_name, type_str, size, func_addr
+                angr_offset, new_name, type_str, size, func_addr
             )
             self.binsync_state_change(
                 self.controller.push_artifact,
@@ -579,7 +579,7 @@ class HexRaysHooks:
             cur_func_header = compat.function_header(ida_cfunc)
             binsync_args = {}
             for idx, arg in cur_func_header.args.items():
-                binsync_args[idx] = FunctionArgument(idx, arg.name, arg.type_str, arg.size)
+                binsync_args[idx] = FunctionArgument(idx, arg.name, arg.type, arg.size)
 
             # send the change
             self.binsync_state_change(
@@ -611,7 +611,7 @@ class HexRaysHooks:
         cmts = HexRaysHooks._get_user_cmts(ea)
 
         # validate we dont waste time
-        if len(cmts) == 0:
+        if not cmts:
             return
 
         # never do the same push twice

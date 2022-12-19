@@ -1,6 +1,6 @@
 import logging
 
-from binsync.data.artifact import Artifact
+from binsync.data import StackVariable, Artifact
 from binsync.data.type_parser import BSTypeParser, BSType
 
 _l = logging.getLogger(name=__name__)
@@ -20,22 +20,6 @@ class ArtifactLifter:
 
     def lower(self, artifact: Artifact):
         return self._lift_or_lower_artifact(artifact, "lower")
-
-    #
-    # TODO: deprecate these and standardize property names
-    #
-
-    def lift_ret_type(self, type_str):
-        return self.lift_type(type_str)
-
-    def lower_ret_type(self, type_str):
-        return self.lower_type(type_str)
-
-    def lift_type_str(self, type_str):
-        return self.lift_type(type_str)
-
-    def lower_type_str(self, type_str):
-        return self.lower_type(type_str)
 
     #
     # Override Mandatory Funcs
@@ -70,7 +54,7 @@ class ArtifactLifter:
     #
 
     def _lift_or_lower_artifact(self, artifact, mode):
-        target_attrs = ("ret_type", "type_str", "type", "stack_offset", "addr")
+        target_attrs = ("type", "offset", "addr")
         if mode not in ("lower", "lift"):
             return None
 
@@ -85,11 +69,14 @@ class ArtifactLifter:
                 if not curr_val:
                     continue
 
-                lifting_func = getattr(self, f"{mode}_{attr}")
-
-                if attr == "stack_offset":
+                # special handling for stack variables
+                if attr == "offset":
+                    if not isinstance(artifact, StackVariable):
+                        continue
+                    lifting_func = getattr(self, f"{mode}_stack_offset")
                     setattr(lifted_art, attr, lifting_func(curr_val, lifted_art.addr))
                 else:
+                    lifting_func = getattr(self, f"{mode}_{attr}")
                     setattr(lifted_art, attr, lifting_func(curr_val))
 
         # recursively correct nested artifacts

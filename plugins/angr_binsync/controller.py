@@ -13,7 +13,7 @@ from binsync.common.controller import (
     fill_event
 )
 from binsync.data import (
-    Function, FunctionHeader, StackOffsetType, Comment, StackVariable
+    Function, FunctionHeader, Comment, StackVariable
 )
 
 from .artifact_lifter import AngrArtifactLifter
@@ -193,7 +193,7 @@ class AngrBinSyncController(BinSyncController):
             return None
 
         func = Function(_func.addr, _func.size)
-        func_header = FunctionHeader(_func.name, _func.addr, ret_type=_func.prototype.c_repr())
+        func_header = FunctionHeader(_func.name, _func.addr, type_=_func.prototype.c_repr())
 
         func.header = func_header
         return func

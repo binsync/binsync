@@ -77,10 +77,10 @@ class TestState(unittest.TestCase):
         state2 = State("user2")
 
         # setup top
-        func1 = FunctionHeader("func", 0x400000, ret_type="int *", args={
+        func1 = FunctionHeader("func", 0x400000, type_="int *", args={
             0: FunctionArgument(0, "a1", "int", 4), 1: FunctionArgument(1, "a2", "long", 8)
         })
-        func2 = FunctionHeader("func_changed", func1.addr, ret_type="long *", args={
+        func2 = FunctionHeader("func_changed", func1.addr, type_="long *", args={
             0: FunctionArgument(0, "a1", "int", 4), 1: FunctionArgument(1, "a2", "int", 4)
         })
 
@@ -145,8 +145,8 @@ class TestState(unittest.TestCase):
         state2 = State("user2")
 
         # setup top
-        func1 = FunctionHeader("user1_func", 0x400000, ret_type="int *", args={})
-        func2 = FunctionHeader("main", func1.addr, ret_type="long *", args={})
+        func1 = FunctionHeader("user1_func", 0x400000, type_="int *", args={})
+        func2 = FunctionHeader("main", func1.addr, type_="long *", args={})
 
         state1.set_function_header(func1)
         state2.set_function_header(func2)
@@ -173,7 +173,7 @@ class TestState(unittest.TestCase):
         merge_func = func1.nonconflict_merge(func2)
 
         self.assertEqual(merge_func.name, "user1_func")
-        self.assertEqual(merge_func.header.ret_type, "int *")
+        self.assertEqual(merge_func.header.type, "int *")
         self.assertEqual(merge_func.stack_vars[0].name, "v0")
         self.assertEqual(merge_func.stack_vars[4].name, "my_var")
         self.assertEqual(merge_func.stack_vars[4].type, "int")

@@ -430,12 +430,12 @@ class State:
             return False
 
         try:
-            old_var = func.stack_vars[variable.stack_offset]
+            old_var = func.stack_vars[variable.offset]
         except KeyError:
             old_var = None
 
         if old_var != variable:
-            func.stack_vars[variable.stack_offset] = variable
+            func.stack_vars[variable.offset] = variable
             return True
 
         return False

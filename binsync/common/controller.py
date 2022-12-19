@@ -559,6 +559,7 @@ class BinSyncController:
             master_artifact,  self.lower_artifact(art_getter(state, *identifiers)),
             merge_level=merge_level, master_state=master_state
         )
+        merged_artifact.last_change = None
 
         lock = self.sync_lock if not self.sync_lock.locked() else FakeSyncLock()
         with lock:
@@ -664,7 +665,7 @@ class BinSyncController:
         # function header
         if master_func.header and master_func.header != dec_func.header:
             # type is user made (a struct)
-            changes |= self.import_user_defined_type(master_func.header.ret_type, **kwargs)
+            changes |= self.import_user_defined_type(master_func.header.type, **kwargs)
             changes |= self.fill_function_header(func_addr, artifact=master_func.header, **kwargs)
 
         # stack vars
@@ -677,7 +678,7 @@ class BinSyncController:
                 if dec_sv == sv:
                     continue
 
-                corrected_off = dec_sv.stack_offset if dec_sv and dec_sv.stack_offset else sv.stack_offset
+                corrected_off = dec_sv.offset if dec_sv and dec_sv.offset else sv.offset
                 changes |= self.import_user_defined_type(sv.type, **kwargs)
                 changes |= self.fill_stack_variable(func_addr, corrected_off, artifact=sv, **kwargs)
 
@@ -942,7 +943,7 @@ class BinSyncController:
         if not type_.is_unknown:
             return None
 
-        base_type_str = type_.base_type.type_str
+        base_type_str = type_.base_type.type
         return base_type_str if base_type_str in state.structs.keys() else None
 
     def import_user_defined_type(self, type_str, **kwargs):
@@ -957,7 +958,7 @@ class BinSyncController:
             return False
 
         nested_undefined_structs = False
-        for off, memb in struct.struct_members.items():
+        for off, memb in struct.members.items():
             user_type = self.type_is_user_defined(memb.type, state=state)
             if user_type and user_type not in master_state.structs.keys():
                 # should we ever happen to have a struct with a nested type that is
