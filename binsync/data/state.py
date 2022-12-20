@@ -2,12 +2,14 @@ import logging
 import os
 import pathlib
 import time
+import datetime
 from functools import wraps
 from typing import Dict, Iterable, Optional, Union, List
 
 import git
 import toml
 from sortedcontainers import SortedDict
+
 
 from binsync.data import (
     Comment,
@@ -17,8 +19,9 @@ from binsync.data import (
     GlobalVariable,
     Patch,
     StackVariable,
-    Struct
+    Struct,
 )
+from binsync.data.artifact import TomlHexEncoder
 from binsync.core.errors import MetadataNotFoundError
 
 
@@ -62,7 +65,7 @@ def update_last_change(f):
 
         if not should_set:
             return f(self, *args, **kwargs)
-        artifact.last_change = int(time.time())
+        artifact.last_change = datetime.datetime.now(tz=datetime.timezone.utc)
 
         # Comment
         if isinstance(artifact, Comment):
@@ -247,7 +250,7 @@ class State:
             "last_push_artifact": self.last_push_artifact,
             "last_push_artifact_type": self.last_push_artifact_type,
         }
-        self._dump_data(dst, 'metadata.toml', toml.dumps(d).encode())
+        self._dump_data(dst, 'metadata.toml', toml.dumps(d, encoder=TomlHexEncoder()).encode())
 
     def dump(self, dst: Union[pathlib.Path, git.IndexFile]):
         if isinstance(dst, str):
@@ -267,16 +270,16 @@ class State:
             self._dump_data(dst, path, struct.dump().encode())
 
         # dump comments
-        self._dump_data(dst, 'comments.toml', toml.dumps(Comment.dump_many(self.comments)).encode())
+        self._dump_data(dst, 'comments.toml', toml.dumps(Comment.dump_many(self.comments), encoder=TomlHexEncoder()).encode())
 
         # dump patches
-        self._dump_data(dst, 'patches.toml', toml.dumps(Patch.dump_many(self.patches)).encode())
+        self._dump_data(dst, 'patches.toml', toml.dumps(Patch.dump_many(self.patches), encoder=TomlHexEncoder()).encode())
 
         # dump global vars
-        self._dump_data(dst, 'global_vars.toml', toml.dumps(GlobalVariable.dump_many(self.global_vars)).encode())
+        self._dump_data(dst, 'global_vars.toml', toml.dumps(GlobalVariable.dump_many(self.global_vars), encoder=TomlHexEncoder()).encode())
 
         # dump enums
-        self._dump_data(dst, 'enums.toml', toml.dumps(Enum.dump_many(self.enums)).encode())
+        self._dump_data(dst, 'enums.toml', toml.dumps(Enum.dump_many(self.enums), encoder=TomlHexEncoder()).encode())
 
     @classmethod
     def parse(cls, src: Union[pathlib.Path, git.Tree], version=None, client=None):

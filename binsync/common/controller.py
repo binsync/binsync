@@ -1,5 +1,6 @@
 import logging
 import threading
+import datetime
 import time
 from functools import wraps
 from typing import Dict, Iterable, List, Optional, Union
@@ -167,17 +168,18 @@ class BinSyncController:
     def updater_routine(self):
         while self._run_updater_threads:
             time.sleep(BUSY_LOOP_COOLDOWN)
+            now = datetime.datetime.now(tz=datetime.timezone.utc)
 
             # validate a client is connected to this controller (may not have remote )
             if not self.check_client():
                 continue
 
             # do git pull/push operations if a remote exist for the client
-            if self.client.last_pull_attempt_ts is None:
+            if self.client.last_pull_attempt_time is None:
                 self.client.update(commit_msg="User created")
 
             # update every reload_time
-            elif time.time() - self.client.last_pull_attempt_ts > self.reload_time:
+            elif (now - self.client.last_pull_attempt_time).seconds > self.reload_time:
                 self.client.update()
 
             if not self.headless:
@@ -187,8 +189,8 @@ class BinSyncController:
 
                 # update the control panel with new info every BINSYNC_RELOAD_TIME seconds
                 if self._last_reload is None or \
-                        time.time() - self._last_reload > self.reload_time:
-                    self._last_reload = time.time()
+                        (now - self._last_reload).seconds > self.reload_time:
+                    self._last_reload = datetime.datetime.now(tz=datetime.timezone.utc)
                     self._update_ui()
 
     def _update_ui(self):

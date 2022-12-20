@@ -3,7 +3,7 @@ import pathlib
 import os
 import re
 import subprocess
-import time
+import datetime
 from functools import wraps
 from typing import Iterable, Optional
 
@@ -118,11 +118,11 @@ class Client:
 
         # timestamps
         self._commit_interval = commit_interval
-        self._last_push_ts = None  # type: Optional[float]
-        self.last_push_attempt_ts = None  # type: Optional[float]
-        self._last_pull_ts = None  # type: Optional[float]
-        self.last_pull_attempt_ts = None  # type: Optional[float]
-        self._last_commit_ts = None # type: Optional[float]
+        self._last_push_time = None  # type: datetime.datetime
+        self.last_push_attempt_time = None  # type: datetime.datetime
+        self._last_pull_time = None  # type: datetime.datetime
+        self.last_pull_attempt_time = None  # type: datetime.datetime
+        self._last_commit_time = None # type: datetime.datetime
 
         # load or update the global binsync config
         self.global_config = self._load_or_update_config()
@@ -245,15 +245,15 @@ class Client:
 
     @property
     def last_push_ts(self):
-        return self._last_push_ts
+        return self._last_push_time
 
     @property
     def last_pull_ts(self):
-        return self._last_pull_ts
+        return self._last_pull_time
 
     @property
     def last_commit_ts(self):
-        return self._last_commit_ts
+        return self._last_commit_time
 
     @property
     def user_branch_name(self):
@@ -287,7 +287,7 @@ class Client:
         except Exception as e:
             l.warning(f"Internal Git Commit Error: {e}")
             return
-        self._last_commit_ts = time.time()
+        self._last_commit_time = datetime.datetime.now(tz=datetime.timezone.utc)
         master_user_branch.commit = commit
         state._dirty = False
 
@@ -332,7 +332,7 @@ class Client:
 
         :return:    None
         """
-        self.last_pull_attempt_ts = time.time()
+        self.last_pull_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
         try:
             env = self.ssh_agent_env()
         except Exception:
@@ -345,7 +345,7 @@ class Client:
                 self.repo.git.checkout(BINSYNC_ROOT_BRANCH)
                 self.repo.git.fetch("--all")
                 self.repo.git.pull("--all")
-                self._last_pull_ts = time.time()
+                self._last_pull_time = datetime.datetime.now(tz=datetime.timezone.utc)
                 self.active_remote = True
             except Exception as e:
                 #l.debug(f"Pull exception {e}")
@@ -375,14 +375,14 @@ class Client:
 
         :return:    None
         """
-        self.last_push_attempt_ts = time.time()
+        self.last_push_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
         self._checkout_to_master_user()
         try:
             env = self.ssh_agent_env()
             with self.repo.git.custom_environment(**env):
                 self.repo.remotes[self.remote].push(BINSYNC_ROOT_BRANCH)
                 self.repo.remotes[self.remote].push(self.user_branch_name)
-            self._last_push_ts = time.time()
+            self._last_push_time = datetime.datetime.now(tz=datetime.timezone.utc)
             #l.debug("Push completed successfully at %s", self._last_push_ts)
             self.active_remote = True
         except git.exc.GitCommandError as ex:
@@ -414,11 +414,11 @@ class Client:
             self.commit_state(master_state, msg=commit_msg)
 
         # do a pull if there is a remote repo connected
-        self.last_pull_attempt_ts = time.time()
+        self.last_pull_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
         if self.has_remote:
             self.pull()
 
-        self.last_push_attempt_ts = time.time()
+        self.last_push_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
         if self.has_remote:
             self.push()
 

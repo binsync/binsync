@@ -2,7 +2,7 @@ from typing import Dict, List
 
 import toml
 
-from binsync.data.artifact import Artifact
+from binsync.data.artifact import Artifact, TomlHexEncoder
 
 import logging
 l = logging.getLogger(name=__name__)
@@ -80,7 +80,7 @@ class Struct(Artifact):
             },
 
             "members": {
-                "%x" % offset: member.__getstate__() for offset, member in self.members.items()
+                hex(offset): member.__getstate__() for offset, member in self.members.items()
             }
         }
 
@@ -93,7 +93,7 @@ class Struct(Artifact):
         self.last_change = metadata.get("last_change", None)
 
         self.members = {
-            int(off, 16): StructMember.parse(toml.dumps(member)) for off, member in members.items()
+            int(off, 16): StructMember.parse(toml.dumps(member, encoder=TomlHexEncoder())) for off, member in members.items()
         }
 
     def add_struct_member(self, mname, moff, mtype, size):

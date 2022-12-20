@@ -1,6 +1,13 @@
 from typing import Dict
 
 import toml
+from toml.encoder import TomlEncoder
+
+
+class TomlHexEncoder(TomlEncoder):
+    def __init__(self, _dict=dict, preserve=False):
+        super(TomlHexEncoder, self).__init__(_dict, preserve=preserve)
+        self.dump_funcs[int] = lambda v: hex(v) if v >= 0 else v
 
 
 class Artifact:
@@ -84,7 +91,7 @@ class Artifact:
 
         @return:
         """
-        return toml.dumps(self.__getstate__())
+        return toml.dumps(self.__getstate__(), encoder=TomlHexEncoder())
 
     def copy(self) -> "Artifact":
         return None

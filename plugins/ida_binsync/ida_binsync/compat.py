@@ -8,7 +8,7 @@
 # through this program if it is not running in the main thread.
 #
 # ----------------------------------------------------------------------------
-
+import datetime
 import threading
 from functools import wraps
 import typing
@@ -176,7 +176,7 @@ def function(addr, decompiler_available=True, ida_code_view=None, **kwargs):
         return None
 
     func_addr = ida_func.start_ea
-    change_time = int(time())
+    change_time = datetime.datetime.now(tz=datetime.timezone.utc)
     func = Function(func_addr, get_func_size(func_addr), last_change=change_time)
 
     if not decompiler_available:
@@ -226,7 +226,8 @@ def function_header(ida_codeview) -> FunctionHeader:
     except Exception:
         ret_type_str = ""
 
-    ida_function_info = FunctionHeader(func_name, func_addr, type_=ret_type_str, args=func_args, last_change=int(time()))
+    ida_function_info = FunctionHeader(func_name, func_addr, type_=ret_type_str, args=func_args,
+                                       last_change=datetime.datetime.now(tz=datetime.timezone.utc))
     return ida_function_info
 
 
@@ -472,7 +473,7 @@ def struct(name):
     
     sptr = ida_struct.get_struc(sid)
     size = ida_struct.get_struc_size(sptr)
-    _struct = Struct(name, size, {}, last_change=int(time()))
+    _struct = Struct(name, size, {}, last_change=datetime.datetime.now(tz=datetime.timezone.utc))
     for mptr in sptr.members:
         mid = mptr.id
         m_name = ida_struct.get_member_name(mid)
@@ -589,7 +590,7 @@ def global_var(addr):
         return None
 
     size = idaapi.get_item_size(addr)
-    return GlobalVariable(addr, name, size=size, last_change=int(time()))
+    return GlobalVariable(addr, name, size=size, last_change=datetime.datetime.now(tz=datetime.timezone.utc))
 
 
 @execute_write

@@ -1,3 +1,4 @@
+import datetime
 import logging
 from typing import Dict
 
@@ -22,7 +23,8 @@ class QFunctionItem:
         self.addr = addr
         self.name = name
         self.user = user
-        self.last_push = last_push
+        self.last_push = datetime.datetime.fromtimestamp(last_push, tz=datetime.timezone.utc) \
+            if isinstance(last_push, int) else last_push
 
     def __eq__(self, other):
         return self.addr == other.addr
@@ -135,7 +137,6 @@ class QFunctionTable(QTableWidget):
                     continue
 
                 func_change_time = sync_func.last_change
-                # compare this users change time to the store change time
                 if func_addr not in self.items or func_change_time >= self.items[func_addr].last_push:
                     remote_func_name = sync_func.name if sync_func.name else ""
                     self.items[func_addr] = QFunctionItem(func_addr, remote_func_name, user.name, func_change_time)

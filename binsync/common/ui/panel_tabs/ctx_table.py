@@ -1,4 +1,5 @@
 import logging
+import datetime
 
 from binsync.common.controller import BinSyncController
 from binsync.common.ui.qt_objects import (
@@ -26,7 +27,8 @@ class QCTXItem:
     def __init__(self, user, name, last_push, changes):
         self.user = user
         self.name = name
-        self.last_push = last_push
+        self.last_push = datetime.datetime.fromtimestamp(last_push, tz=datetime.timezone.utc) \
+            if isinstance(last_push, int) else last_push
         self.changes = changes
 
     def widgets(self):

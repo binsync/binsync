@@ -20,13 +20,13 @@ def friendly_datetime(time_before):
     if isinstance(time_before, int):
         if time_before == -1:
             return ""
-        dt = datetime.datetime.fromtimestamp(time_before)
+        dt = datetime.datetime.fromtimestamp(time_before, tz=datetime.timezone.utc)
     elif isinstance(time_before, datetime.datetime):
         dt = time_before
     else:
         return ""
 
-    now = datetime.datetime.now()
+    now = datetime.datetime.now(tz=datetime.timezone.utc)
     if dt <= now:
         diff = now - dt
         ago = True

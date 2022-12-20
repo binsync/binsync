@@ -2,7 +2,7 @@ from typing import Dict, Optional
 
 import toml
 
-from binsync.data.artifact import Artifact
+from binsync.data.artifact import Artifact, TomlHexEncoder
 from binsync.data.stack_variable import StackVariable
 
 
@@ -79,7 +79,7 @@ class FunctionHeader(Artifact):
         self.addr = state["addr"]
         self.type = state.get("type", None)
         args = state.get("args", {})
-        self.args = {int(idx, 16): FunctionArgument.parse(toml.dumps(arg)) for idx, arg in args.items()}
+        self.args = {int(idx, 16): FunctionArgument.parse(toml.dumps(arg, encoder=TomlHexEncoder())) for idx, arg in args.items()}
 
     @classmethod
     def parse(cls, s):
@@ -199,7 +199,7 @@ class Function(Artifact):
 
     def __getstate__(self):
         header = self.header.__getstate__() if self.header else None
-        stack_vars = {"%x" % offset: stack_var.__getstate__() for offset, stack_var in self.stack_vars.items()} if \
+        stack_vars = {hex(offset): stack_var.__getstate__() for offset, stack_var in self.stack_vars.items()} if \
             self.stack_vars else {}
 
         return {
@@ -222,10 +222,10 @@ class Function(Artifact):
         self.size = metadata["size"]
         self.last_change = metadata.get("last_change", None)
 
-        self.header = FunctionHeader.parse(toml.dumps(header)) if header else None
+        self.header = FunctionHeader.parse(toml.dumps(header, encoder=TomlHexEncoder())) if header else None
 
         self.stack_vars = {
-            int(off, 16): StackVariable.parse(toml.dumps(stack_var)) for off, stack_var in stack_vars.items()
+            int(off, 16): StackVariable.parse(toml.dumps(stack_var, encoder=TomlHexEncoder())) for off, stack_var in stack_vars.items()
         } if stack_vars else {}
 
     def diff(self, other, **kwargs) -> Dict:

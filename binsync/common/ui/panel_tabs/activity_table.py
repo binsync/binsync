@@ -1,5 +1,6 @@
 import logging
 from typing import Dict
+import datetime
 
 from binsync.common.controller import BinSyncController
 from binsync.common.ui.qt_objects import (
@@ -21,7 +22,8 @@ class QActivityItem:
     def __init__(self, user, activity, last_push):
         self.user = user
         self.activity = activity
-        self.last_push = last_push
+        self.last_push = datetime.datetime.fromtimestamp(last_push, tz=datetime.timezone.utc) \
+            if isinstance(last_push, int) else last_push
 
     def widgets(self):
         if isinstance(self.activity, int):

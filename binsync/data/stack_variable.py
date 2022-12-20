@@ -64,5 +64,5 @@ class StackVariable(Artifact):
     def dump_many(cls, svs):
         d = { }
         for v in sorted(svs.values(), key=lambda x: x.offset):
-            d["%x" % v.offset] = v.__getstate__()
+            d[hex(v.offset)] = v.__getstate__()
         return d

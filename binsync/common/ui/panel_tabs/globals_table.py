@@ -1,5 +1,6 @@
 import logging
 import re
+import datetime
 
 from binsync.common.controller import BinSyncController
 from binsync.common.ui.qt_objects import (
@@ -21,7 +22,8 @@ class QGlobalItem:
         self.name = name
         self.type = type_
         self.user = user
-        self.last_push = last_push
+        self.last_push = datetime.datetime.fromtimestamp(last_push, tz=datetime.timezone.utc) \
+            if isinstance(last_push, int) else last_push
 
     def widgets(self):
         # sort by int value

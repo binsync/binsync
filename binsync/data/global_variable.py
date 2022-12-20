@@ -46,7 +46,7 @@ class GlobalVariable(Artifact):
         global_vars_ = {}
 
         for v in sorted(global_vars.values(), key=lambda x: x.addr):
-            global_vars_["%x" % v.addr] = v.__getstate__()
+            global_vars_[hex(v.addr)] = v.__getstate__()
         return global_vars_
 
     def copy(self):

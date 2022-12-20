@@ -62,7 +62,7 @@ class Patch(Artifact):
     def dump_many(cls, patches):
         patches_ = {}
         for v in patches.values():
-            patches_["%s_%x" % (v.name, v.offset)] = v.__getstate__()
+            patches_[hex(v.offset)] = v.__getstate__()
         return patches_
 
     def copy(self):
