@@ -183,12 +183,12 @@ class BinjaPlugin:
 
     def _init_ui(self):
         # config dialog
-        configure_binsync_id = "BinSync: Configure"
+        configure_binsync_id = "BinSync: Configure..."
         UIAction.registerAction(configure_binsync_id)
         UIActionHandler.globalActions().bindAction(
             configure_binsync_id, UIAction(self._launch_config)
         )
-        Menu.mainMenu("Tools").addAction(configure_binsync_id, "BinSync")
+        Menu.mainMenu("Plugins").addAction(configure_binsync_id, "BinSync")
 
         # control panel (per BV)
         dock_handler = DockHandler.getActiveDockHandler()

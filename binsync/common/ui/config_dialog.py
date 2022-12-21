@@ -181,7 +181,7 @@ class SyncConfig(QDialog):
 
         if remote_url and not path:
             path = os.path.join(os.path.dirname(self.controller.binary_path() or ""),
-                                os.path.basename(self.controller.binary_path() or "") + "_bs"
+                                os.path.basename(self.controller.binary_path() or "") + ".bsproj"
                                 )
 
         try:

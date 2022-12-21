@@ -110,7 +110,7 @@ class BinjaWidgetBase:
     def __init__(self):
         self._main_window = None
         self._menu_bar = None
-        self._tool_menu = None
+        self._plugin_menu = None
 
     @property
     def main_window(self):
@@ -127,19 +127,19 @@ class BinjaWidgetBase:
         return self._menu_bar
 
     @property
-    def tool_menu(self):
-        if self._tool_menu is None:
-            self._tool_menu = next(
+    def plugin_menu(self):
+        if self._plugin_menu is None:
+            self._plugin_menu = next(
                 iter(
                     x
                     for x in self._menu_bar.children()
-                    if isinstance(x, QMenu) and x.title() == u"Tools"
+                    if isinstance(x, QMenu) and x.title() == u"Plugins"
                 )
             )
-        return self._tool_menu
+        return self._plugin_menu
 
     def add_tool_menu_action(self, name, func):
-        self.tool_menu.addAction(name, func)
+        self.plugin_menu.addAction(name, func)
 
 
 class BinjaDockWidget(QWidget, DockContextHandler):
