@@ -209,10 +209,11 @@ class BinjaPlugin:
         controller_bv = self.controllers[bv]
 
         # exit early if we already configed
-        if controller_bv.bv is not None or bv is None:
+        if (controller_bv.bv is not None and controller_bv.check_client()) or bv is None:
+            l.info("BinSync has already been configured! Restart if you want to reconfigure.")
             return
-        controller_bv.bv = bv
 
+        controller_bv.bv = bv
         # configure
         dialog = SyncConfig(controller_bv)
         dialog.exec_()
