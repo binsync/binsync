@@ -63,7 +63,7 @@ class Scheduler:
         if not self._work:
             l.warning(f"The job scheduler is not currently set to work, but you are still scheduling a job...")
 
-        l.debug(f"Job scheduled: {job} with priority {priority}")
+        #l.debug(f"Job scheduled: {job} with priority {priority}")
         self._job_queue.put_nowait(
             (priority, job,)
         )
@@ -85,5 +85,5 @@ class Scheduler:
         else:
             return
 
-        l.debug(f"Completing scheduled job now: {job}")
+        #l.debug(f"Completing scheduled job now: {job}")
         job.execute()

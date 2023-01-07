@@ -221,21 +221,43 @@ class IDABinSyncController(BinSyncController):
     @fill_event
     def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
         func: Function = artifact
+        """
         try:
             ida_code_view = compat.acquire_pseudocode_vdui(func.addr)
         except Exception:
             ida_code_view = None
+        """
 
+        if func_addr == 0x3d26:
+            import remote_pdb; remote_pdb.RemotePdb("localhost", 4444).set_trace()
+
+        ida_code_view = compat.acquire_pseudocode_vdui(func_addr)
         changes = super(IDABinSyncController, self).fill_function(
             func_addr, user=user, artifact=artifact, ida_code_view=ida_code_view, **kwargs
         )
-        compat.refresh_pseudocode_view(func.addr)
+        if ida_code_view is not None and changes:
+            if func_addr == 0x3d26:
+                import remote_pdb; remote_pdb.RemotePdb("localhost", 4444).set_trace()
+            ida_code_view.cfunc.refresh_func_ctext()
+            #ida_code_view.refresh_view(changes)
+
+
+        #with compat.IDAViewCTX(func.addr) as ida_code_view:
+        #    _l.debug(f"Using code view: {ida_code_view}")
+
+        #    changes = super(IDABinSyncController, self).fill_function(
+        #        func_addr, user=user, artifact=artifact, ida_code_view=ida_code_view, **kwargs
+        #    )
+        #    if ida_code_view is not None:
+        #        ida_code_view.refresh_view(changes)
+
         return changes
 
     @init_checker
     @fill_event
     def fill_comment(self, addr, user=None, artifact=None, **kwargs):
         cmt: Comment = artifact
+        _l.debug(f"Filling comment {cmt} now...")
         res = compat.set_ida_comment(addr, cmt.comment, decompiled=cmt.decompiled)
         if not res:
             _l.warning(f"Failed to sync comment at <{hex(addr)}>: \'{cmt.comment}\'")
@@ -249,6 +271,7 @@ class IDABinSyncController(BinSyncController):
             return False
 
         stack_var: StackVariable = artifact
+        _l.debug(f"Filling stack var {stack_var} now...")
         frame = idaapi.get_frame(stack_var.addr)
         changes = False
         if frame is None or frame.memqty <= 0:
@@ -270,6 +293,7 @@ class IDABinSyncController(BinSyncController):
     @fill_event
     def fill_function_header(self, func_addr, user=None, artifact=None, ida_code_view=None, **kwargs):
         func_header: FunctionHeader = artifact
+        _l.debug(f"Filling header {func_header} now...")
         if ida_code_view is None:
             compat.set_ida_func_name(func_addr, func_header.name)
             return False
@@ -291,8 +315,8 @@ class IDABinSyncController(BinSyncController):
     def functions(self) -> Dict[int, Function]:
         return compat.functions()
 
-    def function(self, addr) -> Optional[Function]:
-        return compat.function(addr, decompiler_available=self.decompiler_available)
+    def function(self, addr, **kwargs) -> Optional[Function]:
+        return compat.function(addr, decompiler_available=self.decompiler_available, **kwargs)
 
     def global_vars(self) -> Dict[int, GlobalVariable]:
         return compat.global_vars()

@@ -348,7 +348,7 @@ class Client:
                 self._last_pull_ts = time.time()
                 self.active_remote = True
             except Exception as e:
-                l.debug(f"Pull exception {e}")
+                #l.debug(f"Pull exception {e}")
                 self.active_remote = False
 
         if not self.active_remote:
@@ -387,7 +387,7 @@ class Client:
             self.active_remote = True
         except git.exc.GitCommandError as ex:
             self.active_remote = False
-            l.debug(f"Failed to push b/c {ex}")
+            #l.debug(f"Failed to push b/c {ex}")
 
     @property
     @atomic_git_action
