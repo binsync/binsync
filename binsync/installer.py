@@ -1,11 +1,14 @@
 import os
-import readline
 from pathlib import Path
 import textwrap
 import pkg_resources
 import shutil
 from urllib.request import urlretrieve
 
+from binsync.data.configuration import GlobalConfig
+
+from prompt_toolkit import prompt
+from prompt_toolkit.completion.filesystem import PathCompleter
 
 class Color:
     """
@@ -43,10 +46,18 @@ class Installer:
     )
 
     def __init__(self, targets=None, target_install_paths=None):
-        readline.set_completer_delims(' \t\n=')
-        readline.parse_and_bind("tab: complete")
         self.targets = targets or self.DECOMPILERS+self.DEBUGGERS
-        self.target_install_paths = target_install_paths or {}
+        self._home = Path(os.getenv("HOME") or "~/").expanduser().absolute()
+        self.target_install_paths = target_install_paths or self._populate_installs_from_config()
+
+    def _populate_installs_from_config(self):
+        config = GlobalConfig.update_or_make(self._home)
+        if not config:
+            return {}
+
+        return {
+            attr: getattr(config, attr) for attr in config.__slots__
+        }
 
     def install(self):
         self.display_prologue()
@@ -77,15 +88,17 @@ class Installer:
     @staticmethod
     def ask_path(question):
         Installer.info(question)
-        filepath = input()
+        filepath = prompt("", completer=PathCompleter(expanduser=True))
+
         if not filepath:
             return None
 
-        filepath = Path(filepath)
-        if not filepath.absolute().exists():
+        filepath = Path(filepath).expanduser().absolute()
+        if not filepath.exists():
+            Installer.warn(f"Provided filepath {filepath} does not exist.")
             return None
 
-        return filepath.absolute()
+        return filepath
 
     @staticmethod
     def link_or_copy(src, dst, is_dir=False):
@@ -116,21 +129,25 @@ class Installer:
             except AttributeError:
                 continue
 
-            path = self.target_install_paths.get(target, None)
+            path = self.target_install_paths.get(f"{target}_path", None)
+            if path:
+                path = Path(path).expanduser().absolute()
+
             res = installer(path=path)
             if res is None:
                 self.warn(f"Skipping or failed install for {target}... {Color.NORMAL}\n")
             else:
                 self.good(f"Installed {target} to {res}\n")
+                GlobalConfig.update_or_make(self._home, **{f"{target}_path": res.parent})
 
     def install_ida(self, path=None):
-        ida_plugin_path = Path("~/").joinpath(".idapro").joinpath("plugins").expanduser()
+        ida_plugin_path = path or Path("~/").joinpath(".idapro").joinpath("plugins").expanduser()
         default_str = f" [default = {ida_plugin_path}]"
         if not ida_plugin_path.exists():
             ida_plugin_path = None
             default_str = ""
 
-        path = self.ask_path(f"IDA Plugins Path{default_str}:") if path is None else path
+        path = self.ask_path(f"IDA Plugins Path{default_str}:")
         if not path:
             if not ida_plugin_path:
                 return None
@@ -143,24 +160,29 @@ class Installer:
         return path
 
     def install_ghidra(self, path=None):
-        path = self.ask_path("Ghidra Install Path:") if path is None else path
-        if not path:
+        default_str = f" [default = {path}]"
+        ghidra_default_path = path
+        path = self.ask_path(f"Ghidra Install Path{default_str}:")
+        if path:
+            path = path.joinpath("Extensions").joinpath("Ghidra")
+        elif ghidra_default_path:
+            path = ghidra_default_path
+        else:
             return None
 
-        path = path.joinpath("Extensions").joinpath("Ghidra")
         if not path.absolute().exists():
             return None
 
         return path
 
     def install_binja(self, path=None):
-        binja_install_path = Path("~/").joinpath(".binaryninja").joinpath("plugins").expanduser()
+        binja_install_path = path or Path("~/").joinpath(".binaryninja").joinpath("plugins").expanduser()
         default_str = f" [default = {binja_install_path}]"
         if not binja_install_path.exists():
             binja_install_path = None
             default_str = ""
 
-        path = self.ask_path(f"Binary Ninja Plugins Path{default_str}:") if path is None else path
+        path = self.ask_path(f"Binary Ninja Plugins Path{default_str}:")
         if not path:
             if not binja_install_path:
                 return None
@@ -183,8 +205,13 @@ class Installer:
         if angr_resolved:
             angr_install_path = Path(angrmanagement.__file__).parent
             default_str = f" [default = {angr_install_path}]"
+        elif path:
+            angr_install_path = path
+            default_str = f" [default = {angr_install_path}]"
 
         # use the default if possible
+        # TODO: this needs to be changed so we can still provide the install path if non-interactive,
+        # but also introduce a default_path kwarg to all these installers
         path = self.ask_path(f"angr-management Install Path{default_str}:") if path is None else path
         if not path:
             if not angr_install_path:
@@ -199,7 +226,7 @@ class Installer:
         return path
 
     def install_gdb(self, path=None):
-        default_gdb_path = Path("~/").joinpath(".gdbinit").expanduser()
+        default_gdb_path = path or Path("~/").joinpath(".gdbinit").expanduser()
         default_str = f" [default = {default_gdb_path}]"
         path = self.ask_path(f"gdbinit path{default_str}:") if path is None else path
         if not path:
