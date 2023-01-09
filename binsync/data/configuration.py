@@ -10,6 +10,7 @@ BS_GLOBAL_CONFIG_FILENAME = f".global.{BS_CONFIG_POSTFIX}"
 
 l = logging.getLogger(__name__)
 
+
 class Config:
     __slots__ = (
         "path",
@@ -88,7 +89,7 @@ class ProjectConfig(Config):
                  repo_path=None,
                  remote=None
                  ):
-        super(ProjectConfig, self).__init__(self._correct_path(binary_path))
+        super(ProjectConfig, self).__init__(self.correct_path(binary_path))
 
         self.binary_name = pathlib.Path(binary_path).name
         self.user = user
