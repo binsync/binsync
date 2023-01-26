@@ -7,7 +7,8 @@
 
 BinSync is a decompiler collaboration tool built on the Git versioning system to enable fined-grained reverse
 engineering collaboration regardless of decompiler. BinSync is built by [mahaloz](https://github.com/mahaloz), 
-the [SEFCOM](https://sefcom.asu.edu) research lab, and various members of [Shellphish](https://shellphish.net). 
+the [angr team](https://angr.io), and the [SEFCOM](https://sefcom.asu.edu) research lab. It's also due
+in large part to its use by the [Shellphish](https://shellphish.net) hacking team. 
 
 All good decompilers share common objects called Reverse Engineering Artifacts (REAs). These REAs are the
 center of BinSync's syncing ability. Here are the supported REAs:
