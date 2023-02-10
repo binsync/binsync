@@ -274,10 +274,8 @@ def set_function_header(ida_codeview, binsync_header: binsync.data.FunctionHeade
 
         # change the name
         if binsync_arg.name and binsync_arg.name != cur_ida_arg.name:
-            #success = ida_codeview.rename_lvar(ida_codeview.cfunc.arguments[idx], binsync_arg.name, 1)
-            ida_codeview.cfunc.arguments[idx].name = binsync_arg.name
-            data_changed |= True
-            #ida_codeview.refresh_view(True)
+            success = ida_codeview.rename_lvar(ida_codeview.cfunc.arguments[idx], binsync_arg.name, 1)
+            data_changed |= success
 
         # record the type to change
         if binsync_arg.type_str and binsync_arg.type_str != cur_ida_arg.type_str:
