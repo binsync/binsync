@@ -653,7 +653,7 @@ class BinSyncController:
         """
         Grab all relevant information from the specified user and fill the @func_addr.
         """
-        dec_func: Function = Function(0,0) #self.function(func_addr, **kwargs)
+        dec_func: Function = self.function(func_addr, **kwargs)
         if not dec_func:
             _l.warning(f"The function at {hex(func_addr)} does not exist in your decompiler.")
             dec_func = Function(None, None)

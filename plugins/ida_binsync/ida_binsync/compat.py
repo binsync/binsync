@@ -234,10 +234,6 @@ def function_header(ida_codeview) -> FunctionHeader:
 def set_function_header(ida_codeview, binsync_header: binsync.data.FunctionHeader, exit_on_bad_type=False):
     data_changed = False
     func_addr = ida_codeview.cfunc.entry_ea
-
-    if func_addr == 0x3d26:
-        import remote_pdb; remote_pdb.RemotePdb("localhost", 4444).set_trace()
-
     cur_ida_func = function_header(ida_codeview)
 
     #

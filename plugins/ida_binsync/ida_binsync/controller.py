@@ -221,35 +221,16 @@ class IDABinSyncController(BinSyncController):
     @fill_event
     def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
         func: Function = artifact
-        """
         try:
             ida_code_view = compat.acquire_pseudocode_vdui(func.addr)
         except Exception:
             ida_code_view = None
-        """
 
-        if func_addr == 0x3d26:
-            import remote_pdb; remote_pdb.RemotePdb("localhost", 4444).set_trace()
-
-        ida_code_view = compat.acquire_pseudocode_vdui(func_addr)
         changes = super(IDABinSyncController, self).fill_function(
             func_addr, user=user, artifact=artifact, ida_code_view=ida_code_view, **kwargs
         )
         if ida_code_view is not None and changes:
-            if func_addr == 0x3d26:
-                import remote_pdb; remote_pdb.RemotePdb("localhost", 4444).set_trace()
             ida_code_view.cfunc.refresh_func_ctext()
-            #ida_code_view.refresh_view(changes)
-
-
-        #with compat.IDAViewCTX(func.addr) as ida_code_view:
-        #    _l.debug(f"Using code view: {ida_code_view}")
-
-        #    changes = super(IDABinSyncController, self).fill_function(
-        #        func_addr, user=user, artifact=artifact, ida_code_view=ida_code_view, **kwargs
-        #    )
-        #    if ida_code_view is not None:
-        #        ida_code_view.refresh_view(changes)
 
         return changes
 
