@@ -290,7 +290,7 @@ class BinjaBinSyncController(BinSyncController):
     # Artifact API
     #
 
-    def function(self, addr) -> Optional[Function]:
+    def function(self, addr, **kwargs) -> Optional[Function]:
         bn_func = self.bv.get_function_at(addr)
         if not bn_func:
             return None
