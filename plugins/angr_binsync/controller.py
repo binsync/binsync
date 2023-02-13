@@ -180,7 +180,7 @@ class AngrBinSyncController(BinSyncController):
 
         return funcs
 
-    def function(self, addr) -> Optional[Function]:
+    def function(self, addr, **kwargs) -> Optional[Function]:
         """
         TODO: add support for stack variables and function args
 

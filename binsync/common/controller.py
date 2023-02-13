@@ -334,7 +334,7 @@ class BinSyncController:
         """
         return {}
 
-    def function(self, addr) -> Optional[Function]:
+    def function(self, addr, **kwargs) -> Optional[Function]:
         return None
 
     def global_vars(self) -> Dict[int, GlobalVariable]:
@@ -653,7 +653,7 @@ class BinSyncController:
         """
         Grab all relevant information from the specified user and fill the @func_addr.
         """
-        dec_func: Function = self.function(func_addr)
+        dec_func: Function = self.function(func_addr, **kwargs)
         if not dec_func:
             _l.warning(f"The function at {hex(func_addr)} does not exist in your decompiler.")
             dec_func = Function(None, None)
@@ -822,6 +822,7 @@ class BinSyncController:
                     pref_art = pref_art.nonconflict_merge(user_art)
                     pref_art.last_change = None
 
+                _l.debug(f"Filling artifact {pref_art} now...")
                 try:
                     filler_func(
                         identifier, artifact=pref_art, state=master_state,  commit_msg=f"Magic Synced {pref_art}",

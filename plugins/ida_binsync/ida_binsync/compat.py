@@ -169,50 +169,51 @@ def functions():
 
 
 @execute_write
-def function(addr, decompiler_available=True):
+def function(addr, decompiler_available=True, ida_code_view=None, **kwargs):
     ida_func = ida_funcs.get_func(addr)
     if ida_func is None:
         l.warning(f"IDA function does not exist for {hex(addr)}.")
         return None
 
     func_addr = ida_func.start_ea
-
-    if decompiler_available:
-        try:
-            ida_cfunc = idaapi.decompile(func_addr)
-        except Exception:
-            ida_cfunc = None
-    else:
-        ida_cfunc = None
-
     change_time = int(time())
     func = Function(func_addr, get_func_size(func_addr), last_change=change_time)
-    if ida_cfunc is None:
-        if decompiler_available:
-            l.warning(f"IDA function {hex(func_addr)} is not decompilable")
 
+    if not decompiler_available:
         func.header = FunctionHeader(get_func_name(func_addr), func_addr, last_change=change_time)
         return func
 
-    # decompilation is available
-    func_header: FunctionHeader = function_header(ida_cfunc)
-    stack_vars = {
-        offset: var
-        for offset, var in get_func_stack_var_info(ida_func.start_ea).items()
-    }
-    func.header = func_header
-    func.stack_vars = stack_vars
+    def _get_func_info(code_view):
+        if code_view is None:
+            l.warning(f"IDA function {hex(func_addr)} is not decompilable")
+            return func
+
+        func_header: FunctionHeader = function_header(code_view)
+        stack_vars = {
+            offset: var
+            for offset, var in get_func_stack_var_info(ida_func.start_ea).items()
+        }
+        func.header = func_header
+        func.stack_vars = stack_vars
+
+        return func
+
+    if ida_code_view is not None:
+        func = _get_func_info(ida_code_view)
+    else:
+        with IDAViewCTX(func_addr) as ida_codeview:
+            func = _get_func_info(ida_codeview)
 
     return func
 
 
 @execute_write
-def function_header(ida_cfunc) -> FunctionHeader:
-    func_addr = ida_cfunc.entry_ea
+def function_header(ida_codeview) -> FunctionHeader:
+    func_addr = ida_codeview.cfunc.entry_ea
 
     # collect the function arguments
     func_args = {}
-    for idx, arg in enumerate(ida_cfunc.arguments):
+    for idx, arg in enumerate(ida_codeview.cfunc.arguments):
         size = arg.width
         name = arg.name
         type_str = str(arg.type())
@@ -221,7 +222,7 @@ def function_header(ida_cfunc) -> FunctionHeader:
     # collect the header ret_type and name
     func_name = get_func_name(func_addr)
     try:
-        ret_type_str = str(ida_cfunc.type.get_rettype())
+        ret_type_str = str(ida_codeview.cfunc.type.get_rettype())
     except Exception:
         ret_type_str = ""
 
@@ -230,12 +231,10 @@ def function_header(ida_cfunc) -> FunctionHeader:
 
 
 @execute_write
-def set_function_header(ida_func_code_view, binsync_header: binsync.data.FunctionHeader, exit_on_bad_type=False):
+def set_function_header(ida_codeview, binsync_header: binsync.data.FunctionHeader, exit_on_bad_type=False):
     data_changed = False
-    ida_cfunc = ida_func_code_view.cfunc
-    func_addr = ida_cfunc.entry_ea
-
-    cur_ida_func = function_header(ida_cfunc)
+    func_addr = ida_codeview.cfunc.entry_ea
+    cur_ida_func = function_header(ida_codeview)
 
     #
     # FUNCTION NAME
@@ -249,9 +248,9 @@ def set_function_header(ida_func_code_view, binsync_header: binsync.data.Functio
     #
 
     func_name = get_func_name(func_addr)
-    cur_ret_type_str = str(ida_cfunc.type.get_rettype())
+    cur_ret_type_str = str(ida_codeview.cfunc.type.get_rettype())
     if binsync_header.ret_type and binsync_header.ret_type != cur_ret_type_str:
-        old_prototype = str(ida_cfunc.type).replace("(", f" {func_name}(", 1)
+        old_prototype = str(ida_codeview.cfunc.type).replace("(", f" {func_name}(", 1)
         new_prototype = old_prototype.replace(cur_ret_type_str, binsync_header.ret_type, 1)
         success = idc.SetType(func_addr, new_prototype)
 
@@ -260,7 +259,7 @@ def set_function_header(ida_func_code_view, binsync_header: binsync.data.Functio
             return None
 
         data_changed |= success is True
-        refresh_pseudocode_view(func_addr)
+        #ida_codeview.refresh_view(data_changed)
 
     #
     # FUNCTION ARGS
@@ -275,16 +274,15 @@ def set_function_header(ida_func_code_view, binsync_header: binsync.data.Functio
 
         # change the name
         if binsync_arg.name and binsync_arg.name != cur_ida_arg.name:
-            success = ida_func_code_view.rename_lvar(ida_cfunc.arguments[idx], binsync_arg.name, 1)
-            data_changed |= success is True
-            refresh_pseudocode_view(func_addr)
+            success = ida_codeview.rename_lvar(ida_codeview.cfunc.arguments[idx], binsync_arg.name, 1)
+            data_changed |= success
 
         # record the type to change
         if binsync_arg.type_str and binsync_arg.type_str != cur_ida_arg.type_str:
             types_to_change[idx] = (cur_ida_arg.type_str, binsync_arg.type_str)
 
     # crazy prototype parsing
-    func_prototype = str(ida_cfunc.type).replace("(", f" {func_name}(", 1)
+    func_prototype = str(ida_codeview.cfunc.type).replace("(", f" {func_name}(", 1)
     proto_split = func_prototype.split("(", maxsplit=1)
     proto_head, proto_body = proto_split[0], "(" + proto_split[1]
     arg_strs = proto_body.split(",")
