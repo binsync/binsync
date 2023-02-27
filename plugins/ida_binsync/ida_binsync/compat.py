@@ -488,7 +488,7 @@ def set_struct_member_name(ida_struct, frame, offset, name):
     ida_struct.set_member_name(frame, offset, name)
 
 @execute_write
-def set_ida_struct(struct: Struct, controller) -> bool:
+def set_ida_struct(struct: Struct) -> bool:
     # first, delete any struct by the same name if it exists
     sid = ida_struct.get_struc_id(struct.name)
     if sid != 0xffffffffffffffff:
@@ -523,7 +523,7 @@ def set_ida_struct(struct: Struct, controller) -> bool:
 
 
 @execute_write
-def set_ida_struct_member_types(struct: Struct, controller) -> bool:
+def set_ida_struct_member_types(struct: Struct) -> bool:
     # find the specific struct
     sid = ida_struct.get_struc_id(struct.name)
     sptr = ida_struct.get_struc(sid)
@@ -771,3 +771,16 @@ def jumpto(addr):
     @return:
     """
     idaapi.jumpto(addr)
+
+
+def has_older_hexrays_version():
+    try:
+        vers = ida_hexrays.get_hexrays_version()
+    except Exception:
+        return False
+
+    return not vers.startswith("8.2")
+
+
+
+

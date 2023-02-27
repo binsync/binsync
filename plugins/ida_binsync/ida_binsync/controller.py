@@ -137,6 +137,7 @@ class IDABinSyncController(BinSyncController):
         # view change callback
         self._updated_ctx = None
         self._decompiler_available = None
+        self._crashing_version = compat.has_older_hexrays_version()
 
         # update state for only updating when needed
         self.update_states = defaultdict(UpdateTaskState)
@@ -189,16 +190,20 @@ class IDABinSyncController(BinSyncController):
     def fill_struct(self, struct_name, user=None, header=True, members=True, artifact=None, **kwargs):
         data_changed = False
         struct: Struct = artifact
-
+        
         if not struct:
             _l.warning(f"Unable to find the struct: {struct_name} in requested user.")
             return False
 
+        if self._crashing_version and struct_name == "gcc_va_list" or struct.name == "gcc_va_list":
+            _l.critical(f"Syncing the struct {struct_name} in IDA Pro 8.2 <= will cause a crash. Skipping...")
+            return False
+        
         if header:
-            data_changed |= compat.set_ida_struct(struct, self)
+            data_changed |= compat.set_ida_struct(struct)
 
         if members:
-            data_changed |= compat.set_ida_struct_member_types(struct, self)
+            data_changed |= compat.set_ida_struct_member_types(struct)
 
         return data_changed
 
