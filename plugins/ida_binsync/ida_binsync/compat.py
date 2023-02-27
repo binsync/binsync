@@ -771,3 +771,16 @@ def jumpto(addr):
     @return:
     """
     idaapi.jumpto(addr)
+
+
+def has_older_hexrays_version():
+    try:
+        vers = ida_hexrays.get_hexrays_version()
+    except Exception:
+        return False
+
+    return not vers.startswith("8.2")
+
+
+
+
