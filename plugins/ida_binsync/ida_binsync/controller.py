@@ -137,7 +137,7 @@ class IDABinSyncController(BinSyncController):
         # view change callback
         self._updated_ctx = None
         self._decompiler_available = None
-        self._crashing_version = compat.has_older_hexrays_version()
+        self._crashing_version = False
 
         # update state for only updating when needed
         self.update_states = defaultdict(UpdateTaskState)
