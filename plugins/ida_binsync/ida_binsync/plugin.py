@@ -25,6 +25,7 @@ from binsync.common.ui.control_panel import ControlPanel
 from .hooks import MasterHook
 from . import IDA_DIR, VERSION
 from .controller import IDABinSyncController
+from . import compat
 
 l = logging.getLogger(__name__)
 controller = IDABinSyncController()
@@ -128,6 +129,7 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         if not controller.check_client():
             return
 
+        controller._crashing_version = compat.has_older_hexrays_version()
         if not self.hooks_started:
             self.action_hooks.hook()
             self.view_hook.hook()
