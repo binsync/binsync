@@ -20,9 +20,8 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QCheckBox,
 )
-from PySide6.QtCore import Qt
-from binaryninjaui import DockContextHandler
 import binaryninja
+from binaryninjaui import DockContextHandler
 from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourceType
 from binaryninja.mainthread import execute_on_main_thread, is_main_thread
 from binaryninja.types import StructureType, EnumerationType
@@ -30,9 +29,8 @@ from binaryninja.types import StructureType, EnumerationType
 import binsync
 from binsync.data import (
     State, User, Artifact,
-    Function, FunctionHeader, FunctionArgument, StackVariable, StackOffsetType,
-    Comment, GlobalVariable, Patch,
-    Enum, Struct, StructMember
+    Function, FunctionHeader, FunctionArgument, StackVariable, StructMember, Struct,
+    Comment, GlobalVariable, Patch, Enum, Struct, StructMember
 )
 
 # Some code is derived from https://github.com/NOPDev/BinjaDock/tree/master/defunct
@@ -112,7 +110,7 @@ class BinjaWidgetBase:
     def __init__(self):
         self._main_window = None
         self._menu_bar = None
-        self._tool_menu = None
+        self._plugin_menu = None
 
     @property
     def main_window(self):
@@ -129,19 +127,19 @@ class BinjaWidgetBase:
         return self._menu_bar
 
     @property
-    def tool_menu(self):
-        if self._tool_menu is None:
-            self._tool_menu = next(
+    def plugin_menu(self):
+        if self._plugin_menu is None:
+            self._plugin_menu = next(
                 iter(
                     x
                     for x in self._menu_bar.children()
-                    if isinstance(x, QMenu) and x.title() == u"Tools"
+                    if isinstance(x, QMenu) and x.title() == u"Plugins"
                 )
             )
-        return self._tool_menu
+        return self._plugin_menu
 
     def add_tool_menu_action(self, name, func):
-        self.tool_menu.addAction(name, func)
+        self.plugin_menu.addAction(name, func)
 
 
 class BinjaDockWidget(QWidget, DockContextHandler):
@@ -150,11 +148,6 @@ class BinjaDockWidget(QWidget, DockContextHandler):
         DockContextHandler.__init__(self, self, name)
 
         self.base = BinjaWidgetBase()
-
-        #self._main_window.addDockWidget(Qt.RightDockWidgetArea, self)
-        #self._tabs = QTabWidget()
-        #self._tabs.setTabPosition(QTabWidget.East)
-        #self.setWidget(self._tabs)
 
         # self.hide()
         self.show()
@@ -204,7 +197,7 @@ def bn_func_to_bs(bn_func):
     sync_header = FunctionHeader(
         bn_func.name,
         bn_func.start,
-        ret_type=bn_func.return_type.get_string_before_name(),
+        type_=bn_func.return_type.get_string_before_name(),
         args=args
     )
 
@@ -226,8 +219,8 @@ def bn_func_to_bs(bn_func):
             var_sizes[var] = var.storage - sorted_stack[i].storage
 
     bs_stack_vars = {
-        off: binsync.StackVariable(
-            off, binsync.StackOffsetType.BINJA,
+        off: binsync.data.StackVariable(
+            off,
             var.name,
             var.type.get_string_before_name(),
             var_sizes[var],

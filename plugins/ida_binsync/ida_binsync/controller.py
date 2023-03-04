@@ -37,7 +37,7 @@ import ida_kernwin
 import binsync
 from binsync.common.controller import BinSyncController, init_checker, fill_event
 from binsync.data import (
-    StackVariable, StackOffsetType, Function, FunctionHeader, Struct, Comment, GlobalVariable, Enum, State, Patch
+    StackVariable, Function, FunctionHeader, Struct, Comment, GlobalVariable, Enum, State, Patch
 )
 from . import compat
 from .artifact_lifter import IDAArtifactLifter

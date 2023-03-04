@@ -8,7 +8,7 @@
 # through this program if it is not running in the main thread.
 #
 # ----------------------------------------------------------------------------
-
+import datetime
 import threading
 from functools import wraps
 import typing
@@ -20,7 +20,7 @@ import idc, idaapi, ida_kernwin, ida_hexrays, ida_funcs, \
 
 import binsync
 from binsync.data import (
-    Struct, FunctionHeader, FunctionArgument, StackVariable, StackOffsetType, Function, GlobalVariable, Enum
+    Struct, FunctionHeader, FunctionArgument, StackVariable, Function, GlobalVariable, Enum
 )
 from .controller import IDABinSyncController
 
@@ -176,7 +176,7 @@ def function(addr, decompiler_available=True, ida_code_view=None, **kwargs):
         return None
 
     func_addr = ida_func.start_ea
-    change_time = int(time())
+    change_time = datetime.datetime.now(tz=datetime.timezone.utc)
     func = Function(func_addr, get_func_size(func_addr), last_change=change_time)
 
     if not decompiler_available:
@@ -226,7 +226,8 @@ def function_header(ida_codeview) -> FunctionHeader:
     except Exception:
         ret_type_str = ""
 
-    ida_function_info = FunctionHeader(func_name, func_addr, ret_type=ret_type_str, args=func_args, last_change=int(time()))
+    ida_function_info = FunctionHeader(func_name, func_addr, type_=ret_type_str, args=func_args,
+                                       last_change=datetime.datetime.now(tz=datetime.timezone.utc))
     return ida_function_info
 
 
@@ -249,9 +250,9 @@ def set_function_header(ida_codeview, binsync_header: binsync.data.FunctionHeade
 
     func_name = get_func_name(func_addr)
     cur_ret_type_str = str(ida_codeview.cfunc.type.get_rettype())
-    if binsync_header.ret_type and binsync_header.ret_type != cur_ret_type_str:
+    if binsync_header.type and binsync_header.type != cur_ret_type_str:
         old_prototype = str(ida_codeview.cfunc.type).replace("(", f" {func_name}(", 1)
-        new_prototype = old_prototype.replace(cur_ret_type_str, binsync_header.ret_type, 1)
+        new_prototype = old_prototype.replace(cur_ret_type_str, binsync_header.type, 1)
         success = idc.SetType(func_addr, new_prototype)
 
         # we may need to reload types
@@ -278,8 +279,8 @@ def set_function_header(ida_codeview, binsync_header: binsync.data.FunctionHeade
             data_changed |= success
 
         # record the type to change
-        if binsync_arg.type_str and binsync_arg.type_str != cur_ida_arg.type_str:
-            types_to_change[idx] = (cur_ida_arg.type_str, binsync_arg.type_str)
+        if binsync_arg.type and binsync_arg.type != cur_ida_arg.type:
+            types_to_change[idx] = (cur_ida_arg.type, binsync_arg.type)
 
     # crazy prototype parsing
     func_prototype = str(ida_codeview.cfunc.type).replace("(", f" {func_name}(", 1)
@@ -403,7 +404,7 @@ def get_func_stack_var_info(func_addr) -> typing.Dict[int, StackVariable]:
         bs_offset = ida_to_angr_stack_offset(func_addr, ida_offset)
         type_str = str(var.type())
         stack_var_info[bs_offset] = StackVariable(
-            ida_offset, StackOffsetType.IDA, name, type_str, size, func_addr
+            ida_offset, name, type_str, size, func_addr
         )
 
     return stack_var_info
@@ -472,7 +473,7 @@ def struct(name):
     
     sptr = ida_struct.get_struc(sid)
     size = ida_struct.get_struc_size(sptr)
-    _struct = Struct(name, size, {}, last_change=int(time()))
+    _struct = Struct(name, size, {}, last_change=datetime.datetime.now(tz=datetime.timezone.utc))
     for mptr in sptr.members:
         mid = mptr.id
         m_name = ida_struct.get_member_name(mid)
@@ -505,14 +506,14 @@ def set_ida_struct(struct: Struct) -> bool:
     ida_struct.expand_struc(sptr, 0, struct.size)
 
     # add every member of the struct
-    for off, member in struct.struct_members.items():
+    for off, member in struct.members.items():
         # convert to ida's flag system
         mflag = convert_size_to_flag(member.size)
 
         # create the new member
         ida_struct.add_struc_member(
             sptr,
-            member.member_name,
+            member.name,
             member.offset,
             mflag,
             None,
@@ -529,7 +530,7 @@ def set_ida_struct_member_types(struct: Struct) -> bool:
     sptr = ida_struct.get_struc(sid)
     data_changed = False
 
-    for idx, member in enumerate(struct.struct_members.values()):
+    for idx, member in enumerate(struct.members.values()):
         # set the new member type if it has one
         if member.type == "":
             continue
@@ -589,7 +590,7 @@ def global_var(addr):
         return None
 
     size = idaapi.get_item_size(addr)
-    return GlobalVariable(addr, name, size=size, last_change=int(time()))
+    return GlobalVariable(addr, name, size=size, last_change=datetime.datetime.now(tz=datetime.timezone.utc))
 
 
 @execute_write
@@ -606,12 +607,18 @@ def get_enum_members(_enum) -> typing.Dict[str, int]:
     member = ida_enum.get_first_enum_member(_enum)
     member_addr = ida_enum.get_enum_member(_enum, member, 0, 0)
     member_name = ida_enum.get_enum_member_name(member_addr)
+    if member_name is None:
+        return enum_members
+
     enum_members[member_name] = member
 
     while member := ida_enum.get_next_enum_member(_enum, member, 0):
         if member == 0xffffffffffffffff: break
         member_addr = ida_enum.get_enum_member(_enum, member, 0, 0)
         member_name = ida_enum.get_enum_member_name(member_addr)
+        if member_name is None:
+            continue
+
         enum_members[member_name] = member
     return enum_members
 

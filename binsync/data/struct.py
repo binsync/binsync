@@ -2,33 +2,33 @@ from typing import Dict, List
 
 import toml
 
-from binsync.data.artifact import Artifact
+from binsync.data.artifact import Artifact, TomlHexEncoder
 
 import logging
 l = logging.getLogger(name=__name__)
+
 
 class StructMember(Artifact):
     """
     Describes a struct member that corresponds to a struct.
     """
 
-    __slots__ = (
-        "last_change",
-        "member_name",
+    __slots__ = Artifact.__slots__ + (
+        "name",
         "offset",
         "type",
         "size",
     )
 
-    def __init__(self, member_name, offset, type_, size, last_change=None):
+    def __init__(self, name, offset, type_, size, last_change=None):
         super(StructMember, self).__init__(last_change=last_change)
-        self.member_name: str = member_name
+        self.name: str = name
         self.offset: int = offset
         self.type: str = type_
         self.size: int = size
 
     def __str__(self):
-        return f"<StructMember: {self.type} {self.member_name}; @{hex(self.offset)}>"
+        return f"<StructMember: {self.type} {self.name}; @{hex(self.offset)}>"
 
     def __repr__(self):
         self.__str__()
@@ -41,7 +41,7 @@ class StructMember(Artifact):
 
     def copy(self):
         sm = StructMember(
-            self.member_name,
+            self.name,
             self.offset,
             self.type,
             self.size
@@ -55,21 +55,20 @@ class Struct(Artifact):
     Describes a struct
     """
 
-    __slots__ = (
-        "last_change",
+    __slots__ = Artifact.__slots__ + (
         "name",
         "size",
-        "struct_members",
+        "members",
     )
 
-    def __init__(self, name: str, size: int, struct_members: Dict[int, StructMember], last_change=None):
+    def __init__(self, name: str, size: int, members: Dict[int, StructMember], last_change=None):
         super(Struct, self).__init__(last_change=last_change)
         self.name = name
         self.size = size or 0
-        self.struct_members: Dict[int, StructMember] = struct_members
+        self.members: Dict[int, StructMember] = members
 
     def __str__(self):
-        return f"<Struct: {self.name} membs={len(self.struct_members)} ({hex(self.size)})>"
+        return f"<Struct: {self.name} membs={len(self.members)} ({hex(self.size)})>"
 
     def __repr__(self):
         return self.__str__()
@@ -81,7 +80,7 @@ class Struct(Artifact):
             },
 
             "members": {
-                "%x" % offset: member.__getstate__() for offset, member in self.struct_members.items()
+                hex(offset): member.__getstate__() for offset, member in self.members.items()
             }
         }
 
@@ -93,12 +92,12 @@ class Struct(Artifact):
         self.size = metadata["size"]
         self.last_change = metadata.get("last_change", None)
 
-        self.struct_members = {
-            int(off, 16): StructMember.parse(toml.dumps(member)) for off, member in members.items()
+        self.members = {
+            int(off, 16): StructMember.parse(toml.dumps(member, encoder=TomlHexEncoder())) for off, member in members.items()
         }
 
     def add_struct_member(self, mname, moff, mtype, size):
-        self.struct_members[moff] = StructMember(mname, moff, mtype, size)
+        self.members[moff] = StructMember(mname, moff, mtype, size)
 
     def diff(self, other, **kwargs) -> Dict:
         diff_dict = {}
@@ -115,26 +114,26 @@ class Struct(Artifact):
             }
 
         # struct members
-        diff_dict["struct_members"] = {}
-        for off, member in self.struct_members.items():
+        diff_dict["members"] = {}
+        for off, member in self.members.items():
             try:
-                other_mem = other.struct_members[off]
+                other_mem = other.members[off]
             except KeyError:
                 other_mem = None
 
-            diff_dict["struct_members"][off] = member.diff(other_mem)
+            diff_dict["members"][off] = member.diff(other_mem)
 
-        for off, other_mem in other.struct_members.items():
-            if off in diff_dict["struct_members"]:
+        for off, other_mem in other.members.items():
+            if off in diff_dict["members"]:
                 continue
 
-            diff_dict["struct_members"][off] = self.invert_diff(other_mem.diff(None))
+            diff_dict["members"][off] = self.invert_diff(other_mem.diff(None))
 
         return diff_dict
 
     def copy(self):
-        struct_members = {offset: member.copy() for offset, member in self.struct_members.items()}
-        struct = Struct(self.name, self.size, struct_members, last_change=self.last_change)
+        members = {offset: member.copy() for offset, member in self.members.items()}
+        struct = Struct(self.name, self.size, members, last_change=self.last_change)
         return struct
 
     @classmethod
@@ -157,8 +156,8 @@ class Struct(Artifact):
         struct_diff = struct1.diff(struct2)
         merge_struct = struct1
 
-        members_diff = struct_diff["struct_members"]
-        for off, mem in struct2.struct_members.items():
+        members_diff = struct_diff["members"]
+        for off, mem in struct2.members.items():
             # no difference
             if off not in members_diff:
                 continue
@@ -172,21 +171,21 @@ class Struct(Artifact):
                 new_mem_offset = mem.offset
 
                 for off_check in range(new_mem_offset, new_mem_offset + new_mem_size):
-                    if off_check in merge_struct.struct_members:
+                    if off_check in merge_struct.members:
                         break
                 else:
-                    merge_struct.struct_members[off] = mem.copy()
+                    merge_struct.members[off] = mem.copy()
 
                 continue
 
             # member differs
-            merge_mem = merge_struct.struct_members.get(off, None)
+            merge_mem = merge_struct.members.get(off, None)
             if not merge_mem:
                 merge_mem = mem
 
             merge_mem = StructMember.nonconflict_merge(merge_mem, mem)
-            merge_struct.struct_members[off] = merge_mem
+            merge_struct.members[off] = merge_mem
 
         # compute the new size
-        merge_struct.size = sum(mem.size for mem in merge_struct.struct_members.values())
+        merge_struct.size = sum(mem.size for mem in merge_struct.members.values())
         return merge_struct

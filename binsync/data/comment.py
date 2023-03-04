@@ -4,8 +4,7 @@ from binsync.data.artifact import Artifact
 
 
 class Comment(Artifact):
-    __slots__ = (
-        "last_change",
+    __slots__ = Artifact.__slots__ + (
         "addr",
         "func_addr",
         "comment",
@@ -48,7 +47,7 @@ class Comment(Artifact):
         comments_ = {}
 
         for v in sorted(comments.values(), key=lambda x: x.addr):
-            comments_["%x" % v.addr] = v.__getstate__()
+            comments_[hex(v.addr)] = v.__getstate__()
         return comments_
 
     def copy(self):

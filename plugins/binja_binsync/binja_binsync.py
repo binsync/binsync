@@ -144,7 +144,7 @@ class DataMonitor(BinaryDataNotification):
             bs_func = bn_func_to_bs(func)
             self._controller.schedule_job(
                 self._controller.push_artifact,
-                FunctionHeader(sym.name, sym.address, ret_type=bs_func.header.ret_type, args=bs_func.header.args)
+                FunctionHeader(sym.name, sym.address, type_=bs_func.header.type, args=bs_func.header.args)
             )
 
         elif sym.type == SymbolType.DataSymbol:
@@ -183,12 +183,12 @@ class BinjaPlugin:
 
     def _init_ui(self):
         # config dialog
-        configure_binsync_id = "BinSync: Configure"
+        configure_binsync_id = "BinSync: Configure..."
         UIAction.registerAction(configure_binsync_id)
         UIActionHandler.globalActions().bindAction(
             configure_binsync_id, UIAction(self._launch_config)
         )
-        Menu.mainMenu("Tools").addAction(configure_binsync_id, "BinSync")
+        Menu.mainMenu("Plugins").addAction(configure_binsync_id, "BinSync")
 
         # control panel (per BV)
         dock_handler = DockHandler.getActiveDockHandler()

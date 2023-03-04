@@ -112,7 +112,7 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
     comment = "Syncing dbs between users"
 
     help = "This is help"
-    wanted_name = "Binsync: settings"
+    wanted_name = "BinSync: Configure..."
     wanted_hotkey = "Ctrl-Shift-B"
 
     def __init__(self, *args, **kwargs):

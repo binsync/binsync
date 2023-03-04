@@ -1,5 +1,6 @@
 import logging
 import threading
+import datetime
 import time
 from functools import wraps
 from typing import Dict, Iterable, List, Optional, Union
@@ -167,17 +168,18 @@ class BinSyncController:
     def updater_routine(self):
         while self._run_updater_threads:
             time.sleep(BUSY_LOOP_COOLDOWN)
+            now = datetime.datetime.now(tz=datetime.timezone.utc)
 
             # validate a client is connected to this controller (may not have remote )
             if not self.check_client():
                 continue
 
             # do git pull/push operations if a remote exist for the client
-            if self.client.last_pull_attempt_ts is None:
+            if self.client.last_pull_attempt_time is None:
                 self.client.update(commit_msg="User created")
 
             # update every reload_time
-            elif time.time() - self.client.last_pull_attempt_ts > self.reload_time:
+            elif (now - self.client.last_pull_attempt_time).seconds > self.reload_time:
                 self.client.update()
 
             if not self.headless:
@@ -187,8 +189,8 @@ class BinSyncController:
 
                 # update the control panel with new info every BINSYNC_RELOAD_TIME seconds
                 if self._last_reload is None or \
-                        time.time() - self._last_reload > self.reload_time:
-                    self._last_reload = time.time()
+                        (now - self._last_reload).seconds > self.reload_time:
+                    self._last_reload = datetime.datetime.now(tz=datetime.timezone.utc)
                     self._update_ui()
 
     def _update_ui(self):
@@ -559,6 +561,7 @@ class BinSyncController:
             master_artifact,  self.lower_artifact(art_getter(state, *identifiers)),
             merge_level=merge_level, master_state=master_state
         )
+        merged_artifact.last_change = None
 
         lock = self.sync_lock if not self.sync_lock.locked() else FakeSyncLock()
         with lock:
@@ -664,7 +667,7 @@ class BinSyncController:
         # function header
         if master_func.header and master_func.header != dec_func.header:
             # type is user made (a struct)
-            changes |= self.import_user_defined_type(master_func.header.ret_type, **kwargs)
+            changes |= self.import_user_defined_type(master_func.header.type, **kwargs)
             changes |= self.fill_function_header(func_addr, artifact=master_func.header, **kwargs)
 
         # stack vars
@@ -677,7 +680,7 @@ class BinSyncController:
                 if dec_sv == sv:
                     continue
 
-                corrected_off = dec_sv.stack_offset if dec_sv and dec_sv.stack_offset else sv.stack_offset
+                corrected_off = dec_sv.offset if dec_sv and dec_sv.offset else sv.offset
                 changes |= self.import_user_defined_type(sv.type, **kwargs)
                 changes |= self.fill_stack_variable(func_addr, corrected_off, artifact=sv, **kwargs)
 
@@ -942,7 +945,7 @@ class BinSyncController:
         if not type_.is_unknown:
             return None
 
-        base_type_str = type_.base_type.type_str
+        base_type_str = type_.base_type.type
         return base_type_str if base_type_str in state.structs.keys() else None
 
     def import_user_defined_type(self, type_str, **kwargs):
@@ -957,7 +960,7 @@ class BinSyncController:
             return False
 
         nested_undefined_structs = False
-        for off, memb in struct.struct_members.items():
+        for off, memb in struct.members.items():
             user_type = self.type_is_user_defined(memb.type, state=state)
             if user_type and user_type not in master_state.structs.keys():
                 # should we ever happen to have a struct with a nested type that is

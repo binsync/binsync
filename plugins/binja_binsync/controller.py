@@ -41,7 +41,7 @@ from binaryninja.types import StructureType, EnumerationType
 from binsync.common.controller import BinSyncController, fill_event, init_checker
 from binsync.data import (
     State, User, Artifact,
-    Function, FunctionHeader, FunctionArgument, StackVariable, StackOffsetType,
+    Function, FunctionHeader, FunctionArgument, StackVariable,
     Comment, GlobalVariable, Patch,
     Enum, Struct
 )
@@ -148,8 +148,8 @@ class BinjaBinSyncController(BinSyncController):
             with binaryninja.Type.builder(self.bv, struct_name) as s:
                 s.width = bs_struct.size
                 members = list()
-                for offset in sorted(bs_struct.struct_members.keys()):
-                    bs_memb = bs_struct.struct_members[offset]
+                for offset in sorted(bs_struct.members.keys()):
+                    bs_memb = bs_struct.members[offset]
                     try:
                         bn_type = self.bv.parse_type_string(bs_memb.type) if bs_memb.type else None
                     except Exception:
@@ -158,7 +158,7 @@ class BinjaBinSyncController(BinSyncController):
                         if bn_type is None:
                             bn_type = binaryninja.Type.int(bs_memb.size)
 
-                    members.append((bn_type, bs_memb.member_name))
+                    members.append((bn_type, bs_memb.name))
 
                 s.members = members
 
@@ -197,12 +197,12 @@ class BinjaBinSyncController(BinSyncController):
                 updates |= True
 
             # ret type
-            if bs_func_header.ret_type and \
-                    bs_func_header.ret_type != bn_func.return_type.get_string_before_name():
+            if bs_func_header.type and \
+                    bs_func_header.type != bn_func.return_type.get_string_before_name():
 
                 valid_type = False
                 try:
-                    new_type, _ = self.bv.parse_type_string(bs_func_header.ret_type)
+                    new_type, _ = self.bv.parse_type_string(bs_func_header.type)
                     valid_type = True
                 except Exception:
                     pass
@@ -213,12 +213,12 @@ class BinjaBinSyncController(BinSyncController):
 
             # parameters
             if bs_func_header.args:
-                prototype_tokens = [bs_func_header.ret_type] if bs_func_header.ret_type \
+                prototype_tokens = [bs_func_header.type] if bs_func_header.type \
                     else [bn_func.return_type.get_string_before_name()]
 
                 prototype_tokens.append("(")
                 for idx, func_arg in bs_func_header.args.items():
-                    prototype_tokens.append(func_arg.type_str)
+                    prototype_tokens.append(func_arg.type)
                     prototype_tokens.append(func_arg.name)
                     prototype_tokens.append(",")
 
@@ -251,8 +251,7 @@ class BinjaBinSyncController(BinSyncController):
             if v.source_type == VariableSourceType.StackVariableSourceType
         }
 
-        bn_offset = bs_stack_var.get_offset(StackOffsetType.BINJA)
-
+        bn_offset = bs_stack_var.offset
         if bn_offset in existing_stack_vars:
             if existing_stack_vars[bn_offset].name != bs_stack_var.name:
                 existing_stack_vars[bn_offset].name = bs_stack_var.name
@@ -334,6 +333,6 @@ class BinjaBinSyncController(BinSyncController):
             return None 
             
         gvar = GlobalVariable(
-            addr, self.bv.get_symbol_at(addr) or f"data_{addr:x}", type_str=str(var.type), size=var.type.width
+            addr, self.bv.get_symbol_at(addr) or f"data_{addr:x}", type_=str(var.type), size=var.type.width
         )
         return gvar

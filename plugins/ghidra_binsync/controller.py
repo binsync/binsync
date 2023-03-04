@@ -64,10 +64,10 @@ class GhidraBinSyncController(BinSyncController):
         update = False
         stack_var: StackVariable = artifact
         if stack_var.name:
-            update |= self.ghidra.set_stack_var_name(stack_var.addr, stack_var.stack_offset, stack_var.name)
+            update |= self.ghidra.set_stack_var_name(stack_var.addr, stack_var.offset, stack_var.name)
 
         if stack_var.type:
-            update |= self.ghidra.set_stack_var_type(stack_var.addr, stack_var.stack_offset, stack_var.type)
+            update |= self.ghidra.set_stack_var_type(stack_var.addr, stack_var.offset, stack_var.type)
 
         return update
 
@@ -78,8 +78,8 @@ class GhidraBinSyncController(BinSyncController):
         if func_header.name:
             update |= self.ghidra.set_func_name(func_header.addr, func_header.name)
 
-        if func_header.ret_type:
-            update |= self.ghidra.set_func_rettype(func_header.addr, func_header.ret_type)
+        if func_header.type:
+            update |= self.ghidra.set_func_rettype(func_header.addr, func_header.type)
 
         return update
 
