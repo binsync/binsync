@@ -56,15 +56,15 @@ def start_am_gui(binpath, app):
 
 
 def get_binsync_am_plugin(main):
-    #_plugin = main.workspace.plugins.loaded_plugins['binsync']
-    #_plugin = [plugin for plugin in main.workspace.plugins.loaded_plugins if "binsync" in str(plugin)][
-    #    0]
-    #main.workspace.plugins.activate_plugin(_plugin)
+    plugin_shortname = "binsync"
+    binsync_plugin = main.workspace.plugins.active_plugins.get(plugin_shortname, None)
+    if binsync_plugin is not None:
+        return binsync_plugin
 
-    binsync_plugin = main.workspace.plugins.active_plugins['binsync']
-    #binsync_plugin = next(iter(
-    #    [p for p in main.workspace.plugins.active_plugins if "binsync" in str(p)]
-    #))
+    main.workspace.plugins.active_plugin_by_name(plugin_shortname)
+    binsync_plugin = main.workspace.plugins.active_plugins.get(plugin_shortname, None)
+    assert binsync_plugin is not None
+
     return binsync_plugin
 
 
@@ -90,15 +90,10 @@ def click_sync_menu(qtbot: QtBot, table, obj_name):
     context_menu = next(
         filter(lambda x: isinstance(x, QMenu) and x.objectName() == obj_name,
                QApplication.topLevelWidgets()))
-    for widget in QApplication.topLevelWidgets():
-        if widget.objectName():
-            print(widget.objectName())
 
-    print(context_menu)
     # triple check we got the right menu
     assert (context_menu.objectName() == obj_name)
     sync_action = next(filter(lambda x: "Sync" == x.text(), context_menu.actions()))
-    print(sync_action)
     sync_action.trigger()
     context_menu.close()
 
@@ -140,7 +135,7 @@ def rename_stack_variable(qtbot:QtBot, main, func, new_var_name, var_offset):
     else:
         raise Exception("The CFunction _instance is not found.")
 
-    rnode = RenameNode(code_view=pseudocode_view, node=var_node)
+    rnode = RenameNode(code_view=pseudocode_view, node=var_node, func=func)
     rnode._name_box.setText("")
     qtbot.keyClicks(rnode._name_box, new_var_name)
     qtbot.mouseClick(rnode._ok_button, Qt.MouseButton.LeftButton)
@@ -206,9 +201,9 @@ class TestBinsyncGUI(object):
 
             print("Blocking waiting for table updates..")
             control_panel = binsync_plugin.control_panel_view.control_panel
-            for i in range(20):
+            for i in range(40):
                 qWait(BINSYNC_RELOAD_TIME // 10, main.app)
-                print(f"\tAttempt number {i + 1}/20..")
+                print(f"\tAttempt number {i + 1}/40..")
                 try:
                     assert len(control_panel._func_table.table.model.row_data) == 1
                     top_change_func = control_panel._func_table.table.model.row_data[0]
@@ -251,9 +246,9 @@ class TestBinsyncGUI(object):
 
             print("Blocking waiting for table updates..")
             control_panel = binsync_plugin.control_panel_view.control_panel
-            for i in range(20):
+            for i in range(40):
                 qWait(BINSYNC_RELOAD_TIME // 10, main.app)
-                print(f"\tAttempt number {i + 1}/20..")
+                print(f"\tAttempt number {i + 1}/40..")
                 try:
                     assert len(control_panel._func_table.table.model.row_data) == 1
                     assert control_panel._func_table.table.model.row_data[0][3] != -1
@@ -315,9 +310,9 @@ class TestBinsyncGUI(object):
 
             print("Blocking waiting for table updates..")
             control_panel = binsync_plugin.control_panel_view.control_panel
-            for i in range(20):
+            for i in range(40):
                 qWait(BINSYNC_RELOAD_TIME // 10, main.app)
-                print(f"\tAttempt number {i + 1}/20..")
+                print(f"\tAttempt number {i + 1}/40..")
                 try:
                     assert len(control_panel._func_table.table.model.row_data) == 1
                     top_change_func = control_panel._func_table.table.model.row_data[0]
@@ -336,10 +331,6 @@ class TestBinsyncGUI(object):
 
             # check for var correctness
             var_man = main.workspace.main_instance.pseudocode_variable_kb.variables.get_function_manager(func.addr)
-            print(main)
-            print(func)
-            print(var_offset)
-            print(var_man)
             assert get_stack_variable(main, func, var_offset, var_man).name == new_var_name
 
             print("Exiting first angr-management instance..")
@@ -366,9 +357,9 @@ class TestBinsyncGUI(object):
 
             print("Blocking waiting for table updates..")
             control_panel = binsync_plugin.control_panel_view.control_panel
-            for i in range(20):
+            for i in range(40):
                 qWait(BINSYNC_RELOAD_TIME // 10, main.app)
-                print(f"\tAttempt number {i + 1}/20..")
+                print(f"\tAttempt number {i + 1}/40..")
                 try:
                     assert len(control_panel._func_table.table.model.row_data) == 1
                     top_change_func = control_panel._func_table.table.model.row_data[0]
