@@ -33,8 +33,10 @@ logging.disable(logging.CRITICAL)
 
 BINSYNC_RELOAD_TIME = 10000
 
+
 def get_timestamp():
     return datetime_.utcfromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S.%f')
+
 
 def qWait(to_wait, app):
     endtime = datetime_.now() + timedelta(milliseconds=to_wait)
@@ -54,13 +56,15 @@ def start_am_gui(binpath, app):
 
 
 def get_binsync_am_plugin(main):
-    _plugin = [plugin for plugin in main.workspace.plugins.loaded_plugins if "BinSyncPlugin" in str(plugin)][
-        0]
-    main.workspace.plugins.activate_plugin(_plugin)
+    #_plugin = main.workspace.plugins.loaded_plugins['binsync']
+    #_plugin = [plugin for plugin in main.workspace.plugins.loaded_plugins if "binsync" in str(plugin)][
+    #    0]
+    #main.workspace.plugins.activate_plugin(_plugin)
 
-    binsync_plugin = next(iter(
-        [p for p in main.workspace.plugins.active_plugins if "BinSync" in str(p)]
-    ))
+    binsync_plugin = main.workspace.plugins.active_plugins['binsync']
+    #binsync_plugin = next(iter(
+    #    [p for p in main.workspace.plugins.active_plugins if "binsync" in str(p)]
+    #))
     return binsync_plugin
 
 

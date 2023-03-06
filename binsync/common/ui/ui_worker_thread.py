@@ -1,3 +1,4 @@
+import datetime
 import time
 from binsync.common.ui.qt_objects import QObject, Signal, Slot
 import binsync.common.controller as bsc
@@ -28,6 +29,6 @@ class BinSyncUIWorker(QObject):
 
                 # update the control panel with new info every self.reload_time seconds
                 if self._last_reload is None or \
-                        time.time() - self._last_reload > self.reload_time:
-                    self._last_reload = time.time()
+                        (datetime.datetime.now(tz=datetime.timezone.utc) - self._last_reload).seconds > self.reload_time:
+                    self._last_reload = datetime.datetime.now(tz=datetime.timezone.utc)
                     self.controller._update_ui()

@@ -12,6 +12,3 @@ del Loggers
 del logging
 
 import binsync.data
-import binsync.common
-
-

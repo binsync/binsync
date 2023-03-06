@@ -81,7 +81,7 @@ class CTXTableModel(BinsyncTableModel):
                 idxs_to_update.append(i)
             data_to_send.append(v)
 
-            duration = time.time() - v[self.time_col]  # table coloring
+            duration = (datetime.datetime.now(tz=datetime.timezone.utc) - v[self.time_col]).seconds  # table coloring
             row_color = None
             if 0 <= duration <= self.controller.table_coloring_window:
                 opacity = (

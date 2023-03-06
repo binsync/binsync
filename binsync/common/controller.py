@@ -6,7 +6,7 @@ from functools import wraps
 from typing import Dict, Iterable, Optional, Union
 
 import binsync.data
-from binsync import ProjectConfig
+from binsync.data import ProjectConfig
 from binsync.common.artifact_lifter import ArtifactLifter
 from binsync.core.client import Client, SchedSpeed, Scheduler, Job
 from binsync.data.type_parser import BSTypeParser, BSType
