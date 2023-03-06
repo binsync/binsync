@@ -45,6 +45,7 @@ class BinSyncPlugin(BasePlugin):
     #
 
     def teardown(self):
+        self.controller.stop_worker_routines()
         # destroy the sync view on deinit
         self.workspace.remove_view(self.control_panel_view)
 

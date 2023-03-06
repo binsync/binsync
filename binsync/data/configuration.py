@@ -81,13 +81,19 @@ class ProjectConfig(Config):
         "user",
         "repo_path",
         "remote",
+        "table_coloring_window",
+        "log_level",
+        "merge_level"
     )
 
     def __init__(self,
                  binary_path,
                  user=None,
                  repo_path=None,
-                 remote=None
+                 remote=None,
+                 table_coloring_window=None,
+                 log_level=None,
+                 merge_level=None,
                  ):
         super(ProjectConfig, self).__init__(self.correct_path(binary_path))
 
@@ -95,6 +101,9 @@ class ProjectConfig(Config):
         self.user = user
         self.repo_path = repo_path
         self.remote = remote
+        self.table_coloring_window = table_coloring_window
+        self.log_level = log_level
+        self.merge_level = merge_level
 
     @classmethod
     def correct_path(cls, binary_path):
