@@ -272,7 +272,7 @@ class BinSyncController:
         self.headless = not self.headless
 
     @init_checker
-    def users(self, priority=None, no_cache=False) -> Iterable[User]:  # TODO: fix no_cache user bug
+    def users(self, priority=None, no_cache=True) -> Iterable[User]:  # TODO: fix no_cache user bug
         return self.client.users(priority=priority, no_cache=no_cache)
 
     def usernames(self, priority=None) -> Iterable[str]:
