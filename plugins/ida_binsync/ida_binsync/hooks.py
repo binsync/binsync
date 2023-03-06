@@ -43,6 +43,8 @@ import ida_enum
 import idaapi
 import idc
 
+from PyQt5 import QtCore, QtGui
+
 from . import compat
 from .controller import IDABinSyncController
 from binsync.data import (
@@ -50,6 +52,7 @@ from binsync.data import (
     Comment, GlobalVariable, Patch,
     Enum, Struct
 )
+from PyQt5.QtGui import QKeyEvent
 
 l = logging.getLogger(__name__)
 
@@ -645,6 +648,26 @@ class HexRaysHooks:
 
     def binsync_state_change(self, *args, **kwargs):
         self.controller.schedule_job(*args, **kwargs)
+
+
+class IdaHotkeyHook(ida_kernwin.UI_Hooks):
+    def __init__(self, keys_to_pass, uiptr):
+        super().__init__()
+        self.keys_to_pass = keys_to_pass
+        self.ui = uiptr
+
+    def preprocess_action(self, action_name):
+        uie = ida_kernwin.input_event_t()
+        ida_kernwin.get_user_input_event(uie)
+        key_event = uie.get_source_QEvent()
+        keycode = key_event.key()
+        if keycode[0] in self.keys_to_pass:
+            ke = QKeyEvent(QtCore.QEvent.KeyPress, keycode[0], QtCore.Qt.NoModifier)
+            # send new event
+            self.ui.event(ke)
+            # consume the event so ida doesn't take it
+            return 1
+        return 0
 
 
 class MasterHook:

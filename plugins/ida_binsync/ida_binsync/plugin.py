@@ -16,13 +16,14 @@ import idc
 import ida_hexrays
 import idautils
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
+from PyQt5.QtCore import Qt
 
 from binsync.common.ui.version import set_ui_version
 set_ui_version("PyQt5")
 from binsync.common.ui.config_dialog import SyncConfig
 from binsync.common.ui.control_panel import ControlPanel
 
-from .hooks import MasterHook
+from .hooks import MasterHook, IdaHotkeyHook
 from . import IDA_DIR, VERSION
 from .controller import IDABinSyncController
 from . import compat
@@ -124,7 +125,14 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
 
     def open_config_dialog(self):
         dialog = SyncConfig(controller)
+
+        dialog.dialog_uihook = IdaHotkeyHook([Qt.Key_Return, Qt.Key_Tab, Qt.Key_Backtab], dialog)
+        if not dialog.dialog_uihook.hook():
+            l.warning("Failed to hook ida hotkeys for SyncConfig")
+
         dialog.exec_()
+
+        dialog.dialog_uihook.unhook()
 
         if not controller.check_client():
             return

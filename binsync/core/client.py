@@ -45,7 +45,7 @@ def atomic_git_action(f):
         no_cache = kwargs.get("no_cache", False)
         if not no_cache:
             # cache check
-            cache_item = self._check_cache_(f, **kwargs)
+            cache_item = self.check_cache_(f, **kwargs)
             if cache_item is not None:
                 return cache_item
 
@@ -296,14 +296,15 @@ class Client:
         repo = self.repo
         users = list()
         for ref in self._get_best_refs(repo).values():
+            l.info(f"{ref} NAME: {ref.name}")
             try:
                 metadata = load_toml_from_file(ref.commit.tree, "metadata.toml", client=self)
                 user = User.from_metadata(metadata)
                 users.append(user)
             except Exception as e:
-                l.debug(f"Unable to load user {e}")
+                l.info(f"Unable to load user {e}")
                 continue
-
+        l.info(users)
         return users
 
     @atomic_git_action
@@ -645,7 +646,7 @@ class Client:
         }
         return commit_dict
 
-    def _check_cache_(self, f, **kwargs):
+    def check_cache_(self, f, **kwargs):
         if f.__qualname__ == self.get_state.__qualname__:
             cache_func = self.cache.get_state
             args = []

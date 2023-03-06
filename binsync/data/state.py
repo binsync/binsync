@@ -174,7 +174,7 @@ class State:
         self.version = version if version is not None else 0  # type: int
         self.last_push_artifact = -1
         self.last_push_artifact_type = -1
-        self.last_push_time = -1
+        self.last_push_time = datetime.datetime.now(tz=datetime.timezone.utc)
 
         # the client
         self.client = client  # type: Optional[Client]
