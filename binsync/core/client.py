@@ -296,15 +296,15 @@ class Client:
         repo = self.repo
         users = list()
         for ref in self._get_best_refs(repo).values():
-            l.info(f"{ref} NAME: {ref.name}")
+            l.debug(f"{ref} NAME: {ref.name}")
             try:
                 metadata = load_toml_from_file(ref.commit.tree, "metadata.toml", client=self)
                 user = User.from_metadata(metadata)
                 users.append(user)
             except Exception as e:
-                l.info(f"Unable to load user {e}")
+                l.debug(f"Unable to load user {e}")
                 continue
-        l.info(users)
+        l.debug(users)
         return users
 
     @atomic_git_action
