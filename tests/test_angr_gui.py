@@ -61,7 +61,7 @@ def get_binsync_am_plugin(main):
     if binsync_plugin is not None:
         return binsync_plugin
 
-    main.workspace.plugins.active_plugin_by_name(plugin_shortname)
+    main.workspace.plugins.activate_plugin_by_name(plugin_shortname)
     binsync_plugin = main.workspace.plugins.active_plugins.get(plugin_shortname, None)
     assert binsync_plugin is not None
 
