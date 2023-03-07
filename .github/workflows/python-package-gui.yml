@@ -13,10 +13,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Set up Python 3.8
+    - name: Set up Python 3.11
       uses: actions/setup-python@v2
       with:
-        python-version: "3.8"
+        python-version: "3.11"
     - name: Install dependencies
       run: |
         sudo apt-get install libegl1 -y
@@ -33,4 +33,4 @@ jobs:
       env:
         QT_QPA_PLATFORM: "offscreen"
       run: |
-        QT_QPA_PLATFORM="offscreen" pytest ./tests/test_angr_gui.py -sx
+        QT_QPA_PLATFORM="offscreen" pytest ./tests/test_angr_gui.py -s
