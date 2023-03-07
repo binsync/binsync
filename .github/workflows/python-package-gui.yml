@@ -33,4 +33,4 @@ jobs:
       env:
         QT_QPA_PLATFORM: "offscreen"
       run: |
-        QT_QPA_PLATFORM="offscreen" pytest ./tests/test_angr_gui.py
+        QT_QPA_PLATFORM="offscreen" pytest ./tests/test_angr_gui.py -sx
