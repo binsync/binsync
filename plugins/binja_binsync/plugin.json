@@ -15,13 +15,7 @@
 		"Linux" : "Install through the Binja Plugin Manager. To update do `pip install -U binsync`",
 		"Windows" : "Install through the Binja Plugin Manager. To update do `pip install -U binsync`"
 	},
-	"dependencies": {
-		"pip": ["sortedcontainers", "toml", "GitPython", "filelock", "pycparser", "setuptools", "prompt_toolkit"],
-		"apt": [],
-		"installers": [],
-		"other": []
-	},
-	"version": "3.1.0",
+	"version": "3.1.1",
 	"author": "BinSync Team",
 	"minimumbinaryninjaversion": 1200
 }
