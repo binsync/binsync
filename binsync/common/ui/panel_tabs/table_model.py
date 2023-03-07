@@ -1,4 +1,5 @@
 import logging
+import datetime
 
 from binsync.common.controller import BinSyncController
 from binsync.common.ui.qt_objects import (
@@ -143,6 +144,19 @@ class BinsyncTableModel(QAbstractTableModel):
         """ Returns information about the data at a specified index based
             on the role supplied. This function is performance sensitive. """
         raise NotImplementedError
+
+    def _compute_row_color(self, artifact):
+        duration = (datetime.datetime.now(tz=datetime.timezone.utc) - artifact.last_change).seconds  # table coloring
+        if 0 <= duration <= self.controller.table_coloring_window:
+            opacity = (self.controller.table_coloring_window - duration) / self.controller.table_coloring_window
+            return QColor(
+                BinsyncTableModel.ACTIVE_FUNCTION_COLOR[0],
+                BinsyncTableModel.ACTIVE_FUNCTION_COLOR[1],
+                BinsyncTableModel.ACTIVE_FUNCTION_COLOR[2],
+                int(BinsyncTableModel.ACTIVE_FUNCTION_COLOR[3] * opacity)
+            )
+
+        return None
 
     def update_table(self):
         """ Updates the table using the controller's information. """

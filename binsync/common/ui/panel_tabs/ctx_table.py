@@ -72,6 +72,10 @@ class CTXTableModel(BinsyncTableModel):
             self.data_dict[user.name] = row
             touched_users.append(user.name)
 
+        if not self.data_dict:
+            self.update_signal.emit([], [])
+            return
+
         # parse new info to figure out what specifically needs updating, recalculate tooltips/coloring
         data_to_send = []
         colors_to_send = []
