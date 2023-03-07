@@ -101,21 +101,26 @@ class FunctionTableModel(BinsyncTableModel):
             colors_to_send.append(row_color)
 
             self.data_tooltips.append(f"Age: {friendly_datetime(v[self.time_col])}")
-        # no changes required, dont bother updating
-        if len(idxs_to_update) == 0 and self.controller.table_coloring_window == self.saved_color_window:
-            return
 
-        if len(data_to_send) != self.rowCount():
-            idxs_to_update = []
+        # if no changes required, dont bother updating
+        if len(idxs_to_update) != 0 or self.controller.table_coloring_window != self.saved_color_window:
+            if len(data_to_send) != self.rowCount():
+                idxs_to_update = []
 
-        if self.controller.table_coloring_window != self.saved_color_window:
-            self.saved_color_window = self.controller.table_coloring_window
-            idxs_to_update = range(len(data_to_send))
+            if self.controller.table_coloring_window != self.saved_color_window:
+                self.saved_color_window = self.controller.table_coloring_window
+                idxs_to_update = range(len(data_to_send))
 
-        self.update_signal.emit(data_to_send, colors_to_send)
+            self.update_signal.emit(data_to_send, colors_to_send)
 
-        for idx in idxs_to_update:
-            self.dataChanged.emit(self.index(0, idx), self.index(self.rowCount() - 1, idx))
+            for idx in idxs_to_update:
+                self.dataChanged.emit(self.index(0, idx), self.index(self.rowCount() - 1, idx))
+
+        from_idx = self.createIndex(0, 3)
+        to_idx = self.createIndex(self.rowCount() - 1, 3)
+        self.dataChanged.emit(from_idx, to_idx)
+        l.critical(f"Updating from {from_idx.row()} to {to_idx.row()} on col 3")
+
 
 class FunctionTableView(BinsyncTableView):
     HEADER = ['Addr', 'Remote Name', 'User', 'Last Push']
