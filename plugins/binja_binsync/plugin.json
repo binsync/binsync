@@ -3,25 +3,25 @@
 	"name": "BinSync",
 	"type": ["core", "ui"],
 	"api": ["python3"],
-	"description": "BinSync support.",
-	"longdescription": "BinSync support.",
+	"description": "Adds support for cross-decompiler collab in the BinSync supported decompilers.",
+	"longdescription": "Adds support for cross-decompiler collab in the BinSync supported decompilers.",
 	"license": {
 		"name": "BSD 2-clause",
 		"text": ""
 	},
 	"platforms" : ["Darwin", "Linux", "Windows"],
 	"installinstructions" : {
-		"Darwin" : "Follow the README",
-		"Linux" : "Follow the README",
-		"Windows" : "Follow the README"
+		"Darwin" : "Install through the Binja Plugin Manager. To update do `pip install -U binsync`",
+		"Linux" : "Install through the Binja Plugin Manager. To update do `pip install -U binsync`",
+		"Windows" : "Install through the Binja Plugin Manager. To update do `pip install -U binsync`"
 	},
 	"dependencies": {
-		"pip": [],
+		"pip": ["sortedcontainers", "toml", "GitPython", "filelock", "pycparser", "setuptools", "prompt_toolkit"],
 		"apt": [],
 		"installers": [],
 		"other": []
 	},
-	"version": "2.1.0",
+	"version": "3.1.0",
 	"author": "BinSync Team",
 	"minimumbinaryninjaversion": 1200
 }
