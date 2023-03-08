@@ -34,6 +34,5 @@ dist
 .vscode/
 *.db
 .DS_Store
-binsync/plugins/
-binsync/plugins
+binsync/decompiler_stubs/
 .pytest_cache/

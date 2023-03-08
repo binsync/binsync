@@ -11,37 +11,37 @@ from setuptools import Command, setup
 from setuptools.command.develop import develop as st_develop
 
 
-def _copy_decomp_plugins():
-    local_plugins = Path("plugins").absolute()
-    pip_e_plugins = Path("binsync").joinpath("plugins").absolute()
+def _copy_decomp_decompiler_stubs():
+    local_decompiler_stubs = Path("decompiler_stubs").absolute()
+    pip_e_decompiler_stubs = Path("binsync").joinpath("decompiler_stubs").absolute()
 
     # clean the install location of symlink or folder
-    shutil.rmtree(pip_e_plugins, ignore_errors=True)
+    shutil.rmtree(pip_e_decompiler_stubs, ignore_errors=True)
     try:
-        os.unlink(pip_e_plugins)
+        os.unlink(pip_e_decompiler_stubs)
     except:
         pass
 
     # first attempt a symlink, if it works, exit early
     try:
-        os.symlink(local_plugins, pip_e_plugins, target_is_directory=True)
+        os.symlink(local_decompiler_stubs, pip_e_decompiler_stubs, target_is_directory=True)
         return
     except:
         pass
 
     # copy if symlinking is not available on target system
-    shutil.copytree("plugins", "binsync/plugins")
+    shutil.copytree("decompiler_stubs", "binsync/decompiler_stubs")
 
 
 class build(st_build):
     def run(self, *args):
-        self.execute(_copy_decomp_plugins, (), msg="Copying binsync plugins")
+        self.execute(_copy_decomp_decompiler_stubs, (), msg="Copying binsync decompiler_stubs")
         super().run(*args)
 
 
 class develop(st_develop):
     def run(self, *args):
-        self.execute(_copy_decomp_plugins, (), msg="Linking or copying local plugins folder")
+        self.execute(_copy_decomp_decompiler_stubs, (), msg="Linking or copying local decompiler_stubs folder")
         super().run(*args)
 
 
