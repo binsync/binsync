@@ -22,9 +22,9 @@ from binsync.common.ui.version import set_ui_version
 set_ui_version("PyQt5")
 from binsync.common.ui.config_dialog import SyncConfig
 from binsync.common.ui.control_panel import ControlPanel
+from binsync import __version__ as VERSION
 
 from .hooks import MasterHook, IdaHotkeyHook
-from . import VERSION
 from .controller import IDABinSyncController
 from . import compat
 
