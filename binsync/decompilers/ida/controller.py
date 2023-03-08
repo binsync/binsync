@@ -18,26 +18,20 @@
 # ----------------------------------------------------------------------------
 
 from functools import wraps
-import re
 import threading
-import time
-import datetime
 import logging
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, Optional
 from collections import OrderedDict, defaultdict
 
 import idc
 import idaapi
-import idautils
 import ida_struct
 import ida_hexrays
-import ida_funcs
-import ida_kernwin
 
 import binsync
 from binsync.common.controller import BinSyncController, init_checker, fill_event
 from binsync.data import (
-    StackVariable, Function, FunctionHeader, Struct, Comment, GlobalVariable, Enum, State, Patch
+    StackVariable, Function, FunctionHeader, Struct, Comment, GlobalVariable, Enum
 )
 from . import compat
 from .artifact_lifter import IDAArtifactLifter

@@ -242,7 +242,7 @@ class BinSyncInstaller(Installer):
     def __init__(self):
         super().__init__(targets=Installer.DECOMPILERS)
         self.plugins_path = Path(
-            pkg_resources.resource_filename("binsync", f"plugins")
+            pkg_resources.resource_filename("binsync", f"decompiler_stubs")
         )
 
     def display_prologue(self):
@@ -262,13 +262,10 @@ class BinSyncInstaller(Installer):
         if ida_plugin_path is None:
             return None
 
-        src_ida_binsync_pkg = self.plugins_path.joinpath("ida_binsync").joinpath("ida_binsync")
-        src_ida_binsync_py = self.plugins_path.joinpath("ida_binsync").joinpath("ida_binsync.py")
-        dst_ida_binsync_pkg = ida_plugin_path.joinpath("ida_binsync")
+        src_ida_binsync_py = self.plugins_path.joinpath("ida_binsync.py")
         dst_ida_binsync_py = ida_plugin_path.joinpath("ida_binsync.py")
-        self.link_or_copy(src_ida_binsync_pkg, dst_ida_binsync_pkg, is_dir=True)
         self.link_or_copy(src_ida_binsync_py, dst_ida_binsync_py)
-        return dst_ida_binsync_pkg
+        return dst_ida_binsync_py
 
     def install_angr(self, path=None):
         angr_plugin_path = super().install_angr(path=path)

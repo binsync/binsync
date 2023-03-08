@@ -21,36 +21,27 @@
 #
 # ----------------------------------------------------------------------------
 import threading
-import time
 from functools import wraps
 import logging
 
-import ida_auto
 import ida_bytes
-import ida_enum
 import ida_funcs
 import ida_hexrays
-import ida_idaapi
 import ida_idp
 import ida_kernwin
-import ida_nalt
-import ida_netnode
-import ida_pro
-import ida_segment
 import ida_struct
 import ida_typeinf
 import ida_enum
 import idaapi
 import idc
 
-from PyQt5 import QtCore, QtGui
+from PyQt5 import QtCore
 
 from . import compat
 from .controller import IDABinSyncController
 from binsync.data import (
-    Function, FunctionHeader, FunctionArgument, StackVariable,
-    Comment, GlobalVariable, Patch,
-    Enum, Struct
+    FunctionHeader, FunctionArgument, StackVariable,
+    Comment, GlobalVariable, Enum, Struct
 )
 from PyQt5.QtGui import QKeyEvent
 
@@ -251,7 +242,8 @@ class IDBHooks(ida_idp.IDB_Hooks):
             stack_frame = sptr
             func_addr = idaapi.get_func_by_frame(stack_frame.id)
             try:
-                stack_var_info = compat.get_func_stack_var_info(func_addr)[compat.ida_to_angr_stack_offset(func_addr, mptr.soff)]
+                stack_var_info = compat.get_func_stack_var_info(func_addr)[
+                    compat.ida_to_angr_stack_offset(func_addr, mptr.soff)]
             except KeyError:
                 l.debug(f"Failed to track an internal changing stack var: {mptr.id}.")
                 return 0

@@ -24,7 +24,7 @@ from binsync.common.ui.config_dialog import SyncConfig
 from binsync.common.ui.control_panel import ControlPanel
 
 from .hooks import MasterHook, IdaHotkeyHook
-from . import IDA_DIR, VERSION
+from . import VERSION
 from .controller import IDABinSyncController
 from . import compat
 

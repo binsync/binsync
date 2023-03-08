@@ -47,17 +47,17 @@ default_config = {
             'level': 'INFO',
             'propagate': False
         },
-        'ghidra_binsync': {
+        'ghidra': {
             'handlers': ["console", "local_file_handler"],
             'level': 'INFO',
             'propagate': False
         },
-        'angr_binsync': {
+        'angr': {
             'handlers': ["console", "local_file_handler"],
             'level': 'INFO',
             'propagate': False
         },
-        'binja_binsync': {
+        'binja': {
             'handlers': ["console", "local_file_handler"],
             'level': 'INFO',
             'propagate': False
@@ -70,7 +70,7 @@ class Loggers:
     """
     Logger Manager.
     """
-    IN_SCOPE_LOGGERS = ('binsync', 'ida_binsync', 'angr_binsync', 'binja_binsync')
+    IN_SCOPE_LOGGERS = ('binsync', 'ida_binsync', 'angr', 'binja')
 
     def __init__(self):
         self._loggers = {}
