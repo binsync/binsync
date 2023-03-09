@@ -48,7 +48,8 @@ class FunctionTableModel(BinsyncTableModel):
         elif role == self.FilterRole:
             return f"{hex(self.row_data[row][0])} {self.row_data[row][1]} {self.row_data[row][2]}"
         elif role == Qt.ToolTipRole:
-            return self.data_tooltips[index.row()]
+            #return self.data_tooltips[index.row()]
+            pass
         return None
 
     def update_table(self):

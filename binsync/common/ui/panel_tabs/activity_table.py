@@ -1,5 +1,6 @@
 import logging
 import time
+from collections import defaultdict
 from typing import Dict
 import datetime
 
@@ -38,7 +39,8 @@ class ActivityTableModel(BinsyncTableModel):
             if col == 0:
                 return self.row_data[row][col]
             elif col == 1:
-                return hex(self.row_data[row][col])
+                data = self.row_data[row][col]
+                return hex(self.row_data[row][col]) if data != -1 else ""
             elif col == 2:
                 return friendly_datetime(self.row_data[row][col])
         elif role == self.SortRole:
@@ -48,90 +50,48 @@ class ActivityTableModel(BinsyncTableModel):
         elif role == self.FilterRole:
             return f"{self.row_data[row][0]} {hex(self.row_data[row][1])}"
         elif role == Qt.ToolTipRole:
-            return self.data_tooltips[row]
+            #return self.data_tooltips[row]
+            pass
         return None
 
     def update_table(self):
-        cmenu_cache = {}
-        touched_users = []
+        cmenu_cache = defaultdict(list)
+        updated_row_keys = set()
 
-        # first check if any functions are unknown to the table
         for user in self.controller.users():
-            changed_funcs = {}
+            latest_func = None
             state = self.controller.client.get_state(user=user.name)
             user_funcs: Dict[int, Function] = state.functions
 
             for func_addr, sync_func in user_funcs.items():
-                func_change_time = sync_func.last_change
-
                 # don't add functions that were never changed by the user
                 if not sync_func.last_change:
                     continue
 
-                if user.name in cmenu_cache:
-                    cmenu_cache[user.name].append(func_addr)
-                else:
-                    cmenu_cache[user.name] = [func_addr]
+                cmenu_cache[user.name].append(func_addr)
 
-                # check if we already know about it
-                if func_addr in changed_funcs:
-                    # compare this users change time to the store change time
-                    if not func_change_time or func_change_time < changed_funcs[func_addr]:
-                        continue
+                if latest_func is None:
+                    latest_func = sync_func
+                    continue
 
-                changed_funcs[func_addr] = func_change_time
+                if latest_func is not None and sync_func.last_change <= latest_func.last_change:
+                    continue
 
-            if len(changed_funcs) > 0:
-                most_recent_func = list(changed_funcs)[0]
-                last_state_change = state.last_push_time \
-                    if not state.last_push_time \
-                    else list(changed_funcs.values())[0]
+                latest_func = sync_func
+
+            if latest_func is not None:
+                most_recent_func = latest_func.addr
+                last_state_change = latest_func.last_change
             else:
-                most_recent_func = 0
+                most_recent_func = -1
                 last_state_change = state.last_push_time
 
-            row = [user.name, most_recent_func, last_state_change]
-
-            self.data_dict[user.name] = row
-            touched_users.append(user.name)
+            self.data_dict[user.name] = [user.name, most_recent_func, last_state_change]
+            updated_row_keys.add(user.name)
 
         self.context_menu_cache = cmenu_cache
-        data_to_send = []
-        colors_to_send = []
-        idxs_to_update = []
-        for i, (k, v) in enumerate(self.data_dict.items()):
-            if k in touched_users:
-                idxs_to_update.append(i)
-            data_to_send.append(v)
-
-            duration = (datetime.datetime.now(tz=datetime.timezone.utc) - v[self.time_col]).seconds  # table coloring
-            row_color = None
-            if 0 <= duration <= self.controller.table_coloring_window:
-                opacity = (self.controller.table_coloring_window - duration) / self.controller.table_coloring_window
-                row_color = QColor(BinsyncTableModel.ACTIVE_FUNCTION_COLOR[0],
-                                   BinsyncTableModel.ACTIVE_FUNCTION_COLOR[1],
-                                   BinsyncTableModel.ACTIVE_FUNCTION_COLOR[2],
-                                   int(BinsyncTableModel.ACTIVE_FUNCTION_COLOR[3] * opacity))
-            colors_to_send.append(row_color)
-
-            self.data_tooltips.append(f"Age: {friendly_datetime(v[self.time_col])}")
-
-        # no changes required, dont bother updating
-        if len(idxs_to_update) == 0 and self.controller.table_coloring_window == self.saved_color_window:
-            return
-
-        if len(data_to_send) != self.rowCount():
-            idxs_to_update = []
-
-        if self.controller.table_coloring_window != self.saved_color_window:
-            self.saved_color_window = self.controller.table_coloring_window
-            idxs_to_update = range(len(data_to_send))
-
-        self.update_signal.emit(data_to_send, colors_to_send)
-
-        for idx in idxs_to_update:
-            self.dataChanged.emit(self.index(0, idx), self.index(self.rowCount() - 1, idx))
-
+        self._update_changed_rows(self.data_dict, updated_row_keys)
+        self.refresh_time_cells()
 
 class ActivityTableView(BinsyncTableView):
     HEADER = ['User', 'Activity', 'Last Push']

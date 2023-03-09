@@ -47,11 +47,12 @@ class GlobalsTableModel(BinsyncTableModel):
         elif role == Qt.BackgroundRole:
             return self.data_bgcolors[row]
         elif role == self.FilterRole:
-            print(self.row_data)
-            print(self.row_data[row][0] + " " + self.row_data[row][1] + " " + self.row_data[row][2])
+            #print(self.row_data)
+            #print(self.row_data[row][0] + " " + self.row_data[row][1] + " " + self.row_data[row][2])
             return self.row_data[row][0] + " " + self.row_data[row][1] + " " + self.row_data[row][2]
         elif role == Qt.ToolTipRole:
-            return self.data_tooltips[index.row()]
+            #return self.data_tooltips[index.row()]
+            pass
         return None
 
     def update_table(self):

@@ -9,10 +9,6 @@ from binsync.common.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncT
 from binsync.common.ui.qt_objects import (
     QMenu,
     QAction,
-    QWidget,
-    QVBoxLayout,
-    QModelIndex,
-    QColor,
     Qt
 )
 from binsync.common.ui.utils import friendly_datetime
@@ -49,7 +45,8 @@ class CTXTableModel(BinsyncTableModel):
         elif role == self.FilterRole:
             return self.row_data[row][0] + " " + self.row_data[row][1]
         elif role == Qt.ToolTipRole:
-            return self.data_tooltips[row]
+            #return self.data_tooltips[row]
+            pass
         return None
 
     def update_table(self, new_ctx=None):
