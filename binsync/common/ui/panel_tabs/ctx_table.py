@@ -29,7 +29,7 @@ class CTXTableModel(BinsyncTableModel):
         self.data_dict = {}
         self.saved_color_window = self.controller.table_coloring_window
 
-        self.ctx = None
+        self.saved_ctx = None
 
     def data(self, index, role=Qt.DisplayRole):
         if not index.isValid():
@@ -54,65 +54,31 @@ class CTXTableModel(BinsyncTableModel):
 
     def update_table(self, new_ctx=None):
         """ Updates the table using the controller's information """
-        if self.ctx is None and new_ctx is None:
+        # we have never had a set context yet
+        if self.saved_ctx is None and new_ctx is None:
             return
 
-        if new_ctx and self.ctx != new_ctx:
-            self.ctx = new_ctx
+        # the context has updated
+        if new_ctx and self.saved_ctx != new_ctx:
+            self.saved_ctx = new_ctx
             self.data_dict = {}
 
-        touched_users = []
+        updated_row_keys = set()
         for user in self.controller.users():
             state = self.controller.client.get_state(user=user.name)
-            func = state.get_function(self.ctx)
+            func = state.get_function(self.saved_ctx)
             if not func or not func.last_change:
                 continue
 
-            row = [user.name, func.name, func.last_change]
-            self.data_dict[user.name] = row
-            touched_users.append(user.name)
+            self.data_dict[user.name] = [user.name, func.name, func.last_change]
+            updated_row_keys.add(user.name)
 
+        # clear the entire table in the case of a new empty ctx
         if not self.data_dict:
             self.update_signal.emit([], [])
-            return
-
-        # parse new info to figure out what specifically needs updating, recalculate tooltips/coloring
-        data_to_send = []
-        colors_to_send = []
-        idxs_to_update = []
-        for i, (k, v) in enumerate(self.data_dict.items()):
-            if k in touched_users:
-                idxs_to_update.append(i)
-            data_to_send.append(v)
-
-            duration = (datetime.datetime.now(tz=datetime.timezone.utc) - v[self.time_col]).seconds  # table coloring
-            row_color = None
-            if 0 <= duration <= self.controller.table_coloring_window:
-                opacity = (
-                                      self.controller.table_coloring_window - duration) / self.controller.table_coloring_window
-                row_color = QColor(BinsyncTableModel.ACTIVE_FUNCTION_COLOR[0],
-                                   BinsyncTableModel.ACTIVE_FUNCTION_COLOR[1],
-                                   BinsyncTableModel.ACTIVE_FUNCTION_COLOR[2],
-                                   int(BinsyncTableModel.ACTIVE_FUNCTION_COLOR[3] * opacity))
-            colors_to_send.append(row_color)
-
-            self.data_tooltips.append(f"Age: {friendly_datetime(v[self.time_col])}")
-
-        # no changes required, dont bother updating
-        if len(idxs_to_update) == 0 and self.controller.table_coloring_window == self.saved_color_window:
-            return
-
-        if len(data_to_send) != self.rowCount():
-            idxs_to_update = []
-
-        if self.controller.table_coloring_window != self.saved_color_window:
-            self.saved_color_window = self.controller.table_coloring_window
-            idxs_to_update = range(len(data_to_send))
-
-        self.update_signal.emit(data_to_send, colors_to_send)
-
-        for idx in idxs_to_update:
-            self.dataChanged.emit(self.index(0, idx), self.index(self.rowCount() - 1, idx))
+        else:
+            self._update_changed_rows(self.data_dict, updated_row_keys)
+        self.refresh_time_cells()
 
 
 class QCTXTable(BinsyncTableView):
@@ -153,11 +119,11 @@ class QCTXTable(BinsyncTableView):
             act.triggered.connect(handler(i))
             col_hide_menu.addAction(act)
 
-        if valid_row and self.model.ctx:
+        if valid_row and self.model.saved_ctx:
             user_name = self.model.row_data[idx.row()][0]
 
             menu.addSeparator()
-            menu.addAction("Sync", lambda: self.controller.fill_function(self.model.ctx, user=user_name))
+            menu.addAction("Sync", lambda: self.controller.fill_function(self.model.saved_ctx, user=user_name))
 
         menu.popup(self.mapToGlobal(event.pos()))
 
