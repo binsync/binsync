@@ -2,6 +2,7 @@ import datetime
 import logging
 import time
 from typing import Dict
+from collections import defaultdict
 
 from binsync.common.controller import BinSyncController
 from binsync.common.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView
@@ -25,7 +26,6 @@ class FunctionTableModel(BinsyncTableModel):
                  addr_col=None, parent=None):
         super().__init__(controller, col_headers, filter_cols, time_col, addr_col, parent)
         self.data_dict = {}
-        self.saved_color_window = self.controller.table_coloring_window
         self.context_menu_cache = {}
 
     def data(self, index, role=Qt.DisplayRole):
@@ -52,9 +52,9 @@ class FunctionTableModel(BinsyncTableModel):
         return None
 
     def update_table(self):
-        cmenu_cache = {}
+        cmenu_cache = defaultdict(list)
+        updated_row_keys = set()
 
-        touched_addrs = []
         # grab all the new info from user states
         for user in self.controller.users():
             state = self.controller.client.get_state(user=user.name)
@@ -65,62 +65,21 @@ class FunctionTableModel(BinsyncTableModel):
                 if not func_change_time:
                     continue
 
-                if func_addr in cmenu_cache:
-                    cmenu_cache[func_addr].append(user.name)
-                else:
-                    cmenu_cache[func_addr] = [user.name]
+                cmenu_cache[func_addr].append(user.name)
 
-                exists = func_addr in self.data_dict
-                if exists:
-                    if not func_change_time or (func_change_time <= self.data_dict[func_addr][self.time_col]):
-                        continue
-                row = [func_addr, sync_func.name if sync_func.name else "", user.name,
-                       func_change_time]
+                # skip updating existent, older, functions
+                if func_addr in self.data_dict and \
+                        (not func_change_time or func_change_time <= self.data_dict[func_addr][self.time_col]):
+                    continue
 
-                self.data_dict[func_addr] = row
-                touched_addrs.append(func_addr)
-        l.critical(touched_addrs)
+                self.data_dict[func_addr] = [
+                    func_addr, sync_func.name if sync_func.name else "", user.name, func_change_time
+                ]
+                updated_row_keys.add(func_addr)
+
         self.context_menu_cache = cmenu_cache
-        # parse new info to figure out what specifically needs updating, recalculate tooltips/coloring
-        data_to_send = []
-        colors_to_send = []
-        idxs_to_update = []
-        for i, (k, v) in enumerate(self.data_dict.items()):
-            if k in touched_addrs:
-                idxs_to_update.append(i)
-            data_to_send.append(v)
-
-            duration = (datetime.datetime.now(tz=datetime.timezone.utc) - v[self.time_col]).seconds  # table coloring
-            row_color = None
-            if 0 <= duration <= self.controller.table_coloring_window:
-                opacity = (self.controller.table_coloring_window - duration) / self.controller.table_coloring_window
-                row_color = QColor(BinsyncTableModel.ACTIVE_FUNCTION_COLOR[0],
-                                   BinsyncTableModel.ACTIVE_FUNCTION_COLOR[1],
-                                   BinsyncTableModel.ACTIVE_FUNCTION_COLOR[2],
-                                   int(BinsyncTableModel.ACTIVE_FUNCTION_COLOR[3] * opacity))
-            colors_to_send.append(row_color)
-
-            self.data_tooltips.append(f"Age: {friendly_datetime(v[self.time_col])}")
-
-        # if no changes required, dont bother updating
-        if len(idxs_to_update) != 0 or self.controller.table_coloring_window != self.saved_color_window:
-            if len(data_to_send) != self.rowCount():
-                idxs_to_update = []
-
-            if self.controller.table_coloring_window != self.saved_color_window:
-                self.saved_color_window = self.controller.table_coloring_window
-                idxs_to_update = range(len(data_to_send))
-
-            self.update_signal.emit(data_to_send, colors_to_send)
-
-            for idx in idxs_to_update:
-                self.dataChanged.emit(self.index(0, idx), self.index(self.rowCount() - 1, idx))
-
-        from_idx = self.createIndex(0, 3)
-        to_idx = self.createIndex(self.rowCount() - 1, 3)
-        self.dataChanged.emit(from_idx, to_idx)
-        l.critical(f"Updating from {from_idx.row()} to {to_idx.row()} on col 3")
-
+        self._update_changed_rows(self.data_dict, updated_row_keys)
+        self.refresh_time_cells()
 
 class FunctionTableView(BinsyncTableView):
     HEADER = ['Addr', 'Remote Name', 'User', 'Last Push']

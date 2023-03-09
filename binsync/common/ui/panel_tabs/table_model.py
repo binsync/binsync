@@ -1,5 +1,6 @@
 import logging
 import datetime
+from typing import List, Dict, Set
 
 from binsync.common.controller import BinSyncController
 from binsync.common.ui.qt_objects import (
@@ -61,6 +62,7 @@ class BinsyncTableModel(QAbstractTableModel):
             self.filter_cols = filter_cols
 
         self.update_signal.connect(self.update_data)
+        self.saved_color_window = self.controller.table_coloring_window
 
     def rowCount(self, index=QModelIndex()):
         """ Returns number of rows the model holds. """
@@ -145,8 +147,45 @@ class BinsyncTableModel(QAbstractTableModel):
             on the role supplied. This function is performance sensitive. """
         raise NotImplementedError
 
-    def _compute_row_color(self, artifact):
-        duration = (datetime.datetime.now(tz=datetime.timezone.utc) - artifact.last_change).seconds  # table coloring
+    def refresh_time_cells(self):
+        # always update every column in the table that contains time
+        self.dataChanged.emit(
+            self.createIndex(0, self.time_col),
+            self.createIndex(self.rowCount() - 1, self.time_col)
+        )
+
+    def _update_changed_rows(self, row_data: Dict, updated_row_keys: Set):
+        # user may have changed how dark he wants colors to go (color window)
+        force_color_update = self.controller.table_coloring_window != self.saved_color_window
+
+        # no changes are required
+        if not updated_row_keys and not force_color_update:
+            return False
+
+        row_colors = [
+            self._compute_row_color(row[self.time_col]) for row in row_data.values()
+        ]
+
+        if force_color_update:
+            # update all rows
+            self.saved_color_window = self.controller.table_coloring_window
+            row_update_idxs = range(len(row_data))
+        else:
+            # update only rows with changes
+            row_update_idxs = [
+                idx for idx, row_key in enumerate(row_data.keys())
+                if row_key in updated_row_keys
+            ]
+
+        # send update signal for everything in row data, with new colors
+        self.update_signal.emit(list(row_data.values()), row_colors)
+
+        # ask for in-row updates (in UI) to any single row changed
+        for update_idx in row_update_idxs:
+            self.dataChanged.emit(self.index(0, update_idx), self.index(self.rowCount() - 1, update_idx))
+
+    def _compute_row_color(self, artifact_update_time: datetime.datetime):
+        duration = (datetime.datetime.now(tz=datetime.timezone.utc) - artifact_update_time).seconds  # table coloring
         if 0 <= duration <= self.controller.table_coloring_window:
             opacity = (self.controller.table_coloring_window - duration) / self.controller.table_coloring_window
             return QColor(

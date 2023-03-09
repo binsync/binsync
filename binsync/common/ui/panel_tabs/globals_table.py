@@ -1,5 +1,6 @@
 import logging
 import time
+from collections import defaultdict
 from typing import Dict
 import re
 import datetime
@@ -19,6 +20,7 @@ from binsync.core.scheduler import SchedSpeed
 from binsync.data import Function
 
 l = logging.getLogger(__name__)
+
 
 class GlobalsTableModel(BinsyncTableModel):
     def __init__(self, controller: BinSyncController, col_headers=None, filter_cols=None, time_col=None,
@@ -53,8 +55,9 @@ class GlobalsTableModel(BinsyncTableModel):
         return None
 
     def update_table(self):
-        cmenu_cache = {}
-        touched_globals = []
+        cmenu_cache = defaultdict(list)
+        updated_row_keys = set()
+
         for user in self.controller.users():
             state = self.controller.client.get_state(user=user.name)
             user_structs = state.structs
@@ -69,57 +72,29 @@ class GlobalsTableModel(BinsyncTableModel):
                     if not change_time:
                         continue
 
-                    artifact_name = artifact.name if global_type != "Variable" \
-                        else f"{artifact.name} ({hex(artifact.addr)})"
-
-                    if artifact_name in cmenu_cache:
-                        cmenu_cache[artifact_name].append((user.name, global_type[0]))
+                    artifact_name = artifact.name
+                    if global_type in ("Enum", "Struct"):
+                        artifact_key = artifact_name + f"({global_type})"
+                    elif global_type in ("Variable",):
+                        artifact_key = artifact.addr
+                        artifact_name += f" ({hex(artifact.addr)})"
                     else:
-                        cmenu_cache[artifact_name] = [(user.name, global_type[0])]
+                        l.critical(f"Attempted to parse an unparsable global type!")
+                        return
 
-                    if artifact.name in self.data_dict:
-                        # change_time < artifact_stored_change_time
-                        if not change_time or change_time < self.data_dict[artifact.name][3]:
-                            continue
+                    cmenu_cache[artifact_key].append((user.name, global_type[0]))
 
-                    self.data_dict[artifact_name] = [global_type[0], artifact_name, user.name, change_time]
-                    touched_globals.append(artifact_name)
+                    # skip updating existent, older, artifacts
+                    if artifact_key in self.data_dict and \
+                            (not change_time or change_time <= self.data_dict[artifact_key][self.time_col]):
+                        continue
+
+                    self.data_dict[artifact_key] = [global_type[0], artifact_name, user.name, change_time]
+                    updated_row_keys.add(artifact_key)
 
         self.context_menu_cache = cmenu_cache
-        data_to_send = []
-        colors_to_send = []
-        idxs_to_update = []
-        for i, (k, v) in enumerate(self.data_dict.items()):
-            if k in touched_globals:
-                idxs_to_update.append(i)
-            data_to_send.append(v)
-            duration = (datetime.datetime.now(tz=datetime.timezone.utc) - v[self.time_col]).seconds  # table coloring
-            row_color = None
-            if 0 <= duration <= self.controller.table_coloring_window:
-                opacity = (self.controller.table_coloring_window - duration) / self.controller.table_coloring_window
-                row_color = QColor(BinsyncTableModel.ACTIVE_FUNCTION_COLOR[0],
-                                   BinsyncTableModel.ACTIVE_FUNCTION_COLOR[1],
-                                   BinsyncTableModel.ACTIVE_FUNCTION_COLOR[2],
-                                   int(BinsyncTableModel.ACTIVE_FUNCTION_COLOR[3] * opacity))
-            colors_to_send.append(row_color)
-
-            self.data_tooltips.append(f"Age: {friendly_datetime(v[self.time_col])}")
-
-        # no changes required, dont bother updating
-        if len(idxs_to_update) == 0 and self.controller.table_coloring_window == self.saved_color_window:
-            return
-
-        if len(data_to_send) != self.rowCount():
-            idxs_to_update = []
-
-        if self.controller.table_coloring_window != self.saved_color_window:
-            self.saved_color_window = self.controller.table_coloring_window
-            idxs_to_update = range(len(data_to_send))
-
-        self.update_signal.emit(data_to_send, colors_to_send)
-
-        for idx in idxs_to_update:
-            self.dataChanged.emit(self.index(0, idx), self.index(self.rowCount() - 1, idx))
+        self._update_changed_rows(self.data_dict, updated_row_keys)
+        self.refresh_time_cells()
 
 
 class GlobalsTableView(BinsyncTableView):

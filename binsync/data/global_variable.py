@@ -50,5 +50,5 @@ class GlobalVariable(Artifact):
         return global_vars_
 
     def copy(self):
-        gvar = GlobalVariable(self.addr, self.name, self.type, self.size)
+        gvar = GlobalVariable(self.addr, self.name, type_=self.type, size=self.size, last_change=self.last_change)
         return gvar
