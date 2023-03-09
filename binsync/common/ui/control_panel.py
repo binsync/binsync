@@ -54,20 +54,20 @@ class ControlPanel(QWidget):
         self.ctx_change.connect(self._reload_ctx)
         self.controller.ctx_change_callback = self.ctx_callback
 
-    def update_callback(self):
+    def update_callback(self, states):
         """
         This function will be called in another thread, so the work
         done here is guaranteed to be thread safe.
 
         @return:
         """
-        self._update_table_data()
+        self._update_table_data(states)
         status = self.controller.status_string() if self.controller else "Disconnected"
         self.update_ready.emit(status)
 
-    def ctx_callback(self):
+    def ctx_callback(self, states):
         if isinstance(self.controller.last_ctx, binsync.data.Function):
-            self._ctx_table.update_table(new_ctx=self.controller.last_ctx.addr)
+            self._ctx_table.update_table(states, new_ctx=self.controller.last_ctx.addr)
 
         self.ctx_change.emit()
 
@@ -127,9 +127,10 @@ class ControlPanel(QWidget):
         self._status_bar.showMessage(f"{ctx_name}@{hex(self.controller.last_ctx.addr)}")
         self._ctx_table.reload()
 
+    def _update_table_data(self, states):
+        #import remote_pdb; remote_pdb.RemotePdb("localhost", 4444).set_trace()
 
-    def _update_table_data(self):
         for _, table in self.tables.items():
-            table.update_table()
+            table.update_table(states)
 
-        self._ctx_table.update_table()
+        self._ctx_table.update_table(states)

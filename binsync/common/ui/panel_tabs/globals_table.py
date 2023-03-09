@@ -55,15 +55,15 @@ class GlobalsTableModel(BinsyncTableModel):
             pass
         return None
 
-    def update_table(self):
+    def update_table(self, states):
         cmenu_cache = defaultdict(list)
         updated_row_keys = set()
 
-        for user in self.controller.users():
-            state = self.controller.client.get_state(user=user.name)
+        for state in states:
             user_structs = state.structs
             user_gvars = state.global_vars
             user_enums = state.enums
+            user_name = state.user
 
             all_artifacts = ((user_enums, "Enum"), (user_structs, "Struct"), (user_gvars, "Variable"))
             for user_artifacts, global_type in all_artifacts:
@@ -83,14 +83,14 @@ class GlobalsTableModel(BinsyncTableModel):
                         l.critical(f"Attempted to parse an unparsable global type!")
                         return
 
-                    cmenu_cache[artifact_key].append((user.name, global_type[0]))
+                    cmenu_cache[artifact_key].append((user_name, global_type[0]))
 
                     # skip updating existent, older, artifacts
                     if artifact_key in self.data_dict and \
                             (not change_time or change_time <= self.data_dict[artifact_key][self.time_col]):
                         continue
 
-                    self.data_dict[artifact_key] = [global_type[0], artifact_name, user.name, change_time]
+                    self.data_dict[artifact_key] = [global_type[0], artifact_name, user_name, change_time]
                     updated_row_keys.add(artifact_key)
 
         self.context_menu_cache = cmenu_cache
@@ -220,8 +220,8 @@ class QGlobalsTable(QWidget):
         self.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
-    def update_table(self):
-        self.table.update_table()
+    def update_table(self, states):
+        self.table.update_table(states)
 
     def reload(self):
         pass

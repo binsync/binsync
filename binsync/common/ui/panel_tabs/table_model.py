@@ -197,7 +197,7 @@ class BinsyncTableModel(QAbstractTableModel):
 
         return None
 
-    def update_table(self):
+    def update_table(self, states):
         """ Updates the table using the controller's information. """
         raise NotImplementedError
 
@@ -280,9 +280,9 @@ class BinsyncTableView(QTableView):
         else:
             self.hideColumn(index)
 
-    def update_table(self):
+    def update_table(self, states):
         """ Update the model of the table with new data from the controller """
-        self.model.update_table()
+        self.model.update_table(states)
 
     def reload(self):
         pass

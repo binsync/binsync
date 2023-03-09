@@ -49,7 +49,7 @@ class CTXTableModel(BinsyncTableModel):
             pass
         return None
 
-    def update_table(self, new_ctx=None):
+    def update_table(self, states, new_ctx=None):
         """ Updates the table using the controller's information """
         # we have never had a set context yet
         if self.saved_ctx is None and new_ctx is None:
@@ -61,14 +61,14 @@ class CTXTableModel(BinsyncTableModel):
             self.data_dict = {}
 
         updated_row_keys = set()
-        for user in self.controller.users():
-            state = self.controller.client.get_state(user=user.name)
+        for state in states:
+            user_name = state.user
             func = state.get_function(self.saved_ctx)
             if not func or not func.last_change:
                 continue
 
-            self.data_dict[user.name] = [user.name, func.name, func.last_change]
-            updated_row_keys.add(user.name)
+            self.data_dict[user_name] = [user_name, func.name, func.last_change]
+            updated_row_keys.add(user_name)
 
         # clear the entire table in the case of a new empty ctx
         if not self.data_dict:
@@ -124,6 +124,6 @@ class QCTXTable(BinsyncTableView):
 
         menu.popup(self.mapToGlobal(event.pos()))
 
-    def update_table(self, new_ctx=None):
+    def update_table(self, states, new_ctx=None):
         """ Update the model of the table with new data from the controller """
-        self.model.update_table(new_ctx)
+        self.model.update_table(states, new_ctx=new_ctx)

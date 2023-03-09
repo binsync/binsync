@@ -54,21 +54,21 @@ class ActivityTableModel(BinsyncTableModel):
             pass
         return None
 
-    def update_table(self):
+    def update_table(self, states):
         cmenu_cache = defaultdict(list)
         updated_row_keys = set()
 
-        for user in self.controller.users():
+        for state in states:
             latest_func = None
-            state = self.controller.client.get_state(user=user.name)
             user_funcs: Dict[int, Function] = state.functions
+            user_name = state.user
 
             for func_addr, sync_func in user_funcs.items():
                 # don't add functions that were never changed by the user
                 if not sync_func.last_change:
                     continue
 
-                cmenu_cache[user.name].append(func_addr)
+                cmenu_cache[user_name].append(func_addr)
 
                 if latest_func is None:
                     latest_func = sync_func
@@ -86,8 +86,8 @@ class ActivityTableModel(BinsyncTableModel):
                 most_recent_func = -1
                 last_state_change = state.last_push_time
 
-            self.data_dict[user.name] = [user.name, most_recent_func, last_state_change]
-            updated_row_keys.add(user.name)
+            self.data_dict[user_name] = [user_name, most_recent_func, last_state_change]
+            updated_row_keys.add(user_name)
 
         self.context_menu_cache = cmenu_cache
         self._update_changed_rows(self.data_dict, updated_row_keys)
@@ -185,8 +185,8 @@ class QActivityTable(QWidget):
         self.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
-    def update_table(self):
-        self.table.update_table()
+    def update_table(self, states):
+        self.table.update_table(states)
 
     def reload(self):
         pass

@@ -52,21 +52,21 @@ class FunctionTableModel(BinsyncTableModel):
             pass
         return None
 
-    def update_table(self):
+    def update_table(self, states):
         cmenu_cache = defaultdict(list)
         updated_row_keys = set()
 
         # grab all the new info from user states
-        for user in self.controller.users():
-            state = self.controller.client.get_state(user=user.name)
+        for state in states:
             user_funcs: Dict[int, Function] = state.functions
+            user_name = state.user
             for func_addr, sync_func in user_funcs.items():
                 func_change_time = sync_func.last_change
                 # don't add functions that were never changed by the user
                 if not func_change_time:
                     continue
 
-                cmenu_cache[func_addr].append(user.name)
+                cmenu_cache[func_addr].append(user_name)
 
                 # skip updating existent, older, functions
                 if func_addr in self.data_dict and \
@@ -74,7 +74,7 @@ class FunctionTableModel(BinsyncTableModel):
                     continue
 
                 self.data_dict[func_addr] = [
-                    func_addr, sync_func.name if sync_func.name else "", user.name, func_change_time
+                    func_addr, sync_func.name if sync_func.name else "", user_name, func_change_time
                 ]
                 updated_row_keys.add(func_addr)
 
@@ -179,8 +179,8 @@ class QFunctionTable(QWidget):
         self.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
-    def update_table(self):
-        self.table.update_table()
+    def update_table(self, states):
+        self.table.update_table(states)
 
     def reload(self):
         pass

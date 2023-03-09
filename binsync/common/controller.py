@@ -120,10 +120,13 @@ class BinSyncController:
         self.client = None  # type: Optional[Client]
 
         # ui callback created on UI init
-        self.ui_callback = None  # func()
+        self.ui_callback = None  # func(states: List[State])
         self.ctx_change_callback = None  # func()
         self._last_reload = None
         self.last_ctx = None
+        # ui worker that fires off requests for UI update
+        self._ui_updater_thread = None
+        self._ui_updater_worker: Scheduler = None
 
         # settings
         self.config = None
@@ -131,14 +134,13 @@ class BinSyncController:
         self.merge_level: int = MergeLevel.NON_CONFLICTING
 
         # command locks
-        self.job_scheduler = Scheduler()
+        self.push_job_scheduler = Scheduler()
         self.sync_lock = threading.Lock()
 
         # create a pulling thread, but start on connection
-        self.updater_thread = threading.Thread(target=self.updater_routine)
         self._run_updater_threads = False
-        self.ui_updater_thread = None
-        self.ui_thread_worker = None
+        self.user_states_update_thread = threading.Thread(target=self.updater_routine)
+
         # TODO: make the initialization of this with types of decompiler
         self.type_parser = BSTypeParser()
 
@@ -154,36 +156,33 @@ class BinSyncController:
         from binsync.common.ui.qt_objects import (
             QThread
         )
-        from binsync.common.ui.ui_worker_thread import BinSyncUIWorker
+        from binsync.common.ui.utils import BSUIScheduler
         # spawns a qthread/worker
-        self.ui_updater_thread = QThread()
-        self.ui_thread_worker = BinSyncUIWorker(self, BUSY_LOOP_COOLDOWN)
-
-        self.ui_thread_worker.moveToThread(self.ui_updater_thread)
-        self.ui_updater_thread.started.connect(self.ui_thread_worker.run)
-        self.ui_updater_thread.finished.connect(self.ui_updater_thread.deleteLater)
-
-        self.ui_updater_thread.start()
+        self._ui_updater_thread = QThread()
+        self._ui_updater_worker = BSUIScheduler()
+        self._ui_updater_worker.moveToThread(self._ui_updater_thread)
+        self._ui_updater_thread.started.connect(self._ui_updater_worker.run)
+        self._ui_updater_thread.finished.connect(self._ui_updater_thread.deleteLater)
+        self._ui_updater_thread.start()
 
     def _stop_ui_components(self):
         if self.headless:
             return
         #stop the worker, quit the thread, wait for it to exit
-        if self.ui_thread_worker and self.ui_updater_thread:
-            self.ui_thread_worker.stop()
-            self.ui_updater_thread.quit()
+        if self._ui_updater_worker and self._ui_updater_thread:
+            self._ui_updater_worker.stop()
+            self._ui_updater_thread.quit()
             _l.debug("Waiting for QThread ui_updater_thread to exit..")
-            self.ui_updater_thread.wait()
-        
+            self._ui_updater_thread.wait()
 
     def schedule_job(self, cmd_func, *args, blocking=False, **kwargs):
         if blocking:
-            return self.job_scheduler.schedule_and_wait_job(
+            return self.push_job_scheduler.schedule_and_wait_job(
                 Job(cmd_func, *args, **kwargs),
                 priority=SchedSpeed.FAST
             )
 
-        self.job_scheduler.schedule_job(
+        self.push_job_scheduler.schedule_job(
             Job(cmd_func, *args, **kwargs),
             priority=SchedSpeed.FAST
         )
@@ -194,7 +193,7 @@ class BinSyncController:
             time.sleep(BUSY_LOOP_COOLDOWN)
             now = datetime.datetime.now(tz=datetime.timezone.utc)
 
-            # validate a client is connected to this controller (may not have remote )
+            # validate a client is connected to this controller (which may be local only)
             if not self.check_client():
                 continue
 
@@ -205,35 +204,54 @@ class BinSyncController:
             # update every reload_time
             elif (now - self.client.last_pull_attempt_time).seconds > self.reload_time:
                 self.client.update()
+                
+            if not self.headless:
+                all_states = self.client.all_states()
+                if not all_states:
+                    _l.warning(f"There were no states remote or local.")
+                    continue
 
+                # update context knowledge every loop iteration
+                if self.ctx_change_callback:
+                    self._ui_updater_worker.schedule_job(
+                        Job(self._check_and_notify_ctx, all_states)
+                    )
 
+                # update the control panel with new info every BINSYNC_RELOAD_TIME seconds
+                if self._last_reload is None or \
+                        (now - self._last_reload).seconds > self.reload_time:
+                    self._last_reload = datetime.datetime.now(tz=datetime.timezone.utc)
 
-    def _update_ui(self):
+                    self._ui_updater_worker.schedule_job(
+                        Job(self._update_ui, all_states)
+                    )
+
+    def _update_ui(self, states):
         if not self.ui_callback:
             return
 
-        self.ui_callback()
+        self.ui_callback(states)
 
-    def _check_and_notify_ctx(self):
+    def _check_and_notify_ctx(self, states):
         active_ctx = self.active_context()
         if active_ctx is None or self.last_ctx == active_ctx:
             return
 
         self.last_ctx = active_ctx
-        self.ctx_change_callback()
+        self.ctx_change_callback(states)
 
     def start_worker_routines(self):
         self._run_updater_threads = True
-        self.updater_thread.daemon = True
-        self.updater_thread.start()
+        self.user_states_update_thread.daemon = True
+        self.user_states_update_thread.start()
 
-        self.job_scheduler.start_worker_thread()
+        self.push_job_scheduler.start_worker_thread()
 
         self._init_ui_components()
 
     def stop_worker_routines(self):
         self._run_updater_threads = False
-        self.job_scheduler.stop_worker_thread()
+        self.push_job_scheduler.stop_worker_thread()
         self._stop_ui_components()
 
     #

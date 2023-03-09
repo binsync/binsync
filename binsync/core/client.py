@@ -404,6 +404,14 @@ class Client:
     # Non-Atomic Public API
     #
 
+    def all_states(self):
+        states = list()
+        for user in self.users(no_cache=True):
+            state = self.get_state(user=user.name)
+            states.append(state)
+
+        return states
+
     def update(self, commit_msg="Generic Change"):
         """
         Update both the local and remote repo knowledge of files through pushes/pulls and commits
