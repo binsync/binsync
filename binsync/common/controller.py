@@ -168,6 +168,7 @@ class BinSyncController:
     def _stop_ui_components(self):
         if self.headless:
             return
+
         #stop the worker, quit the thread, wait for it to exit
         if self._ui_updater_worker and self._ui_updater_thread:
             self._ui_updater_worker.stop()
