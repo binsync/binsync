@@ -12,7 +12,7 @@ l = logging.getLogger(__name__)
 
 def run_plugin(plugin_name):
     plugins_path = Path(
-        pkg_resources.resource_filename("binsync", f"plugins")
+        pkg_resources.resource_filename("binsync", f"decompiler_stubs")
     )
     if not plugins_path.exists():
         l.error("Known plugins path does not exist, which means BinSync did not install correctly!")

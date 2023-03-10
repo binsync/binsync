@@ -10,4 +10,4 @@ long_description = ""
 platforms = ["windows", "linux", "macos"]
 min_angr_version = "9.0.0.0"
 author = "The BinSync Team"
-entrypoints = ["binsync_plugin.py"]
+entrypoints = ["__init__.py"]
