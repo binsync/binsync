@@ -19,7 +19,9 @@ center of BinSync's syncing ability. Here are the supported REAs:
 
 Note: all types support user-created types like structs.
 
-![](./assets/images/binja_sync.gif)
+<p align="center">
+   <img src="./assets/images/binja_sync.gif" alt="Binja Sync"/>
+</p>
 
 
 **Join our discord below for more online help**:
