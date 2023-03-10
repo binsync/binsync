@@ -3,7 +3,7 @@ from binsync.common.ui.version import ui_version
 if ui_version == "PySide2":
     from PySide2.QtCore import (
         QDir, Qt, Signal, QAbstractTableModel, QModelIndex, QSortFilterProxyModel, QPersistentModelIndex,
-        QEvent, QThread
+        QEvent, QThread, Slot, QObject
     )
     from PySide2.QtWidgets import (
         QAbstractItemView,
@@ -44,7 +44,7 @@ if ui_version == "PySide2":
 elif ui_version == "PySide6":
     from PySide6.QtCore import (
         QDir, Qt, Signal, QAbstractTableModel, QModelIndex, QSortFilterProxyModel, QPersistentModelIndex,
-        QEvent, QThread
+        QEvent, QThread, Slot, QObject
     )
     from PySide6.QtWidgets import (
         QAbstractItemView,
@@ -85,9 +85,10 @@ elif ui_version == "PySide6":
 else:
     from PyQt5.QtCore import (
         QDir, Qt, QAbstractTableModel, QModelIndex, QSortFilterProxyModel, QPersistentModelIndex,
-        QEvent, QThread
+        QEvent, QThread, QObject
     )
     from PyQt5.QtCore import pyqtSignal as Signal
+    from PyQt5.QtCore import pyqtSlot as Slot
     from PyQt5.QtWidgets import (
         QAbstractItemView,
         QCheckBox,

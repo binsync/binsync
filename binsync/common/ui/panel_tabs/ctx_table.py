@@ -1,137 +1,129 @@
 import logging
+import time
+from functools import partial
+from typing import Dict
 import datetime
 
 from binsync.common.controller import BinSyncController
+from binsync.common.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView
 from binsync.common.ui.qt_objects import (
-    QAbstractItemView,
-    QHeaderView,
     QMenu,
-    Qt,
-    QTableWidget,
-    QTableWidgetItem,
+    QAction,
+    Qt
 )
-from binsync.common.ui.utils import QNumericItem, friendly_datetime
-from binsync.data import State
+from binsync.common.ui.utils import friendly_datetime
+from binsync.core.scheduler import SchedSpeed
+from binsync.data import Function
 
 l = logging.getLogger(__name__)
 
-class QCTXItem:
-    """
-    The CTX view shown in the Control Panel. Responsible for showing the main user info on whatever the main user
-    is currently looking at (clicked). For any line in a function, this would be the entire function. For a struct,
-    this would be a struct. The view will be as useful as the decompilers support for understanding what the user
-    is looking at.
 
-    TODO: refactor this to allow for any context item, not just functions (like structs).
-    """
-    def __init__(self, user, name, last_push, changes):
-        self.user = user
-        self.name = name
-        self.last_push = datetime.datetime.fromtimestamp(last_push, tz=datetime.timezone.utc) \
-            if isinstance(last_push, int) else last_push
-        self.changes = changes
+class CTXTableModel(BinsyncTableModel):
+    def __init__(self, controller: BinSyncController, col_headers=None, filter_cols=None, time_col=None,
+                 addr_col=None, parent=None):
+        super().__init__(controller, col_headers, filter_cols, time_col, addr_col, parent)
+        self.data_dict = {}
+        self.saved_color_window = self.controller.table_coloring_window
 
-    def widgets(self):
-        user = QTableWidgetItem(self.user)
-        name = QTableWidgetItem(self.name)
+        self.saved_ctx = None
 
-        # sort by unix value
-        last_push = QNumericItem(friendly_datetime(self.last_push))
-        last_push.setData(Qt.UserRole, self.last_push)
+    def data(self, index, role=Qt.DisplayRole):
+        if not index.isValid():
+            return None
 
-        changes = QNumericItem(self.changes)
-        changes.setData(Qt.UserRole, self.changes)
+        col = index.column()
+        row = index.row()
+        if role == Qt.DisplayRole:
+            if col == 0 or col == 1:
+                return self.row_data[row][col]
+            elif col == 2:
+                return friendly_datetime(self.row_data[row][col])
+        elif role == self.SortRole:
+            return self.row_data[row][col]
+        elif role == Qt.BackgroundRole:
+            return self.data_bgcolors[row]
+        elif role == self.FilterRole:
+            return self.row_data[row][0] + " " + self.row_data[row][1]
+        elif role == Qt.ToolTipRole:
+            #return self.data_tooltips[row]
+            pass
+        return None
 
-        widgets = [
-            user,
-            name,
-            last_push,
-            changes
-        ]
+    def update_table(self, states, new_ctx=None):
+        """ Updates the table using the controller's information """
+        # we have never had a set context yet
+        if self.saved_ctx is None and new_ctx is None:
+            return
 
-        for w in widgets:
-            w.setFlags(w.flags() & ~Qt.ItemIsEditable)
+        # the context has updated
+        if new_ctx and self.saved_ctx != new_ctx:
+            self.saved_ctx = new_ctx
+            self.data_dict = {}
 
-        return widgets
+        updated_row_keys = set()
+        for state in states:
+            user_name = state.user
+            func = state.get_function(self.saved_ctx)
+            if not func or not func.last_change:
+                continue
+
+            self.data_dict[user_name] = [user_name, func.name, func.last_change]
+            updated_row_keys.add(user_name)
+
+        # clear the entire table in the case of a new empty ctx
+        if not self.data_dict:
+            self.update_signal.emit([], [])
+        else:
+            self._update_changed_rows(self.data_dict, updated_row_keys)
+        self.refresh_time_cells()
 
 
-class QCTXTable(QTableWidget):
+class QCTXTable(BinsyncTableView):
+    HEADER = ['User', 'Remote Name', 'Last Push']
 
-    HEADER = [
-        'User',
-        'Remote Name',
-        'Last Push',
-        'Changes'
-    ]
+    def __init__(self, controller: BinSyncController, stretch_col=None,
+                 col_count=None, parent=None):
+        super().__init__(controller, None, 1, 3, parent)
 
-    def __init__(self, controller: BinSyncController, parent=None):
-        super(QCTXTable, self).__init__(parent)
-        self.controller = controller
-        self.items = []
-        self.ctx = None
+        self.model = CTXTableModel(controller, self.HEADER, filter_cols=[0, 1], time_col=2,
+                                        parent=parent)
+        self.proxymodel.setSourceModel(self.model)
+        self.setModel(self.proxymodel)
 
-        self.ScrollPerPixel = self.ScrollPerPixel if hasattr(self, "ScrollPerPixel") \
-            else QTableWidget.ScrollMode.ScrollPerPixel
-        # header
-        self.setColumnCount(len(self.HEADER))
-        self.setHorizontalHeaderLabels(self.HEADER)
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self.horizontalHeader().setHorizontalScrollMode(self.ScrollPerPixel)
-        self.horizontalHeader().setDefaultAlignment(Qt.AlignHCenter | Qt.Alignment(Qt.TextWordWrap))
-        self.horizontalHeader().setMinimumWidth(160)
-        self.setHorizontalScrollMode(self.ScrollPerPixel)
-        self.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.verticalHeader().setVisible(False)
-        self.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-        self.verticalHeader().setDefaultSectionSize(24)
-
-        self.setSortingEnabled(True)
-
-    def reload(self):
-        self.setSortingEnabled(False)
-        self.setRowCount(len(self.items))
-
-        for idx, item in enumerate(self.items):
-            for i, it in enumerate(item.widgets()):
-                self.setItem(idx, i, it)
-
-        self.viewport().update()
-        self.setSortingEnabled(True)
+        # always init settings *after* loading the model
+        self._init_settings()
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
         menu.setObjectName("binsync_context_table_context_menu")
-        
-        func_addr = self.ctx if self.ctx else None
+
+        valid_row = True
         selected_row = self.rowAt(event.pos().y())
-        item = self.item(selected_row, 0)
-        if item is None:
-            return
-        username = item.text()
-        menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=username))
-        #menu.addAction("Manual Merge", lambda: manual_merge(self.controller, func_addr, user=username))
+        idx = self.proxymodel.index(selected_row, 0)
+        idx = self.proxymodel.mapToSource(idx)
+        if event.pos().y() == -1 and event.pos().x() == -1:
+            idx = self.proxymodel.index(0, 0)
+            idx = self.proxymodel.mapToSource(idx)
+        elif not (0 <= selected_row < len(self.model.row_data)) or not idx.isValid():
+            valid_row = False
+
+        col_hide_menu = menu.addMenu("Show Columns")
+        handler = lambda ind: lambda: self._col_hide_handler(ind)
+        for i, c in enumerate(self.HEADER):
+            act = QAction(c, parent=menu)
+            act.setCheckable(True)
+            act.setChecked(self.column_visibility[i])
+            act.triggered.connect(handler(i))
+            col_hide_menu.addAction(act)
+
+        if valid_row and self.model.saved_ctx:
+            user_name = self.model.row_data[idx.row()][0]
+
+            menu.addSeparator()
+            menu.addAction("Sync", lambda: self.controller.fill_function(self.model.saved_ctx, user=user_name))
 
         menu.popup(self.mapToGlobal(event.pos()))
 
-
-    def update_table(self, new_ctx=None):
-        # only functions currently supported
-        if self.ctx is None and new_ctx is None:
-            return
-
-        self.ctx = new_ctx or self.ctx
-        self.items = []
-        for user in self.controller.users():
-            state = self.controller.client.get_state(user=user.name)
-
-            func = state.get_function(self.ctx)
-
-            if not func or not func.last_change:
-                continue
-
-            # changes is not currently supported
-            self.items.append(
-                QCTXItem(user.name, func.name, func.last_change, 0)
-            )
+    def update_table(self, states, new_ctx=None):
+        """ Update the model of the table with new data from the controller """
+        self.model.update_table(states, new_ctx=new_ctx)

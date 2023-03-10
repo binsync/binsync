@@ -21,6 +21,7 @@ from binsync.common.ui.qt_objects import (
     QMessageBox,
     QPushButton,
     QVBoxLayout,
+    QEvent
 )
 
 l = logging.getLogger(__name__)
@@ -266,7 +267,7 @@ class SyncConfig(QDialog):
     #
 
     def load_saved_config(self) -> bool:
-        config = ProjectConfig.load_from_file(self.controller.binary_path() or "")
+        config = self.controller.load_saved_config()
         if not config:
             return False
 
@@ -288,16 +289,22 @@ class SyncConfig(QDialog):
         if remote and not repo:
             repo = str(pathlib.Path(self.controller.client.repo_root).absolute())
 
-        config = ProjectConfig(
-            self.controller.binary_path() or "",
-            user=user,
-            repo_path=repo,
-            remote=remote
-        )
-        if not config:
-            return config
+        if self.controller.config:
+            self.controller.config.user = user
+            self.controller.config.repo_path = repo
+            self.controller.config.remote = remote
+        else:
+            config = ProjectConfig(
+                self.controller.binary_path() or "",
+                user=user,
+                repo_path=repo,
+                remote=remote
+            )
+            if not config:
+                return config
+            self.controller.config = config
 
-        return config.save()
+        return self.controller.config.save()
 
 
     #

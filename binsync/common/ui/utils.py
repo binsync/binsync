@@ -1,9 +1,13 @@
 import datetime
 import logging
 
-from binsync.common.ui.qt_objects import Qt, QTableWidgetItem
+from binsync.common.ui.qt_objects import Qt, QTableWidgetItem, QObject
+import datetime
+from binsync.core.scheduler import Scheduler
+import logging
 
 l = logging.getLogger(__name__)
+
 
 class QNumericItem(QTableWidgetItem):
     def __lt__(self, other):
@@ -13,6 +17,23 @@ class QNumericItem(QTableWidgetItem):
             return False
 
         return self.data(Qt.UserRole) < other.data(Qt.UserRole)
+
+
+class BSUIScheduler(QObject, Scheduler):
+    """
+    Just like the normal Schedule, but follows the PyQT (and PySide) for Objects running
+    in another thread. Only useful for scheduling UI jobs.
+    """
+    def __init__(self, sleep_interval=0.05):
+        QObject.__init__(self)
+        Scheduler.__init__(self, sleep_interval=sleep_interval)
+        self._work = True
+
+    def stop(self):
+        self._work = False
+
+    def run(self):
+        self._worker_thread()
 
 
 def friendly_datetime(time_before):
@@ -48,5 +69,7 @@ def friendly_datetime(time_before):
     s += " ago" if ago else " in the future"
     return s
 
+
 def menu_stub(menu):
     return menu
+

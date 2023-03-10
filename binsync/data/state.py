@@ -168,13 +168,13 @@ class State:
     :ivar int version:  Version of the state, starting from 0.
     """
 
-    def __init__(self, user, version=None, client=None):
+    def __init__(self, user, version=None, client=None, last_push_time=None):
         # metadata info
         self.user = user  # type: str
         self.version = version if version is not None else 0  # type: int
         self.last_push_artifact = -1
         self.last_push_artifact_type = -1
-        self.last_push_time = datetime.datetime.now(tz=datetime.timezone.utc)
+        self.last_push_time = last_push_time or datetime.datetime.now(tz=datetime.timezone.utc)
 
         # the client
         self.client = client  # type: Optional[Client]
@@ -201,7 +201,7 @@ class State:
         return False
 
     def copy(self):
-        state = State(self.user, version=self.version, client=self.client)
+        state = State(self.user, version=self.version, client=self.client, last_push_time=self.last_push_time)
         state._dirty = False
         artifacts = ["functions", "comments", "structs", "patches", "global_vars", "enums"]
         for artifact in artifacts:
@@ -296,6 +296,7 @@ class State:
             raise MetadataNotFoundError()
         state.user = metadata["user"]
         state.version = version if version is not None else metadata["version"]
+        state.last_push_time = metadata.get("last_push_time", None)
 
         # load functions
         function_files = list_files_in_dir(src, "functions", client=client)

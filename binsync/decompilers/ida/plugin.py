@@ -233,7 +233,8 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         self.open_config_dialog()
 
     def term(self):
-        print("term() called!")
+        if controller:
+            controller.stop_worker_routines()
 
 #
 #   Utils
