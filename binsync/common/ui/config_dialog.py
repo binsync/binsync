@@ -21,13 +21,107 @@ from binsync.common.ui.qt_objects import (
     QMessageBox,
     QPushButton,
     QVBoxLayout,
-    QEvent
+    QEvent,
+    QTableWidget
 )
 
 l = logging.getLogger(__name__)
 
-class SyncConfig(QDialog):
+
+class CloneProjectDialog(QDialog):
+    def __init__(self, controller, open_magic_sync=True, load_config=True, parent=None):
+        super().__init__(parent)
+        pass
+
+
+class CreateProjectDialog(QDialog):
+    def __init__(self, controller, open_magic_sync=True, load_config=True, parent=None):
+        super().__init__(parent)
+        pass
+
+
+class ConfigureBSDialog(QDialog):
     """
+    TODO: connect the other dialogs above and delete the old one below
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Start BinSync")
+        self._main_layout = QVBoxLayout()
+
+        self._init_widgets()
+        self.setLayout(self._main_layout)
+        self.show()
+
+    def _init_widgets(self):
+        upper_layout = QGridLayout()
+        row = 0
+
+        open_btn = QPushButton(self)
+        open_btn.setText("Open")
+        open_btn.clicked.connect(self.open_binsync_project_selection)
+        open_label = QLabel(self)
+        open_label.setText("Open a local BS project...")
+        upper_layout.addWidget(open_btn, row, 0)
+        upper_layout.addWidget(open_label, row, 1)
+        row += 1
+
+        clone_btn = QPushButton(self)
+        clone_btn.setText("Clone")
+        clone_label = QLabel(self)
+        clone_label.setText("Open a remote BS project...")
+        upper_layout.addWidget(clone_btn, row, 0)
+        upper_layout.addWidget(clone_label, row, 1)
+        row += 1
+
+        new_btn = QPushButton(self)
+        new_btn.setText("New")
+        new_label = QLabel(self)
+        new_label.setText("Create a new BS project...")
+        upper_layout.addWidget(new_btn, row, 0)
+        upper_layout.addWidget(new_label, row, 1)
+        row += 1
+        upper_layout.setVerticalSpacing(10)
+
+        prev_proj_label = QLabel(self)
+        prev_proj_label.setText("Previous Projects")
+        upper_layout.addWidget(prev_proj_label, row, 0)
+        prev_proj_layout = QHBoxLayout()
+        prev_proj_table = QTableWidget(self)
+        prev_proj_layout.addWidget(prev_proj_table)
+
+        # buttons
+        self._ok_button = QPushButton(self)
+        self._ok_button.setText("OK")
+        self._ok_button.setDefault(True)
+
+        cancel_button = QPushButton(self)
+        cancel_button.setText("Cancel")
+
+        buttons_layout = QHBoxLayout()
+        buttons_layout.addWidget(self._ok_button)
+        buttons_layout.addWidget(cancel_button)
+
+        # main layout
+        self._main_layout.addLayout(upper_layout)
+        self._main_layout.addLayout(prev_proj_layout)
+        self._main_layout.addLayout(buttons_layout)
+
+    def open_binsync_project_selection(self):
+        out = QFileDialog(self)
+        out.exec_()
+        print(out.selectedFiles())
+        self.close()
+
+    def _open_binsync_project(self):
+        pass
+
+
+class ConfigureBSDialog(QDialog):
+    """
+    TODO: this has the code we need to move to the CreateProjectDialog
+
     The dialog that allows a user to config a BinSync client for:
     - initing a local repo
     - cloning a remote

@@ -23,7 +23,7 @@ from binsync.common.ui.version import set_ui_version
 set_ui_version("PySide6")
 from binsync.common.controller import SyncControlStatus
 from binsync.common.ui import utils
-from binsync.common.ui.config_dialog import SyncConfig
+from binsync.common.ui.config_dialog import ConfigureBSDialog
 
 from common import timeout_after
 
@@ -69,7 +69,7 @@ def get_binsync_am_plugin(main):
 
 
 def configure_and_connect(qtbot: QtBot, binsync_plugin, sync_dir_path, username, init=False):
-    config = SyncConfig(binsync_plugin.controller, open_magic_sync=False, load_config=False)
+    config = ConfigureBSDialog(binsync_plugin.controller, open_magic_sync=False, load_config=False)
     qtbot.addWidget(config)
     config._user_edit.setText("")
     config._repo_edit.setText("")

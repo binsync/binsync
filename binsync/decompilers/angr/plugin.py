@@ -7,7 +7,7 @@ from angrmanagement.ui.workspace import Workspace
 from binsync.common.ui.version import set_ui_version
 
 set_ui_version("PySide6")
-from binsync.common.ui.config_dialog import SyncConfig
+from binsync.common.ui.config_dialog import ConfigureBSDialog
 from .control_panel_view import ControlPanelView
 from .controller import AngrBinSyncController
 
@@ -79,7 +79,7 @@ class BinSyncPlugin(BasePlugin):
             # project does not exist yet
             return
 
-        sync_config = SyncConfig(self.controller)
+        sync_config = ConfigureBSDialog(self.controller)
         sync_config.exec_()
 
         if self.controller.check_client() and self.control_panel_view not in self.workspace.view_manager.views:

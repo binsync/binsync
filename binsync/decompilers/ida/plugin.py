@@ -20,7 +20,7 @@ from PyQt5.QtCore import Qt
 
 from binsync.common.ui.version import set_ui_version
 set_ui_version("PyQt5")
-from binsync.common.ui.config_dialog import SyncConfig
+from binsync.common.ui.config_dialog import ConfigureBSDialog
 from binsync.common.ui.control_panel import ControlPanel
 from binsync import __version__ as VERSION
 
@@ -124,7 +124,7 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         self.hooks_started = False
 
     def open_config_dialog(self):
-        dialog = SyncConfig(controller)
+        dialog = ConfigureBSDialog(controller)
 
         dialog.dialog_uihook = IdaHotkeyHook([Qt.Key_Return, Qt.Key_Tab, Qt.Key_Backtab], dialog)
         if not dialog.dialog_uihook.hook():

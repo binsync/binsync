@@ -3,7 +3,7 @@ import sys
 
 from binsync.common.ui.qt_objects import QVBoxLayout, QMainWindow, QApplication
 from binsync.common.ui.control_panel import ControlPanel
-from binsync.common.ui.config_dialog import SyncConfig
+from binsync.common.ui.config_dialog import ConfigureBSDialog
 
 from .controller import GhidraBinSyncController
 
@@ -43,7 +43,7 @@ class ControlPanelWindow(QMainWindow):
         # setup bridge and alert it we are configuring
         bridge_connected = self.controller.connect_ghidra_client()
 
-        config = SyncConfig(self.controller)
+        config = ConfigureBSDialog(self.controller)
         config.show()
         config.exec_()
         client_connected = self.controller.check_client()
