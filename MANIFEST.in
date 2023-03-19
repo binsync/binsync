@@ -1,3 +1,3 @@
 include LICENSE
 include README.md
-recursive-include plugins *.py *.json *.toml
+recursive-include decompiler_stubs *.py *.json *.toml
