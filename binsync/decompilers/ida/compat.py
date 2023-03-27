@@ -781,10 +781,14 @@ def jumpto(addr):
 
 
 def has_older_hexrays_version():
+    idc.auto_wait() 
     try:
         vers = ida_hexrays.get_hexrays_version()
     except Exception:
         return False
+    
+    if not isinstance(vers, str):
+        return False 
 
     return not vers.startswith("8.2")
 

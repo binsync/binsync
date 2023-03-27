@@ -116,7 +116,7 @@ class ProjectConfig(Config):
 
 class GlobalConfig(Config):
     __slots__ = Config.__slots__ + (
-        "last_bs_repo_path",
+        "recent_bs_projects",
         "ida_path",
         "ghidra_path",
         "angr_path",
@@ -126,7 +126,7 @@ class GlobalConfig(Config):
 
     def __init__(self,
                  path,
-                 last_bs_repo_path=None,
+                 recent_bs_projects=None,
                  ida_path=None,
                  ghidra_path=None,
                  angr_path=None,
@@ -135,7 +135,7 @@ class GlobalConfig(Config):
                  ):
         super(GlobalConfig, self).__init__(GlobalConfig.correct_path(path))
 
-        self.last_bs_repo_path = last_bs_repo_path
+        self.recent_bs_projects = recent_bs_projects or []
         self.angr_path = angr_path
         self.ida_path = ida_path
         self.ghidra_path = ghidra_path
@@ -155,3 +155,11 @@ class GlobalConfig(Config):
             path = path.parent.joinpath(BS_GLOBAL_CONFIG_FILENAME)
 
         return path
+
+    def add_recent_project_path(self, path, user):
+        if self.recent_bs_projects is None:
+            self.recent_bs_projects = []
+
+        self.recent_bs_projects.insert(0, f"{path}:{user}")
+        # only save the last 5 projects
+        self.recent_bs_projects = self.recent_bs_projects[0:5]

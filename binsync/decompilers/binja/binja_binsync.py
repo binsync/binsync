@@ -23,7 +23,7 @@ import logging
 
 from binsync.common.ui.version import set_ui_version
 set_ui_version("PySide6")
-from binsync.common.ui.config_dialog import SyncConfig
+from binsync.common.ui.config_dialog import ConfigureBSDialog
 from binsync.common.ui.control_panel import ControlPanel
 from .compat import find_main_window, BinjaDockWidget, create_widget, bn_struct_to_bs, bn_func_to_bs
 from .controller import BinjaBinSyncController
@@ -215,7 +215,7 @@ class BinjaPlugin:
 
         controller_bv.bv = bv
         # configure
-        dialog = SyncConfig(controller_bv)
+        dialog = ConfigureBSDialog(controller_bv)
         dialog.exec_()
 
         # if the config was successful init a full client

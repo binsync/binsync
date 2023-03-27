@@ -259,10 +259,10 @@ class BinSyncController:
     # Client Interaction Functions
     #
 
-    def connect(self, user, path, init_repo=False, remote_url=None):
+    def connect(self, user, path, init_repo=False, remote_url=None, **kwargs):
         binary_hash = self.binary_hash()
         self.client = Client(
-            user, path, binary_hash, init_repo=init_repo, remote_url=remote_url
+            user, path, binary_hash, init_repo=init_repo, remote_url=remote_url, **kwargs
         )
 
         self.start_worker_routines()
