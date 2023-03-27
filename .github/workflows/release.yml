@@ -13,13 +13,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-      - name: Download Plugin
-        run: wget "https://github.com/mahaloz/binsync-ghidra-plugin/releases/latest/download/binsync-ghidra-plugin.zip"
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
+          # binsync-ghidra-plugin.zip will be uploaded from another workflow
           generateReleaseNotes: true
-          artifacts: "binsync-ghidra-plugin.zip"
 
   release-pypi:
     name: Release pypi package
