@@ -13,6 +13,9 @@ on:
   pull_request:
     branches: [ main ]
     paths: ['binsync/decompilers/ghidra/**']
+  push:
+    branches: [ main ]
+    paths: ['binsync/decompilers/ghidra/**']
 
 jobs:
   build:
@@ -49,7 +52,7 @@ jobs:
       uses: actions/upload-artifact@v2
       with:
         name: extension
-        path: /binsync/decompilers/ghidra/client/dist/binsync-ghidra-plugin.zip
+        path: binsync/decompilers/ghidra/client/dist/binsync-ghidra-plugin.zip
 
   release:
     runs-on: ubuntu-latest
