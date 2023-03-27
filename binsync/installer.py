@@ -101,7 +101,7 @@ class Installer:
         return filepath
 
     @staticmethod
-    def link_or_copy(src, dst, is_dir=False):
+    def link_or_copy(src, dst, is_dir=False, symlink=False):
         # clean the install location
         shutil.rmtree(dst, ignore_errors=True)
         try:
@@ -109,18 +109,19 @@ class Installer:
         except:
             pass
 
-        # first attempt a symlink, if it works, exit early
-        try:
-            os.symlink(src, dst, target_is_directory=is_dir)
-            return
-        except:
-            pass
-
-        # copy if symlinking is not available on target system
-        if is_dir:
-            shutil.copytree(src, dst)
+        if not symlink:
+            # copy if symlinking is not available on target system
+            if is_dir:
+                shutil.copytree(src, dst)
+            else:
+                shutil.copy(src, dst)
         else:
-            shutil.copy(src, dst)
+            # first attempt a symlink, if it works, exit early
+            try:
+                os.symlink(src, dst, target_is_directory=is_dir)
+                return
+            except:
+                pass
 
     def install_all_targets(self):
         for target in self.targets:
