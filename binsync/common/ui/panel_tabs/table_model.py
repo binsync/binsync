@@ -185,7 +185,7 @@ class BinsyncTableModel(QAbstractTableModel):
             self.dataChanged.emit(self.index(0, update_idx), self.index(self.rowCount() - 1, update_idx))
 
     def _compute_row_color(self, artifact_update_time: datetime.datetime):
-        duration = (datetime.datetime.now(tz=datetime.timezone.utc) - artifact_update_time).seconds  # table coloring
+        duration = int(datetime.datetime.now(tz=datetime.timezone.utc).timestamp() - artifact_update_time.timestamp())
         if 0 <= duration <= self.controller.table_coloring_window:
             opacity = (self.controller.table_coloring_window - duration) / self.controller.table_coloring_window
             return QColor(
