@@ -1,0 +1,70 @@
+name: Ghidra Extension Build
+
+env:
+  ghidra-url: https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_10.2.2_build/ghidra_10.2.2_PUBLIC_20221115.zip
+  ghidra-zip-filename: ghidra_10.2.2_PUBLIC.zip
+  ghidra-directory: ghidra_10.2.2_PUBLIC
+
+on:
+  push:
+    branches: [ main ]
+    paths: ['binsync/decompilers/ghidra/**']
+  pull_request:
+    branches: [ main ]
+    paths: ['binsync/decompilers/ghidra/**']
+  release:
+    types: [ created ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Download Ghidra release
+      uses: carlosperate/download-file-action@v1.0.3
+      id: download-ghidra
+      with:
+        file-url: ${{ env.ghidra-url }}
+        file-name: ${{ env.ghidra-zip-filename }}
+
+    - name: Unzip Ghidra
+      uses: TonyBogdanov/zip@1.0
+      with:
+        args: unzip -qq ${{ steps.download-ghidra.outputs.file-path }} -d .
+    - uses: actions/setup-java@v1
+      with:
+        java-version: '17.0.6'
+
+    - name: Build extension
+      uses: eskatos/gradle-command-action@v1
+      with:
+        gradle-version: '7.3'
+        build-root-directory: ${{ github.workspace }}/binsync/decompilers/ghidra/client/
+        arguments: '-PGHIDRA_INSTALL_DIR=${{ github.workspace }}/${{ env.ghidra-directory }}'
+
+    - name: Rename extension
+      run: cd binsync/decompilers/ghidra/client/dist/ && mv *.zip binsync-ghidra-plugin.zip
+    - name: Upload built extension
+      uses: actions/upload-artifact@v2
+      with:
+        name: extension
+        path: /binsync/decompilers/ghidra/client/dist/binsync-ghidra-plugin.zip
+
+  release:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'release' }}
+    needs: build
+
+    steps:
+    - name: Download built extension
+      uses: actions/download-artifact@v2
+      with:
+        name: extension
+    - name: Upload extension to release
+      uses: skx/github-action-publish-binaries@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        args: '*.zip'
