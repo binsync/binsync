@@ -74,7 +74,10 @@ class Client:
         init_repo: bool = False,
         remote_url: Optional[str] = None,
         ssh_agent_pid: Optional[int] = None,
-        ssh_auth_sock: Optional[str] = None
+        ssh_auth_sock: Optional[str] = None,
+        push_on_update=True,
+        pull_on_update=True,
+        **kwargs,
     ):
         """
         The Client class is responsible for making the low-level Git operations for the BinSync environment.
@@ -97,9 +100,11 @@ class Client:
         self.remote = remote
         self.repo = None
         self.repo_lock = None
+        self.pull_on_update = pull_on_update
+        self.push_on_update = push_on_update
 
         # validate this username can exist
-        if master_user.endswith('/') or '__root__' in master_user:
+        if not master_user or master_user.endswith('/') or '__root__' in master_user:
             raise Exception(f"Bad username: {master_user}")
 
         # ssh-agent info
@@ -378,6 +383,7 @@ class Client:
         """
         self.last_push_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
         self._checkout_to_master_user()
+        print("PUSH ATTEMPT NOW =============================")
         try:
             env = self.ssh_agent_env()
             with self.repo.git.custom_environment(**env):
@@ -424,11 +430,11 @@ class Client:
 
         # do a pull if there is a remote repo connected
         self.last_pull_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
-        if self.has_remote:
+        if self.has_remote and self.pull_on_update:
             self.pull()
 
         self.last_push_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
-        if self.has_remote:
+        if self.has_remote and self.push_on_update:
             self.push()
 
     #

@@ -3,7 +3,7 @@ from binsync.common.ui.version import ui_version
 if ui_version == "PySide2":
     from PySide2.QtCore import (
         QDir, Qt, Signal, QAbstractTableModel, QModelIndex, QSortFilterProxyModel, QPersistentModelIndex,
-        QEvent, QThread, Slot, QObject
+        QEvent, QThread, Slot, QObject, QPropertyAnimation, QAbstractAnimation, QParallelAnimationGroup
     )
     from PySide2.QtWidgets import (
         QAbstractItemView,
@@ -32,7 +32,12 @@ if ui_version == "PySide2":
         QFontDialog,
         QCheckBox,
         QMainWindow,
-        QApplication
+        QApplication,
+        QFrame,
+        QWidget,
+        QSizePolicy,
+        QScrollArea,
+        QToolButton,
     )
     from PySide2.QtGui import (
         QFontDatabase,
@@ -44,7 +49,7 @@ if ui_version == "PySide2":
 elif ui_version == "PySide6":
     from PySide6.QtCore import (
         QDir, Qt, Signal, QAbstractTableModel, QModelIndex, QSortFilterProxyModel, QPersistentModelIndex,
-        QEvent, QThread, Slot, QObject
+        QEvent, QThread, Slot, QObject, QPropertyAnimation, QAbstractAnimation, QParallelAnimationGroup
     )
     from PySide6.QtWidgets import (
         QAbstractItemView,
@@ -72,7 +77,12 @@ elif ui_version == "PySide6":
         QFontDialog,
         QCheckBox,
         QMainWindow,
-        QApplication
+        QApplication,
+        QFrame,
+        QWidget,
+        QSizePolicy,
+        QScrollArea,
+        QToolButton,
     )
     from PySide6.QtGui import (
         QFontDatabase,
@@ -85,7 +95,7 @@ elif ui_version == "PySide6":
 else:
     from PyQt5.QtCore import (
         QDir, Qt, QAbstractTableModel, QModelIndex, QSortFilterProxyModel, QPersistentModelIndex,
-        QEvent, QThread, QObject
+        QEvent, QThread, QObject, QPropertyAnimation, QAbstractAnimation, QParallelAnimationGroup
     )
     from PyQt5.QtCore import pyqtSignal as Signal
     from PyQt5.QtCore import pyqtSlot as Slot
@@ -116,7 +126,12 @@ else:
         QFontDialog,
         QCheckBox,
         QMainWindow,
-        QApplication
+        QApplication,
+        QFrame,
+        QWidget,
+        QSizePolicy,
+        QScrollArea,
+        QToolButton,
     )
     from PyQt5.QtGui import (
         QFontDatabase,

@@ -157,6 +157,9 @@ class GlobalConfig(Config):
         return path
 
     def add_recent_project_path(self, path, user):
+        if self.recent_bs_projects is None:
+            self.recent_bs_projects = []
+
         self.recent_bs_projects.insert(0, f"{path}:{user}")
         # only save the last 5 projects
         self.recent_bs_projects = self.recent_bs_projects[0:5]
