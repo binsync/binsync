@@ -296,8 +296,8 @@ class ConfigureBSDialog(QDialog):
 
     def _get_selected_config_row(self):
         items = self._prev_proj_table.selectedItems()
-        if not (0 < len(items) <= 1):
-            return
+        if not items:
+            return None, None
 
         item = items[0]
         username = None
@@ -314,6 +314,10 @@ class ConfigureBSDialog(QDialog):
 
     def use_recent_project_config(self):
         username, proj_path = self._get_selected_config_row()
+        if username is None:
+            l.critical("Failed to grab the current user!")
+            return False
+
         return self.connect_client_to_project(username, proj_path, initialize=False)
 
     #
