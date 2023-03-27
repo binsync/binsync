@@ -36,7 +36,7 @@ class Cache:
 
     def users(self, **kwargs):
         with self.user_lock:
-            return self.user_cache.users if self.user_cache.users else None
+            return self.user_cache.users if self.user_cache.users else []
 
     #
     # setters

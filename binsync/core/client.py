@@ -58,7 +58,7 @@ def atomic_git_action(f):
 
         self._set_cache(f, ret_val, **kwargs)
 
-        return ret_val
+        return ret_val if ret_val is not None else {}
 
     return _atomic_git_action
 
@@ -318,7 +318,7 @@ class Client:
             user = self.master_user
 
         repo = self.repo
-        state = None
+        state = State(None)
         try:
             state = State.parse(
                 self._get_tree(user, repo),
