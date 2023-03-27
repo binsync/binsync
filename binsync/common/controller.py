@@ -130,7 +130,7 @@ class BinSyncController:
 
         # settings
         self.config = None
-        self.table_coloring_window = 2 * 60 * 60  # 2 hours in seconds
+        self.table_coloring_window = 60 * 30  # 30 mins
         self.merge_level: int = MergeLevel.NON_CONFLICTING
 
         # command locks
