@@ -383,7 +383,6 @@ class Client:
         """
         self.last_push_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
         self._checkout_to_master_user()
-        print("PUSH ATTEMPT NOW =============================")
         try:
             env = self.ssh_agent_env()
             with self.repo.git.custom_environment(**env):
