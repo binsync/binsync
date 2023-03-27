@@ -221,6 +221,8 @@ class ConfigureBSDialog(QDialog):
     def __init__(self, controller, open_magic_sync=True, load_config=True, parent=None):
         super().__init__(parent)
         self.controller = controller
+        self.open_magic_sync = open_magic_sync
+        self.load_config = load_config
 
         self.setWindowTitle("Start BinSync")
         self._main_layout = QVBoxLayout()
