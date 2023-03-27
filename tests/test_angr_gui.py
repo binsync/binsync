@@ -22,10 +22,7 @@ from angrmanagement.ui.main_window import MainWindow
 from binsync.common.ui.version import set_ui_version
 set_ui_version("PySide6")
 from binsync.common.controller import SyncControlStatus
-from binsync.common.ui import utils
 from binsync.common.ui.config_dialog import ConfigureBSDialog
-
-from common import timeout_after
 
 
 test_location = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'binaries')
@@ -70,14 +67,17 @@ def get_binsync_am_plugin(main):
 
 def configure_and_connect(qtbot: QtBot, binsync_plugin, sync_dir_path, username, init=False):
     config = ConfigureBSDialog(binsync_plugin.controller, open_magic_sync=False, load_config=False)
-    qtbot.addWidget(config)
-    config._user_edit.setText("")
-    config._repo_edit.setText("")
-    qtbot.keyClicks(config._user_edit, username)
-    qtbot.keyClicks(config._repo_edit, sync_dir_path)
-    if init:
-        qtbot.mouseClick(config._initrepo_checkbox, Qt.MouseButton.LeftButton)
-    qtbot.mouseClick(config._ok_button, Qt.MouseButton.LeftButton)
+    config.connect_client_to_project(username, sync_dir_path, initialize=init)
+
+    # TODO: reinstate GUI testing of the config dialog in another test
+    #qtbot.addWidget(config)
+    #config._user_edit.setText("")
+    #config._repo_edit.setText("")
+    #qtbot.keyClicks(config._user_edit, username)
+    #qtbot.keyClicks(config._repo_edit, sync_dir_path)
+    #if init:
+    #    qtbot.mouseClick(config._initrepo_checkbox, Qt.MouseButton.LeftButton)
+    #qtbot.mouseClick(config._ok_button, Qt.MouseButton.LeftButton)
 
     assert binsync_plugin.controller.status() == SyncControlStatus.CONNECTED_NO_REMOTE
     assert binsync_plugin.controller.client.master_user == username

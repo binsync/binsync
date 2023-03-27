@@ -314,7 +314,7 @@ class ConfigureBSDialog(QDialog):
 
     def use_recent_project_config(self):
         username, proj_path = self._get_selected_config_row()
-        return self._connect_client_to_project(username, proj_path, initialize=False)
+        return self.connect_client_to_project(username, proj_path, initialize=False)
 
     #
     # Callbacks
@@ -392,7 +392,7 @@ class ConfigureBSDialog(QDialog):
             return
 
         # by this point we know the data is valid data
-        successs = self._connect_client_to_project(
+        successs = self.connect_client_to_project(
             username, project_path, initialize=initialize, remote_url=remote_url,
             push_on_update=not dialog.disable_push, pull_on_update=not dialog.disable_pull
         )
@@ -406,8 +406,8 @@ class ConfigureBSDialog(QDialog):
     # Client helpers
     #
 
-    def _connect_client_to_project(self, username, proj_path, initialize=False, remote_url=None, push_on_update=True,
-                                   pull_on_update=True):
+    def connect_client_to_project(self, username, proj_path, initialize=False, remote_url=None, push_on_update=True,
+                                  pull_on_update=True):
         try:
             connection_warnings = self.controller.connect(
                 username, str(proj_path), init_repo=initialize, remote_url=remote_url,
