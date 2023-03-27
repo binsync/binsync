@@ -8,8 +8,12 @@ env:
 on:
   push:
     branches: [ main ]
+    paths: ['binsync/decompilers/ghidra/**']
   pull_request:
     branches: [ main ]
+    paths: ['binsync/decompilers/ghidra/**']
+  release:
+    types: [ created ]
 
 jobs:
   build:
