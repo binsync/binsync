@@ -59,7 +59,9 @@ To understand the difference between artifact support, pull, push, and auto push
 | Push      	                        | :heavy_check_mark: 	                     | :heavy_check_mark: 	               | :heavy_check_mark: 	                | :heavy_check_mark: 	            | :heavy_check_mark: 	          | :x: 	                            |
 | Auto Push                          | :heavy_check_mark: 	                     | :heavy_check_mark:    	            | :heavy_check_mark: 	                | :heavy_check_mark: 	            | :heavy_check_mark: 	          | :heavy_check_mark: 	             |
 
-![](./assets/images/ida_sync.gif)
+<p align="center">
+   <img src="./assets/images/ida_sync.gif" alt="IDA Sync"/>
+</p>
 
 
 ### Binary Ninja
@@ -72,7 +74,9 @@ To understand the difference between artifact support, pull, push, and auto push
 | Push      	                        | :heavy_check_mark:                       | :heavy_check_mark:		               | :x:					                            | :heavy_check_mark:			           | :x: 					                     | :heavy_check_mark: 					         |
 | Auto Push 	                        | :heavy_check_mark:                       | :heavy_check_mark:		               | :x:					                            | :heavy_check_mark:			           | :x: 					                     | :heavy_check_mark: 					         |
 
-![](./assets/images/binja_sync.gif)
+<p align="center">
+   <img src="./assets/images/binja_sync.gif" alt="Binja Sync"/>
+</p>
 
 ### Ghidra
 
@@ -84,7 +88,9 @@ To understand the difference between artifact support, pull, push, and auto push
 | Push      	                        | :x: 					                                | :x:						                          | :x:					                            | :x:					                        | :x: 					                     | :x: 					                        |
 | Auto Push 	                        | :x: 					                                | :x:						                          | :x:					                            | :x:					                        | :x: 					                     | :x: 					                        |
 
-![](./assets/images/ghidra_sync.gif)
+<p align="center">
+   <img src="./assets/images/ghidra_sync.gif" alt="Ghidra Sync"/>
+</p>
 
 ### angr-management
 
