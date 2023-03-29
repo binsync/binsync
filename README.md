@@ -23,6 +23,14 @@ Note: all types support user-created types like structs.
    <img src="./assets/images/binja_sync.gif" alt="Binja Sync"/>
 </p>
 
+<div align="center">
+    <ul>
+    <li><img src="./assets/images/ida_sync.gif" alt="IDA Sync"/></li>
+    <li><img src="./assets/images/binja_sync.gif" alt="Binja Sync"/></li>
+    <li><img src="./assets/images/ghidra_sync.gif" alt="Ghidra Sync"/></li>
+    </ul>
+</div>
+
 
 **Join our discord below for more online help**:
 
