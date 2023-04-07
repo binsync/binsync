@@ -358,7 +358,7 @@ class BinjaBinSyncController(BinSyncController):
 
     def struct(self, name) -> Optional[Struct]:
         bn_struct = self.bv.types.get(name, None)
-        if bn_struct is None:
+        if bn_struct is None or not isinstance(bn_struct, StructureType):
             return None
 
         return bn_struct_to_bs(name, bn_struct)
