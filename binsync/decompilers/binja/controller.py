@@ -382,6 +382,6 @@ class BinjaBinSyncController(BinSyncController):
             return None 
             
         gvar = GlobalVariable(
-            addr, self.bv.get_symbol_at(addr) or f"data_{addr:x}", type_=str(var.type), size=var.type.width
+            addr, self.bv.get_symbol_at(addr) or f"data_{addr:x}", type_=str(var.type) if var.type is not None else None, size=var.type.width
         )
         return gvar
