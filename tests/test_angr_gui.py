@@ -12,6 +12,7 @@ from PySide6.QtGui import QContextMenuEvent
 from PySide6.QtTest import QTest
 from PySide6.QtCore import Qt, QPoint, QTimer
 from PySide6.QtWidgets import QApplication, QMenu
+from angrmanagement.ui.views import CodeView, DisassemblyView
 from pytestqt.qtbot import QtBot
 import pytest
 
@@ -99,12 +100,13 @@ def click_sync_menu(qtbot: QtBot, table, obj_name):
 
 
 def rename_function(qtbot: QtBot, main, func, new_func_name):
-    disasm_view = main.workspace._get_or_create_disassembly_view()
+    disasm_view = main.workspace._get_or_create_view("disassembly", DisassemblyView)
     disasm_view._t_flow_graph_visible = True
     disasm_view.display_function(func)
     disasm_view.decompile_current_function()
     main.workspace.main_instance.join_all_jobs()
-    pseudocode_view = main.workspace._get_or_create_pseudocode_view()
+
+    pseudocode_view = main.workspace._get_or_create_view("pseudocode", CodeView)
     for _, item in pseudocode_view.codegen.map_pos_to_node.items():
         if isinstance(item.obj, angr.analyses.decompiler.structured_codegen.c.CFunction):
             func_node = item.obj
@@ -120,12 +122,12 @@ def rename_function(qtbot: QtBot, main, func, new_func_name):
 
 
 def rename_stack_variable(qtbot:QtBot, main, func, new_var_name, var_offset):
-    disasm_view = main.workspace._get_or_create_disassembly_view()
+    disasm_view = main.workspace._get_or_create_view("disassembly", DisassemblyView)
     disasm_view._t_flow_graph_visible = True
     disasm_view.display_function(func)
     disasm_view.decompile_current_function()
     main.workspace.main_instance.join_all_jobs()
-    pseudocode_view = main.workspace._get_or_create_pseudocode_view()
+    pseudocode_view = main.workspace._get_or_create_view("pseudocode", CodeView)
     for _, item in pseudocode_view.codegen.map_pos_to_node.items():
         if isinstance(item.obj, angr.analyses.decompiler.structured_codegen.c.CVariable) and \
                 isinstance(item.obj.variable, angr.sim_variable.SimStackVariable) and \
