@@ -285,11 +285,20 @@ class FunctionTableView(QTableView):
             self.select_all.setChecked(True)
 
     def push(self):
+        # In higher QT versions, like those used in Binja, the way states are described in
+        # a checkbox changed, so we must find out if .value can be used or not
+        first_state_obj = self.model.checkState(
+            self.proxymodel.mapToSource(self.proxymodel.index(0, 0, QModelIndex()))
+        )
+        check_has_value = hasattr(first_state_obj, "value")
+
         self.proxymodel.setFilterFixedString("")
         for i in range(self.proxymodel.rowCount()):
             proxyIndex = self.proxymodel.index(i, 0, QModelIndex())
             mappedIndex = self.proxymodel.mapToSource(proxyIndex)
-            if self.model.checkState(mappedIndex):
+            model_state = self.model.checkState(mappedIndex)
+            is_checked = model_state.value if check_has_value else model_state
+            if is_checked:
                 func_addr = int(self.model.data(mappedIndex), 16)
                 self.controller.force_push_function(func_addr)
 

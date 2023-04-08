@@ -25,7 +25,7 @@ from binsync.common.ui.version import set_ui_version
 set_ui_version("PySide6")
 from binsync.common.ui.config_dialog import ConfigureBSDialog
 from binsync.common.ui.control_panel import ControlPanel
-from .compat import find_main_window, BinjaDockWidget, create_widget, bn_struct_to_bs, bn_func_to_bs
+from .compat import bn_enum_to_bs, find_main_window, BinjaDockWidget, create_widget, bn_struct_to_bs, bn_func_to_bs
 from .controller import BinjaBinSyncController
 from binsync.data import (
     State, User, Artifact,
@@ -146,10 +146,14 @@ class DataMonitor(BinaryDataNotification):
                 self._controller.push_artifact,
                 FunctionHeader(sym.name, sym.address, type_=bs_func.header.type, args=bs_func.header.args)
             )
-
         elif sym.type == SymbolType.DataSymbol:
             l.debug(f"   -> Data Symbol")
-            pass
+            var: binaryninja.DataVariable = view.get_data_var_at(sym.address)
+            
+            self._controller.schedule_job(
+                self._controller.push_artifact,
+                GlobalVariable(var.address, var.name, type_=str(var.type), size=var.type.width)
+            )
         else:
             l.debug(f"   -> Other Symbol: {sym.type}")
             pass
@@ -167,7 +171,8 @@ class DataMonitor(BinaryDataNotification):
             )
 
         elif isinstance(type_, EnumerationType):
-            pass
+            bs_enum = bn_enum_to_bs(type_)
+            self._controller.schedule_job(self._controller.push_artifact, bs_enum)
 
 
 def start_data_monitor(view, controller):

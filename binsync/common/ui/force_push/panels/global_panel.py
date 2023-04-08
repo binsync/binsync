@@ -271,11 +271,20 @@ class GlobalTableView(QTableView):
         return self.model.gvar_name_to_addr_map[name]
 
     def push(self):
+        # In higher QT versions, like those used in Binja, the way states are described in
+        # a checkbox changed, so we must find out if .value can be used or not
+        first_state_obj = self.model.checkState(
+            self.proxymodel.mapToSource(self.proxymodel.index(0, 0, QModelIndex()))
+        )
+        check_has_value = hasattr(first_state_obj, "value")
+
         self.proxymodel.setFilterFixedString("")
         for i in range(self.proxymodel.rowCount()):
             proxyIndex = self.proxymodel.index(i, 0, QModelIndex())
             mappedIndex = self.proxymodel.mapToSource(proxyIndex)
-            if self.model.checkState(mappedIndex):
+            model_state = self.model.checkState(mappedIndex)
+            is_checked = model_state.value if check_has_value else model_state
+            if is_checked:
                 type_ = self.model.data(mappedIndex)
                 name = self.model.data(mappedIndex.sibling(mappedIndex.row(), 1))
                 lookup_item = self._lookup_addr_for_gvar(name) if type_ == "Variable" else name

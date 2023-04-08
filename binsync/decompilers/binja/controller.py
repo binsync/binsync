@@ -48,7 +48,7 @@ from binsync.data import (
 import binsync
 
 from .artifact_lifter import BinjaArtifactLifter
-from .compat import bn_func_to_bs, bn_struct_to_bs
+from .compat import bn_enum_to_bs, bn_func_to_bs, bn_struct_to_bs
 
 
 l = logging.getLogger(__name__)
@@ -82,7 +82,7 @@ def background_and_wait(func):
 class BinjaBinSyncController(BinSyncController):
     def __init__(self):
         super(BinjaBinSyncController, self).__init__(artifact_lifter=BinjaArtifactLifter(self))
-        self.bv = None
+        self.bv: binaryninja.BinaryView = None
 
     def binary_hash(self) -> str:
         hash_ = ""
@@ -165,8 +165,23 @@ class BinjaBinSyncController(BinSyncController):
         return True
 
     @init_checker
+    @fill_event
     def fill_global_var(self, var_addr, user=None, artifact=None, **kwargs):
-        return False
+        changed = False
+        bs_global_var: GlobalVariable = artifact
+        bn_global_var: binaryninja.DataVariable = self.bv.get_data_var_at(var_addr)
+        global_type = self.bv.parse_type_string(bs_global_var.type)
+        
+        if bs_global_var and bs_global_var.name:
+            if bn_global_var is None:
+                bn_global_var = self.bv.define_user_data_var(bs_global_var.addr, global_type, bs_global_var.name)
+                changed = True
+        
+            if bn_global_var.name != bs_global_var.name or bn_global_var.type != global_type:
+                bn_global_var = self.bv.define_user_data_var(bs_global_var.addr, global_type, bs_global_var.name)
+                changed = True
+
+        return changed
 
     @init_checker
     @background_and_wait
@@ -235,7 +250,7 @@ class BinjaBinSyncController(BinSyncController):
                     pass
 
                 if valid_type:
-                    bn_func.function_type = bn_prototype
+                    bn_func.type = bn_prototype
                     updates |= True
 
         return updates
@@ -284,6 +299,23 @@ class BinjaBinSyncController(BinSyncController):
         bn_func.set_comment_at(comment.addr, comment.comment)
 
         return True
+    
+    @init_checker
+    @fill_event
+    def fill_enum(self, name, user=None, artifact=None, ida_code_view=None, **kwargs):
+        bs_enum: Enum = artifact
+        bn_enum: binaryninja.EnumerationType = self.bv.types.get(name)
+        
+        bn_members = []
+        
+        for member_name, value in bs_enum.members.items():
+            bn_members.append({ "name": member_name, "value": value })
+        
+        new_type = binaryninja.TypeBuilder.enumeration(self.bv.arch, bn_members)
+        
+        self.bv.define_user_type(name, new_type)
+            
+        return True
 
     #
     # Artifact API
@@ -306,23 +338,40 @@ class BinjaBinSyncController(BinSyncController):
             funcs[bn_func.start].name = bn_func.name
 
         return funcs
+    
+
+    def enum(self, name) -> Optional[Enum]:
+        bn_enum = self.bv.types.get(name, None)
+        if bn_enum is None:
+            return None
+        
+        if isinstance(bn_enum, EnumerationType):
+            return bn_enum_to_bs(name, bn_enum)
+        
+        return None
+    
+    def enums(self) -> Dict[str, Enum]:                        
+        return {
+            name: bn_enum_to_bs(''.join(name.name), t) for name, t in self.bv.types.items()
+            if isinstance(t, EnumerationType)
+        }
 
     def struct(self, name) -> Optional[Struct]:
         bn_struct = self.bv.types.get(name, None)
-        if bn_struct is None:
+        if bn_struct is None or not isinstance(bn_struct, StructureType):
             return None
 
         return bn_struct_to_bs(name, bn_struct)
 
     def structs(self) -> Dict[str, Struct]:
         return {
-            name: Struct(name, t.width, {}) for name, t in self.bv.types.items()
+            name: Struct(''.join(name.name), t.width, {}) for name, t in self.bv.types.items()
             if isinstance(t, StructureType)
         }
 
     def global_vars(self) -> Dict[int, GlobalVariable]:
         return {
-            addr: GlobalVariable(addr, self.bv.get_symbol_at(addr) or f"data_{addr:x}")
+            addr: GlobalVariable(addr, var.name or f"data_{addr:x}")
             for addr, var in self.bv.data_vars.items()
         }
     
@@ -333,6 +382,6 @@ class BinjaBinSyncController(BinSyncController):
             return None 
             
         gvar = GlobalVariable(
-            addr, self.bv.get_symbol_at(addr) or f"data_{addr:x}", type_=str(var.type), size=var.type.width
+            addr, self.bv.get_symbol_at(addr) or f"data_{addr:x}", type_=str(var.type) if var.type is not None else None, size=var.type.width
         )
         return gvar
