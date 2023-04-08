@@ -463,6 +463,29 @@ class BinSyncController:
         return None
 
     #
+    # Change Callback API
+    #
+
+    def on_function_header_changed(self, fheader: FunctionHeader):
+        pass
+
+    def on_stack_variable_changed(self, svar: StackVariable):
+        pass
+
+    def on_comment_changed(self, comment: Comment):
+        pass
+
+    def on_struct_changed(self, struct: Struct):
+        pass
+
+    def on_enum_changed(self, enum: Enum):
+        pass
+
+    def on_global_variable_changed(self, gvar: GlobalVariable):
+        pass
+
+
+    #
     # Client API & Shortcuts
     #
 
