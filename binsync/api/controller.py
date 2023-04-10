@@ -7,9 +7,9 @@ from typing import Dict, Iterable, Optional, Union
 
 import binsync.data
 from binsync.data import ProjectConfig
-from binsync.common.artifact_lifter import ArtifactLifter
+from binsync.api.artifact_lifter import BSArtifactLifter
 from binsync.core.client import Client, SchedSpeed, Scheduler, Job
-from binsync.data.type_parser import BSTypeParser, BSType
+from binsync.api.type_parser import BSTypeParser, BSType
 from binsync.data import (
     State, User, Artifact,
     Function, FunctionHeader, StackVariable,
@@ -33,9 +33,10 @@ def init_checker(f):
 
     return _init_check
 
+
 def fill_event(f):
     @wraps(f)
-    def _fill_event(self: "BinSyncController", *args, **kwargs):
+    def _fill_event(self: "BSController", *args, **kwargs):
         return self.fill_event_handler(f, *args, **kwargs)
 
     return _fill_event
@@ -44,10 +45,12 @@ def fill_event(f):
 # Description Constants
 #
 
+
 # https://stackoverflow.com/questions/10926328
 BUSY_LOOP_COOLDOWN = 0.5
 GET_MANY = True
 FILL_MANY = True
+
 
 class SyncControlStatus:
     CONNECTED = 0
@@ -73,7 +76,7 @@ class FakeSyncLock:
 #   Controller
 #
 
-class BinSyncController:
+class BSController:
 
     ARTIFACT_SET_MAP = {
         Function: State.set_function,
@@ -114,7 +117,7 @@ class BinSyncController:
     def __init__(self, artifact_lifter=None, headless=False, reload_time=10):
         self.headless = headless
         self.reload_time = reload_time
-        self.artifact_lifer: ArtifactLifter = artifact_lifter
+        self.artifact_lifer: BSArtifactLifter = artifact_lifter
 
         # client created on connection
         self.client = None  # type: Optional[Client]
@@ -153,10 +156,10 @@ class BinSyncController:
             return
 
         # after this point you can import anything from UI and it is safe!
-        from binsync.common.ui.qt_objects import (
+        from binsync.ui.qt_objects import (
             QThread
         )
-        from binsync.common.ui.utils import BSUIScheduler
+        from binsync.ui.utils import BSUIScheduler
         # spawns a qthread/worker
         self._ui_updater_thread = QThread()
         self._ui_updater_worker = BSUIScheduler()
@@ -463,6 +466,85 @@ class BinSyncController:
         return None
 
     #
+    # Setters:
+    # Work like Fillers, except can function without a BS Client. In effect, this allows you to
+    # change the decompilers objects using BinSync objects.
+    #
+
+    def set_artifact(self, artifact: Artifact, lower=True):
+        """
+        Sets a BinSync Artifact into the decompilers local database. This operations allows you to change
+        what the native decompiler sees with BinSync Artifacts. This is different from opertions on a BinSync State,
+        since this is native to the decompiler
+
+        >>> func = Function(0xdeadbeef, 0x800)
+        >>> func.name = "main"
+        >>> controller.set_artifact(func)
+
+        @param artifact:
+        @param lower:       Wether to convert the Artifacts types and offset into the local decompilers format
+        @return:            True if the Artifact was succesfuly set into the decompiler
+        """
+        set_map = {
+            Function: self.set_function,
+            Comment: self.set_comment,
+            GlobalVariable: self.set_global_var,
+            Struct: self.set_struct,
+            Enum: self.set_enum,
+            Patch: self.set_patch,
+        }
+
+        if lower:
+            artifact = self.lower_artifact(artifact)
+
+        setter = set_map.get(type(artifact), None)
+        if setter is None:
+            _l.critical(f"Unsupported object is attempting to be set, please check your object: {artifact}")
+            return False
+
+        return setter(artifact)
+
+    def set_function(self, func: Function):
+        return False
+
+    def set_comment(self, comment: Comment):
+        return False
+
+    def set_global_var(self, gvar: GlobalVariable):
+        return False
+
+    def set_struct(self, struct: Struct):
+        return False
+
+    def set_enum(self, enum: Enum):
+        return False
+
+    def set_patch(self, path: Patch):
+        return False
+
+    #
+    # Change Callback API
+    #
+
+    def on_function_header_changed(self, fheader: FunctionHeader):
+        pass
+
+    def on_stack_variable_changed(self, svar: StackVariable):
+        pass
+
+    def on_comment_changed(self, comment: Comment):
+        pass
+
+    def on_struct_changed(self, struct: Struct):
+        pass
+
+    def on_enum_changed(self, enum: Enum):
+        pass
+
+    def on_global_variable_changed(self, gvar: GlobalVariable):
+        pass
+
+    #
     # Client API & Shortcuts
     #
 
@@ -627,8 +709,6 @@ class BinSyncController:
 
         return fill_changes
 
-
-    @init_checker
     @fill_event
     def fill_struct(self, struct_name, header=True, members=True, artifact=None, **kwargs):
         """
@@ -643,7 +723,6 @@ class BinSyncController:
         _l.debug(f"Fill Struct is not implemented in your decompiler.")
         return False
 
-    @init_checker
     @fill_event
     def fill_global_var(self, var_addr, user=None, artifact=None, **kwargs):
         """
@@ -657,8 +736,6 @@ class BinSyncController:
         _l.debug(f"Fill Global Var is not implemented in your decompiler.")
         return False
 
-
-    @init_checker
     @fill_event
     def fill_enum(self, enum_name, user=None, artifact=None, **kwargs):
         """
@@ -687,7 +764,6 @@ class BinSyncController:
         _l.debug(f"Fill Comments is not implemented in your decompiler.")
         return False
 
-    @init_checker
     @fill_event
     def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
         """
@@ -727,7 +803,6 @@ class BinSyncController:
 
         return changes
 
-    @init_checker
     def fill_functions(self, user=None, **kwargs):
         change = False
         master_state, state = self.get_master_and_user_state(user=user, **kwargs)
@@ -736,7 +811,6 @@ class BinSyncController:
 
         return change
 
-    @init_checker
     def fill_structs(self, user=None, **kwargs):
         """
         Grab all the structs from a specified user, then fill them locally
@@ -756,7 +830,6 @@ class BinSyncController:
 
         return changes
 
-    @init_checker
     def fill_enums(self, user=None, **kwargs):
         """
         Grab all enums and fill it locally
@@ -772,7 +845,6 @@ class BinSyncController:
 
         return changes
 
-    @init_checker
     def fill_global_vars(self, user=None, **kwargs):
         changes = False
         master_state, state = self.get_master_and_user_state(user=user, **kwargs)
@@ -781,7 +853,6 @@ class BinSyncController:
 
         return changes
 
-    @init_checker
     def fill_all(self, user=None, **kwargs):
         """
         Connected to the Sync All action:

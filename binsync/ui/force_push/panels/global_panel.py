@@ -1,8 +1,8 @@
 import logging
 from datetime import datetime
 
-from binsync.common.controller import BinSyncController
-from binsync.common.ui.qt_objects import (
+from binsync.api.controller import BSController
+from binsync.ui.qt_objects import (
     QAbstractItemView,
     QAbstractTableModel,
     QHeaderView,
@@ -16,11 +16,10 @@ from binsync.common.ui.qt_objects import (
     QFontDatabase,
     QWidget,
     QVBoxLayout,
-    QPersistentModelIndex,
     QCheckBox,
     QPushButton
 )
-from binsync.common.ui.utils import friendly_datetime
+from binsync.ui.utils import friendly_datetime
 
 l = logging.getLogger(__name__)
 
@@ -41,7 +40,7 @@ class GlobalTableModel(QAbstractTableModel):
     # Color for most recently updated, the alpha value decreases linearly over controller.table_coloring_window
     ACTIVE_GLOBAL_COLOR = (100, 255, 100, 70)
 
-    def __init__(self, controller: BinSyncController, data=None, parent=None):
+    def __init__(self, controller: BSController, data=None, parent=None):
         super().__init__(parent)
         self.controller = controller
         # holds sublists of form: (type, remote name, user, last push)
@@ -197,7 +196,7 @@ class GlobalTableFilterLineEdit(QLineEdit):
 class GlobalTableView(QTableView):
     """ Table view for the data, this is the front end "container" for our model. """
 
-    def __init__(self, controller: BinSyncController, filteredit: GlobalTableFilterLineEdit, parent=None):
+    def __init__(self, controller: BSController, filteredit: GlobalTableFilterLineEdit, parent=None):
         super().__init__(parent=parent)
         self.controller = controller
 
@@ -310,7 +309,7 @@ class GlobalTableView(QTableView):
 class QGlobalsTable(QWidget):
     """ Wrapper widget to contain the globals table classes in one file (prevents bulking up control_panel.py) """
 
-    def __init__(self, controller: BinSyncController, parent=None):
+    def __init__(self, controller: BSController, parent=None):
         super().__init__(parent)
         self.controller = controller
         self._init_widgets()

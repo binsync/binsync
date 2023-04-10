@@ -9,4 +9,3 @@ from binsync.data.global_variable import GlobalVariable
 from binsync.data.enum import Enum
 from binsync.data.state import State, ArtifactType
 from binsync.data.configuration import ProjectConfig, GlobalConfig
-from binsync.data.type_parser import BSType, BSTypeParser

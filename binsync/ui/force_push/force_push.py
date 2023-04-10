@@ -1,8 +1,8 @@
 import logging
 
-from binsync.common.ui.force_push.panels.functions_table import QFunctionTable
-from binsync.common.ui.force_push.panels.global_panel import QGlobalsTable
-from binsync.common.ui.qt_objects import (
+from binsync.ui.force_push.panels.functions_table import QFunctionTable
+from binsync.ui.force_push.panels.global_panel import QGlobalsTable
+from binsync.ui.qt_objects import (
     QTabWidget,
     QVBoxLayout,
     QWidget,

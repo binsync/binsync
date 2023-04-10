@@ -1,6 +1,6 @@
 import logging
 
-from binsync.common.ui.qt_objects import (
+from .qt_objects import (
     QDialog,
     QDialogButtonBox,
     QGridLayout,

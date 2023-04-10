@@ -1,25 +1,19 @@
 import logging
-import time
-from functools import partial
-from typing import Dict
-import datetime
 
-from binsync.common.controller import BinSyncController
-from binsync.common.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView
-from binsync.common.ui.qt_objects import (
+from binsync.api.controller import BSController
+from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableView
+from binsync.ui.qt_objects import (
     QMenu,
     QAction,
     Qt
 )
-from binsync.common.ui.utils import friendly_datetime
-from binsync.core.scheduler import SchedSpeed
-from binsync.data import Function
+from binsync.ui.utils import friendly_datetime
 
 l = logging.getLogger(__name__)
 
 
 class CTXTableModel(BinsyncTableModel):
-    def __init__(self, controller: BinSyncController, col_headers=None, filter_cols=None, time_col=None,
+    def __init__(self, controller: BSController, col_headers=None, filter_cols=None, time_col=None,
                  addr_col=None, parent=None):
         super().__init__(controller, col_headers, filter_cols, time_col, addr_col, parent)
         self.data_dict = {}
@@ -81,7 +75,7 @@ class CTXTableModel(BinsyncTableModel):
 class QCTXTable(BinsyncTableView):
     HEADER = ['User', 'Remote Name', 'Last Push']
 
-    def __init__(self, controller: BinSyncController, stretch_col=None,
+    def __init__(self, controller: BSController, stretch_col=None,
                  col_count=None, parent=None):
         super().__init__(controller, None, 1, 3, parent)
 

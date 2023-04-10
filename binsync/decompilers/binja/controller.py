@@ -17,31 +17,26 @@
 #
 # ----------------------------------------------------------------------------
 
-import re
 import threading
 import functools
-from typing import Dict, List, Tuple, Optional, Iterable, Any
+from typing import Dict, Tuple, Optional, Iterable, Any
 import hashlib
 import logging
 
 from binaryninja import SymbolType
 from binaryninjaui import (
     UIContext,
-    DockHandler,
     DockContextHandler,
-    UIAction,
     UIActionHandler,
     Menu,
 )
 import binaryninja
-from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourceType
-from binaryninja.mainthread import execute_on_main_thread, is_main_thread
+from binaryninja.enums import VariableSourceType
 from binaryninja.types import StructureType, EnumerationType
 
-from binsync.common.controller import BinSyncController, fill_event, init_checker
+from binsync.api.controller import BSController, fill_event, init_checker
 from binsync.data import (
-    State, User, Artifact,
-    Function, FunctionHeader, FunctionArgument, StackVariable,
+    State, Function, FunctionHeader, StackVariable,
     Comment, GlobalVariable, Patch,
     Enum, Struct
 )
@@ -79,10 +74,10 @@ def background_and_wait(func):
 # Controller
 #
 
-class BinjaBinSyncController(BinSyncController):
-    def __init__(self):
-        super(BinjaBinSyncController, self).__init__(artifact_lifter=BinjaArtifactLifter(self))
-        self.bv: binaryninja.BinaryView = None
+class BinjaBSController(BSController):
+    def __init__(self, bv=None):
+        super(BinjaBSController, self).__init__(artifact_lifter=BinjaArtifactLifter(self))
+        self.bv: binaryninja.BinaryView = bv
 
     def binary_hash(self) -> str:
         hash_ = ""
@@ -132,7 +127,6 @@ class BinjaBinSyncController(BinSyncController):
     # Fillers
     #
 
-    @init_checker
     @fill_event
     def fill_struct(self, struct_name, header=True, members=True, artifact=None, **kwargs):
         bs_struct: Struct = artifact
@@ -164,7 +158,6 @@ class BinjaBinSyncController(BinSyncController):
 
         return True
 
-    @init_checker
     @fill_event
     def fill_global_var(self, var_addr, user=None, artifact=None, **kwargs):
         changed = False
@@ -183,7 +176,6 @@ class BinjaBinSyncController(BinSyncController):
 
         return changed
 
-    @init_checker
     @background_and_wait
     @fill_event
     def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
@@ -193,13 +185,12 @@ class BinjaBinSyncController(BinSyncController):
         bs_func: Function = artifact
         bn_func = self.bv.get_function_at(bs_func.addr)
 
-        changes = super(BinjaBinSyncController, self).fill_function(
+        changes = super(BinjaBSController, self).fill_function(
             func_addr, user=user, artifact=artifact, bn_func=bn_func, **kwargs
         )
         bn_func.reanalyze()
         return changes
 
-    @init_checker
     @fill_event
     def fill_function_header(self, func_addr, user=None, artifact=None, bn_func=None, **kwargs):
         updates = False
@@ -255,7 +246,6 @@ class BinjaBinSyncController(BinSyncController):
 
         return updates
 
-    @init_checker
     @fill_event
     def fill_stack_variable(self, func_addr, offset, user=None, artifact=None, bn_func=None, **kwargs):
         updates = False
@@ -291,7 +281,6 @@ class BinjaBinSyncController(BinSyncController):
 
         return updates
 
-    @init_checker
     @fill_event
     def fill_comment(self, addr, user=None, artifact=None, bn_func=None, **kwargs):
         # TODO: check if the comment changed when set!
@@ -300,7 +289,6 @@ class BinjaBinSyncController(BinSyncController):
 
         return True
     
-    @init_checker
     @fill_event
     def fill_enum(self, name, user=None, artifact=None, ida_code_view=None, **kwargs):
         bs_enum: Enum = artifact

@@ -1,13 +1,13 @@
 import logging
 
 from angrmanagement.ui.views.view import BaseView
-from binsync.common.ui.version import set_ui_version
+from binsync.ui.version import set_ui_version
 
 set_ui_version("PySide6")
-from binsync.common.ui.control_panel import ControlPanel
-from binsync.common.ui.qt_objects import QVBoxLayout
+from binsync.ui.control_panel import ControlPanel
+from binsync.ui.qt_objects import QVBoxLayout
 
-from .controller import AngrBinSyncController
+from .controller import AngrBSController
 
 
 l = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ class ControlPanelView(BaseView):
 
         self.base_caption = "BinSync: Control Panel"
 
-        self.controller: AngrBinSyncController = controller
+        self.controller: AngrBSController = controller
         self.control_panel = ControlPanel(self.controller)
         self._init_widgets()
 

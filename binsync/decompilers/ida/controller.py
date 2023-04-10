@@ -29,7 +29,7 @@ import ida_struct
 import ida_hexrays
 
 import binsync
-from binsync.common.controller import BinSyncController, init_checker, fill_event
+from binsync.api.controller import BSController, init_checker, fill_event
 from binsync.data import (
     StackVariable, Function, FunctionHeader, Struct, Comment, GlobalVariable, Enum
 )
@@ -41,7 +41,7 @@ _l = logging.getLogger(name=__name__)
 
 def update_on_view(f):
     wraps(f)
-    def _update_on_view(self: IDABinSyncController, func_addr, *args, **kwargs):
+    def _update_on_view(self: IDABSController, func_addr, *args, **kwargs):
         # always execute something we are looking at
         active_ctx = self.active_context()
         if active_ctx and active_ctx.addr == func_addr:
@@ -124,9 +124,9 @@ class UpdateTaskState:
 #   Controller
 #
 
-class IDABinSyncController(BinSyncController):
+class IDABSController(BSController):
     def __init__(self):
-        super(IDABinSyncController, self).__init__(artifact_lifter=IDAArtifactLifter(self))
+        super(IDABSController, self).__init__(artifact_lifter=IDAArtifactLifter(self))
 
         # view change callback
         self._updated_ctx = None
@@ -179,7 +179,6 @@ class IDABinSyncController(BinSyncController):
     # IDA DataBase Fillers
     #
 
-    @init_checker
     @fill_event
     def fill_struct(self, struct_name, user=None, header=True, members=True, artifact=None, **kwargs):
         data_changed = False
@@ -201,7 +200,6 @@ class IDABinSyncController(BinSyncController):
 
         return data_changed
 
-    @init_checker
     @fill_event
     def fill_global_var(self, var_addr, user=None, artifact=None, **kwargs):
         changed = False
@@ -216,7 +214,6 @@ class IDABinSyncController(BinSyncController):
 
         return changed
 
-    @init_checker
     @fill_event
     def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
         func: Function = artifact
@@ -225,7 +222,7 @@ class IDABinSyncController(BinSyncController):
         except Exception:
             ida_code_view = None
 
-        changes = super(IDABinSyncController, self).fill_function(
+        changes = super(IDABSController, self).fill_function(
             func_addr, user=user, artifact=artifact, ida_code_view=ida_code_view, **kwargs
         )
         if ida_code_view is not None and changes:
@@ -233,7 +230,6 @@ class IDABinSyncController(BinSyncController):
 
         return changes
 
-    @init_checker
     @fill_event
     def fill_comment(self, addr, user=None, artifact=None, **kwargs):
         cmt: Comment = artifact
@@ -244,7 +240,6 @@ class IDABinSyncController(BinSyncController):
 
         return res
 
-    @init_checker
     @fill_event
     def fill_stack_variable(self, func_addr, offset, user=None, artifact=None, ida_code_view=None, **kwargs):
         if ida_code_view is None:
@@ -269,7 +264,6 @@ class IDABinSyncController(BinSyncController):
         changes |= compat.set_stack_vars_types({offset: ida_type}, ida_code_view, self)
         return changes
 
-    @init_checker
     @fill_event
     def fill_function_header(self, func_addr, user=None, artifact=None, ida_code_view=None, **kwargs):
         func_header: FunctionHeader = artifact
@@ -281,7 +275,6 @@ class IDABinSyncController(BinSyncController):
         updated_header = compat.set_function_header(ida_code_view, func_header)
         return updated_header
 
-    @init_checker
     @fill_event
     def fill_enum(self, name, user=None, artifact=None, ida_code_view=None, **kwargs):
         enum: Enum = artifact
