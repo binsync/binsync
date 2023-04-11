@@ -1,4 +1,3 @@
-import threading
 import re
 
 from PySide6.QtWidgets import QVBoxLayout
@@ -13,25 +12,22 @@ from binaryninjaui import (
 )
 import binaryninja
 from binaryninja.types import StructureType, EnumerationType
-from binaryninja import PluginCommand, BinaryView, SymbolType
+from binaryninja import SymbolType
 from binaryninja.interaction import show_message_box
-from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourceType
 from binaryninja.binaryview import BinaryDataNotification
 
 from collections import defaultdict
 import logging
 
-from binsync.common.ui.version import set_ui_version
+from binsync.ui.version import set_ui_version
 set_ui_version("PySide6")
-from binsync.common.ui.config_dialog import ConfigureBSDialog
-from binsync.common.ui.control_panel import ControlPanel
+from binsync.ui.config_dialog import ConfigureBSDialog
+from binsync.ui.control_panel import ControlPanel
 from .compat import bn_enum_to_bs, find_main_window, BinjaDockWidget, create_widget, bn_struct_to_bs, bn_func_to_bs
-from .controller import BinjaBinSyncController
+from .controller import BinjaBSController
 from binsync.data import (
-    State, User, Artifact,
-    Function, FunctionHeader, FunctionArgument, StackVariable,
-    Comment, GlobalVariable, Patch,
-    Enum, Struct, StructMember
+    Artifact,
+    Function, FunctionHeader, FunctionArgument, Comment, GlobalVariable, Enum, StructMember
 )
 
 l = logging.getLogger(__name__)
@@ -183,7 +179,7 @@ def start_data_monitor(view, controller):
 class BinjaPlugin:
     def __init__(self):
         # controller stored by a binary view
-        self.controllers = defaultdict(BinjaBinSyncController)
+        self.controllers = defaultdict(BinjaBSController)
         self._init_ui()
 
     def _init_ui(self):

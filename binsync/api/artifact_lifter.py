@@ -1,12 +1,12 @@
 import logging
 
 from binsync.data import StackVariable, Artifact
-from binsync.data.type_parser import BSTypeParser, BSType
+from binsync.api.type_parser import BSTypeParser
 
 _l = logging.getLogger(name=__name__)
 
 
-class ArtifactLifter:
+class BSArtifactLifter:
     def __init__(self, controller, types=None):
         self.controller = controller
         self.type_parser = BSTypeParser(extra_types=types)

@@ -1,7 +1,7 @@
 import logging
 
-from binsync.common.controller import BinSyncController, MergeLevel
-from binsync.common.ui.qt_objects import (
+from binsync.api.controller import BSController, MergeLevel
+from binsync.ui.qt_objects import (
     QCheckBox,
     QComboBox,
     QGroupBox,
@@ -14,16 +14,16 @@ from binsync.common.ui.qt_objects import (
     QLineEdit,
     QIntValidator
 )
-from binsync.common.ui.magic_sync_dialog import MagicSyncDialog
-from binsync.common.ui.force_push import ForcePushUI
-from binsync.common.controller import BinSyncController
+from binsync.ui.magic_sync_dialog import MagicSyncDialog
+from binsync.ui.force_push import ForcePushUI
+from binsync.api.controller import BSController
 from binsync.core.scheduler import SchedSpeed
 
 l = logging.getLogger(__name__)
 
 
 class QUtilPanel(QWidget):
-    def __init__(self, controller: BinSyncController, parent=None):
+    def __init__(self, controller: BSController, parent=None):
         super().__init__(parent)
         self.controller = controller
         self._init_widgets()

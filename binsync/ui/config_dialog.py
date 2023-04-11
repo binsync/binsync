@@ -7,7 +7,7 @@ from typing import Optional
 
 from binsync.core.client import ConnectionWarnings, BINSYNC_ROOT_BRANCH
 from binsync.data.configuration import ProjectConfig
-from binsync.common.ui.qt_objects import (
+from binsync.ui.qt_objects import (
     QCheckBox,
     QDialog,
     QDir,
@@ -23,7 +23,7 @@ from binsync.common.ui.qt_objects import (
     QTableWidgetItem,
     QHeaderView
 )
-from binsync.common.ui.utils import QCollapsibleBox
+from binsync.ui.utils import QCollapsibleBox
 
 l = logging.getLogger(__name__)
 

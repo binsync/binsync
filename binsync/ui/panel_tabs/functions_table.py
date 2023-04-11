@@ -4,9 +4,9 @@ import time
 from typing import Dict
 from collections import defaultdict
 
-from binsync.common.controller import BinSyncController
-from binsync.common.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView
-from binsync.common.ui.qt_objects import (
+from binsync.api.controller import BSController
+from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView
+from binsync.ui.qt_objects import (
     QMenu,
     QAction,
     QWidget,
@@ -14,7 +14,7 @@ from binsync.common.ui.qt_objects import (
     QColor,
     Qt
 )
-from binsync.common.ui.utils import friendly_datetime
+from binsync.ui.utils import friendly_datetime
 from binsync.core.scheduler import SchedSpeed
 from binsync.data import Function
 
@@ -22,7 +22,7 @@ l = logging.getLogger(__name__)
 
 
 class FunctionTableModel(BinsyncTableModel):
-    def __init__(self, controller: BinSyncController, col_headers=None, filter_cols=None, time_col=None,
+    def __init__(self, controller: BSController, col_headers=None, filter_cols=None, time_col=None,
                  addr_col=None, parent=None):
         super().__init__(controller, col_headers, filter_cols, time_col, addr_col, parent)
         self.data_dict = {}
@@ -85,7 +85,7 @@ class FunctionTableModel(BinsyncTableModel):
 class FunctionTableView(BinsyncTableView):
     HEADER = ['Addr', 'Remote Name', 'User', 'Last Push']
 
-    def __init__(self, controller: BinSyncController, filteredit: BinsyncTableFilterLineEdit, stretch_col=None,
+    def __init__(self, controller: BSController, filteredit: BinsyncTableFilterLineEdit, stretch_col=None,
                  col_count=None, parent=None):
         super().__init__(controller, filteredit, stretch_col, col_count, parent)
 
@@ -163,7 +163,7 @@ class FunctionTableView(BinsyncTableView):
 class QFunctionTable(QWidget):
     """ Wrapper widget to contain the function table classes in one file (prevents bulking up control_panel.py) """
 
-    def __init__(self, controller: BinSyncController, parent=None):
+    def __init__(self, controller: BSController, parent=None):
         super().__init__(parent)
         self.controller = controller
         self._init_widgets()

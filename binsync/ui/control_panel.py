@@ -1,17 +1,14 @@
 import logging
-import time
 
 import binsync.data
-from binsync.common.ui.force_push.force_push import ForcePushUI
-from binsync.common.ui.panel_tabs.activity_table import QActivityTable
-from binsync.common.ui.panel_tabs.ctx_table import QCTXTable
-from binsync.common.ui.panel_tabs.functions_table import QFunctionTable
-from binsync.common.ui.panel_tabs.globals_table import QGlobalsTable
-from binsync.common.ui.panel_tabs.util_panel import QUtilPanel
-from binsync.common.ui.qt_objects import (
+from binsync.ui.panel_tabs.activity_table import QActivityTable
+from binsync.ui.panel_tabs.ctx_table import QCTXTable
+from binsync.ui.panel_tabs.functions_table import QFunctionTable
+from binsync.ui.panel_tabs.globals_table import QGlobalsTable
+from binsync.ui.panel_tabs.util_panel import QUtilPanel
+from binsync.ui.qt_objects import (
     QLabel,
     QMenu,
-    QPushButton,
     QStatusBar,
     QTabWidget,
     QVBoxLayout,

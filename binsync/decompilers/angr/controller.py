@@ -7,8 +7,8 @@ from angr.analyses.decompiler.structured_codegen import DummyStructuredCodeGener
 from angrmanagement.ui.views import CodeView
 
 import binsync
-from binsync.common.controller import (
-    BinSyncController,
+from binsync.api.controller import (
+    BSController,
     init_checker,
     fill_event
 )
@@ -21,16 +21,20 @@ from .artifact_lifter import AngrArtifactLifter
 l = logging.getLogger(__name__)
 
 
-class AngrBinSyncController(BinSyncController):
+class AngrBSController(BSController):
     """
     The class used for all pushing/pulling and merging based actions with BinSync data.
     This class is responsible for handling callbacks that are done by changes from the local user
     and responsible for running a thread to get new changes from other users.
     """
 
-    def __init__(self, workspace):
+    def __init__(self, workspace=None):
         super().__init__(artifact_lifter=AngrArtifactLifter(self))
         self._workspace = workspace
+        if workspace is None:
+            l.critical("The workspace provided is None, which will result in a broken BinSync.")
+            return
+
         self._main_instance = workspace.main_instance
 
     def binary_hash(self) -> str:
@@ -84,15 +88,13 @@ class AngrBinSyncController(BinSyncController):
     #
     # Display Fillers
     #
-    @init_checker
+
     def fill_global_var(self, var_addr, user=None, artifact=None, **kwargs):
         return False
 
-    @init_checker
     def fill_struct(self, struct_name, user=None, artifact=None, **kwargs):
         return False
 
-    @init_checker
     @fill_event
     def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
         func: Function = artifact
@@ -101,14 +103,13 @@ class AngrBinSyncController(BinSyncController):
         # re-decompile a function if needed
         decompilation = self.decompile_function(angr_func)
 
-        changes = super(AngrBinSyncController, self).fill_function(
+        changes = super(AngrBSController, self).fill_function(
             func_addr, user=user, artifact=artifact, decompilation=decompilation, **kwargs
         )
 
         self.refresh_decompilation(func.addr)
         return changes
 
-    @init_checker
     @fill_event
     def fill_comment(self, addr, user=None, artifact=None, decompilation=None, **kwargs):
         cmt: Comment = artifact
@@ -133,12 +134,11 @@ class AngrBinSyncController(BinSyncController):
                 changed = True
         return changed
 
-    @init_checker
     @fill_event
     def fill_stack_variable(self, func_addr, offset, user=None, artifact=None, decompilation=None, **kwargs):
         sync_var: StackVariable = artifact
         changed = False
-        code_var = AngrBinSyncController.find_stack_var_in_codegen(decompilation, offset)
+        code_var = AngrBSController.find_stack_var_in_codegen(decompilation, offset)
         if code_var:
             code_var.name = sync_var.name
             code_var.renamed = True
@@ -146,7 +146,6 @@ class AngrBinSyncController(BinSyncController):
 
         return changed
 
-    @init_checker
     @fill_event
     def fill_function_header(self, func_addr, user=None, artifact=None, decompilation=None, **kwargs):
         func_header: FunctionHeader = artifact
@@ -197,6 +196,17 @@ class AngrBinSyncController(BinSyncController):
 
         func.header = func_header
         return func
+
+    def _decompile(self, function: Function) -> Optional[str]:
+        func = self._workspace.main_instance.kb.functions.get(function.addr, None)
+        if func is None:
+            return None
+
+        codegen = self.decompile_function(func)
+        if not codegen or not codegen.text:
+            return None
+
+        return codegen.text
 
 
     #

@@ -1,11 +1,11 @@
 import logging
 import sys
 
-from binsync.common.ui.qt_objects import QVBoxLayout, QMainWindow, QApplication
-from binsync.common.ui.control_panel import ControlPanel
-from binsync.common.ui.config_dialog import ConfigureBSDialog
+from binsync.ui.qt_objects import QVBoxLayout, QMainWindow, QApplication
+from binsync.ui.control_panel import ControlPanel
+from binsync.ui.config_dialog import ConfigureBSDialog
 
-from .controller import GhidraBinSyncController
+from .controller import GhidraBSController
 
 
 l = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ class ControlPanelWindow(QMainWindow):
         self.setWindowTitle("BinSync")
         self.width_hint = 300
 
-        self.controller: GhidraBinSyncController = GhidraBinSyncController()
+        self.controller: GhidraBSController = GhidraBSController()
         self.control_panel = ControlPanel(self.controller)
 
         self._init_widgets()

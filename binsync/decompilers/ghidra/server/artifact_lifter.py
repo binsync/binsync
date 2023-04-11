@@ -1,11 +1,11 @@
 import logging
 
-from binsync.common import ArtifactLifter
+from binsync.api import BSArtifactLifter
 
 l = logging.getLogger(name=__name__)
 
 
-class GhidraArtifactLifter(ArtifactLifter):
+class GhidraArtifactLifter(BSArtifactLifter):
     lift_map = {}
 
     def __init__(self, controller):

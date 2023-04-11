@@ -7,10 +7,8 @@ import logging
 from datetime import datetime as datetime_, timedelta
 
 from PySide6 import QtWidgets
-from PySide6.QtCore import Qt, QPoint
 from PySide6.QtGui import QContextMenuEvent
-from PySide6.QtTest import QTest
-from PySide6.QtCore import Qt, QPoint, QTimer
+from PySide6.QtCore import Qt, QPoint
 from PySide6.QtWidgets import QApplication, QMenu
 from angrmanagement.ui.views import CodeView, DisassemblyView
 from pytestqt.qtbot import QtBot
@@ -20,10 +18,10 @@ import angr
 from angrmanagement.ui.dialogs.rename_node import RenameNode
 from angrmanagement.ui.main_window import MainWindow
 
-from binsync.common.ui.version import set_ui_version
+from binsync.ui.version import set_ui_version
 set_ui_version("PySide6")
-from binsync.common.controller import SyncControlStatus
-from binsync.common.ui.config_dialog import ConfigureBSDialog
+from binsync.api.controller import SyncControlStatus
+from binsync.ui.config_dialog import ConfigureBSDialog
 
 
 test_location = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'binaries')

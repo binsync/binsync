@@ -1,13 +1,13 @@
 import logging
 
-from binsync.common import ArtifactLifter
+from binsync.api import BSArtifactLifter
 
 from . import compat
 
 l = logging.getLogger(name=__name__)
 
 
-class IDAArtifactLifter(ArtifactLifter):
+class IDAArtifactLifter(BSArtifactLifter):
     lift_map = {
         "__int64": "long",
         "__int32": "int",

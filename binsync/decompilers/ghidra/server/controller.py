@@ -1,7 +1,7 @@
 from typing import Optional
 import logging
 
-from binsync.common.controller import BinSyncController, init_checker, fill_event
+from binsync.api.controller import BSController, init_checker, fill_event
 from binsync.data import (
     Function, FunctionHeader, StackVariable, Comment
 )
@@ -12,9 +12,9 @@ from .artifact_lifter import GhidraArtifactLifter
 l = logging.getLogger(__name__)
 
 
-class GhidraBinSyncController(BinSyncController):
+class GhidraBSController(BSController):
     def __init__(self):
-        super(GhidraBinSyncController, self).__init__(GhidraArtifactLifter(self))
+        super(GhidraBSController, self).__init__(GhidraArtifactLifter(self))
         self.ghidra = BSGhidraClient()
         self.base_addr = None
 
@@ -94,6 +94,13 @@ class GhidraBinSyncController(BinSyncController):
 
     @init_checker
     def magic_fill(self, preference_user=None):
-        super(GhidraBinSyncController, self).magic_fill(
+        super(GhidraBSController, self).magic_fill(
             preference_user=preference_user, target_artifacts={Function: self.fill_function}
         )
+
+    #
+    # Artifact API
+    #
+
+    def _decompile(self, function: Function) -> Optional[str]:
+        return None

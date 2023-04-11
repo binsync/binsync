@@ -22,7 +22,7 @@ import binsync
 from binsync.data import (
     Struct, FunctionHeader, FunctionArgument, StackVariable, Function, GlobalVariable, Enum
 )
-from .controller import IDABinSyncController
+from .controller import IDABSController
 
 l = logging.getLogger(__name__)
 
@@ -411,7 +411,7 @@ def get_func_stack_var_info(func_addr) -> typing.Dict[int, StackVariable]:
 
 
 @execute_write
-def set_stack_vars_types(var_type_dict, code_view, controller: "IDABinSyncController") -> bool:
+def set_stack_vars_types(var_type_dict, code_view, controller: "IDABSController") -> bool:
     """
     Sets the type of a stack variable, which should be a local variable.
     Take special note of the types of first two parameters used here:

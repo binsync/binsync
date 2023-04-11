@@ -1,7 +1,7 @@
-from binsync.common import ArtifactLifter
+from binsync.api import BSArtifactLifter
 
 
-class AngrArtifactLifter(ArtifactLifter):
+class AngrArtifactLifter(BSArtifactLifter):
     """
     TODO: fix me
     """

@@ -38,7 +38,7 @@ import idc
 from PyQt5 import QtCore
 
 from . import compat
-from .controller import IDABinSyncController
+from .controller import IDABSController
 from binsync.data import (
     FunctionHeader, FunctionArgument, StackVariable,
     Comment, GlobalVariable, Enum, Struct
@@ -79,7 +79,7 @@ def stop_if_syncing(f):
 class IDBHooks(ida_idp.IDB_Hooks):
     def __init__(self, controller):
         ida_idp.IDB_Hooks.__init__(self)
-        self.controller: IDABinSyncController = controller
+        self.controller: IDABSController = controller
         self.last_local_type = None
 
     @quite_init_checker
@@ -514,7 +514,7 @@ class FakeIDACodeView:
 
 class HexRaysHooks:
     def __init__(self, controller):
-        self.controller: IDABinSyncController = controller
+        self.controller: IDABSController = controller
         super(HexRaysHooks, self).__init__()
         self._available = None
         self._installed = False

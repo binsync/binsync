@@ -4,12 +4,12 @@ import logging
 import binsync
 from angrmanagement.plugins import BasePlugin
 from angrmanagement.ui.workspace import Workspace
-from binsync.common.ui.version import set_ui_version
+from binsync.ui.version import set_ui_version
 
 set_ui_version("PySide6")
-from binsync.common.ui.config_dialog import ConfigureBSDialog
+from binsync.ui.config_dialog import ConfigureBSDialog
 from .control_panel_view import ControlPanelView
-from .controller import AngrBinSyncController
+from .controller import AngrBSController
 
 from binsync.data import (
     StackVariable, Function, FunctionHeader, Comment
@@ -32,7 +32,7 @@ class BinSyncPlugin(BasePlugin):
         super().__init__(workspace)
 
         # init the Sync View on load
-        self.controller = AngrBinSyncController(self.workspace)
+        self.controller = AngrBSController(workspace=self.workspace)
         self.control_panel_view = ControlPanelView(workspace.main_instance, 'right', self.controller)
 
         self.controller.control_panel = self.control_panel_view
@@ -105,7 +105,7 @@ class BinSyncPlugin(BasePlugin):
 
         decompilation = self.controller.decompile_function(func)
         stack_var = self.controller.find_stack_var_in_codegen(decompilation, offset)
-        var_type = AngrBinSyncController.stack_var_type_str(decompilation, stack_var)
+        var_type = AngrBSController.stack_var_type_str(decompilation, stack_var)
 
         self.controller.schedule_job(
             self.controller.push_artifact,
@@ -127,7 +127,7 @@ class BinSyncPlugin(BasePlugin):
     # pylint: disable=unused-argument
     def handle_func_arg_renamed(self, func, offset, old_name, new_name):
         decompilation = self.controller.decompile_function(func)
-        func_args = AngrBinSyncController.get_func_args(decompilation)
+        func_args = AngrBSController.get_func_args(decompilation)
         func_type = decompilation.cfunc.functy.returnty.c_repr()
         bs_args = {
             i: binsync.FunctionArgument(i, var_info[0].name, var_info[1], var_info[0].size)
@@ -143,7 +143,7 @@ class BinSyncPlugin(BasePlugin):
     # pylint: disable=unused-argument
     def handle_func_arg_retyped(self, func, offset, old_type, new_type):
         decompilation = self.controller.decompile_function(func)
-        func_args = AngrBinSyncController.get_func_args(decompilation)
+        func_args = AngrBSController.get_func_args(decompilation)
         func_type = decompilation.cfunc.functy.returnty.c_repr()
         bs_args = {
             i: binsync.FunctionArgument(i, var_info[0].name, var_info[1], var_info[0].size)

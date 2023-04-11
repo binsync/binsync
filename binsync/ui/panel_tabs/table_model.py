@@ -1,9 +1,9 @@
 import logging
 import datetime
-from typing import List, Dict, Set
+from typing import Dict, Set
 
-from binsync.common.controller import BinSyncController
-from binsync.common.ui.qt_objects import (
+from binsync.api.controller import BSController
+from binsync.ui.qt_objects import (
     QAbstractItemView,
     QAbstractTableModel,
     QHeaderView,
@@ -19,7 +19,7 @@ from binsync.common.ui.qt_objects import (
     Signal,
     Slot,
 )
-from binsync.common.ui.utils import friendly_datetime
+
 l = logging.getLogger(__name__)
 
 
@@ -33,7 +33,7 @@ class BinsyncTableModel(QAbstractTableModel):
 
     update_signal = Signal(list, list)
 
-    def __init__(self, controller: BinSyncController, col_headers=None, filter_cols=None, time_col=None, addr_col=None, parent=None):
+    def __init__(self, controller: BSController, col_headers=None, filter_cols=None, time_col=None, addr_col=None, parent=None):
         """
         Template class for a Binsync Table
 
@@ -228,7 +228,7 @@ class BinsyncTableFilterLineEdit(QLineEdit):
 class BinsyncTableView(QTableView):
     """ Table view for the data, this is the front end "container" for our model. """
 
-    def __init__(self, controller: BinSyncController, filteredit: BinsyncTableFilterLineEdit=None, stretch_col=None, col_count=None, parent=None):
+    def __init__(self, controller: BSController, filteredit: BinsyncTableFilterLineEdit=None, stretch_col=None, col_count=None, parent=None):
         """
         Template class for a Binsync Table View, required to create and set the model (extend BinsyncTableModel)
 

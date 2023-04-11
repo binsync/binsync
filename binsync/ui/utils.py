@@ -1,7 +1,7 @@
 import datetime
 import logging
 
-from binsync.common.ui.qt_objects import (
+from binsync.ui.qt_objects import (
     QFrame,
     QWidget,
     QScrollArea,

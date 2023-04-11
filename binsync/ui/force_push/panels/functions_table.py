@@ -1,8 +1,8 @@
 import logging
 from datetime import datetime
 
-from binsync.common.controller import BinSyncController
-from binsync.common.ui.qt_objects import (
+from binsync.api.controller import BSController
+from binsync.ui.qt_objects import (
     QAbstractItemView,
     QAbstractTableModel,
     QHeaderView,
@@ -20,7 +20,7 @@ from binsync.common.ui.qt_objects import (
     QPersistentModelIndex,
     QCheckBox
 )
-from binsync.common.ui.utils import friendly_datetime
+from binsync.ui.utils import friendly_datetime
 from binsync.data.state import State
 from binsync.core.scheduler import SchedSpeed
 
@@ -43,7 +43,7 @@ class FunctionTableModel(QAbstractTableModel):
     # Color for most recently updated, the alpha value decreases linearly over controller.table_coloring_window
     ACTIVE_FUNCTION_COLOR = (100, 255, 100, 70)
 
-    def __init__(self, controller: BinSyncController, data=None, parent=None):
+    def __init__(self, controller: BSController, data=None, parent=None):
         super().__init__(parent)
         self.controller = controller
         self.row_data = data if data else []
@@ -189,7 +189,7 @@ class FunctionTableFilterLineEdit(QLineEdit):
 class FunctionTableView(QTableView):
     """ Table view for the data, this is the front end "container" for our model. """
 
-    def __init__(self, controller: BinSyncController, filteredit: FunctionTableFilterLineEdit, parent=None):
+    def __init__(self, controller: BSController, filteredit: FunctionTableFilterLineEdit, parent=None):
         super().__init__(parent=parent)
         self.controller = controller
 
@@ -319,7 +319,7 @@ class FunctionTableView(QTableView):
 
 class QFunctionTable(QWidget):
     """ Wrapper widget to contain the function table classes in one file (prevents bulking up control_panel.py) """
-    def __init__(self, controller: BinSyncController, parent=None):
+    def __init__(self, controller: BSController, parent=None):
         super().__init__(parent)
         self.controller = controller
         self._init_widgets()

@@ -18,18 +18,18 @@ import idautils
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
 from PyQt5.QtCore import Qt
 
-from binsync.common.ui.version import set_ui_version
+from binsync.ui.version import set_ui_version
 set_ui_version("PyQt5")
-from binsync.common.ui.config_dialog import ConfigureBSDialog
-from binsync.common.ui.control_panel import ControlPanel
+from binsync.ui.config_dialog import ConfigureBSDialog
+from binsync.ui.control_panel import ControlPanel
 from binsync import __version__ as VERSION
 
 from .hooks import MasterHook, IdaHotkeyHook
-from .controller import IDABinSyncController
+from .controller import IDABSController
 from . import compat
 
 l = logging.getLogger(__name__)
-controller = IDABinSyncController()
+controller = IDABSController()
 
 # disable the annoying "Running Python script" wait box that freezes IDA at times
 idaapi.set_script_timeout(0)
