@@ -3,7 +3,7 @@ import threading
 import datetime
 import time
 from functools import wraps
-from typing import Dict, Iterable, Optional, Union
+from typing import Dict, Iterable, Optional, Union, TypeVar, Callable
 
 import binsync.data
 from binsync.data import ProjectConfig
@@ -465,13 +465,29 @@ class BSController:
 
         return None
 
+    def decompile(self, function: Function) -> Optional[str]:
+        if not self.decompiler_available:
+            return None
+
+        if function.addr not in self.functions():
+            function = self.lower_artifact(function)
+            if not function or (function.addr not in self.functions()):
+                return  None
+
+        return self._decompile(function)
+
+    def _decompile(self, function: Function) -> Optional[str]:
+        return None
+
     #
     # Setters:
     # Work like Fillers, except can function without a BS Client. In effect, this allows you to
     # change the decompilers objects using BinSync objects.
+    # TODO: all the code in this category set_* is experimental and not ready for production use
+    # all this code should be implemented in the other decompilers or moved to a different project
     #
 
-    def set_artifact(self, artifact: Artifact, lower=True):
+    def set_artifact(self, artifact: Artifact, lower=True, **kwargs) -> bool:
         """
         Sets a BinSync Artifact into the decompilers local database. This operations allows you to change
         what the native decompiler sees with BinSync Artifacts. This is different from opertions on a BinSync State,
@@ -487,11 +503,14 @@ class BSController:
         """
         set_map = {
             Function: self.set_function,
+            FunctionHeader: self.set_function_header,
+            StackVariable: self.set_stack_variable,
             Comment: self.set_comment,
             GlobalVariable: self.set_global_var,
             Struct: self.set_struct,
             Enum: self.set_enum,
             Patch: self.set_patch,
+            Artifact: None,
         }
 
         if lower:
@@ -502,28 +521,45 @@ class BSController:
             _l.critical(f"Unsupported object is attempting to be set, please check your object: {artifact}")
             return False
 
-        return setter(artifact)
+        return setter(artifact, **kwargs)
 
-    def set_function(self, func: Function):
+    def set_function(self, func: Function, **kwargs) -> bool:
+        update = False
+        header = func.header
+        if header is not None:
+            update = self.set_function_header(header, **kwargs)
+
+        if func.stack_vars:
+            for variable in func.stack_vars.values():
+                update |= self.set_stack_variable(variable, **kwargs)
+
+        return update
+
+    def set_function_header(self, fheader: FunctionHeader, **kwargs) -> bool:
         return False
 
-    def set_comment(self, comment: Comment):
+    def set_stack_variable(self, svar: StackVariable, **kwargs) -> bool:
         return False
 
-    def set_global_var(self, gvar: GlobalVariable):
+    def set_comment(self, comment: Comment, **kwargs) -> bool:
         return False
 
-    def set_struct(self, struct: Struct):
+    def set_global_var(self, gvar: GlobalVariable, **kwargs) -> bool:
         return False
 
-    def set_enum(self, enum: Enum):
+    def set_struct(self, struct: Struct, header=True, members=True, **kwargs) -> bool:
         return False
 
-    def set_patch(self, path: Patch):
+    def set_enum(self, enum: Enum, **kwargs) -> bool:
+        return False
+
+    def set_patch(self, path: Patch, **kwargs) -> bool:
         return False
 
     #
     # Change Callback API
+    # TODO: all the code in this category on_* is experimental and not ready for production use
+    # all this code should be implemented in the other decompilers or moved to a different project
     #
 
     def on_function_header_changed(self, fheader: FunctionHeader):

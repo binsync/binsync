@@ -373,3 +373,10 @@ class BinjaBSController(BSController):
             addr, self.bv.get_symbol_at(addr) or f"data_{addr:x}", type_=str(var.type) if var.type is not None else None, size=var.type.width
         )
         return gvar
+
+    def _decompile(self, function: Function) -> Optional[str]:
+        funcs = self.bv.get_functions_containing(function.addr)
+        if not funcs:
+            return None
+        func = funcs[0]
+        return str(func.hlil)

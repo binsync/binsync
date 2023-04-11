@@ -197,6 +197,17 @@ class AngrBSController(BSController):
         func.header = func_header
         return func
 
+    def _decompile(self, function: Function) -> Optional[str]:
+        func = self._workspace.main_instance.kb.functions.get(function.addr, None)
+        if func is None:
+            return None
+
+        codegen = self.decompile_function(func)
+        if not codegen or not codegen.text:
+            return None
+
+        return codegen
+
 
     #
     #   Utils

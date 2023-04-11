@@ -308,3 +308,11 @@ class IDABSController(BSController):
 
     def enum(self, name) -> Optional[Enum]:
         return compat.enum(name)
+
+    def _decompile(self, function: Function) -> Optional[str]:
+        try:
+            cfunc = ida_hexrays.decompile(function.addr)
+        except Exception:
+            return None
+
+        return str(cfunc)

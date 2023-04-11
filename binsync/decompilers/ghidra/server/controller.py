@@ -97,3 +97,10 @@ class GhidraBSController(BSController):
         super(GhidraBSController, self).magic_fill(
             preference_user=preference_user, target_artifacts={Function: self.fill_function}
         )
+
+    #
+    # Artifact API
+    #
+
+    def _decompile(self, function: Function) -> Optional[str]:
+        return None
