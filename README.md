@@ -53,11 +53,11 @@ To understand the difference between artifact support, pull, push, and auto push
 
 | Operations&nbsp;&nbsp;&nbsp;&nbsp; | Function Headers&nbsp;&nbsp;&nbsp;&nbsp; | Stack Vars&nbsp;&nbsp;&nbsp;&nbsp; | Global Vars&nbsp;&nbsp;&nbsp;&nbsp; | Structs&nbsp;&nbsp;&nbsp;&nbsp; | Enums&nbsp;&nbsp;&nbsp;&nbsp; | Comments&nbsp;&nbsp;&nbsp;&nbsp; |
 |------------------------------------|------------------------------------------|------------------------------------|-------------------------------------|---------------------------------|-------------------------------|----------------------------------|
-| Symbols   	                        | :heavy_check_mark: 	                     | :heavy_check_mark:    	            | :heavy_check_mark: 	                | :heavy_check_mark: 	            | :heavy_check_mark: 	          | :heavy_check_mark: 	             |
-| Types     	                        | :heavy_check_mark: 	                     | :heavy_check_mark:    	            | :heavy_check_mark: 	                | :heavy_check_mark: 	            | :heavy_check_mark: 	          | :heavy_check_mark: 	             |
-| Pull      	                        | :heavy_check_mark: 	                     | :heavy_check_mark:    	            | :heavy_check_mark: 	                | :heavy_check_mark: 	            | :heavy_check_mark: 	          | :heavy_check_mark: 	             |
-| Push      	                        | :heavy_check_mark: 	                     | :heavy_check_mark: 	               | :heavy_check_mark: 	                | :heavy_check_mark: 	            | :heavy_check_mark: 	          | :heavy_check_mark: 	             |
-| Auto Push                          | :heavy_check_mark: 	                     | :heavy_check_mark:    	            | :heavy_check_mark: 	                | :heavy_check_mark: 	            | :heavy_check_mark: 	          | :heavy_check_mark: 	             |
+| Symbols   	                        | :white_check_mark: 	                     | :white_check_mark:    	            | :white_check_mark: 	                | :white_check_mark: 	            | :white_check_mark: 	          | :white_check_mark: 	             |
+| Types     	                        | :white_check_mark: 	                     | :white_check_mark:    	            | :white_check_mark: 	                | :white_check_mark: 	            | :white_check_mark: 	          | :white_check_mark: 	             |
+| Pull      	                        | :white_check_mark: 	                     | :white_check_mark:    	            | :white_check_mark: 	                | :white_check_mark: 	            | :white_check_mark: 	          | :white_check_mark: 	             |
+| Push      	                        | :white_check_mark: 	                     | :white_check_mark: 	               | :white_check_mark: 	                | :white_check_mark: 	            | :white_check_mark: 	          | :white_check_mark: 	             |
+| Auto Push                          | :white_check_mark: 	                     | :white_check_mark:    	            | :white_check_mark: 	                | :white_check_mark: 	            | :white_check_mark: 	          | :white_check_mark: 	             |
 
 <p align="center">
    <img src="./assets/images/ida_sync.gif" alt="IDA Sync"/>
@@ -68,11 +68,11 @@ To understand the difference between artifact support, pull, push, and auto push
 
 | Operations&nbsp;&nbsp;&nbsp;&nbsp; | Function Headers&nbsp;&nbsp;&nbsp;&nbsp; | Stack Vars&nbsp;&nbsp;&nbsp;&nbsp; | Global Vars&nbsp;&nbsp;&nbsp;&nbsp; | Structs&nbsp;&nbsp;&nbsp;&nbsp; | Enums&nbsp;&nbsp;&nbsp;&nbsp; | Comments&nbsp;&nbsp;&nbsp;&nbsp; |
 |------------------------------------|------------------------------------------|------------------------------------|-------------------------------------|---------------------------------|-------------------------------|----------------------------------|
-| Symbols   	                        | :heavy_check_mark: 	                     | :heavy_check_mark:    	            | :heavy_check_mark: 					            | :heavy_check_mark:   					      | :heavy_check_mark: 					      | :heavy_check_mark: 	             |
-| Types     	                        | :heavy_check_mark: 	                     | :heavy_check_mark:    	            | :heavy_check_mark: 					            | :heavy_check_mark:   					      | :heavy_check_mark: 					      | :heavy_check_mark: 	             |
-| Pull      	                        | :heavy_check_mark: 	                     | :heavy_check_mark:    	            | :heavy_check_mark: 					            | :heavy_check_mark:   					      | :heavy_check_mark: 					      | :heavy_check_mark: 	             |
-| Push      	                        | :heavy_check_mark:                       | :heavy_check_mark:		               | :heavy_check_mark:					             | :heavy_check_mark:			           | :heavy_check_mark: 					      | :heavy_check_mark: 					         |
-| Auto Push 	                        | :heavy_check_mark:                       | :heavy_check_mark:		               | :heavy_check_mark:					             | :heavy_check_mark:			           | :heavy_check_mark: 					      | :heavy_check_mark: 					         |
+| Symbols   	                        | :white_check_mark: 	                     | :white_check_mark:    	            | :white_check_mark: 					            | :white_check_mark:   					      | :white_check_mark: 					      | :white_check_mark: 	             |
+| Types     	                        | :white_check_mark: 	                     | :white_check_mark:    	            | :white_check_mark: 					            | :white_check_mark:   					      | :white_check_mark: 					      | :white_check_mark: 	             |
+| Pull      	                        | :white_check_mark: 	                     | :white_check_mark:    	            | :white_check_mark: 					            | :white_check_mark:   					      | :white_check_mark: 					      | :white_check_mark: 	             |
+| Push      	                        | :white_check_mark:                       | :white_check_mark:		               | :white_check_mark:					             | :white_check_mark:			           | :white_check_mark: 					      | :white_check_mark: 					         |
+| Auto Push 	                        | :white_check_mark:                       | :white_check_mark:		               | :white_check_mark:					             | :white_check_mark:			           | :white_check_mark: 					      | :white_check_mark: 					         |
 
 <p align="center">
    <img src="./assets/images/binja_sync.gif" alt="Binja Sync"/>
@@ -82,9 +82,9 @@ To understand the difference between artifact support, pull, push, and auto push
 
 | Operations&nbsp;&nbsp;&nbsp;&nbsp; | Function Headers&nbsp;&nbsp;&nbsp;&nbsp; | Stack Vars&nbsp;&nbsp;&nbsp;&nbsp; | Global Vars&nbsp;&nbsp;&nbsp;&nbsp; | Structs&nbsp;&nbsp;&nbsp;&nbsp; | Enums&nbsp;&nbsp;&nbsp;&nbsp; | Comments&nbsp;&nbsp;&nbsp;&nbsp; |
 |------------------------------------|------------------------------------------|------------------------------------|-------------------------------------|---------------------------------|-------------------------------|----------------------------------|
-| Symbols   	                        | :heavy_check_mark: 	                     | :heavy_check_mark:    	            | :x: 					                           | :x: 					                       | :x: 					                     | :heavy_check_mark: 	             |
-| Types     	                        | :heavy_check_mark: 	                     | :heavy_check_mark:    	            | :x: 					                           | :x: 					                       | :x: 					                     | :heavy_check_mark: 	             |
-| Pull      	                        | :heavy_check_mark: 	                     | :heavy_check_mark:    	            | :x: 					                           | :x: 					                       | :x: 					                     | :heavy_check_mark: 	             |
+| Symbols   	                        | :white_check_mark: 	                     | :white_check_mark:    	            | :x: 					                           | :x: 					                       | :x: 					                     | :white_check_mark: 	             |
+| Types     	                        | :white_check_mark: 	                     | :white_check_mark:    	            | :x: 					                           | :x: 					                       | :x: 					                     | :white_check_mark: 	             |
+| Pull      	                        | :white_check_mark: 	                     | :white_check_mark:    	            | :x: 					                           | :x: 					                       | :x: 					                     | :white_check_mark: 	             |
 | Push      	                        | :x: 					                                | :x:						                          | :x:					                            | :x:					                        | :x: 					                     | :x: 					                        |
 | Auto Push 	                        | :x: 					                                | :x:						                          | :x:					                            | :x:					                        | :x: 					                     | :x: 					                        |
 
@@ -96,11 +96,11 @@ To understand the difference between artifact support, pull, push, and auto push
 
 | Operations&nbsp;&nbsp;&nbsp;&nbsp; | Function Headers&nbsp;&nbsp;&nbsp;&nbsp; | Stack Vars&nbsp;&nbsp;&nbsp;&nbsp; | Global Vars&nbsp;&nbsp;&nbsp;&nbsp; | Structs&nbsp;&nbsp;&nbsp;&nbsp; | Enums&nbsp;&nbsp;&nbsp;&nbsp; | Comments&nbsp;&nbsp;&nbsp;&nbsp; |
 |------------------------------------|------------------------------------------|------------------------------------|-------------------------------------|---------------------------------|-------------------------------|----------------------------------|
-| Symbols   	                        | :heavy_check_mark: 	                     | :heavy_check_mark:    	            | :x: 					                           | :x: 					                       | :x: 					                     | :heavy_check_mark: 	             |
-| Types     	                        | :heavy_check_mark: 	                     | :heavy_check_mark:    	            | :x: 					                           | :x: 					                       | :x: 					                     | :heavy_check_mark: 	             |
-| Pull      	                        | :heavy_check_mark: 	                     | :heavy_check_mark:    	            | :x: 					                           | :x: 					                       | :x: 					                     | :heavy_check_mark: 	             |
-| Push      	                        | :heavy_check_mark:                       | :heavy_check_mark:		               | :x:					                            | :x:					                        | :x: 					                     | :heavy_check_mark: 					         |
-| Auto Push 	                        | :heavy_check_mark:                       | :heavy_check_mark:		               | :x:					                            | :x:					                        | :x: 					                     | :heavy_check_mark: 					         |
+| Symbols   	                        | :white_check_mark: 	                     | :white_check_mark:    	            | :x: 					                           | :x: 					                       | :x: 					                     | :white_check_mark: 	             |
+| Types     	                        | :white_check_mark: 	                     | :white_check_mark:    	            | :x: 					                           | :x: 					                       | :x: 					                     | :white_check_mark: 	             |
+| Pull      	                        | :white_check_mark: 	                     | :white_check_mark:    	            | :x: 					                           | :x: 					                       | :x: 					                     | :white_check_mark: 	             |
+| Push      	                        | :white_check_mark:                       | :white_check_mark:		               | :x:					                            | :x:					                        | :x: 					                     | :white_check_mark: 					         |
+| Auto Push 	                        | :white_check_mark:                       | :white_check_mark:		               | :x:					                            | :x:					                        | :x: 					                     | :white_check_mark: 					         |
 
 ## Scripting
 Since BinSync needs to lift (and lower) most artifact components, BinSync offers a generic API to work with decompilers
