@@ -206,7 +206,7 @@ class AngrBSController(BSController):
         if not codegen or not codegen.text:
             return None
 
-        return codegen
+        return codegen.text
 
 
     #
