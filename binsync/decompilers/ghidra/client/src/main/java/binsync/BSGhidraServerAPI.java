@@ -204,7 +204,7 @@ public class BSGhidraServerAPI {
 	}
 
 	public String decompile(String addr) {
-        var addr = this.strToAddr(addr)
+        var addr = this.strToAddr(addr);
 		var func = this.getNearestFunction(addr);
 		var rebasedAddrLong = rebasedAddr.getOffset();
 
