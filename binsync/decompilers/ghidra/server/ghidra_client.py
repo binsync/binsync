@@ -99,6 +99,10 @@ class BSGhidraClient:
     def goto_address(self, addr) -> bool:
         return self.server.gotoAddress(addr)
 
+    @stringify_args
+    def decomiple(self, addr) -> str:
+        return self.server.decompile(addr)
+
     #
     # Function Operations
     #

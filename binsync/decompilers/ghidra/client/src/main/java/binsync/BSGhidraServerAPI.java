@@ -85,7 +85,7 @@ public class BSGhidraServerAPI {
 		return this.server.plugin.getCurrentProgram().getAddressFactory().getAddress(addrStr);
 	}
 	
-	private DecompileResults decompile(Function func) {
+	private DecompileResults decompileFunction(Function func) {
 		DecompInterface ifc = new DecompInterface();
 		ifc.setOptions(new DecompileOptions());
 		ifc.openProgram(this.server.plugin.getCurrentProgram());
@@ -130,6 +130,37 @@ public class BSGhidraServerAPI {
 		var funcDefn = CParserUtils.parseSignature((ServiceProvider) null, program, protoStr);
 		return funcDefn;
 	}
+
+	private Address strToAddr(String addrStr) {
+		return this.server.plugin.getCurrentProgram().getAddressFactory().getAddress(addrStr);
+	}
+
+	private Address rebaseAddr(Integer addr, Boolean rebaseDown) {
+		var program = this.getCurrentProgram();
+		var base = (int) program.getImageBase().getOffset();
+		Integer rebasedAddr = addr;
+		if(rebaseDown) {
+			rebasedAddr -= base;
+		}
+		else if(addr < base) {
+			rebasedAddr += base;
+		}
+
+		return this.strToAddr(Integer.toHexString(rebasedAddr));
+	}
+
+	private Function getNearestFunction(Address addr) {
+		if(addr == null) {
+			Msg.warn(this, "Failed to parse Addr string earlier, got null addr.");
+			return null;
+		}
+
+		var program = this.server.plugin.getCurrentProgram();
+		var funcManager = program.getFunctionManager();
+		var func =  funcManager.getFunctionContaining(addr);
+
+		return func;
+	}
 	
 	/*
 	 * 
@@ -170,6 +201,25 @@ public class BSGhidraServerAPI {
 		GoToService goToService = this.server.plugin.getTool().getService(GoToService.class);
 		goToService.goTo(this.strToAddr(addr));
 		return true;
+	}
+
+	public String decompile(String addr) {
+        var addr = this.strToAddr(addr)
+		var func = this.getNearestFunction(addr);
+		var rebasedAddrLong = rebasedAddr.getOffset();
+
+		if(func == null) {
+			Msg.warn(server, "Failed to find a function by the address " + addr);
+			return "";
+		}
+
+		var dec = this.server.plugin.decompileFunc(func);
+		if(dec == null) {
+			Msg.warn(server, "Failed to decompile function by the address " + addr);
+			return "";
+		}
+	    var decompilation = dec.getDecompiledFunction().getC();
+		return decompilation;
 	}
 	
 	/*

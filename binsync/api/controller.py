@@ -465,16 +465,26 @@ class BSController:
 
         return None
 
-    def decompile(self, function: Function) -> Optional[str]:
+    def decompile(self, addr: int) -> Optional[str]:
         if not self.decompiler_available:
             return None
 
-        if function.addr not in self.functions():
-            function = self.lower_artifact(function)
-            if not function or (function.addr not in self.functions()):
-                return  None
+        # TODO: make this a function call after transitioning decompiler artifacts to LiveState
+        for search_addr in (addr, self.artifact_lifer.lower_addr(addr)):
+            func_found = False
+            for func_addr, func in self.functions().items():
+                if func.addr <= search_addr < (func.addr + func.size):
+                    func_found = True
+                    break
+            else:
+                func = None
 
-        return self._decompile(function)
+            if func_found:
+                break
+        else:
+            return None
+
+        return self._decompile(func)
 
     def _decompile(self, function: Function) -> Optional[str]:
         return None

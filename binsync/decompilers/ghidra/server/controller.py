@@ -44,6 +44,9 @@ class GhidraBSController(BSController):
     def goto_address(self, func_addr) -> None:
         self.ghidra.goto_address(func_addr)
 
+    def _decompile(self, function: Function) -> Optional[str]:
+        return self.ghidra.decompile(function.addr)
+
     #
     # Ghidra Specific
     #
