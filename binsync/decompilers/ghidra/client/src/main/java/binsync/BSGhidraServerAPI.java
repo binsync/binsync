@@ -206,7 +206,7 @@ public class BSGhidraServerAPI {
 	public String decompile(String addr) {
         var addr = this.strToAddr(addr);
 		var func = this.getNearestFunction(addr);
-		var rebasedAddrLong = rebasedAddr.getOffset();
+		var rebasedAddrLong = addr.getOffset();
 
 		if(func == null) {
 			Msg.warn(server, "Failed to find a function by the address " + addr);
