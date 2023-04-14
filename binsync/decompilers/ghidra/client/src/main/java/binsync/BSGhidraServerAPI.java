@@ -131,10 +131,6 @@ public class BSGhidraServerAPI {
 		return funcDefn;
 	}
 
-	private Address strToAddr(String addrStr) {
-		return this.server.plugin.getCurrentProgram().getAddressFactory().getAddress(addrStr);
-	}
-
 	private Address rebaseAddr(Integer addr, Boolean rebaseDown) {
 		var program = this.server.plugin.getCurrentProgram();
 		var base = (int) program.getImageBase().getOffset();
@@ -149,19 +145,6 @@ public class BSGhidraServerAPI {
 		return this.strToAddr(Integer.toHexString(rebasedAddr));
 	}
 
-	private Function getNearestFunction(Address addr) {
-		if(addr == null) {
-			Msg.warn(this, "Failed to parse Addr string earlier, got null addr.");
-			return null;
-		}
-
-		var program = this.server.plugin.getCurrentProgram();
-		var funcManager = program.getFunctionManager();
-		var func =  funcManager.getFunctionContaining(addr);
-
-		return func;
-	}
-	
 	/*
 	 * 
 	 * Decompiler API
