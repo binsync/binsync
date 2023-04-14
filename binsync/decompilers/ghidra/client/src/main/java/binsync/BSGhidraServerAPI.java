@@ -173,7 +173,83 @@ public class BSGhidraServerAPI {
 		retVal.put("addr", "0x0");
 		retVal.put("name", "");
 		
-		
+		var currAddr = this.server.plugin.getProgramLocation().getAddress();
+		var func = this.getNearestFunction(currAddr);
+		if(func != null) {
+			retVal.put("name", func.getName());
+			currAddr = func.getEntryPoint();
+		}
+
+		retVal.put("addr", currAddr.toString());
+		return retVal;
+	}
+
+	public String baseAddr() {
+		return this.server.plugin.getCurrentProgram().getImageBase().toString();
+	}
+
+	public String binaryHash() {
+		return this.server.plugin.getCurrentProgram().getExecutableMD5();
+	}
+
+	public String binaryPath() {
+		return this.server.plugin.getCurrentProgram().getExecutablePath();
+	}
+
+	public Boolean gotoAddress(String addr) {
+		GoToService goToService = this.server.plugin.getTool().getService(GoToService.class);
+		goToService.goTo(this.strToAddr(addr));
+		return true;
+	}
+
+	/*
+	 * Functions
+	 * useful for function header parsing: https://github.com/extremecoders-re/ghidra-jni
+	 */
+
+
+	public Boolean setFunctionName(String addr, String name) {
+		var program = this.server.plugin.getCurrentProgram();
+		var func = this.getNearestFunction(this.strToAddr(addr));
+		if(func == null) {
+			Msg.warn(server, "Failed to find a function by the address " + addr);;
+			return false;
+		}
+
+
+		var transID = program.startTransaction("bs-set-func-name");
+		try {
+			func.setName(name, SourceType.ANALYSIS);
+		} catch (DuplicateNameException | InvalidInputException e) {
+			System.out.println("Failed in setname: " + e.toString());
+			return false;
+		} finally {
+			program.endTransaction(transID, true);
+		}
+
+		return true;
+	}
+
+	public Boolean setFunctionRetType(String addr, String typeStr) {
+		var parsedType = parseTypeString(typeStr);
+		if(parsedType == null) {
+			Msg.warn(server, "Failed to parse type string!");;
+			return false;
+		}
+
+		var program = this.server.plugin.getCurrentProgram();
+		var func = this.getNearestFunction(this.strToAddr(addr));
+		if(func == null) {
+			Msg.warn(server, "Failed to find a function by the address " + addr);;
+			return false;
+		}
+
+
+		var transID = program.startTransaction("bs-set-func-ret");
+		try {
+			func.setReturnType(parsedType, SourceType.ANALYSIS);
+		} catch (Exception e) {
+			Msg.warn(this, "Failed to do transaction on function settype: " + e.toString());
 			return false;
 		} finally {
 			program.endTransaction(transID, true);
