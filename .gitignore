@@ -34,7 +34,6 @@ dist
 .vscode/
 *.db
 .DS_Store
-binsync/decompiler_stubs/
 .pytest_cache/
 binsync/decompilers/ghidra/client/build/
 binsync/decompilers/ghidra/client/dist/
