@@ -26,8 +26,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e .[test]
         AM_INSTALL=$(dirname $(python3 -c "import angrmanagement; print(angrmanagement.__file__)"))
-        ls binsync
-        ls binsync/decompiler_stubs
         binsync --install-angr-only $AM_INSTALL 
 
     - name: Pytest

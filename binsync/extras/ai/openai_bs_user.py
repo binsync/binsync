@@ -15,7 +15,7 @@ from binsync.data import (
     Function, State, Comment, StackVariable
 )
 
-from daila.interfaces import OpenAIInterface
+from dailalib.interfaces import OpenAIInterface
 from rich.progress import track
 
 
