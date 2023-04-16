@@ -1,5 +1,4 @@
 import argparse
-import os
 import sys
 import logging
 from pathlib import Path
@@ -125,6 +124,7 @@ def main():
         return run_plugin(args.run_plugin)
 
     if args.ai:
+        import os
         if not (args.proj_path and args.binary_path):
             l.error("Using the AI feature requires you to specify the binary path and project path with cli options.")
             return
