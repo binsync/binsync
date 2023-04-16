@@ -13,10 +13,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Set up Python 3.10
+    - name: Set up Python 3.11
       uses: actions/setup-python@v2
       with:
-        python-version: "3.10"
+        python-version: "3.11"
     - name: Install dependencies
       run: |
         sudo apt-get install libegl1 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
@@ -26,6 +26,8 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e .[test]
         AM_INSTALL=$(dirname $(python3 -c "import angrmanagement; print(angrmanagement.__file__)"))
+        ls binsync
+        ls binsync/decompiler_stubs
         binsync --install-angr-only $AM_INSTALL 
 
     - name: Pytest
