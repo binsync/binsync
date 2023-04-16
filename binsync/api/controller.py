@@ -146,6 +146,11 @@ class BSController:
 
         # TODO: make the initialization of this with types of decompiler
         self.type_parser = BSTypeParser()
+        if self.headless:
+            self._init_headless_components()
+
+    def _init_headless_components(self):
+        pass
 
     #
     #   Multithreading updaters, locks, and evaluators

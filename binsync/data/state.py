@@ -391,7 +391,7 @@ class State:
 
     @dirty_checker
     @update_last_change
-    def set_comment(self, comment: Comment, set_last_change=True):
+    def set_comment(self, comment: Comment, append=False, set_last_change=True):
         if not comment:
             return False
 
@@ -401,6 +401,11 @@ class State:
             old_cmt = None
 
         if old_cmt != comment:
+            if old_cmt is not None and append:
+                comment.comment = old_cmt.comment + "\n" + comment.comment
+                if set_last_change:
+                    comment.last_change = comment.last_change or old_cmt.last_change
+
             self.comments[comment.addr] = comment
             return True
 

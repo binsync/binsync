@@ -11,6 +11,7 @@ from .artifact_lifter import (
 from .type_parser import (
     BSTypeParser, BSType
 )
+from ..decompilers import BS_SUPPORTED_DECOMPILERS, ANGR_DECOMPILER, BINJA_DECOMPILER, IDA_DECOMPILER, GHIDRA_DECOMPILER
 
 _l = logging.getLogger(__name__)
 
@@ -26,56 +27,59 @@ def _find_global_in_call_frames(global_name, max_frames=10):
         return None
 
 
-def load_decompiler_controller(force_decompiler: str = None) -> Optional[BSController]:
+def load_decompiler_controller(force_decompiler: str = None, **ctrl_kwargs) -> Optional[BSController]:
     """
     This function is a special API helper that will attempt to detect the decompiler it is running in and
-    return the valid BSController for that decompiler. You may also force the chosen controller using the following
-    strings: "ida", "binja", "angr", "ghidra".
+    return the valid BSController for that decompiler. You may also force the chosen controller using any of the strings
+    from binsync.decompiler.BS_SUPPORTED_DECOMPILERS
 
     @param force_decompiler:    The optional string used to override the BSController returned
     @return:                    The BSController associated with the current decompiler env
     """
-    is_ida = False
-    is_binja = False
-    is_angr = False
+    if force_decompiler and force_decompiler not in BS_SUPPORTED_DECOMPILERS:
+        raise ValueError(f"Unsupported decompiler {force_decompiler}")
+
+    has_ida = False
+    has_binja = False
+    has_angr = False
     is_ghidra = False
 
     try:
         import idaapi
-        is_ida = True
+        has_ida = True
     except ImportError:
         pass
 
     try:
         import binaryninja
-        is_binja = True
+        has_binja = True
     except ImportError:
         pass
 
     try:
         import angr
         import angrmanagement
-        is_angr = _find_global_in_call_frames('workspace') is not None
+        has_angr = _find_global_in_call_frames('workspace') is not None
     except ImportError:
         pass
 
     # we assume if we are nothing else, then we are Ghidra
-    is_ghidra = not(is_ida or is_binja or is_angr)
+    is_ghidra = not(has_ida or has_binja or has_angr)
 
-    if is_ida or force_decompiler == "ida":
+    if has_ida or force_decompiler == IDA_DECOMPILER:
         from binsync.decompilers.ida.controller import IDABSController
-        dec_controller = IDABSController()
-    elif is_binja or force_decompiler == "binja":
+        dec_controller = IDABSController(**ctrl_kwargs)
+    elif has_binja or force_decompiler == BINJA_DECOMPILER:
         from binsync.decompilers.binja.controller import BinjaBSController
         bv = _find_global_in_call_frames('bv')
-        dec_controller = BinjaBSController(bv=bv)
-    elif is_angr or force_decompiler == "angr":
+        dec_controller = BinjaBSController(bv=bv, **ctrl_kwargs)
+    elif has_angr or force_decompiler == ANGR_DECOMPILER:
         from binsync.decompilers.angr.controller import AngrBSController
         workspace = _find_global_in_call_frames('workspace')
-        dec_controller = AngrBSController(workspace=workspace)
-    elif is_ghidra or force_decompiler == "ghidra":
+        dec_controller = AngrBSController(workspace=workspace, **ctrl_kwargs)
+    elif is_ghidra or force_decompiler == GHIDRA_DECOMPILER:
         from binsync.decompilers.ghidra.server.controller import GhidraBSController
-        dec_controller = GhidraBSController()
+        dec_controller = GhidraBSController(**ctrl_kwargs)
     else:
         raise ValueError("Please use BinSync with our supported decompiler set!")
 
