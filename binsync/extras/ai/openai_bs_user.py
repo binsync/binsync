@@ -5,7 +5,6 @@ from pathlib import Path
 import argparse
 import subprocess
 import sys
-import time
 import tempfile
 from typing import Union
 
@@ -13,7 +12,7 @@ from binsync.api import load_decompiler_controller, BSController
 from binsync.decompilers import ANGR_DECOMPILER
 from binsync.decompilers.angr.controller import AngrBSController
 from binsync.data import (
-    Function, State, Comment, StackVariable
+    Function, Comment, StackVariable
 )
 
 from dailalib.interfaces import OpenAIInterface
@@ -35,8 +34,10 @@ class OpenAIBSUser:
         username: str = DEFAULT_USERNAME,
         copy_project=True,
         decompiler_backend=None,
+        base_on=None,
     ):
         self.username = username
+        self._base_on = base_on
         if bs_proj_path is not None:
             bs_proj_path = Path(bs_proj_path)
 
@@ -78,6 +79,11 @@ class OpenAIBSUser:
         return self.MIN_FUNC_SIZE <= func.size <= self.MAX_FUNC_SIZE
 
     def commit_ai_changes_to_state(self):
+        # base all changes on another user's state
+        if self._base_on:
+            _l.info(f"Basing all AI changes on user {self._base_on}")
+            self.controller.fill_all(user=self._base_on)
+
         ai_initiated_changes = 0
         valid_funcs = [
             addr
@@ -145,27 +151,29 @@ class OpenAIBSUser:
 
 def add_openai_user_to_project(
     openai_api_key: str, binary_path: Path, bs_proj_path: Path, username: str = OpenAIBSUser.DEFAULT_USERNAME,
-    headless=False, copy_proj=False, decompiler_backend=None
+    base_on=None, headless=False, copy_proj=False, decompiler_backend=None
 ):
     if headless:
-        _headlessly_add_openai_user(openai_api_key, binary_path, bs_proj_path, username=username, decompiler_backend=decompiler_backend)
+        _headlessly_add_openai_user(openai_api_key, binary_path, bs_proj_path, username=username, decompiler_backend=decompiler_backend, base_on=base_on)
     else:
         ai_user = OpenAIBSUser(
             openai_api_key=openai_api_key, binary_path=binary_path, bs_proj_path=bs_proj_path,
-            username=username, copy_project=copy_proj, decompiler_backend=decompiler_backend
+            username=username, copy_project=copy_proj, decompiler_backend=decompiler_backend, base_on=base_on
         )
         ai_user.add_ai_user_to_project()
 
 
 def _headlessly_add_openai_user(
     openai_api_key: str, binary_path: Path, bs_proj_path: Path, username: str = OpenAIBSUser.DEFAULT_USERNAME,
-    decompiler_backend=None,
+    decompiler_backend=None, base_on=None
 ):
     script_path = Path(__file__).absolute()
     python_path = sys.executable
     optional_args = []
     if decompiler_backend:
         optional_args += ["--dec", decompiler_backend]
+    if base_on:
+        optional_args += ["--base-on", base_on]
 
     subpproc = subprocess.Popen([
         python_path,
@@ -187,6 +195,7 @@ def _headless_main():
     parser.add_argument("--proj-path", type=Path)
     parser.add_argument("--username", type=str)
     parser.add_argument("--dec", type=str)
+    parser.add_argument("--base-on", type=str)
 
     args = parser.parse_args()
     if args.username is None:
@@ -194,7 +203,7 @@ def _headless_main():
 
     add_openai_user_to_project(
         args.openai_api_key, args.binary_path, args.proj_path, username=args.username, headless=False,
-        copy_proj=True, decompiler_backend=args.dec if args.dec else None
+        copy_proj=True, decompiler_backend=args.dec if args.dec else None, base_on=args.base_on
     )
 
 

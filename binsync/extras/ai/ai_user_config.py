@@ -34,6 +34,7 @@ class AIUserConfigDialog(QDialog):
         self.username = OpenAIBSUser.DEFAULT_USERNAME
         self.project_path = str(Path(controller.client.repo_root).absolute())
         self.binary_path = str(Path(controller.binary_path()).absolute()) if controller.binary_path() else ""
+        self.base_on = ""
 
         self.setWindowTitle(self.TITLE)
         self._main_layout = QVBoxLayout()
@@ -82,6 +83,19 @@ class AIUserConfigDialog(QDialog):
         self._grid_layout.addWidget(self._decompiler_dropdown, self.row, 1)
         self.row += 1
 
+        # user_base dropdown selection
+        self._user_base_label = QLabel("Base On")
+        self._grid_layout.addWidget(self._user_base_label, self.row, 0)
+        self._user_base_dropdown = QComboBox()
+
+        all_users = [user.name for user in self._controller.users()]
+        curr_user = self._controller.client.master_user
+        all_users.remove(curr_user)
+        all_users = [curr_user] + all_users + [""]
+        self._user_base_dropdown.addItems(all_users)
+        self._grid_layout.addWidget(self._user_base_dropdown, self.row, 1)
+        self.row += 1
+
         # ok/cancel buttons
         self._ok_button = QPushButton("OK")
         self._ok_button.clicked.connect(self._on_ok_button_clicked)
@@ -105,6 +119,7 @@ class AIUserConfigDialog(QDialog):
         self.binary_path = self._binary_path_input.text()
         self.username = self._username_input.text()
         self.decompiler_backend = self._decompiler_dropdown.currentText()
+        self.base_on = self._user_base_dropdown.currentText()
 
         if not (self.api_key and self.binary_path and self.username):
             _l.critical("You did not provide a path, username, and API key for the AI user.")
@@ -112,7 +127,8 @@ class AIUserConfigDialog(QDialog):
 
         _l.info(f"Starting AI user now! Commits from user {self.username} should appear soon...")
         add_openai_user_to_project(
-            self.api_key, self.binary_path, self.project_path, username=self.username, headless=True, copy_proj=True
+            self.api_key, self.binary_path, self.project_path, username=self.username,
+            base_on=self.base_on, headless=True, copy_proj=True
         )
         self.close()
 

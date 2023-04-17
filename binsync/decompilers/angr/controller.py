@@ -125,7 +125,9 @@ class AngrBSController(BSController):
             func_addr, user=user, artifact=artifact, decompilation=decompilation, **kwargs
         )
 
-        self.refresh_decompilation(func.addr)
+        if not self.headless:
+            self.refresh_decompilation(func.addr)
+
         return changes
 
     @fill_event
