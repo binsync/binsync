@@ -22,6 +22,8 @@ l = logging.getLogger(__name__)
 BINSYNC_BRANCH_PREFIX = 'binsync'
 BINSYNC_ROOT_BRANCH = f'{BINSYNC_BRANCH_PREFIX}/__root__'
 
+logging.getLogger("git").setLevel(logging.ERROR)
+
 
 class ConnectionWarnings:
     HASH_MISMATCH = 0

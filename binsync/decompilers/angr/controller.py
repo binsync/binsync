@@ -1,10 +1,10 @@
 import logging
 import os
 from typing import Optional, Dict
+from pathlib import Path
 
 import angr
 from angr.analyses.decompiler.structured_codegen import DummyStructuredCodeGenerator
-from angrmanagement.ui.views import CodeView
 
 import binsync
 from binsync.api.controller import (
@@ -13,13 +13,19 @@ from binsync.api.controller import (
     fill_event
 )
 from binsync.data import (
-    Function, FunctionHeader, Comment, StackVariable
+    Function, FunctionHeader, Comment, StackVariable, FunctionArgument
 )
 
 from .artifact_lifter import AngrArtifactLifter
 
 l = logging.getLogger(__name__)
+try:
+    from angrmanagement.ui.views import CodeView
+except ImportError:
+    l.warning("angr-management module not found... likely running headless.")
 
+logging.getLogger("angr").setLevel(logging.ERROR)
+logging.getLogger("cle").setLevel(logging.ERROR)
 
 class AngrBSController(BSController):
     """
@@ -28,17 +34,26 @@ class AngrBSController(BSController):
     and responsible for running a thread to get new changes from other users.
     """
 
-    def __init__(self, workspace=None):
-        super().__init__(artifact_lifter=AngrArtifactLifter(self))
+    def __init__(self, workspace=None, headless=False, binary_path: Path = None):
         self._workspace = workspace
-        if workspace is None:
+        if workspace is None and not headless:
             l.critical("The workspace provided is None, which will result in a broken BinSync.")
             return
 
-        self._main_instance = workspace.main_instance
+        self.main_instance = workspace.main_instance if workspace else self
+        self._binary_path = Path(binary_path) if binary_path is not None else binary_path
+        super().__init__(artifact_lifter=AngrArtifactLifter(self), headless=headless)
+
+    def _init_headless_components(self):
+        if self._binary_path is None or not self._binary_path.exists():
+            return
+
+        self.project = angr.Project(str(self._binary_path), auto_load_libs=False)
+        cfg = self.project.analyses.CFG(show_progressbar=True, normalize=True, data_references=True)
+        self.project.analyses.CompleteCallingConventions(cfg=cfg, recover_variables=True)
 
     def binary_hash(self) -> str:
-        return self._main_instance.project.loader.main_object.md5.hex()
+        return self.main_instance.project.loader.main_object.md5.hex()
 
     def active_context(self):
         curr_view = self._workspace.view_manager.current_tab
@@ -61,21 +76,21 @@ class AngrBSController(BSController):
 
     def binary_path(self) -> Optional[str]:
         try:
-            return self._main_instance.project.loader.main_object.binary
+            return self.main_instance.project.loader.main_object.binary
         # pylint: disable=broad-except
         except Exception:
             return None
 
     def get_func_size(self, func_addr) -> int:
         try:
-            func = self._main_instance.kb.functions[func_addr]
+            func = self.main_instance.project.kb.functions[func_addr]
             return func.size
         except KeyError:
             return 0
 
     def rebase_addr(self, addr, up=False):
-        base_addr = self._main_instance.project.loader.main_object.mapped_base
-        is_pie = self._main_instance.project.loader.main_object.pic
+        base_addr = self.main_instance.project.loader.main_object.mapped_base
+        is_pie = self.main_instance.project.loader.main_object.pic
 
         if is_pie:
             if up:
@@ -84,6 +99,9 @@ class AngrBSController(BSController):
                 return addr - base_addr
 
         return addr
+
+    def goto_address(self, func_addr):
+        self._workspace.jump_to(self.rebase_addr(func_addr, up=True))
 
     #
     # Display Fillers
@@ -98,7 +116,7 @@ class AngrBSController(BSController):
     @fill_event
     def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
         func: Function = artifact
-        angr_func = self._main_instance.kb.functions[func.addr]
+        angr_func = self.main_instance.project.kb.functions[func.addr]
 
         # re-decompile a function if needed
         decompilation = self.decompile_function(angr_func)
@@ -107,7 +125,9 @@ class AngrBSController(BSController):
             func_addr, user=user, artifact=artifact, decompilation=decompilation, **kwargs
         )
 
-        self.refresh_decompilation(func.addr)
+        if not self.headless:
+            self.refresh_decompilation(func.addr)
+
         return changes
 
     @fill_event
@@ -128,9 +148,9 @@ class AngrBSController(BSController):
                 decompilation.stmt_comments[corrected_addr] = cmt.comment
                 changed = True
         else:
-            kb_cmt = self._main_instance.kb.comments.get(cmt.addr, None)
+            kb_cmt = self.main_instance.project.kb.comments.get(cmt.addr, None)
             if kb_cmt != cmt.comment:
-                self._main_instance.kb.comments[cmt.addr] = cmt.comment
+                self.main_instance.project.kb.comments[cmt.addr] = cmt.comment
                 changed = True
         return changed
 
@@ -149,7 +169,7 @@ class AngrBSController(BSController):
     @fill_event
     def fill_function_header(self, func_addr, user=None, artifact=None, decompilation=None, **kwargs):
         func_header: FunctionHeader = artifact
-        angr_func = self._main_instance.kb.functions[self.artifact_lifer.lower_addr(func_addr)]
+        angr_func = self.main_instance.project.kb.functions[self.artifact_lifer.lower_addr(func_addr)]
         changes = False
         if func_header:
             if func_header.name and func_header.name != angr_func.name:
@@ -173,32 +193,42 @@ class AngrBSController(BSController):
 
     def functions(self) -> Dict[int, Function]:
         funcs = {}
-        for addr, func in self._main_instance.kb.functions.items():
+        for addr, func in self.main_instance.project.kb.functions.items():
             funcs[addr] = Function(addr, func.size)
             funcs[addr].name = func.name
 
         return funcs
 
     def function(self, addr, **kwargs) -> Optional[Function]:
-        """
-        TODO: add support for stack variables and function args
-
-        @param addr:
-        @return:
-        """
         try:
-            _func = self._main_instance.kb.functions[addr]
+            _func = self.main_instance.project.kb.functions[addr]
         except KeyError:
             return None
 
         func = Function(_func.addr, _func.size)
-        func_header = FunctionHeader(_func.name, _func.addr, type_=_func.prototype.c_repr())
+        func.header = FunctionHeader(
+            _func.name, _func.addr, type_=_func.prototype.returnty.c_repr() if _func.prototype else None
+        )
 
-        func.header = func_header
+        decompilation = self.decompile_function(_func)
+        if not decompilation:
+            return func
+
+        func.header.args = self.func_args_as_bs_args(decompilation)
+        # overwrite type again since it can change with decompilation
+        func.header.type = decompilation.cfunc.functy.returnty.c_repr()
+        stack_vars = {
+            angr_sv.offset: StackVariable(
+                angr_sv.offset, angr_sv.name, self.stack_var_type_str(decompilation, angr_sv), angr_sv.size, func.addr
+            )
+            for angr_sv in self.stack_vars_in_dec(decompilation)
+        }
+        func.stack_vars = stack_vars
+
         return func
 
     def _decompile(self, function: Function) -> Optional[str]:
-        func = self._workspace.main_instance.kb.functions.get(function.addr, None)
+        func = self.main_instance.project.kb.functions.get(function.addr, None)
         if func is None:
             return None
 
@@ -208,42 +238,64 @@ class AngrBSController(BSController):
 
         return codegen.text
 
-
     #
     #   Utils
     #
 
     def refresh_decompilation(self, func_addr):
-        self._main_instance.workspace.jump_to(func_addr)
-        view = self._main_instance.workspace._get_or_create_view("pseudocode", CodeView)
+        self.main_instance.workspace.jump_to(func_addr)
+        view = self.main_instance.workspace._get_or_create_view("pseudocode", CodeView)
         view.codegen.am_event()
         view.focus()
 
+    def _headless_decompile(self, func):
+        cfg = self.project.kb.cfgs.get_most_accurate()
+        self.project.analyses.CompleteCallingConventions(cfg=cfg, recover_variables=True)
+        all_optimization_passes = angr.analyses.decompiler.optimization_passes.get_default_optimization_passes(
+            "AMD64", "linux"
+        )
+        options = [([
+            o for o in angr.analyses.decompiler.decompilation_options.options
+            if o.param == "structurer_cls"
+        ][0], "phoenix")]
+
+        self.main_instance.project.analyses.Decompiler(
+            func, flavor='pseudocode', options=options, optimization_passes=all_optimization_passes
+        )
+
+
+    def _angr_management_decompile(self, func):
+        # recover direct pseudocode
+        self.main_instance.project.analyses.Decompiler(func, flavor='pseudocode')
+
+        # attempt to get source code if its available
+        source_root = None
+        if self.main_instance.original_binary_path:
+            source_root = os.path.dirname(self.main_instance.original_binary_path)
+        self.main_instance.project.analyses.ImportSourceCode(func, flavor='source', source_root=source_root)
+
     def decompile_function(self, func, refresh_gui=False):
         # check for known decompilation
-        available = self._main_instance.kb.structured_code.available_flavors(func.addr)
+        available = self.main_instance.project.kb.structured_code.available_flavors(func.addr)
         should_decompile = False
         if 'pseudocode' not in available:
             should_decompile = True
         else:
-            cached = self._main_instance.kb.structured_code[(func.addr, 'pseudocode')]
+            cached = self.main_instance.project.kb.structured_code[(func.addr, 'pseudocode')]
             if isinstance(cached, DummyStructuredCodeGenerator):
                 should_decompile = True
 
         if should_decompile:
-            # recover direct pseudocode
-            self._main_instance.project.analyses.Decompiler(func, flavor='pseudocode')
-
-            # attempt to get source code if its available
-            source_root = None
-            if self._main_instance.original_binary_path:
-                source_root = os.path.dirname(self._main_instance.original_binary_path)
-            self._main_instance.project.analyses.ImportSourceCode(func, flavor='source', source_root=source_root)
+            if not self.headless:
+                self._angr_management_decompile(func)
+            else:
+                self._headless_decompile(func)
 
         # grab newly cached pseudocode
-        decomp = self._main_instance.kb.structured_code[(func.addr, 'pseudocode')].codegen
-        if refresh_gui:
-            # refresh all views
+        decomp = self.main_instance.project.kb.structured_code[(func.addr, 'pseudocode')].codegen
+
+        # refresh the UI after decompiling
+        if refresh_gui and not self.headless:
             self._workspace.reload()
 
             # re-decompile current view to cause a refresh
@@ -252,6 +304,10 @@ class AngrBSController(BSController):
                 self._workspace.decompile_current_function()
 
         return decomp
+
+    #
+    # Function Data Helpers
+    #
 
     @staticmethod
     def find_stack_var_in_codegen(decompilation, stack_offset: int) -> Optional[angr.sim_variable.SimStackVariable]:
@@ -272,12 +328,23 @@ class AngrBSController(BSController):
         return var_type.c_repr()
 
     @staticmethod
-    def get_func_args(decompilation):
-        arg_info = {
-            i: (arg.variable, decompilation.cfunc.functy.args[i].c_repr())
-            for i, arg in enumerate(decompilation.cfunc.arg_list)
-        }
-        return arg_info
+    def stack_vars_in_dec(decompilation):
+        for var in decompilation.cfunc.variable_manager._unified_variables:
+            if hasattr(var, "offset"):
+                yield var
+
+    @staticmethod
+    def func_args_as_bs_args(decompilation) -> Dict[int, FunctionArgument]:
+        args = {}
+        if not decompilation.cfunc.arg_list:
+            return args
+        
+        for idx, arg in enumerate(decompilation.cfunc.arg_list):
+            args[idx] = FunctionArgument(
+                idx, arg.variable.name, arg.variable_type.c_repr(), arg.variable.size
+            )
+
+        return args
 
     @staticmethod
     def func_insn_addrs(func: angr.knowledge_plugins.Function):
@@ -287,15 +354,13 @@ class AngrBSController(BSController):
 
         return insn_addrs
 
-    def get_func_addr_from_addr(self, addr):
+    def get_closest_function(self, addr):
         try:
-            func_addr = self._workspace.main_instance.kb.cfgs.get_most_accurate()\
+            func_addr = self._workspace.main_instance.project.kb.cfgs.get_most_accurate()\
                 .get_any_node(addr, anyaddr=True)\
                 .function_address
         except AttributeError:
             func_addr = None
 
         return func_addr
-    
-    def goto_address(self, func_addr):
-        self._workspace.jump_to(self.rebase_addr(func_addr, up=True))
+

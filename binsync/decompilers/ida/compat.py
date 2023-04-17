@@ -67,6 +67,9 @@ def execute_write(f):
 
 @execute_write
 def convert_type_str_to_ida_type(type_str) -> typing.Optional['ida_typeinf']:
+    if type_str is None or not isinstance(type_str, str):
+        return None
+
     ida_type_str = type_str + ";"
     tif = ida_typeinf.tinfo_t()
     valid_parse = ida_typeinf.parse_decl(tif, None, ida_type_str, 1)

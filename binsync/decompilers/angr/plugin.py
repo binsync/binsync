@@ -127,32 +127,22 @@ class BinSyncPlugin(BasePlugin):
     # pylint: disable=unused-argument
     def handle_func_arg_renamed(self, func, offset, old_name, new_name):
         decompilation = self.controller.decompile_function(func)
-        func_args = AngrBSController.get_func_args(decompilation)
+        func_args = AngrBSController.func_args_as_bs_args(decompilation)
         func_type = decompilation.cfunc.functy.returnty.c_repr()
-        bs_args = {
-            i: binsync.FunctionArgument(i, var_info[0].name, var_info[1], var_info[0].size)
-            for i, var_info in func_args.items()
-        }
-
         self.controller.schedule_job(
             self.controller.push_artifact,
-            FunctionHeader(func.name, func.addr, type_=func_type, args=bs_args)
+            FunctionHeader(func.name, func.addr, type_=func_type, args=func_args)
         )
         return False
 
     # pylint: disable=unused-argument
     def handle_func_arg_retyped(self, func, offset, old_type, new_type):
         decompilation = self.controller.decompile_function(func)
-        func_args = AngrBSController.get_func_args(decompilation)
+        func_args = AngrBSController.func_args_as_bs_args(decompilation)
         func_type = decompilation.cfunc.functy.returnty.c_repr()
-        bs_args = {
-            i: binsync.FunctionArgument(i, var_info[0].name, var_info[1], var_info[0].size)
-            for i, var_info in func_args.items()
-        }
-
         self.controller.schedule_job(
             self.controller.push_artifact,
-            FunctionHeader(func.name, func.addr, type_=func_type, args=bs_args)
+            FunctionHeader(func.name, func.addr, type_=func_type, args=func_args)
         )
         return False
 
@@ -178,7 +168,7 @@ class BinSyncPlugin(BasePlugin):
 
     # pylint: disable=unused-argument
     def handle_comment_changed(self, address, old_cmt, new_cmt, created: bool, decomp: bool):
-        func_addr = self.controller.get_func_addr_from_addr(address)
+        func_addr = self.controller.get_closest_function(address)
         self.controller.schedule_job(
             self.controller.push_artifact,
             Comment(address, new_cmt, func_addr=func_addr, decompiled=decomp)

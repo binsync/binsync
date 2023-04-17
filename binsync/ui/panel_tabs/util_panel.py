@@ -17,7 +17,7 @@ from binsync.ui.qt_objects import (
 from binsync.ui.magic_sync_dialog import MagicSyncDialog
 from binsync.ui.force_push import ForcePushUI
 from binsync.api.controller import BSController
-from binsync.core.scheduler import SchedSpeed
+from binsync.extras import EXTRAS_AVAILABLE
 
 l = logging.getLogger(__name__)
 
@@ -132,12 +132,41 @@ class QUtilPanel(QWidget):
         main_layout.addWidget(sync_options_group)
         main_layout.addWidget(dev_options_group)
         main_layout.addWidget(ui_options_group)
+        if EXTRAS_AVAILABLE:
+            main_layout.addWidget(self._create_extras_group())
         main_layout.addWidget(self._save_apply_config_option)
         self.setLayout(main_layout)
 
     #
+    # Extras GUI (only available if extras are installed)
+    #
+
+    def _create_extras_group(self):
+        extras_group = QGroupBox()
+        extras_layout = QVBoxLayout()
+        extras_group.setTitle("BS Extras")
+
+        #
+        # AI Extras
+        #
+
+        ai_button = QPushButton("Add AI User...")
+        ai_button.clicked.connect(self._handle_add_ai_user)
+        extras_layout.addWidget(ai_button)
+
+        extras_group.setLayout(extras_layout)
+        return extras_group
+
+    def _handle_add_ai_user(self):
+        from binsync.extras.ai.ai_user_config import AIUserConfigDialog
+        dialog = AIUserConfigDialog(self.controller)
+        dialog.exec_()
+
+
+    #
     # Event Handlers
     #
+
     def _handle_table_coloring_change(self):
         try:
             val = int(self._table_coloring_window_lineedit.text())

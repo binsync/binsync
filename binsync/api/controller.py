@@ -146,6 +146,11 @@ class BSController:
 
         # TODO: make the initialization of this with types of decompiler
         self.type_parser = BSTypeParser()
+        if self.headless:
+            self._init_headless_components()
+
+    def _init_headless_components(self):
+        pass
 
     #
     #   Multithreading updaters, locks, and evaluators
@@ -262,13 +267,15 @@ class BSController:
     # Client Interaction Functions
     #
 
-    def connect(self, user, path, init_repo=False, remote_url=None, **kwargs):
+    def connect(self, user, path, init_repo=False, remote_url=None, single_thread=False, **kwargs):
         binary_hash = self.binary_hash()
         self.client = Client(
             user, path, binary_hash, init_repo=init_repo, remote_url=remote_url, **kwargs
         )
 
-        self.start_worker_routines()
+        if not single_thread:
+            self.start_worker_routines()
+
         return self.client.connection_warnings
 
     def check_client(self):
@@ -665,7 +672,7 @@ class BSController:
 
         # set the artifact in the target state, likely master
         _l.debug(f"Setting an artifact now into {state} as {artifact}")
-        was_set = set_artifact_func(state, artifact, set_last_change=set_last_change)
+        was_set = set_artifact_func(state, artifact, set_last_change=set_last_change, **kwargs)
 
         # TODO: make was_set reliable
         _l.debug(f"{state} committing now with {commit_msg or artifact.commit_msg}")

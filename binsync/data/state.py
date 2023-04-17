@@ -373,7 +373,7 @@ class State:
 
     @dirty_checker
     @update_last_change
-    def set_function(self, function: Function, set_last_change=True):
+    def set_function(self, function: Function, set_last_change=True, **kwargs):
         if function.addr in self.functions and self.functions[function.addr] == function:
             return False
 
@@ -382,7 +382,7 @@ class State:
 
     @dirty_checker
     @update_last_change
-    def set_function_header(self, func_header: FunctionHeader, set_last_change=True):
+    def set_function_header(self, func_header: FunctionHeader, set_last_change=True, **kwargs):
         if func_header.addr in self.functions and self.functions[func_header.addr] == func_header:
             return False
 
@@ -391,7 +391,7 @@ class State:
 
     @dirty_checker
     @update_last_change
-    def set_comment(self, comment: Comment, set_last_change=True):
+    def set_comment(self, comment: Comment, append=False, set_last_change=True, **kwargs):
         if not comment:
             return False
 
@@ -401,6 +401,11 @@ class State:
             old_cmt = None
 
         if old_cmt != comment:
+            if old_cmt is not None and append:
+                comment.comment = old_cmt.comment + "\n" + comment.comment
+                if set_last_change:
+                    comment.last_change = comment.last_change or old_cmt.last_change
+
             self.comments[comment.addr] = comment
             return True
 
@@ -408,7 +413,7 @@ class State:
 
     @dirty_checker
     @update_last_change
-    def set_patch(self, patch, addr, set_last_change=True):
+    def set_patch(self, patch, addr, set_last_change=True, **kwargs):
         if not patch:
             return False
 
@@ -425,7 +430,7 @@ class State:
 
     @dirty_checker
     @update_last_change
-    def set_stack_variable(self, variable: StackVariable, set_last_change=True):
+    def set_stack_variable(self, variable: StackVariable, set_last_change=True, **kwargs):
         if not variable:
             return False
 
@@ -446,7 +451,7 @@ class State:
 
     @dirty_checker
     @update_last_change
-    def set_struct(self, struct: Struct, old_name=None, set_last_change=True):
+    def set_struct(self, struct: Struct, old_name=None, set_last_change=True, **kwargs):
         """
         Sets a struct in the current state. If old_name is not defined (None), then
         this indicates that the struct has not changed names. In that case, simply overwrite the
@@ -482,7 +487,7 @@ class State:
 
     @dirty_checker
     @update_last_change
-    def set_global_var(self, gloabl_var: GlobalVariable, set_last_change=True):
+    def set_global_var(self, gloabl_var: GlobalVariable, set_last_change=True, **kwargs):
         try:
             old_gvar = self.global_vars[gloabl_var.addr]
         except KeyError:
@@ -496,7 +501,7 @@ class State:
 
     @dirty_checker
     @update_last_change
-    def set_enum(self, enum: Enum, set_last_change=True):
+    def set_enum(self, enum: Enum, set_last_change=True, **kwargs):
         try:
             old_enum = self.enums[enum.name]
         except KeyError:
