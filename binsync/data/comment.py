@@ -14,8 +14,10 @@ class Comment(Artifact):
 
     def __init__(self, addr, comment,  func_addr=None, decompiled=False, last_change=None):
         super(Comment, self).__init__(last_change=last_change)
-        self.comment = comment  # type: str
-        self.decompiled = decompiled  # TODO: use this in other places!
+        if comment:
+            self.comment = self.linewrap_comment(comment)
+
+        self.decompiled = decompiled
         self.addr = addr  # type: int
         self.func_addr = func_addr
 
@@ -24,6 +26,25 @@ class Comment(Artifact):
 
     def __repr__(self):
         return self.__str__()
+
+    @staticmethod
+    def linewrap_comment(comment: str, width=80):
+        lines = comment.splitlines()
+        final_comment = ""
+
+        for line in lines:
+            if len(line) < width:
+                final_comment += line + "\n"
+                continue
+
+            for i, c in enumerate(line):
+                if i % width == 0 and i != 0:
+                    final_comment += "\n"
+                final_comment += c
+
+            final_comment += "\n"
+
+        return final_comment
 
     @classmethod
     def parse(cls, s):
