@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 from pathlib import Path
@@ -18,6 +19,8 @@ from binsync.data import (
 from dailalib.interfaces import OpenAIInterface
 from rich.progress import track
 
+_l = logging.getLogger(__name__)
+_l.setLevel(logging.INFO)
 
 class OpenAIBSUser:
     MAX_FUNC_SIZE = 0xffff
@@ -33,6 +36,7 @@ class OpenAIBSUser:
         copy_project=True,
         decompiler_backend=None,
     ):
+        self.username = username
         if bs_proj_path is not None:
             bs_proj_path = Path(bs_proj_path)
 
@@ -55,28 +59,33 @@ class OpenAIBSUser:
         self.controller: Union[AngrBSController, BSController] = load_decompiler_controller(
             force_decompiler=self.decompiler_backend, headless=True, binary_path=binary_path
         )
-        self.controller.connect(username, str(self.project_path), init_repo=create)
+        self.controller.connect(username, str(self.project_path), init_repo=create, single_thread=True)
         self.ai_interface = OpenAIInterface(openai_api_key=openai_api_key, decompiler_controller=self.controller)
 
+    def __del__(self):
+        if self._is_tmp:
+            shutil.rmtree(self.project_path)
+
     def add_ai_user_to_project(self):
-        bs_state = self.create_bs_state()
-        self.controller.client.commit_state(bs_state, msg="AI mass-change Commit")
+        _l.info(f"Querying AI for BS changes now...")
+        # commit all changes the AI can generate to the master state
+        total_ai_changes = self.commit_ai_changes_to_state()
+        # ask the git client to push/pull those changes
         self.controller.client.update()
-        self.controller.stop_worker_routines()
-        shutil.rmtree(self.project_path)
+        _l.info(f"Pushed {total_ai_changes} AI initiated changes to user {self.username}")
 
     def _function_is_large_enough(self, func: Function):
         return self.MIN_FUNC_SIZE <= func.size <= self.MAX_FUNC_SIZE
 
-    def create_bs_state(self):
-        new_state: State = self.controller.get_state()
+    def commit_ai_changes_to_state(self):
+        ai_initiated_changes = 0
         valid_funcs = [
             addr
             for addr, func in self.controller.functions().items()
             if self._function_is_large_enough(func)
         ]
 
-        for func_addr in track(valid_funcs, description="Analyzing funcs with AI..."):
+        for func_addr in track(valid_funcs, description="Querying AI..."):
             func = self.controller.function(func_addr)
             if func is None:
                 continue
@@ -85,11 +94,12 @@ class OpenAIBSUser:
             if not decompilation:
                 continue
 
-            self.run_all_ai_commands_for_dec(decompilation, func, new_state)
+            ai_initiated_changes += self.run_all_ai_commands_for_dec(decompilation, func)
 
-        return new_state
+        return ai_initiated_changes
 
-    def run_all_ai_commands_for_dec(self, decompilation: str, func: Function, state: State):
+    def run_all_ai_commands_for_dec(self, decompilation: str, func: Function):
+        changes = 0
         artifact_edit_cmds = {
             self.ai_interface.RETYPE_VARS_CMD, self.ai_interface.RENAME_VARS_CMD, self.ai_interface.RENAME_FUNCS_CMD
         }
@@ -102,32 +112,35 @@ class OpenAIBSUser:
         new_func: Function = func.copy()
         new_func.header = None
         new_func.stack_vars = {}
-        state.set_function(new_func)
+        self.controller.push_artifact(new_func)
         for cmd in self.ai_interface.AI_COMMANDS:
             resp = self.ai_interface.query_for_cmd(cmd, decompilation=decompilation)
             if not resp:
                 continue
 
+            changes += 1
             if cmd not in artifact_edit_cmds:
                 resp = cmt_prepends.get(cmd, "") + resp
-                state.set_comment(Comment(new_func.addr, resp), append=True)
+                self.controller.push_artifact(Comment(new_func.addr, resp), append=True)
             elif cmd == self.ai_interface.RENAME_VARS_CMD:
                 for _, sv in func.stack_vars.items():
                     if sv.name in resp:
-                        state.set_stack_variable(StackVariable(sv.offset, resp[sv.name], None, None, func.addr))
+                        self.controller.push_artifact(StackVariable(sv.offset, resp[sv.name], None, None, func.addr))
             elif cmd == self.ai_interface.RETYPE_VARS_CMD:
                 for _, sv in func.stack_vars.items():
                     if sv.name in resp:
-                        state.set_stack_variable(StackVariable(sv.offset, sv.name, resp[sv.name], None, func.addr))
+                        self.controller.push_artifact(StackVariable(sv.offset, sv.name, resp[sv.name], None, func.addr))
             elif cmd == self.ai_interface.RENAME_FUNCS_CMD:
                 for addr, func in self.controller.functions().items():
                     if func.name in resp:
                         func.name = resp[func.name]
-                        state.set_function(func)
+                        self.controller.push_artifact(func)
 
                         # update the function we are in as well
                         if func.name == new_func.name:
                             new_func.name = resp[func.name]
+
+        return changes
 
 
 def add_openai_user_to_project(
