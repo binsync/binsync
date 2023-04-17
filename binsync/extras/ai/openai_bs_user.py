@@ -118,7 +118,7 @@ class OpenAIBSUser:
         new_func: Function = func.copy()
         new_func.header = None
         new_func.stack_vars = {}
-        self.controller.push_artifact(new_func)
+        func_cmt = ""
         for cmd in self.ai_interface.AI_COMMANDS:
             resp = self.ai_interface.query_for_cmd(cmd, decompilation=decompilation)
             if not resp:
@@ -126,8 +126,7 @@ class OpenAIBSUser:
 
             changes += 1
             if cmd not in artifact_edit_cmds:
-                resp = cmt_prepends.get(cmd, "") + resp
-                self.controller.push_artifact(Comment(new_func.addr, resp), append=True)
+                func_cmt += cmt_prepends.get(cmd, "") + resp + "\n"
             elif cmd == self.ai_interface.RENAME_VARS_CMD:
                 for _, sv in func.stack_vars.items():
                     if sv.name in resp:
@@ -141,10 +140,17 @@ class OpenAIBSUser:
                     if func.name in resp:
                         func.name = resp[func.name]
                         self.controller.push_artifact(func)
+                        changes += 1
 
                         # update the function we are in as well
                         if func.name == new_func.name:
                             new_func.name = resp[func.name]
+
+        # send full function comment
+        if func_cmt:
+            self.controller.push_artifact(
+                Comment(new_func.addr, func_cmt, func_addr=new_func.addr, decompiled=True), append=True
+            )
 
         return changes
 
