@@ -929,7 +929,7 @@ class BSController:
         return changes
 
     @init_checker
-    def remove_unused_structs(self):
+    def remove_unused_structs_from_decompiler(self):
         raise NotImplementedError
 
     @init_checker
@@ -949,7 +949,7 @@ class BSController:
         @param target_artifacts:
         @return:
         """
-        self.save_decompiler_database()
+        self.save_native_decompiler_database()
         _l.info(f"Staring a Magic Sync with a preference for {preference_user}")
 
         if self.merge_level == MergeLevel.OVERWRITE:
@@ -999,7 +999,7 @@ class BSController:
                     )
                 except Exception as e:
                     _l.info(f"Banishing exception: {e}")
-        self.remove_unused_structs()
+        self.remove_unused_structs_from_decompiler()
         _l.info(f"Magic Syncing Completed!")
 
     #
@@ -1174,5 +1174,9 @@ class BSController:
 
         return self.config
 
-    def save_decompiler_database(self):
+    def save_native_decompiler_database(self):
+        """
+        Saves the current state of the decompilers database with the file name being the name of the current
+        binary and the filename extension being that of the native decompilers save format
+        """
         raise NotImplementedError

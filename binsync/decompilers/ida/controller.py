@@ -169,8 +169,8 @@ class IDABSController(BSController):
     def goto_address(self, func_addr) -> None:
         compat.jumpto(func_addr)
 
-    def save_decompiler_database(self) -> None:
-        compat.save_idb()
+    def save_native_decompiler_database(self) -> Optional[str]:
+        return compat.save_idb()
 
     @property
     def decompiler_available(self) -> bool:
@@ -285,7 +285,7 @@ class IDABSController(BSController):
         updated_enum = compat.set_enum(enum)
         return updated_enum
 
-    def remove_unused_structs(self):
+    def remove_unused_structs_from_decompiler(self):
         structs = self.structs()
         for struct in structs:
             struct_id = ida_struct.get_struc_id(struct)

@@ -190,7 +190,7 @@ class AngrBSController(BSController):
                         changes = True
         return changes
 
-    def remove_unused_structs(self):
+    def remove_unused_structs_from_decompiler(self):
 
         return None
 
