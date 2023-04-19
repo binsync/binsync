@@ -27,6 +27,7 @@ import idc
 import idaapi
 import ida_struct
 import ida_hexrays
+import idautils
 
 import binsync
 from binsync.api.controller import BSController, init_checker, fill_event
@@ -168,6 +169,9 @@ class IDABSController(BSController):
     def goto_address(self, func_addr) -> None:
         compat.jumpto(func_addr)
 
+    def save_decompiler_database(self) -> None:
+        compat.save_idb()
+
     @property
     def decompiler_available(self) -> bool:
         if self._decompiler_available is None:
@@ -280,6 +284,27 @@ class IDABSController(BSController):
         enum: Enum = artifact
         updated_enum = compat.set_enum(enum)
         return updated_enum
+
+    def remove_unused_structs(self):
+        structs = self.structs()
+        for struct in structs:
+            struct_id = ida_struct.get_struc_id(struct)
+            xrefs = idautils.XrefsTo(struct_id)
+            xref_count = len([_ for _ in xrefs])
+
+            ###### Remove before merging with main, just used for testing ######
+            _l.info("\n".join(["",
+                               "#" * 25,
+                               struct,
+                               str(hex(struct_id)),
+                               str(xref_count),
+                               "\n".join([str(i) for i in xrefs]),
+                               "#" * 25]))
+            #####################################################################
+
+            if xref_count == 0:
+                struct_pointer = ida_struct.get_struc(struct_id)
+                ida_struct.del_struc(struct_pointer)
 
     #
     # Artifact API

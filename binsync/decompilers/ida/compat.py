@@ -795,6 +795,8 @@ def has_older_hexrays_version():
 
     return not vers.startswith("8.2")
 
-
-
-
+def save_idb():
+    binary_name = get_binary_path().split("/")[-1]
+    target_name = binary_name + ".i64"
+    l.info(f"Saving IDB to {target_name}\n")
+    idaapi.save_database(target_name, 0)

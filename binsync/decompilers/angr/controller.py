@@ -103,6 +103,9 @@ class AngrBSController(BSController):
     def goto_address(self, func_addr):
         self._workspace.jump_to(self.rebase_addr(func_addr, up=True))
 
+    def save_decompiler_database(self) -> None:
+        return None
+
     #
     # Display Fillers
     #
@@ -186,6 +189,10 @@ class AngrBSController(BSController):
                         decompilation.cfunc.arg_list[i].variable.name = arg.name
                         changes = True
         return changes
+
+    def remove_unused_structs(self):
+
+        return None
 
     #
     # Artifact
