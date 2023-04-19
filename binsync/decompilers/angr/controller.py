@@ -135,7 +135,7 @@ class AngrBSController(BSController):
         cmt: Comment = artifact
         changed = False
 
-        if cmt.decompiled:
+        if cmt.decompiled and cmt.addr != cmt.func_addr:
             try:
                 pos = decompilation.map_addr_to_pos.get_nearest_pos(cmt.addr)
                 corrected_addr = decompilation.map_pos_to_addr.get_node(pos).tags['ins_addr']
@@ -210,7 +210,12 @@ class AngrBSController(BSController):
             _func.name, _func.addr, type_=_func.prototype.returnty.c_repr() if _func.prototype else None
         )
 
-        decompilation = self.decompile_function(_func)
+        try:
+            decompilation = self.decompile_function(_func)
+        except Exception as e:
+            l.warning(f"Failed to decompile function {hex(_func.addr)}: {e}")
+            decompilation = None
+
         if not decompilation:
             return func
 

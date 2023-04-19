@@ -491,7 +491,13 @@ class BSController:
         else:
             return None
 
-        return self._decompile(func)
+        try:
+            decompilation = self._decompile(func)
+        except Exception as e:
+            _l.warning(f"Failed to decompile function at {hex(addr)}: {e}")
+            decompilation = None
+
+        return decompilation
 
     def _decompile(self, function: Function) -> Optional[str]:
         return None
