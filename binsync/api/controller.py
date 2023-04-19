@@ -929,6 +929,10 @@ class BSController:
         return changes
 
     @init_checker
+    def remove_unused_structs(self):
+        raise NotImplementedError
+
+    @init_checker
     def magic_fill(self, preference_user=None, target_artifacts=None):
         """
         Traverses all the data in the BinSync repo, starting with an optional preference user,
@@ -945,6 +949,7 @@ class BSController:
         @param target_artifacts:
         @return:
         """
+        self.save_decompiler_database()
         _l.info(f"Staring a Magic Sync with a preference for {preference_user}")
 
         if self.merge_level == MergeLevel.OVERWRITE:
@@ -994,7 +999,7 @@ class BSController:
                     )
                 except Exception as e:
                     _l.info(f"Banishing exception: {e}")
-
+        self.remove_unused_structs()
         _l.info(f"Magic Syncing Completed!")
 
     #
@@ -1169,5 +1174,5 @@ class BSController:
 
         return self.config
 
-
-
+    def save_decompiler_database(self):
+        raise NotImplementedError
