@@ -75,6 +75,13 @@ class GhidraBSController(BSController):
         return update
 
     @fill_event
+    def fill_global_var(self, var_addr, user=None, artifact=None, **kwargs):
+        update = False
+        update |= self.ghidra.set_global_var_name(var_addr, artifact.name)
+        #update |= self.ghidra.set_stack_var_name(var_add, "-0x10", "not_real")
+        return update
+
+    @fill_event
     def fill_function_header(self, func_addr, user=None, artifact=None, **kwargs):
         update = False
         func_header: FunctionHeader = artifact

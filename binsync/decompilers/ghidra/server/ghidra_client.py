@@ -122,7 +122,15 @@ class BSGhidraClient:
     @stringify_args
     def set_stack_var_type(self, addr: int, offset: int, type_: str) -> bool:
         return self.server.setStackVarType(addr, offset, type_)
-
+    
+    #
+    # Global Operations
+    #
+    
+    @stringify_args
+    def set_global_var_name(self, addr: int, name: str) -> bool:
+        return self.server.setGlobalVarName(addr, name)
+    
     #
     # Comment Ops
     #

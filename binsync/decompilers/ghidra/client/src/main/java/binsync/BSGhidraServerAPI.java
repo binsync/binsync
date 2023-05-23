@@ -36,6 +36,7 @@ import ghidra.app.plugin.core.analysis.AutoAnalysisManager;
 import ghidra.util.Msg;
 import ghidra.app.script.GhidraScript;
 import ghidra.app.cmd.comments.SetCommentCmd;
+import ghidra.app.cmd.label.RenameLabelCmd;
 
 import binsync.BSGhidraServer;
 
@@ -381,7 +382,40 @@ public class BSGhidraServerAPI {
 	/*
 	 * Global Vars
 	 */
-	
+	public Boolean setGlobalVarName(String addr, String name) {
+		Msg.info(this, "Attempting to rename global at " + addr + " to " + name);
+		var program = this.server.plugin.getCurrentProgram();	
+		var symTab = program.getSymbolTable();
+		Boolean success = false;
+		
+		// Loop through symTab to find globals that match addr
+		for (Symbol sym: symTab.getAllSymbols(true)) {
+			if (sym.getSymbolType() != SymbolType.LABEL || !sym.isDynamic()) {
+				//Msg.info(this, sym.getName(true) + " found: Not a global");
+				continue;
+			}
+			
+			Msg.info(this, "Global " + sym.getName(true) + " found at 0x" + sym.getAddress().toString());
+			if (sym.getAddress().equals(this.strToAddr(addr)))
+			{
+				var transID = program.startTransaction("bs-set-global");
+				try {
+					var cmd = new RenameLabelCmd(sym, name, SourceType.USER_DEFINED); // SrcType DEFAULT or USER_DEFINED?
+					success = cmd.applyTo(program);
+				} catch (Exception e) {
+					Msg.warn(this, "Failed to rename global var at " + addr + " : " + e.toString());
+					return success;
+				} finally {
+					program.endTransaction(transID, true);
+				}
+			}
+		}
+		
+		if (!success)
+			Msg.warn(this, "Failed to find global var at " + addr);
+		
+		return success;
+	}
 	/*
 	 * TODO:
 	 * Read this to recap on the progress of global vars:
