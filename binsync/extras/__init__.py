@@ -13,4 +13,4 @@ except ImportError:
     EXTRAS_AVAILABLE = False
 
 if EXTRAS_AVAILABLE:
-    from binsync.extras.ai.openai_bs_user import add_openai_user_to_project
+    from binsync.extras.ai import add_ai_user_to_project

@@ -18,7 +18,7 @@ from binsync.ui.qt_objects import (
     QTableWidgetItem,
     QHeaderView
 )
-from binsync.extras.ai.openai_bs_user import OpenAIBSUser, add_openai_user_to_project
+from binsync.extras.ai import AIBSUser, add_ai_user_to_project
 from binsync.api.controller import BSController
 from binsync.decompilers import ANGR_DECOMPILER, IDA_DECOMPILER
 
@@ -31,10 +31,11 @@ class AIUserConfigDialog(QDialog):
         super().__init__(parent)
         self._controller = controller
         self.api_key = os.getenv("OPENAI_API_KEY") or ""
-        self.username = OpenAIBSUser.DEFAULT_USERNAME
+        self.username = AIBSUser.DEFAULT_USERNAME
         self.project_path = str(Path(controller.client.repo_root).absolute())
         self.binary_path = str(Path(controller.binary_path()).absolute()) if controller.binary_path() else ""
         self.base_on = ""
+        self.model = "gpt-3.5"
 
         self.setWindowTitle(self.TITLE)
         self._main_layout = QVBoxLayout()
@@ -46,6 +47,15 @@ class AIUserConfigDialog(QDialog):
         self.setLayout(self._main_layout)
 
     def _init_widgets(self):
+        # model selection
+        self._model_label = QLabel("AI Model")
+        self._grid_layout.addWidget(self._model_label, self.row, 0)
+        self._model_dropdown = QComboBox()
+        # TODO: add more decompilers
+        self._model_dropdown.addItems(["gpt-3.5", "AVAR"])
+        self._grid_layout.addWidget(self._model_dropdown, self.row, 1)
+        self.row += 1
+
         # api key label
         self._api_key_label = QLabel("API Key")
         self._grid_layout.addWidget(self._api_key_label, self.row, 0)
@@ -120,15 +130,16 @@ class AIUserConfigDialog(QDialog):
         self.username = self._username_input.text()
         self.decompiler_backend = self._decompiler_dropdown.currentText()
         self.base_on = self._user_base_dropdown.currentText()
+        self.model = self._model_dropdown.currentText()
 
         if not (self.api_key and self.binary_path and self.username):
             _l.critical("You did not provide a path, username, and API key for the AI user.")
             return
 
         _l.info(f"Starting AI user now! Commits from user {self.username} should appear soon...")
-        add_openai_user_to_project(
+        add_ai_user_to_project(
             self.api_key, self.binary_path, self.project_path, username=self.username,
-            base_on=self.base_on, headless=True, copy_proj=True
+            base_on=self.base_on, headless=True, copy_proj=True, model=self.model
         )
         self.close()
 
