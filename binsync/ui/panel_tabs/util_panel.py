@@ -158,7 +158,7 @@ class QUtilPanel(QWidget):
         return extras_group
 
     def _handle_add_ai_user(self):
-        from binsync.extras.ai.ai_user_config import AIUserConfigDialog
+        from binsync.extras.ai.ai_user_config_ui import AIUserConfigDialog
         dialog = AIUserConfigDialog(self.controller)
         dialog.exec_()
 
