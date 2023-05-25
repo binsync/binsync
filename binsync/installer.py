@@ -142,11 +142,15 @@ class Installer:
                 GlobalConfig.update_or_make(self._home, **{f"{target}_path": res.parent})
 
     def install_ida(self, path=None):
-        ida_plugin_path = path or Path("~/").joinpath(".idapro").joinpath("plugins").expanduser()
+        ida_path = path or self._home.joinpath(".idapro")
+        ida_plugin_path = ida_path.joinpath("plugins").expanduser()
         default_str = f" [default = {ida_plugin_path}]"
         if not ida_plugin_path.exists():
-            ida_plugin_path = None
-            default_str = ""
+            if ida_path.exists():
+                os.makedirs(ida_plugin_path)
+            else:
+                ida_plugin_path = None
+                default_str = ""
 
         path = self.ask_path(f"IDA Plugins Path{default_str}:")
         if not path:
@@ -177,7 +181,7 @@ class Installer:
         return path
 
     def install_binja(self, path=None):
-        binja_install_path = path or Path("~/").joinpath(".binaryninja").joinpath("plugins").expanduser()
+        binja_install_path = path or self._home.joinpath(".binaryninja").joinpath("plugins").expanduser()
         default_str = f" [default = {binja_install_path}]"
         if not binja_install_path.exists():
             binja_install_path = None
@@ -227,7 +231,7 @@ class Installer:
         return path
 
     def install_gdb(self, path=None):
-        default_gdb_path = path or Path("~/").joinpath(".gdbinit").expanduser()
+        default_gdb_path = path or self._home.joinpath(".gdbinit").expanduser()
         default_str = f" [default = {default_gdb_path}]"
         path = self.ask_path(f"gdbinit path{default_str}:") if path is None else path
         if not path:
