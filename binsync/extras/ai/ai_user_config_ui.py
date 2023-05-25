@@ -33,7 +33,7 @@ class AIUserConfigDialog(QDialog):
         super().__init__(parent)
         self._controller = controller
         self.api_key = os.getenv("OPENAI_API_KEY") or ""
-        self.username = AIBSUser.DEFAULT_USERNAME
+        self.username = f"{self._controller.client.master_user}_{AIBSUser.DEFAULT_USERNAME}"
         self.project_path = str(Path(controller.client.repo_root).absolute())
         self.binary_path = str(Path(controller.binary_path()).absolute()) if controller.binary_path() else ""
         self.base_on = ""
