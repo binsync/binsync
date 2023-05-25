@@ -135,13 +135,13 @@ def main():
                     "OPENAI_API_KEY environment variable.")
             return
 
-        from binsync.extras import add_ai_user_to_project
+        from binsync.extras import add_openai_user_to_project
         l.info("Starting AI queries...")
         extra_args = {}
         if args.username:
             extra_args['username'] = args.username
 
-        add_ai_user_to_project(
+        add_openai_user_to_project(
             ai_key, args.binary_path, args.proj_path, decompiler_backend=args.decompiler, **extra_args
         )
 
