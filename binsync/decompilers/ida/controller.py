@@ -125,8 +125,8 @@ class UpdateTaskState:
 #
 
 class IDABSController(BSController):
-    def __init__(self):
-        super(IDABSController, self).__init__(artifact_lifter=IDAArtifactLifter(self))
+    def __init__(self, **kwargs):
+        super(IDABSController, self).__init__(artifact_lifter=IDAArtifactLifter(self), **kwargs)
 
         # view change callback
         self._updated_ctx = None

@@ -9,21 +9,23 @@ from binsync.extras.ai.varmodel_bs_user import VARModelBSUser
 
 
 def add_ai_user_to_project(
-        openai_api_key: str, binary_path: Path, bs_proj_path: Path, username: str = AIBSUser.DEFAULT_USERNAME,
-        base_on=None, headless=False, copy_proj=False, decompiler_backend=None, model=None
+    openai_api_key: str, binary_path: Path, bs_proj_path: Path, username: str = AIBSUser.DEFAULT_USERNAME,
+    base_on=None, headless=False, copy_proj=False, decompiler_backend=None, model=None, controller=None, progress_callback=None
 ):
     if headless:
         _headlessly_add_ai_user(openai_api_key, binary_path, bs_proj_path, username=username, decompiler_backend=decompiler_backend, base_on=base_on, model=model)
     else:
-        if model is None or model == "gpt-3.5":
-            ai_user = AIBSUser(
-                openai_api_key=openai_api_key, binary_path=binary_path, bs_proj_path=bs_proj_path,
+        if model is None or model.startswith("gpt"):
+            ai_user = OpenAIBSUser(
+                openai_api_key=openai_api_key, binary_path=binary_path, bs_proj_path=bs_proj_path, model=model,
                 username=username, copy_project=copy_proj, decompiler_backend=decompiler_backend, base_on=base_on,
+                controller=controller, progress_callback=progress_callback
             )
-        elif model == "AVAR":
+        elif model == "VARModel":
             ai_user = VARModelBSUser(
-                openai_api_key=openai_api_key, binary_path=binary_path, bs_proj_path=bs_proj_path,
+                openai_api_key=openai_api_key, binary_path=binary_path, bs_proj_path=bs_proj_path, model=model,
                 username=username, copy_project=copy_proj, decompiler_backend=decompiler_backend, base_on=base_on,
+                controller=controller, progress_callback=progress_callback
             )
         else:
             raise ValueError(f"Model: {model} is not supported. Please use a supported model.")

@@ -22,7 +22,7 @@ l = logging.getLogger(__name__)
 try:
     from angrmanagement.ui.views import CodeView
 except ImportError:
-    l.warning("angr-management module not found... likely running headless.")
+    l.debug("angr-management module not found... likely running headless.")
 
 logging.getLogger("angr").setLevel(logging.ERROR)
 logging.getLogger("cle").setLevel(logging.ERROR)

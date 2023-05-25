@@ -38,6 +38,7 @@ if ui_version == "PySide2":
         QSizePolicy,
         QScrollArea,
         QToolButton,
+        QProgressBar
     )
     from PySide2.QtGui import (
         QFontDatabase,
@@ -83,6 +84,7 @@ elif ui_version == "PySide6":
         QSizePolicy,
         QScrollArea,
         QToolButton,
+        QProgressBar
     )
     from PySide6.QtGui import (
         QFontDatabase,
@@ -132,6 +134,7 @@ else:
         QSizePolicy,
         QScrollArea,
         QToolButton,
+        QProgressBar,
     )
     from PyQt5.QtGui import (
         QFontDatabase,

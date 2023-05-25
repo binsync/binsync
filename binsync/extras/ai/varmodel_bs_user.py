@@ -26,3 +26,9 @@ class VARModelBSUser(AIBSUser):
     def run_all_ai_commands_for_dec(self, decompilation: str, func: Function):
         updated_func = self._renaming_api.predict_variable_names(decompilation, func)
         self.controller.push_artifact(updated_func)
+        return 1
+        #self.controller.schedule_job(
+        #    self.controller.push_artifact,
+        #    updated_func,
+        #    blocking=True
+        #)

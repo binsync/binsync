@@ -18,6 +18,7 @@ from binsync.ui.qt_objects import (
     QTableWidgetItem,
     QHeaderView
 )
+from binsync.ui.utils import QProgressBarDialog
 from binsync.extras.ai import AIBSUser, add_ai_user_to_project
 from binsync.api.controller import BSController
 from binsync.decompilers import ANGR_DECOMPILER, IDA_DECOMPILER
@@ -36,7 +37,7 @@ class AIUserConfigDialog(QDialog):
         self.project_path = str(Path(controller.client.repo_root).absolute())
         self.binary_path = str(Path(controller.binary_path()).absolute()) if controller.binary_path() else ""
         self.base_on = ""
-        self.model = "gpt-3.5"
+        self.model = "gpt-4"
 
         self.setWindowTitle(self.TITLE)
         self._main_layout = QVBoxLayout()
@@ -53,7 +54,7 @@ class AIUserConfigDialog(QDialog):
         self._grid_layout.addWidget(self._model_label, self.row, 0)
         self._model_dropdown = QComboBox()
         # TODO: add more decompilers
-        self._model_dropdown.addItems(["gpt-3.5", "VARModel"])
+        self._model_dropdown.addItems(["gpt-4", "gpt-3.5-turbo", "VARModel"])
         self._grid_layout.addWidget(self._model_dropdown, self.row, 1)
         self.row += 1
 
@@ -102,7 +103,7 @@ class AIUserConfigDialog(QDialog):
         all_users = [user.name for user in self._controller.users()]
         curr_user = self._controller.client.master_user
         all_users.remove(curr_user)
-        all_users = [curr_user] + all_users + [""]
+        all_users = [""] + [curr_user] + all_users
         self._user_base_dropdown.addItems(all_users)
         self._grid_layout.addWidget(self._user_base_dropdown, self.row, 1)
         self.row += 1
@@ -141,10 +142,16 @@ class AIUserConfigDialog(QDialog):
             return
 
         _l.info(f"Starting AI user now! Commits from user {self.username} should appear soon...")
+
+        # add a progress bar
+        pbar = QProgressBarDialog(label_text="Querying AI for functions...", on_cancel_callback=self.close)
+        pbar.show()
+        self.hide()
+
         add_ai_user_to_project(
             self.api_key, self.binary_path, self.project_path, username=self.username,
-            base_on=self.base_on, headless=True, copy_proj=True, model=self.model,
-            decompiler_backend=self.decompiler_backend
+            base_on=self.base_on, headless=True if self.decompiler_backend else False, copy_proj=True, model=self.model,
+            decompiler_backend=self.decompiler_backend, progress_callback=pbar.update_progress
         )
         self.close()
 

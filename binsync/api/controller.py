@@ -114,7 +114,7 @@ class BSController:
     The client will be set on connection. The ctx_change_callback will be set by an outside UI
 
     """
-    def __init__(self, artifact_lifter=None, headless=False, reload_time=10):
+    def __init__(self, artifact_lifter=None, headless=False, reload_time=10, **kwargs):
         self.headless = headless
         self.reload_time = reload_time
         self.artifact_lifer: BSArtifactLifter = artifact_lifter
@@ -197,6 +197,21 @@ class BSController:
         )
         return None
 
+    def wait_for_next_push(self):
+        last_push = self.client.last_push_attempt_time
+        start_time = time.time()
+        wait_time = 0
+        while wait_time < self.reload_time:
+            if last_push != self.client.last_push_attempt_time:
+                if not self.push_job_scheduler._job_queue.empty():
+                    # restart wait time when pusher still has jobs
+                    start_time = time.time()
+                else:
+                    break
+
+            time.sleep(BUSY_LOOP_COOLDOWN*2)
+            wait_time = time.time() - start_time
+
     def updater_routine(self):
         while self._run_updater_threads:
             time.sleep(BUSY_LOOP_COOLDOWN)
@@ -211,7 +226,7 @@ class BSController:
                 self.client.update(commit_msg="User created")
 
             # update every reload_time
-            elif (now - self.client.last_pull_attempt_time).seconds > self.reload_time:
+            elif int(now.timestamp() - self.client.last_pull_attempt_time.timestamp()) >= self.reload_time:
                 self.client.update()
                 
             if not self.headless:
@@ -228,7 +243,7 @@ class BSController:
 
                 # update the control panel with new info every BINSYNC_RELOAD_TIME seconds
                 if self._last_reload is None or \
-                        (now - self._last_reload).seconds > self.reload_time:
+                        int(now.timestamp() - self._last_reload.timestamp()) > self.reload_time:
                     self._last_reload = datetime.datetime.now(tz=datetime.timezone.utc)
 
                     self._ui_updater_worker.schedule_job(
