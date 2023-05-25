@@ -383,7 +383,7 @@ public class BSGhidraServerAPI {
 	 * Global Vars
 	 */
 	public Boolean setGlobalVarName(String addr, String name) {
-		Msg.info(this, "Attempting to rename global at " + addr + " to " + name);
+		Msg.debug(this, "Attempting to rename global at " + addr + " to " + name);
 		var program = this.server.plugin.getCurrentProgram();	
 		var symTab = program.getSymbolTable();
 		Boolean success = false;
@@ -391,11 +391,11 @@ public class BSGhidraServerAPI {
 		// Loop through symTab to find globals that match addr
 		for (Symbol sym: symTab.getAllSymbols(true)) {
 			if (sym.getSymbolType() != SymbolType.LABEL) {
-				//Msg.info(this, sym.getName(true) + " found: Not a global");
+				Msg.debug(this, sym.getName(true) + " found: Not a global");
 				continue;
 			}
 			
-			Msg.info(this, "Global " + sym.getName(true) + " found at 0x" + sym.getAddress().toString());
+			Msg.debug(this, "Global " + sym.getName(true) + " found at 0x" + sym.getAddress().toString());
 			if (sym.getAddress().equals(this.strToAddr(addr)))
 			{
 				var transID = program.startTransaction("bs-set-global");

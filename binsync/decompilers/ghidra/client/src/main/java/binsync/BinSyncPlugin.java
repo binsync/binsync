@@ -145,7 +145,7 @@ public class BinSyncPlugin extends ProgramPlugin implements DomainObjectListener
 		Msg.info(this, "Server started, now starting UI");
 		// start the Python3 UI
 		if(!startBinSyncUI())
-		return;
+			return;
 		Msg.info(this, "awaiting a connection...");
 		new Thread(() -> {
 			this.killServerAfterWait(5);
