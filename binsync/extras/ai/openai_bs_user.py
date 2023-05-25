@@ -5,6 +5,8 @@ from binsync.data import Function, StackVariable, Comment
 
 
 class OpenAIBSUser(AIBSUser):
+    DEFAULT_USERNAME = "chatgpt_user"
+
     def __init__(self, openai_api_key,  *args, **kwargs):
         super().__init__(openai_api_key, *args, **kwargs)
         self.ai_interface = OpenAIInterface(openai_api_key=openai_api_key, decompiler_controller=self.controller)

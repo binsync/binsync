@@ -23,6 +23,7 @@ from binsync.api.controller import BSController
 from binsync.decompilers import ANGR_DECOMPILER, IDA_DECOMPILER
 
 _l = logging.getLogger(__name__)
+AUTO_DECOMPILER = "automatic"
 
 class AIUserConfigDialog(QDialog):
     TITLE = "AI User Configuration"
@@ -52,7 +53,7 @@ class AIUserConfigDialog(QDialog):
         self._grid_layout.addWidget(self._model_label, self.row, 0)
         self._model_dropdown = QComboBox()
         # TODO: add more decompilers
-        self._model_dropdown.addItems(["gpt-3.5", "AVAR"])
+        self._model_dropdown.addItems(["gpt-3.5", "VARModel"])
         self._grid_layout.addWidget(self._model_dropdown, self.row, 1)
         self.row += 1
 
@@ -89,7 +90,7 @@ class AIUserConfigDialog(QDialog):
         self._grid_layout.addWidget(self._decompiler_label, self.row, 0)
         self._decompiler_dropdown = QComboBox()
         # TODO: add more decompilers
-        self._decompiler_dropdown.addItems([ANGR_DECOMPILER])
+        self._decompiler_dropdown.addItems([AUTO_DECOMPILER, ANGR_DECOMPILER])
         self._grid_layout.addWidget(self._decompiler_dropdown, self.row, 1)
         self.row += 1
 
@@ -129,6 +130,9 @@ class AIUserConfigDialog(QDialog):
         self.binary_path = self._binary_path_input.text()
         self.username = self._username_input.text()
         self.decompiler_backend = self._decompiler_dropdown.currentText()
+        if self.decompiler_backend == AUTO_DECOMPILER:
+            self.decompiler_backend = None
+
         self.base_on = self._user_base_dropdown.currentText()
         self.model = self._model_dropdown.currentText()
 
@@ -139,7 +143,8 @@ class AIUserConfigDialog(QDialog):
         _l.info(f"Starting AI user now! Commits from user {self.username} should appear soon...")
         add_ai_user_to_project(
             self.api_key, self.binary_path, self.project_path, username=self.username,
-            base_on=self.base_on, headless=True, copy_proj=True, model=self.model
+            base_on=self.base_on, headless=True, copy_proj=True, model=self.model,
+            decompiler_backend=self.decompiler_backend
         )
         self.close()
 

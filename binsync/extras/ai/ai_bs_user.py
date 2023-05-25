@@ -42,7 +42,7 @@ class AIBSUser:
             bs_proj_path = Path(bs_proj_path)
 
         # copy or create the project path into the temp dir
-        self.decompiler_backend = decompiler_backend or ANGR_DECOMPILER
+        self.decompiler_backend = decompiler_backend
         self.project_path = bs_proj_path or Path(binary_path).with_name(f"{binary_path.with_suffix('').name}.bsproj")
         self._is_tmp = False
         if copy_project and self.project_path.exists():
@@ -58,9 +58,9 @@ class AIBSUser:
 
         # connect the controller to a GitClient
         self.controller: Union[AngrBSController, BSController] = load_decompiler_controller(
-            force_decompiler=self.decompiler_backend, headless=True, binary_path=binary_path
+            force_decompiler=self.decompiler_backend, headless=True if self.decompiler_backend else False, binary_path=binary_path
         )
-        self.controller.connect(username, str(self.project_path), init_repo=create, single_thread=True)
+        self.controller.connect(username, str(self.project_path), init_repo=create, single_thread=True if self.decompiler_backend else False)
 
     def __del__(self):
         if self._is_tmp:

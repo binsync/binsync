@@ -5,7 +5,7 @@ import sys
 
 from binsync.extras.ai.ai_bs_user import AIBSUser
 from binsync.extras.ai.openai_bs_user import OpenAIBSUser
-from binsync.extras.ai.avar_bs_user import AVARBSUser
+from binsync.extras.ai.varmodel_bs_user import VARModelBSUser
 
 
 def add_ai_user_to_project(
@@ -21,7 +21,7 @@ def add_ai_user_to_project(
                 username=username, copy_project=copy_proj, decompiler_backend=decompiler_backend, base_on=base_on,
             )
         elif model == "AVAR":
-            ai_user = AVARBSUser(
+            ai_user = VARModelBSUser(
                 openai_api_key=openai_api_key, binary_path=binary_path, bs_proj_path=bs_proj_path,
                 username=username, copy_project=copy_proj, decompiler_backend=decompiler_backend, base_on=base_on,
             )
