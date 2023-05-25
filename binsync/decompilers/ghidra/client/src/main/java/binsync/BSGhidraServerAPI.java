@@ -390,7 +390,7 @@ public class BSGhidraServerAPI {
 		
 		// Loop through symTab to find globals that match addr
 		for (Symbol sym: symTab.getAllSymbols(true)) {
-			if (sym.getSymbolType() != SymbolType.LABEL || !sym.isDynamic()) {
+			if (sym.getSymbolType() != SymbolType.LABEL) {
 				//Msg.info(this, sym.getName(true) + " found: Not a global");
 				continue;
 			}
