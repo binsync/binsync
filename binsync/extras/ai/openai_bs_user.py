@@ -29,7 +29,8 @@ class OpenAIBSUser(AIBSUser):
         new_func = Function(func.addr, func.size, header=FunctionHeader("", func.addr, args={}), stack_vars={})
         for cmd in self.ai_interface.AI_COMMANDS:
             # TODO: convert this back to what it was before quals, it's made to be fast for now
-            if cmd not in {self.ai_interface.SUMMARIZE_CMD, self.ai_interface.RENAME_FUNCS_CMD, self.ai_interface.FIND_VULN_CMD}:
+            if cmd not in {self.ai_interface.SUMMARIZE_CMD, self.ai_interface.RENAME_FUNCS_CMD,
+                           self.ai_interface.FIND_VULN_CMD, self.ai_interface.RENAME_VARS_CMD}:
                 continue
 
             try:
@@ -52,6 +53,9 @@ class OpenAIBSUser(AIBSUser):
                 for off, sv in func.stack_vars.items():
                     if sv.name in resp:
                         proposed_name = resp[sv.name]
+                        if not proposed_name:
+                            continue
+
                         if proposed_name not in all_names:
                             new_func.stack_vars[off] = StackVariable(sv.offset, proposed_name, None, func.stack_vars[off].size, func.addr)
                             #self.controller.push_artifact(StackVariable(sv.offset, proposed_name, None, None, func.addr))
@@ -81,14 +85,14 @@ class OpenAIBSUser(AIBSUser):
 
                         # this is the current function we are working in
                         if _func.name == func.name:
-                            new_func.name = proposed_name
+                            new_func.name = f"gpt_{proposed_name}"
                             changes += 1
                             continue
 
                         # this is some external function
                         if _func.addr not in state.functions:
                             state.functions[_func.addr] = Function(_func.addr, _func.size)
-                        state.functions[_func.addr].name = proposed_name
+                        state.functions[_func.addr].name = f"gpt_{proposed_name}"
                         _l.info(f"Proposing new name for function {_func} to {proposed_name}")
                         changes += 1
 

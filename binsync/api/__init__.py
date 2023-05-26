@@ -49,12 +49,21 @@ def load_decompiler_controller(force_decompiler: str = None, **ctrl_kwargs) -> O
         has_ida = True
     except ImportError:
         pass
+    if has_ida or force_decompiler == IDA_DECOMPILER:
+        from binsync.decompilers.ida.controller import IDABSController
+        dec_controller = IDABSController(**ctrl_kwargs)
+        return dec_controller
 
     try:
         import binaryninja
         has_binja = True
     except ImportError:
         pass
+    if has_binja or force_decompiler == BINJA_DECOMPILER:
+        from binsync.decompilers.binja.controller import BinjaBSController
+        bv = _find_global_in_call_frames('bv')
+        dec_controller = BinjaBSController(bv=bv, **ctrl_kwargs)
+        return dec_controller
 
     try:
         import angr
@@ -62,22 +71,15 @@ def load_decompiler_controller(force_decompiler: str = None, **ctrl_kwargs) -> O
         has_angr = _find_global_in_call_frames('workspace') is not None
     except ImportError:
         pass
-
-    # we assume if we are nothing else, then we are Ghidra
-    is_ghidra = not(has_ida or has_binja or has_angr)
-
-    if has_ida or force_decompiler == IDA_DECOMPILER:
-        from binsync.decompilers.ida.controller import IDABSController
-        dec_controller = IDABSController(**ctrl_kwargs)
-    elif has_binja or force_decompiler == BINJA_DECOMPILER:
-        from binsync.decompilers.binja.controller import BinjaBSController
-        bv = _find_global_in_call_frames('bv')
-        dec_controller = BinjaBSController(bv=bv, **ctrl_kwargs)
-    elif has_angr or force_decompiler == ANGR_DECOMPILER:
+    if has_angr or force_decompiler == ANGR_DECOMPILER:
         from binsync.decompilers.angr.controller import AngrBSController
         workspace = _find_global_in_call_frames('workspace')
         dec_controller = AngrBSController(workspace=workspace, **ctrl_kwargs)
-    elif is_ghidra or force_decompiler == GHIDRA_DECOMPILER:
+        return dec_controller
+
+    # we assume if we are nothing else, then we are Ghidra
+    is_ghidra = not(has_ida or has_binja or has_angr)
+    if is_ghidra or force_decompiler == GHIDRA_DECOMPILER:
         from binsync.decompilers.ghidra.server.controller import GhidraBSController
         dec_controller = GhidraBSController(**ctrl_kwargs)
     else:
