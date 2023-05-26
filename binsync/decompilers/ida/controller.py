@@ -125,8 +125,8 @@ class UpdateTaskState:
 #
 
 class IDABSController(BSController):
-    def __init__(self):
-        super(IDABSController, self).__init__(artifact_lifter=IDAArtifactLifter(self))
+    def __init__(self, **kwargs):
+        super(IDABSController, self).__init__(artifact_lifter=IDAArtifactLifter(self), **kwargs)
 
         # view change callback
         self._updated_ctx = None
@@ -167,6 +167,9 @@ class IDABSController(BSController):
 
     def goto_address(self, func_addr) -> None:
         compat.jumpto(func_addr)
+
+    def save_native_decompiler_database(self):
+        compat.save_idb()
 
     @property
     def decompiler_available(self) -> bool:

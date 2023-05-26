@@ -75,8 +75,8 @@ def background_and_wait(func):
 #
 
 class BinjaBSController(BSController):
-    def __init__(self, bv=None):
-        super(BinjaBSController, self).__init__(artifact_lifter=BinjaArtifactLifter(self))
+    def __init__(self, bv=None, **kwargs):
+        super(BinjaBSController, self).__init__(artifact_lifter=BinjaArtifactLifter(self), **kwargs)
         self.bv: binaryninja.BinaryView = bv
 
     def binary_hash(self) -> str:

@@ -13,8 +13,8 @@ l = logging.getLogger(__name__)
 
 
 class GhidraBSController(BSController):
-    def __init__(self):
-        super(GhidraBSController, self).__init__(GhidraArtifactLifter(self))
+    def __init__(self, **kwargs):
+        super(GhidraBSController, self).__init__(GhidraArtifactLifter(self), **kwargs)
         self.ghidra = BSGhidraClient()
         self.base_addr = None
 

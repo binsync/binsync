@@ -114,7 +114,7 @@ class BSController:
     The client will be set on connection. The ctx_change_callback will be set by an outside UI
 
     """
-    def __init__(self, artifact_lifter=None, headless=False, reload_time=10):
+    def __init__(self, artifact_lifter=None, headless=False, reload_time=10, **kwargs):
         self.headless = headless
         self.reload_time = reload_time
         self.artifact_lifer: BSArtifactLifter = artifact_lifter
@@ -197,6 +197,21 @@ class BSController:
         )
         return None
 
+    def wait_for_next_push(self):
+        last_push = self.client.last_push_attempt_time
+        start_time = time.time()
+        wait_time = 0
+        while wait_time < self.reload_time:
+            if last_push != self.client.last_push_attempt_time:
+                if not self.push_job_scheduler._job_queue.empty():
+                    # restart wait time when pusher still has jobs
+                    start_time = time.time()
+                else:
+                    break
+
+            time.sleep(BUSY_LOOP_COOLDOWN*2)
+            wait_time = time.time() - start_time
+
     def updater_routine(self):
         while self._run_updater_threads:
             time.sleep(BUSY_LOOP_COOLDOWN)
@@ -211,7 +226,7 @@ class BSController:
                 self.client.update(commit_msg="User created")
 
             # update every reload_time
-            elif (now - self.client.last_pull_attempt_time).seconds > self.reload_time:
+            elif int(now.timestamp() - self.client.last_pull_attempt_time.timestamp()) >= self.reload_time:
                 self.client.update()
                 
             if not self.headless:
@@ -228,7 +243,7 @@ class BSController:
 
                 # update the control panel with new info every BINSYNC_RELOAD_TIME seconds
                 if self._last_reload is None or \
-                        (now - self._last_reload).seconds > self.reload_time:
+                        int(now.timestamp() - self._last_reload.timestamp()) > self.reload_time:
                     self._last_reload = datetime.datetime.now(tz=datetime.timezone.utc)
 
                     self._ui_updater_worker.schedule_job(
@@ -366,6 +381,13 @@ class BSController:
         """
         return True
 
+    def save_native_decompiler_database(self):
+        """
+        Saves the current state of the decompilers database with the file name being the name of the current
+        binary and the filename extension being that of the native decompilers save format
+        """
+        raise NotImplementedError
+    
     #
     # Optional Artifact API:
     # A series of functions that allow public access to live artifacts in the decompiler. As an example,
@@ -641,7 +663,7 @@ class BSController:
         return self.lower_artifact(artifact)
 
     @init_checker
-    def push_artifact(self, artifact: Artifact, user=None, state=None, commit_msg=None, set_last_change=True, **kwargs) -> bool:
+    def push_artifact(self, artifact: Artifact, user=None, state=None, commit_msg=None, set_last_change=True, make_func=True, **kwargs) -> bool:
         """
         Every pusher artifact does three things
         1. Get the state setter function based on the class of the Obj
@@ -668,7 +690,7 @@ class BSController:
             state = self.get_state(user=user)
 
         # assure function existence for artifacts requiring a function
-        if isinstance(artifact, (FunctionHeader, StackVariable, Comment)):
+        if isinstance(artifact, (FunctionHeader, StackVariable, Comment)) and make_func:
             func_addr = artifact.func_addr if hasattr(artifact, "func_addr") else artifact.addr
             if func_addr and not state.get_function(func_addr):
                 self.push_artifact(Function(func_addr, self.get_func_size(func_addr)), state=state, set_last_change=set_last_change)
@@ -743,12 +765,15 @@ class BSController:
 
         lock = self.sync_lock if not self.sync_lock.locked() else FakeSyncLock()
         with lock:
-            fill_changes = filler_func(
-                self,
-                *identifiers,
-                artifact=merged_artifact, user=user, state=state, master_state=master_state, merge_level=merge_level,
-                **kwargs
-            )
+            try:
+                fill_changes = filler_func(
+                    self,
+                    *identifiers,
+                    artifact=merged_artifact, user=user, state=state, master_state=master_state, merge_level=merge_level,
+                    **kwargs
+                )
+            except Exception as e:
+                _l.error(f"Failed to fill artifact {merged_artifact} because of an error {e}")
 
         _l.info(
             f"Successfully synced new changes from {state.user} for {merged_artifact}" if fill_changes
@@ -952,6 +977,7 @@ class BSController:
         @return:
         """
         _l.info(f"Staring a Magic Sync with a preference for {preference_user}")
+        self.save_native_decompiler_database()
 
         if self.merge_level == MergeLevel.OVERWRITE:
             _l.warning(f"Using Magic Sync with OVERWRITE is not supported, switching to NON-CONFLICTING")
