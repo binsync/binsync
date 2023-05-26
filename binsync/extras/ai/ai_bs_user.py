@@ -26,7 +26,7 @@ _l.setLevel(logging.INFO)
 
 class AIBSUser:
     MAX_FUNC_SIZE = 0xffff
-    MIN_FUNC_SIZE = 0x40
+    MIN_FUNC_SIZE = 0x25
     DEFAULT_USERNAME = "ai_user"
 
     def __init__(

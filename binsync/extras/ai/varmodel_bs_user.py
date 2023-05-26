@@ -26,7 +26,8 @@ class VARModelBSUser(AIBSUser):
     def run_all_ai_commands_for_dec(self, decompilation: str, func: Function):
         try:
             updated_func = self._renaming_api.predict_variable_names(decompilation, func)
-        except Exception:
+        except Exception as e:
+            _l.warning(f"Skipping {func} due to exception {e}")
             return 0
 
         if updated_func is not None:
