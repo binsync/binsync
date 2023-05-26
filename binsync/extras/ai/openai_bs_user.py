@@ -32,7 +32,7 @@ class OpenAIBSUser(AIBSUser):
         func_cmt = ""
         for cmd in self.ai_interface.AI_COMMANDS:
             # TODO: convert this back to what it was before quals, it's made to be fast for now
-            if cmd not in {self.ai_interface.SUMMARIZE_CMD, self.ai_interface.RENAME_FUNCS_CMD}:
+            if cmd not in {self.ai_interface.SUMMARIZE_CMD, self.ai_interface.RENAME_FUNCS_CMD, self.ai_interface.FIND_VULN_CMD}:
                 continue
 
             resp = self.ai_interface.query_for_cmd(cmd, decompilation=decompilation)
@@ -92,11 +92,14 @@ class OpenAIBSUser(AIBSUser):
                             new_func.name = proposed_name
 
         if changes:
-            self.controller.push_artifact(new_func)
+            self.controller.fill_function(new_func.addr, artifact=new_func, user=self.username)
+            #self.controller.push_artifact(new_func)
 
         # send full function comment
         if func_cmt:
-            self.controller.push_artifact(Comment(new_func.addr, func_cmt, func_addr=new_func.addr, decompiled=True), append=True)
+            self.comments[new_func.addr] = Comment(new_func.addr, func_cmt, func_addr=new_func.addr, decompiled=True)
+            #self.controller.push_artifact(Comment(new_func.addr, func_cmt, func_addr=new_func.addr, decompiled=True), append=True)
+            #self.controller.fill_comment(new_func.addr, user=self.username, artifact=Comment(new_func.addr, func_cmt, func_addr=new_func.addr, decompiled=True), append=True)
             #self.controller.schedule_job(
             #    self.controller.push_artifact,
             #    Comment(new_func.addr, func_cmt, func_addr=new_func.addr, decompiled=True),

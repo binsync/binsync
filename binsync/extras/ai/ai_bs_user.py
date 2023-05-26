@@ -13,6 +13,7 @@ import math
 from binsync.api import load_decompiler_controller, BSController
 from binsync.decompilers import ANGR_DECOMPILER
 from binsync.decompilers.angr.controller import AngrBSController
+from binsync.data.state import State
 from binsync.data import (
     Function, Comment, StackVariable
 )
@@ -66,17 +67,25 @@ class AIBSUser:
             os.mkdir(self.project_path)
 
         # connect the controller to a GitClient
-        self.controller: Union[AngrBSController, BSController] = load_decompiler_controller(
+        self.controller: BSController = load_decompiler_controller(
             force_decompiler=self.decompiler_backend, headless=True, binary_path=binary_path,
         )
         self.controller.connect(username, str(self.project_path), init_repo=create, single_thread=True)
+        self.comments = {}
 
     def add_ai_user_to_project(self):
         _l.info(f"Querying AI for BS changes now...")
         # commit all changes the AI can generate to the master state
         total_ai_changes = self.commit_ai_changes_to_state()
-        if total_ai_changes:
-            self.controller.client.push()
+
+        # TODO: remove this
+        master_state: State = self.controller.get_state()
+        for addr, cmt in self.comments.items():
+            master_state.set_comment(cmt, append=True)
+            #self.controller.push_artifact(cmt, append=True, make_func=False)
+        self.controller.client.commit_state(master_state)
+
+        self.controller.client.push()
 
         _l.info(f"Pushed {total_ai_changes} AI initiated changes to user {self.username}")
         # ask the git client to push/pull those changes
@@ -107,17 +116,16 @@ class AIBSUser:
 
         update_amt_per_func = math.ceil(100 / len(valid_funcs))
         update_cnt = 0
-
+        callback_stub = self._progress_callback if self._progress_callback is not None else lambda x: x
         for func_addr in valid_funcs:
-            if self._progress_callback is not None:
-                self._progress_callback(update_amt_per_func)
-
             func = self.controller.function(func_addr)
             if func is None:
+                callback_stub(update_amt_per_func)
                 continue
 
             decompilation = self.controller.decompile(func_addr)
             if not decompilation:
+                callback_stub(update_amt_per_func)
                 continue
 
             # do a push ever 3 funcs
@@ -128,6 +136,8 @@ class AIBSUser:
             if update_cnt >= 3:
                 update_cnt = 0
                 self.controller.client.push()
+
+            callback_stub(update_amt_per_func)
 
         return ai_initiated_changes
 

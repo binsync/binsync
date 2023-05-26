@@ -168,6 +168,9 @@ class IDABSController(BSController):
     def goto_address(self, func_addr) -> None:
         compat.jumpto(func_addr)
 
+    def save_native_decompiler_database(self):
+        compat.save_idb()
+
     @property
     def decompiler_available(self) -> bool:
         if self._decompiler_available is None:

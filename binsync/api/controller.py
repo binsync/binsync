@@ -381,6 +381,13 @@ class BSController:
         """
         return True
 
+    def save_native_decompiler_database(self):
+        """
+        Saves the current state of the decompilers database with the file name being the name of the current
+        binary and the filename extension being that of the native decompilers save format
+        """
+        raise NotImplementedError
+    
     #
     # Optional Artifact API:
     # A series of functions that allow public access to live artifacts in the decompiler. As an example,
@@ -656,7 +663,7 @@ class BSController:
         return self.lower_artifact(artifact)
 
     @init_checker
-    def push_artifact(self, artifact: Artifact, user=None, state=None, commit_msg=None, set_last_change=True, **kwargs) -> bool:
+    def push_artifact(self, artifact: Artifact, user=None, state=None, commit_msg=None, set_last_change=True, make_func=True, **kwargs) -> bool:
         """
         Every pusher artifact does three things
         1. Get the state setter function based on the class of the Obj
@@ -683,7 +690,7 @@ class BSController:
             state = self.get_state(user=user)
 
         # assure function existence for artifacts requiring a function
-        if isinstance(artifact, (FunctionHeader, StackVariable, Comment)):
+        if isinstance(artifact, (FunctionHeader, StackVariable, Comment)) and make_func:
             func_addr = artifact.func_addr if hasattr(artifact, "func_addr") else artifact.addr
             if func_addr and not state.get_function(func_addr):
                 self.push_artifact(Function(func_addr, self.get_func_size(func_addr)), state=state, set_last_change=set_last_change)
@@ -758,12 +765,15 @@ class BSController:
 
         lock = self.sync_lock if not self.sync_lock.locked() else FakeSyncLock()
         with lock:
-            fill_changes = filler_func(
-                self,
-                *identifiers,
-                artifact=merged_artifact, user=user, state=state, master_state=master_state, merge_level=merge_level,
-                **kwargs
-            )
+            try:
+                fill_changes = filler_func(
+                    self,
+                    *identifiers,
+                    artifact=merged_artifact, user=user, state=state, master_state=master_state, merge_level=merge_level,
+                    **kwargs
+                )
+            except Exception as e:
+                _l.error(f"Failed to fill artifact {merged_artifact} because of an error {e}")
 
         _l.info(
             f"Successfully synced new changes from {state.user} for {merged_artifact}" if fill_changes
@@ -967,6 +977,7 @@ class BSController:
         @return:
         """
         _l.info(f"Staring a Magic Sync with a preference for {preference_user}")
+        self.save_native_decompiler_database()
 
         if self.merge_level == MergeLevel.OVERWRITE:
             _l.warning(f"Using Magic Sync with OVERWRITE is not supported, switching to NON-CONFLICTING")

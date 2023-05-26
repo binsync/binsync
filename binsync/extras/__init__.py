@@ -7,7 +7,7 @@ _l = logging.getLogger(__name__)
 EXTRAS_AVAILABLE = True
 try:
     import dailalib
-    import angr
+    #import angr
 except ImportError:
     _l.info("Extras not installed, some features will not be available.")
     EXTRAS_AVAILABLE = False
