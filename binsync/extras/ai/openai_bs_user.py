@@ -3,8 +3,9 @@ import logging
 from dailalib.interfaces import OpenAIInterface
 
 from binsync.extras.ai.ai_bs_user import AIBSUser
-from binsync.data import Function, StackVariable, Comment
+from binsync.data import Function, StackVariable, Comment, State, FunctionHeader
 
+_l = logging.getLogger(__name__)
 
 class OpenAIBSUser(AIBSUser):
     DEFAULT_USERNAME = "chatgpt_user"
@@ -13,7 +14,7 @@ class OpenAIBSUser(AIBSUser):
         super().__init__(openai_api_key, *args, **kwargs)
         self.ai_interface = OpenAIInterface(openai_api_key=openai_api_key, decompiler_controller=self.controller, model=self._model)
 
-    def run_all_ai_commands_for_dec(self, decompilation: str, func: Function):
+    def run_all_ai_commands_for_dec(self, decompilation: str, func: Function, state: State):
         changes = 0
         artifact_edit_cmds = {
             self.ai_interface.RETYPE_VARS_CMD, self.ai_interface.RENAME_VARS_CMD, self.ai_interface.RENAME_FUNCS_CMD
@@ -24,12 +25,8 @@ class OpenAIBSUser(AIBSUser):
             self.ai_interface.FIND_VULN_CMD: "==== AI Vuln Guess ====\n",
         }
 
-        new_func: Function = func.copy()
-        new_func.header.name = ""
-        new_func.header.args = {}
-        new_func.header.type = ""
-        new_func.stack_vars = {}
         func_cmt = ""
+        new_func = Function(func.addr, func.size, header=FunctionHeader("", func.addr, args={}), stack_vars={})
         for cmd in self.ai_interface.AI_COMMANDS:
             # TODO: convert this back to what it was before quals, it's made to be fast for now
             if cmd not in {self.ai_interface.SUMMARIZE_CMD, self.ai_interface.RENAME_FUNCS_CMD, self.ai_interface.FIND_VULN_CMD}:
@@ -56,7 +53,7 @@ class OpenAIBSUser(AIBSUser):
                     if sv.name in resp:
                         proposed_name = resp[sv.name]
                         if proposed_name not in all_names:
-                            new_func.stack_vars[off] = StackVariable(sv.offset, proposed_name, None, None, func.addr)
+                            new_func.stack_vars[off] = StackVariable(sv.offset, proposed_name, None, func.stack_vars[off].size, func.addr)
                             #self.controller.push_artifact(StackVariable(sv.offset, proposed_name, None, None, func.addr))
                             #self.controller.schedule_job(
                             #    self.controller.push_artifact,
@@ -67,7 +64,7 @@ class OpenAIBSUser(AIBSUser):
             elif cmd == self.ai_interface.RETYPE_VARS_CMD:
                 for off, sv in func.stack_vars.items():
                     if sv.name in resp:
-                        new_func.stack_vars[off] = StackVariable(sv.offset, sv.name, resp[sv.name], None, func.addr)
+                        new_func.stack_vars[off] = StackVariable(sv.offset, "", resp[sv.name], func.stack_vars[off].size, func.addr)
                         #self.controller.push_artifact(StackVariable(sv.offset, sv.name, resp[sv.name], None, func.addr))
                         #self.controller.schedule_job(
                         #    self.controller.push_artifact,
@@ -76,32 +73,30 @@ class OpenAIBSUser(AIBSUser):
                         #)
 
             elif cmd == self.ai_interface.RENAME_FUNCS_CMD:
-                for addr, func in self.controller.functions().items():
-                    if func.name in resp:
-                        proposed_name = resp[func.name]
-                        if proposed_name in self.controller.functions():
+                for addr, _func in self.controller.functions().items():
+                    if _func.name in resp:
+                        proposed_name = resp[_func.name]
+                        if proposed_name in self.controller.functions() or not proposed_name:
                             continue
 
-                        func.name = proposed_name
-                        self.controller.push_artifact(func)
-                        #self.controller.schedule_job(
-                        #    self.controller.push_artifact,
-                        #    func,
-                        #    #blocking=True
-                        #)
+                        # this is the current function we are working in
+                        if _func.name == func.name:
+                            new_func.name = proposed_name
+                            changes += 1
+                            continue
+
+                        # this is some external function
+                        if _func.addr not in state.functions:
+                            state.functions[_func.addr] = Function(_func.addr, _func.size)
+                        state.functions[_func.addr].name = proposed_name
                         changes += 1
 
-                        # update the function we are in as well
-                        if func.name == new_func.name:
-                            new_func.name = proposed_name
-
         if changes:
-            self.controller.fill_function(new_func.addr, artifact=new_func, user=self.username)
-            #self.controller.push_artifact(new_func)
+            state.set_function(new_func)
 
         # send full function comment
         if func_cmt:
-            self.comments[new_func.addr] = Comment(new_func.addr, func_cmt, func_addr=new_func.addr, decompiled=True)
+            state.set_comment(Comment(new_func.addr, func_cmt, func_addr=new_func.addr, decompiled=True), append=True)
             #self.controller.push_artifact(Comment(new_func.addr, func_cmt, func_addr=new_func.addr, decompiled=True), append=True)
             #self.controller.fill_comment(new_func.addr, user=self.username, artifact=Comment(new_func.addr, func_cmt, func_addr=new_func.addr, decompiled=True), append=True)
             #self.controller.schedule_job(

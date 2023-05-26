@@ -141,7 +141,7 @@ class IDABSController(BSController):
     #
 
     def binary_hash(self) -> str:
-        return idc.retrieve_input_file_md5().hex()
+        return compat.binary_hash()
 
     def active_context(self):
         return self._updated_ctx

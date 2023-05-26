@@ -1,7 +1,7 @@
 import logging
 
 from binsync.extras.ai.ai_bs_user import AIBSUser
-from binsync.data import Function
+from binsync.data import Function, State
 
 
 _l = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ class VARModelBSUser(AIBSUser):
 
         self._renaming_api = VariableRenamingAPI()
     
-    def run_all_ai_commands_for_dec(self, decompilation: str, func: Function):
+    def run_all_ai_commands_for_dec(self, decompilation: str, func: Function, state: State):
         try:
             updated_func = self._renaming_api.predict_variable_names(decompilation, func)
         except Exception as e:
@@ -31,7 +31,7 @@ class VARModelBSUser(AIBSUser):
             return 0
 
         if updated_func is not None:
-            self.controller.push_artifact(updated_func)
+            state.set_function(updated_func)
             return 1
 
         return 0

@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import logging
+from threading import Thread
 
 from binsync.ui.qt_objects import (
     QComboBox,
@@ -143,19 +144,33 @@ class AIUserConfigDialog(QDialog):
                 return
 
         _l.info(f"Starting AI user now! Commits from user {self.username} should appear soon...")
-
-        # add a progress bar
-        pbar = QProgressBarDialog(label_text="Querying AI for functions...", on_cancel_callback=self.close)
-        pbar.show()
         self.hide()
+        try:
+            self.threaded_add_ai_user_to_project()
+        except Exception as e:
+            _l.info(f"Ran into issue: {e}")
 
-        add_ai_user_to_project(
-            self.api_key, self.binary_path, self.project_path, username=self.username,
-            base_on=self.base_on, headless=True if self.decompiler_backend else False, copy_proj=True, model=self.model,
-            decompiler_backend=self.decompiler_backend, progress_callback=pbar.update_progress
-        )
         self.close()
 
     def _on_cancel_button_clicked(self):
         self.close()
-
+    
+    def threaded_add_ai_user_to_project(self):
+        add_ai_user_to_project(
+            self.api_key, self.binary_path, self.project_path, username=self.username,
+            base_on=self.base_on, headless=True if self.decompiler_backend else False, copy_proj=True, model=self.model,
+            decompiler_backend=self.decompiler_backend
+        )
+        """
+        t = Thread(
+            target=add_ai_user_to_project, 
+            args=(self.api_key, self.binary_path, self.project_path,),
+            kwargs={
+                "username": self.username, "base_on": self.base_on,
+                "headless": True if self.decompiler_backend else False, "copy_proj": True, "model": self.model,
+                "decompiler_backend": self.decompiler_backend,
+            }
+        )
+        t.setDaemon(True)
+        t.start()
+        """
