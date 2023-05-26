@@ -25,12 +25,26 @@ class VARModelBSUser(AIBSUser):
     
     def run_all_ai_commands_for_dec(self, decompilation: str, func: Function, state: State):
         try:
-            updated_func = self._renaming_api.predict_variable_names(decompilation, func)
+            updated_func: Function = self._renaming_api.predict_variable_names(decompilation, func)
         except Exception as e:
             _l.warning(f"Skipping {func} due to exception {e}")
             return 0
 
         if updated_func is not None:
+            # check for at least one change
+            for off, new_sv in updated_func.stack_vars.items():
+                if new_sv.name != func.stack_vars[off]:
+                    break
+            else:
+                return 0
+
+            for off, new_arg in updated_func.args.items():
+                if new_arg.name != func.args[off]:
+                    break
+            else:
+                return 0
+
+            _l.info(f"Updating variables in {func}...")
             state.set_function(updated_func)
             return 1
 

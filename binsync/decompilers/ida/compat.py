@@ -395,6 +395,8 @@ def get_func_stack_var_info(func_addr) -> typing.Dict[int, StackVariable]:
         return {}
 
     stack_var_info = {}
+    if decompilation is None or not decompilation.lvars:
+        return stack_var_info
 
     for var in decompilation.lvars:
         if not var.is_stk_var():

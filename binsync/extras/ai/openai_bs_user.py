@@ -89,9 +89,11 @@ class OpenAIBSUser(AIBSUser):
                         if _func.addr not in state.functions:
                             state.functions[_func.addr] = Function(_func.addr, _func.size)
                         state.functions[_func.addr].name = proposed_name
+                        _l.info(f"Proposing new name for function {_func} to {proposed_name}")
                         changes += 1
 
         if changes:
+            _l.info(f"Proposing new name for function {func} to {new_func}")
             state.set_function(new_func)
 
         # send full function comment

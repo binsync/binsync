@@ -242,8 +242,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
             stack_frame = sptr
             func_addr = idaapi.get_func_by_frame(stack_frame.id)
             try:
-                stack_var_info = compat.get_func_stack_var_info(func_addr)[
-                    compat.ida_to_angr_stack_offset(func_addr, mptr.soff)]
+                stack_var_info = compat.get_func_stack_var_info(func_addr)[compat.ida_to_angr_stack_offset(func_addr, mptr.soff)]
             except KeyError:
                 l.debug(f"Failed to track an internal changing stack var: {mptr.id}.")
                 return 0
