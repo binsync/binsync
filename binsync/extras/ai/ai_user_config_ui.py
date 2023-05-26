@@ -138,8 +138,9 @@ class AIUserConfigDialog(QDialog):
         self.model = self._model_dropdown.currentText()
 
         if not (self.api_key and self.binary_path and self.username):
-            _l.critical("You did not provide a path, username, and API key for the AI user.")
-            return
+            if self.model is not None and "gpt" in self.model:
+                _l.critical("You did not provide a path, username, and API key for the AI user.")
+                return
 
         _l.info(f"Starting AI user now! Commits from user {self.username} should appear soon...")
 

@@ -24,7 +24,11 @@ class VARModelBSUser(AIBSUser):
         self._renaming_api = VariableRenamingAPI()
     
     def run_all_ai_commands_for_dec(self, decompilation: str, func: Function):
-        updated_func = self._renaming_api.predict_variable_names(decompilation, func)
+        try:
+            updated_func = self._renaming_api.predict_variable_names(decompilation, func)
+        except Exception:
+            return 0
+
         if updated_func is not None:
             self.controller.push_artifact(updated_func)
             return 1
