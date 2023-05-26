@@ -41,6 +41,7 @@ class AIBSUser:
         model=None,
         progress_callback=None
     ):
+        self._base_on = base_on
         self.username = username
         self._model = model
         self._progress_callback = progress_callback
