@@ -12,7 +12,6 @@ import math
 
 from binsync.api import load_decompiler_controller, BSController
 from binsync.decompilers import ANGR_DECOMPILER
-from binsync.decompilers.angr.controller import AngrBSController
 from binsync.data.state import State
 from binsync.data import (
     Function, Comment, StackVariable
@@ -43,7 +42,6 @@ class AIBSUser:
         progress_callback=None
     ):
         self.username = username
-        self._base_on = base_on
         self._model = model
         self._progress_callback = progress_callback
         if bs_proj_path is not None:
