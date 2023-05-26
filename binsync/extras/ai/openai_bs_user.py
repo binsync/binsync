@@ -35,7 +35,11 @@ class OpenAIBSUser(AIBSUser):
             if cmd not in {self.ai_interface.SUMMARIZE_CMD, self.ai_interface.RENAME_FUNCS_CMD, self.ai_interface.FIND_VULN_CMD}:
                 continue
 
-            resp = self.ai_interface.query_for_cmd(cmd, decompilation=decompilation)
+            try:
+                resp = self.ai_interface.query_for_cmd(cmd, decompilation=decompilation)
+            except Exception:
+                continue
+
             if not resp:
                 continue
 
