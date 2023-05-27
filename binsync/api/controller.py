@@ -773,7 +773,9 @@ class BSController:
                     **kwargs
                 )
             except Exception as e:
+                fill_changes = False
                 _l.error(f"Failed to fill artifact {merged_artifact} because of an error {e}")
+
 
         _l.info(
             f"Successfully synced new changes from {state.user} for {merged_artifact}" if fill_changes

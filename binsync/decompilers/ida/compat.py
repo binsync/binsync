@@ -735,8 +735,9 @@ class IDAViewCTX:
 
     @execute_write
     def close_pseudocode_view(self, ida_vdui_t):
-        widget = ida_vdui_t.toplevel
-        idaapi.close_pseudocode(widget)
+        if ida_vdui_t is not None:
+            widget = ida_vdui_t.toplevel
+            idaapi.close_pseudocode(widget)
 
 
 def get_screen_ea():
