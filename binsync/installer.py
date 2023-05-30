@@ -259,7 +259,7 @@ class BinSyncInstaller(Installer):
                           |___|        
         Now installing BinSync...
         Please input decompiler/debugger install paths as prompted. Enter nothing to either use
-        the default install path if one exist, or to skip.
+        the default install path if one exists, or to skip.
         """))
 
     def install_ida(self, path=None):
