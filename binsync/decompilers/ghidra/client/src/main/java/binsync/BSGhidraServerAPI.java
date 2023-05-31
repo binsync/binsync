@@ -443,30 +443,30 @@ public class BSGhidraServerAPI {
 	
 	public Map<String, Object> getFunction(String addr) {
 		var func = this.getNearestFunction(this.strToAddr(addr));
-		
+
 		// Collect header data from function
 		Map<String, Object> header = new HashMap<>();
 		header.put("name", func.getName());
 		header.put("addr", Integer.decode(addr));
 		header.put("type", func.getReturnType().toString());
-		
+
 		// Collect metadata from function
 		Map<String, Object> metadata = new HashMap<>();
 		metadata.put("addr", Integer.decode(addr));
 		metadata.put("size", 0);
-		
+
 		// Add data to the final map
 		Map<String, Object> func_data = new HashMap<>();
 		func_data.put("metadata", metadata);
 		func_data.put("header", header);
-		
+
 		return func_data;
 	}
-	
+
 	public Map<String, Map<String, Object>> getFunctions() {
 		var program = this.server.plugin.getCurrentProgram();
 		var fm = program.getFunctionManager();
-		
+
 		// Iterate through functions and pack data
 		Map<String, Map<String, Object>> funcs = new HashMap<>();
 		for (Function func: fm.getFunctions(true)) {
@@ -478,8 +478,8 @@ public class BSGhidraServerAPI {
 			func_data.put("size", size);
 			funcs.put(addr, func_data);
 		}
-		
+
 		return funcs;
 	}
-	
+
 }
