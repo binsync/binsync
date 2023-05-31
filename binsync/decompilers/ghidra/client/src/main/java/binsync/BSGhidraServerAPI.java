@@ -15,6 +15,7 @@ import ghidra.program.model.pcode.HighFunctionDBUtil;
 import ghidra.program.model.symbol.*;
 import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.exception.InvalidInputException;
+import ghidra.util.table.mapper.ProgramLocationToAddressTableRowMapper;
 import ghidra.program.model.address.*;
 import ghidra.program.model.data.DataType;
 import ghidra.program.flatapi.*;
@@ -440,9 +441,25 @@ public class BSGhidraServerAPI {
 	 * Enums
 	 */
 	
-	public Map<String, String> getFunc(String addr) {
-		Map<String, String> func = new HashMap<>();
-		return func;
+	public Map<String, Object> getFunc(String addr) {
+		var func = this.getNearestFunction(this.strToAddr(addr));
+		
+		// Collect data from function
+		Map<String, Object> header = new HashMap<>();
+		header.put("name", func.getName());
+		header.put("addr", addr);
+		header.put("type", func.getReturnType());
+		header.put("args", null);
+		
+		// Add data to the map
+		Map<String, Object> func_data = new HashMap<>();
+		func_data.put("header", header);
+		// TODO: Implement below artifact data
+		func_data.put("size", null);
+		func_data.put("stack_vars", null);
+		func_data.put("last_change", null);		
+		
+		return func_data;
 	}
 	
 }
