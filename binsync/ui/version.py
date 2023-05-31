@@ -1,4 +1,4 @@
-ui_version = "PySide6"
+ui_version = "PySide2"
 
 
 def set_ui_version(version):
