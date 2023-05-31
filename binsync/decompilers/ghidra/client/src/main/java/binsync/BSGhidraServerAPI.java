@@ -440,4 +440,9 @@ public class BSGhidraServerAPI {
 	 * Enums
 	 */
 	
+	public Map<String, String> getFunc(String addr) {
+		Map<String, String> func = new HashMap<>();
+		return func;
+	}
+	
 }
