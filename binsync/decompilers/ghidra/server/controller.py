@@ -119,12 +119,3 @@ class GhidraBSController(BSController):
         if not ret:
             return None
         return Function.parse(ret)
-
-    def functions(self, **kwargs) -> dict:
-        ret = self.ghidra.get_functions()
-        if not ret:
-            return None
-        funcs = {}
-        for addr in ret:
-            funcs[addr] = Function(addr, ret[addr]["size"], header=FunctionHeader(ret[addr]["name"], addr))        
-        return funcs
