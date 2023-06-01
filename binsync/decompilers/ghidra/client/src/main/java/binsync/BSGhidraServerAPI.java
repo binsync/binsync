@@ -441,23 +441,24 @@ public class BSGhidraServerAPI {
 	 * Enums
 	 */
 	
-	public Map<String, Object> getFunc(String addr) {
+	public Map<String, Object> getFunction(String addr) {
 		var func = this.getNearestFunction(this.strToAddr(addr));
 		
 		// Collect data from function
 		Map<String, Object> header = new HashMap<>();
 		header.put("name", func.getName());
-		header.put("addr", addr);
-		header.put("type", func.getReturnType());
-		header.put("args", null);
+		header.put("addr", Integer.decode(addr));
+		header.put("type", func.getReturnType().toString());
+		//header.put("args", null);
 		
 		// Add data to the map
 		Map<String, Object> func_data = new HashMap<>();
 		func_data.put("header", header);
+		func_data.put("addr", Integer.decode(addr));
 		// TODO: Implement below artifact data
-		func_data.put("size", null);
-		func_data.put("stack_vars", null);
-		func_data.put("last_change", null);		
+		//func_data.put("size", 0);
+		//func_data.put("stack_vars", null);
+		//func_data.put("last_change", null);		
 		
 		return func_data;
 	}

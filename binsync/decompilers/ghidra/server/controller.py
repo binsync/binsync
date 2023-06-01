@@ -113,3 +113,11 @@ class GhidraBSController(BSController):
 
     def _decompile(self, function: Function) -> Optional[str]:
         return None
+
+    def function(self, addr, **kwargs) -> Optional[Function]:
+        ret = self.ghidra.get_function(addr)
+        if not ret:
+            return None
+        metadata = {"addr": ret["addr"], "size": 0}
+        state = {"metadata": metadata, "header": ret["header"]}
+        return Function.parse(state)
