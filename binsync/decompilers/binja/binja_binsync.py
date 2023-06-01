@@ -81,7 +81,11 @@ class DataMonitor(BinaryDataNotification):
         self._func_before_change = None
 
     def function_updated(self, view, func_):
-        if self._controller.sync_lock.locked():
+        if self._controller.sync_lock.locked() or self._func_before_change is None:
+            # In the case of syncing, recording updates can cause infinite loops
+            # In the case of None function before change, this means a function is being created
+            # which is not supported as a change currently
+            # TODO: add support for creating functions here
             return
 
         # service requested function only

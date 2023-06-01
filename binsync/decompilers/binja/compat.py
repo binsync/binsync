@@ -229,7 +229,13 @@ def bn_func_to_bs(bn_func):
         for off, var in binja_stack_vars.items()
     }
 
-    size = bn_func.address_ranges[0].end - bn_func.address_ranges[0].start
+    try:
+        size = bn_func.highest_address - bn_func.start
+    except Exception as e:
+        size = 0
+        l.critical(f"Failed to grab the size of function because {e}. It's possible the function "
+                   f"is not yet known to Binary Ninja.")
+
     return Function(bn_func.start, size, header=sync_header, stack_vars=bs_stack_vars)
 
 def bn_enum_to_bs(name: str, bn_enum: binaryninja.EnumerationType):
