@@ -463,4 +463,23 @@ public class BSGhidraServerAPI {
 		return func_data;
 	}
 	
+	public Map<String, Map<String, Object>> getFunctions() {
+		var program = this.server.plugin.getCurrentProgram();
+		var fm = program.getFunctionManager();
+		
+		// Iterate through functions and pack data
+		Map<String, Map<String, Object>> funcs = new HashMap<>();
+		for (Function func: fm.getFunctions(true)) {
+			Map<String, Object> func_data = new HashMap<>();
+			String addr = "0x"+func.getEntryPoint().toString(false, 0);
+			String name = func.getName();
+			int size = (int) func.getBody().getNumAddresses();
+			func_data.put("name", name);
+			func_data.put("size", size);
+			funcs.put(addr, func_data);
+		}
+		
+		return funcs;
+	}
+	
 }
