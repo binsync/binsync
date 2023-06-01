@@ -481,5 +481,5 @@ public class BSGhidraServerAPI {
 
 		return funcs;
 	}
-	
+
 }
