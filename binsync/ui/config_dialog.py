@@ -163,7 +163,7 @@ class CreateBSProjectDialog(BSProjectDialog):
         if not path.name:
             l.info("No name specified for saved project. Using binary name...")
             try:
-                filename = Path(self.controller.binary_path).name
+                filename = Path(self.controller.binary_path()).name
             except Exception as e:
                 filename = str(int(time.time()))
                 l.warning(f"Failed to grab binary name because {e}. Maybe the decompiler is not ready for API use? "
