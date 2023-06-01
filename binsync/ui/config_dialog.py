@@ -160,7 +160,19 @@ class CreateBSProjectDialog(BSProjectDialog):
     def _on_repo_clicked(self):
         path, _ = QFileDialog.getSaveFileName(self, caption="Select save location", filter=".bsproj")
         path = Path(path)
-        if path.name != ".bsproj":
+        if not path.name:
+            l.info("No name specified for saved project. Using binary name...")
+            try:
+                filename = Path(self.controller.binary_path).name
+            except Exception as e:
+                filename = str(int(time.time()))
+                l.warning(f"Failed to grab binary name because {e}. Maybe the decompiler is not ready for API use? "
+                          f"Using the timestamp instead: {filename}.bsproj")
+
+            filename += ".bsproj"
+            path = path.absolute().joinpath(filename)
+
+        if ".bsproj" not in path.name:
             path = path.with_suffix(".bsproj")
 
         self._repo_edit.setText(str(path))
