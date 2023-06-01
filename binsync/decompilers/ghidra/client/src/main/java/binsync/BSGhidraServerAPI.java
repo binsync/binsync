@@ -444,21 +444,21 @@ public class BSGhidraServerAPI {
 	public Map<String, Object> getFunction(String addr) {
 		var func = this.getNearestFunction(this.strToAddr(addr));
 		
-		// Collect data from function
+		// Collect header data from function
 		Map<String, Object> header = new HashMap<>();
 		header.put("name", func.getName());
 		header.put("addr", Integer.decode(addr));
 		header.put("type", func.getReturnType().toString());
-		//header.put("args", null);
 		
-		// Add data to the map
+		// Collect metadata from function
+		Map<String, Object> metadata = new HashMap<>();
+		metadata.put("addr", Integer.decode(addr));
+		metadata.put("size", 0);
+		
+		// Add data to the final map
 		Map<String, Object> func_data = new HashMap<>();
+		func_data.put("metadata", metadata);
 		func_data.put("header", header);
-		func_data.put("addr", Integer.decode(addr));
-		// TODO: Implement below artifact data
-		//func_data.put("size", 0);
-		//func_data.put("stack_vars", null);
-		//func_data.put("last_change", null);		
 		
 		return func_data;
 	}

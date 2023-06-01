@@ -118,6 +118,4 @@ class GhidraBSController(BSController):
         ret = self.ghidra.get_function(addr)
         if not ret:
             return None
-        metadata = {"addr": ret["addr"], "size": 0}
-        state = {"metadata": metadata, "header": ret["header"]}
-        return Function.parse(state)
+        return Function.parse(ret)
