@@ -31,20 +31,6 @@ class QUtilPanel(QWidget):
     def _init_widgets(self):
 
         #
-        # Developer Options Group
-        #
-
-        dev_options_group = QGroupBox()
-        dev_options_layout = QVBoxLayout()
-        dev_options_group.setTitle("Developer Options")
-        dev_options_group.setLayout(dev_options_layout)
-
-        self._debug_log_toggle = QCheckBox("Toggle Debug Logging")
-        self._debug_log_toggle.setToolTip("Toggles the logging of events BinSync developers care about.")
-        self._debug_log_toggle.stateChanged.connect(self._handle_debug_toggle)
-        dev_options_layout.addWidget(self._debug_log_toggle)
-
-        #
         # Sync Options Group
         #
 
@@ -87,6 +73,37 @@ class QUtilPanel(QWidget):
         sync_options_layout.addLayout(sync_level_layout)
         sync_options_group.layout().addWidget(self._magic_sync_button)
         sync_options_group.layout().addWidget(self._force_push_button)
+
+        #
+        # Developer Options Group
+        #
+
+        dev_options_group = QGroupBox()
+        dev_options_layout = QVBoxLayout()
+        dev_options_group.setTitle("Developer Options")
+        dev_options_group.setLayout(dev_options_layout)
+
+        self._debug_log_toggle = QCheckBox("Toggle Debug Logging")
+        self._debug_log_toggle.setToolTip("Toggles the logging of events BinSync developers care about.")
+        self._debug_log_toggle.stateChanged.connect(self._handle_debug_toggle)
+        dev_options_layout.addWidget(self._debug_log_toggle)
+
+        self._auto_commit = QCheckBox("Disable Auto Committing")
+        self._auto_commit.setToolTip("Disables the automatic committing of changes to your user branch. Any changes"
+                                    "you make during this time will not be recorded by BinSync.")
+        self._auto_commit.stateChanged.connect(self._handle_auto_commit_toggle)
+
+        self._auto_push = QCheckBox("Disable Auto Pushing")
+        self._auto_push.setToolTip("Disables the automatic pushing of commits to your user branch.")
+        self._auto_push.stateChanged.connect(self._handle_auto_push_toggle)
+
+        self._auto_pull = QCheckBox("Disable Auto Pulling")
+        self._auto_pull.setToolTip("Disables the automatic pulling of commits from ALL branches.")
+        self._auto_pull.stateChanged.connect(self._handle_auto_pull_toggle)
+        dev_options_layout.addWidget(self._auto_commit)
+        dev_options_layout.addWidget(self._auto_push)
+        dev_options_layout.addWidget(self._auto_pull)
+
 
         #
         # UI Options Group
@@ -226,3 +243,25 @@ class QUtilPanel(QWidget):
     def _handle_force_push_button(self):
         self.popup = ForcePushUI(self.controller)
         self.popup.show()
+
+    def _handle_auto_commit_toggle(self, state):
+        if state == Qt.Checked:
+            l.info(f"Disabling auto-commit!")
+            self.controller.auto_commit_enabled = False
+        else:
+            self.controller.auto_commit_enabled = True
+
+    def _handle_auto_push_toggle(self, state):
+        if state == Qt.Checked:
+            l.info(f"Disabling auto-push!")
+            self.controller.auto_push_enabled = False
+        else:
+            self.controller.auto_push_enabled = True
+
+    def _handle_auto_pull_toggle(self, state):
+        if state == Qt.Checked:
+            l.info(f"Disabling auto-pull!")
+            self.controller.auto_pull_enabled = False
+        else:
+            self.controller.auto_pull_enabled = True
+
