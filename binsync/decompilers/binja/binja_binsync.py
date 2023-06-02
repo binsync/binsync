@@ -171,7 +171,7 @@ class DataMonitor(BinaryDataNotification):
             )
 
         elif isinstance(type_, EnumerationType):
-            bs_enum = bn_enum_to_bs(type_)
+            bs_enum = bn_enum_to_bs(name, type_)
             self._controller.schedule_job(self._controller.push_artifact, bs_enum)
 
 
