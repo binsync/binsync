@@ -122,6 +122,14 @@ class BSGhidraClient:
     @stringify_args
     def set_stack_var_type(self, addr: int, offset: int, type_: str) -> bool:
         return self.server.setStackVarType(addr, offset, type_)
+
+    @stringify_args
+    def get_function(self, addr: int) -> dict:
+        return self.server.getFunction(addr)
+
+    @stringify_args
+    def get_functions(self) -> dict:
+        return self.server.getFunctions()
     
     #
     # Global Operations
