@@ -164,7 +164,7 @@ class BSController:
 
     @property
     def auto_push_enabled(self):
-        return self.client.push_on_update
+        return self.client.push_on_update if self.client is not None else True
 
     @auto_push_enabled.setter
     def auto_push_enabled(self, val):
@@ -172,7 +172,7 @@ class BSController:
 
     @property
     def auto_pull_enabled(self):
-        return self.client.pull_on_update
+        return self.client.pull_on_update if self.client is not None else True
 
     @auto_pull_enabled.setter
     def auto_pull_enabled(self, val):
