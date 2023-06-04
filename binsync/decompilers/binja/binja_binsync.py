@@ -1,4 +1,6 @@
 import re
+import pkg_resources
+from pathlib import Path
 
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtCore import Qt
@@ -9,6 +11,9 @@ from binaryninjaui import (
     UIAction,
     UIActionHandler,
     Menu,
+    SidebarWidget,
+    SidebarWidgetType,
+    Sidebar,
 )
 import binaryninja
 from binaryninja.types import StructureType, EnumerationType
@@ -23,6 +28,7 @@ from binsync.ui.version import set_ui_version
 set_ui_version("PySide6")
 from binsync.ui.config_dialog import ConfigureBSDialog
 from binsync.ui.control_panel import ControlPanel
+from binsync.ui.qt_objects import QImage
 from .compat import bn_enum_to_bs, find_main_window, BinjaDockWidget, create_widget, bn_struct_to_bs, bn_func_to_bs
 from .controller import BinjaBSController
 from binsync.data import (
@@ -37,22 +43,32 @@ l = logging.getLogger(__name__)
 #
 
 
-class ControlPanelDockWidget(BinjaDockWidget):
-    def __init__(self, controller, parent=None, name=None, data=None):
-        super().__init__(name, parent=parent)
-        self.data = data
-        print(data)
-        self._widget = None
-        self.controller = controller
-
-        self._init_widgets()
-
-    def _init_widgets(self):
-        self._widget = ControlPanel(self.controller)
+class BinSyncSidebarWidget(SidebarWidget):
+    def __init__(self, bv, bn_plugin, name="BinSync"):
+        super().__init__(name)
+        self._controller = bn_plugin.controllers[bv]
+        self._controller.bv = bv
+        self._widget = ControlPanel(self._controller)
 
         layout = QVBoxLayout()
         layout.addWidget(self._widget)
         self.setLayout(layout)
+
+
+class BinSyncSidebarWidgetType(SidebarWidgetType):
+    def __init__(self, bn_plugin):
+        bs_img_path = Path(
+            pkg_resources.resource_filename("binsync", "decompilers/binja/binsync_binja_logo.png")
+        ).absolute()
+        if not bs_img_path.exists():
+            raise FileNotFoundError("Could not find BinSync logo image")
+
+        self._bs_logo = QImage(str(bs_img_path))
+        self.plugin = bn_plugin
+        super().__init__(self._bs_logo, "BinSync")
+
+    def createWidget(self, frame, data):
+        return BinSyncSidebarWidget(data, self.plugin)
 
 
 #
@@ -184,7 +200,10 @@ class BinjaPlugin:
     def __init__(self):
         # controller stored by a binary view
         self.controllers = defaultdict(BinjaBSController)
-        self._init_ui()
+        self.sidebar_widget_type = None
+
+        if binaryninja.core_ui_enabled():
+            self._init_ui()
 
     def _init_ui(self):
         # config dialog
@@ -195,15 +214,9 @@ class BinjaPlugin:
         )
         Menu.mainMenu("Plugins").addAction(configure_binsync_id, "BinSync")
 
-        # control panel (per BV)
-        dock_handler = DockHandler.getActiveDockHandler()
-        dock_handler.addDockWidget(
-            "BinSync: Control Panel",
-            lambda n, p, d: create_widget(ControlPanelDockWidget, n, p, d, self.controllers),
-            Qt.RightDockWidgetArea,
-            Qt.Vertical,
-            True
-        )
+        # control panel widget
+        self.sidebar_widget_type = BinSyncSidebarWidgetType(self)
+        Sidebar.addSidebarWidgetType(self.sidebar_widget_type)
 
     def _init_bv_dependencies(self, bv):
         l.debug(f"Starting data hook")
@@ -218,7 +231,6 @@ class BinjaPlugin:
             l.info("BinSync has already been configured! Restart if you want to reconfigure.")
             return
 
-        controller_bv.bv = bv
         # configure
         dialog = ConfigureBSDialog(controller_bv)
         dialog.exec_()

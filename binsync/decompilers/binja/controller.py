@@ -78,6 +78,7 @@ class BinjaBSController(BSController):
     def __init__(self, bv=None, **kwargs):
         super(BinjaBSController, self).__init__(artifact_lifter=BinjaArtifactLifter(self), **kwargs)
         self.bv: binaryninja.BinaryView = bv
+        self.ui_configured = False
 
     def binary_hash(self) -> str:
         hash_ = ""

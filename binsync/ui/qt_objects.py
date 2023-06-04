@@ -45,7 +45,8 @@ if ui_version == "PySide2":
         QColor,
         QKeyEvent,
         QFocusEvent,
-        QIntValidator
+        QIntValidator,
+        QImage,
     )
 elif ui_version == "PySide6":
     from PySide6.QtCore import (
@@ -92,7 +93,8 @@ elif ui_version == "PySide6":
         QKeyEvent,
         QFocusEvent,
         QIntValidator,
-        QAction
+        QAction,
+        QImage,
     )
 else:
     from PyQt5.QtCore import (
@@ -141,5 +143,6 @@ else:
         QColor,
         QKeyEvent,
         QFocusEvent,
-        QIntValidator
+        QIntValidator,
+        QImage
     )
