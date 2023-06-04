@@ -15,6 +15,7 @@ center of BinSync's syncing ability. Here are the supported REAs:
 - Function headers (symbol, args, type)
 - Stack Variables (symbol, type)
 - Structs
+- Enums
 - Comments
 
 Note: all types support user-created types like structs.
