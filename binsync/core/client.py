@@ -79,6 +79,7 @@ class Client:
         ssh_auth_sock: Optional[str] = None,
         push_on_update=True,
         pull_on_update=True,
+        commit_on_update=True,
         **kwargs,
     ):
         """
@@ -104,6 +105,7 @@ class Client:
         self.repo_lock = None
         self.pull_on_update = pull_on_update
         self.push_on_update = push_on_update
+        self.commit_on_update = commit_on_update
 
         # validate this username can exist
         if not master_user or master_user.endswith('/') or '__root__' in master_user:

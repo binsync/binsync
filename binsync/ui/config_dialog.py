@@ -93,6 +93,15 @@ class BSProjectDialog(QDialog):
         self._disable_pull_checkbox.setChecked(False)
         options_layout.addWidget(self._disable_pull_checkbox)
 
+        self._disable_commit_checkbox = QCheckBox(self)
+        self._disable_commit_checkbox.setText("Disable auto-commit")
+        self._disable_commit_checkbox.setToolTip(
+            "Disables BinSync git-backend to automatically commit changes to the project. Use this if you plan on "
+            "working on a project and immediately running many changes you don't want recorded."
+        )
+        self._disable_commit_checkbox.setChecked(False)
+        options_layout.addWidget(self._disable_commit_checkbox)
+
         box = QCollapsibleBox("Project Options", parent=self)
         box.setContentLayout(options_layout)
         box_layout = QVBoxLayout()
@@ -125,6 +134,7 @@ class BSProjectDialog(QDialog):
         self.username = self._user_edit.text()
         self.disable_push = self._disable_push_checkbox.isChecked()
         self.disable_pull = self._disable_pull_checkbox.isChecked()
+        self.disable_commit = self._disable_commit_checkbox.isChecked()
         self.close()
 
     def _on_cancel_clicked(self):
@@ -412,7 +422,8 @@ class ConfigureBSDialog(QDialog):
         # by this point we know the data is valid data
         successs = self.connect_client_to_project(
             username, project_path, initialize=initialize, remote_url=remote_url,
-            push_on_update=not dialog.disable_push, pull_on_update=not dialog.disable_pull
+            push_on_update=not dialog.disable_push, pull_on_update=not dialog.disable_pull,
+            commit_on_update=not dialog.disable_commit
         )
         if successs:
             self.close()
@@ -425,17 +436,20 @@ class ConfigureBSDialog(QDialog):
     #
 
     def connect_client_to_project(self, username, proj_path, initialize=False, remote_url=None, push_on_update=True,
-                                  pull_on_update=True):
+                                  pull_on_update=True, commit_on_update=True):
         try:
             connection_warnings = self.controller.connect(
                 username, str(proj_path), init_repo=initialize, remote_url=remote_url,
-                push_on_update=push_on_update, pull_on_update=pull_on_update
+                push_on_update=push_on_update, pull_on_update=pull_on_update, commit_on_update=commit_on_update
             )
         except Exception as e:
             l.critical(f"Error connecting to specified repository: {e}!")
             QMessageBox(self).critical(None, "Error connecting to repository", str(e))
             return False
 
+        self.controller.auto_commit_enabled = commit_on_update
+        self.controller.auto_pull_enabled = pull_on_update
+        self.controller.auto_push_enabled = push_on_update
         self._parse_and_display_connection_warnings(connection_warnings)
         l.info(f"Client has connected to sync repo with user: {username}.")
 
