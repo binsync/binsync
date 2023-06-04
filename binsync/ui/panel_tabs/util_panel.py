@@ -91,14 +91,17 @@ class QUtilPanel(QWidget):
         self._auto_commit = QCheckBox("Disable Auto Committing")
         self._auto_commit.setToolTip("Disables the automatic committing of changes to your user branch. Any changes"
                                     "you make during this time will not be recorded by BinSync.")
+        self._auto_commit.setChecked(not self.controller.auto_commit_enabled)
         self._auto_commit.stateChanged.connect(self._handle_auto_commit_toggle)
 
         self._auto_push = QCheckBox("Disable Auto Pushing")
         self._auto_push.setToolTip("Disables the automatic pushing of commits to your user branch.")
+        self._auto_push.setChecked(not self.controller.auto_push_enabled)
         self._auto_push.stateChanged.connect(self._handle_auto_push_toggle)
 
         self._auto_pull = QCheckBox("Disable Auto Pulling")
         self._auto_pull.setToolTip("Disables the automatic pulling of commits from ALL branches.")
+        self._auto_pull.setChecked(not self.controller.auto_pull_enabled)
         self._auto_pull.stateChanged.connect(self._handle_auto_pull_toggle)
         dev_options_layout.addWidget(self._auto_commit)
         dev_options_layout.addWidget(self._auto_push)
