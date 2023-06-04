@@ -176,6 +176,7 @@ class DataMonitor(BinaryDataNotification):
 
     def type_defined(self, view, name, type_):
         l.debug(f"Type Defined: {name} {type_}")
+        name = str(name)
         if self._controller.sync_lock.locked():
             return 
         

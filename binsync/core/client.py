@@ -305,15 +305,15 @@ class Client:
         repo = self.repo
         users = list()
         for ref in self._get_best_refs(repo).values():
-            l.debug(f"{ref} NAME: {ref.name}")
+            #l.debug(f"{ref} NAME: {ref.name}")
             try:
                 metadata = load_toml_from_file(ref.commit.tree, "metadata.toml", client=self)
                 user = User.from_metadata(metadata)
                 users.append(user)
             except Exception as e:
-                l.debug(f"Unable to load user {e}")
+                #l.debug(f"Unable to load user {e}")
                 continue
-        l.debug(users)
+        #l.debug(users)
         return users
 
     @atomic_git_action
@@ -695,12 +695,12 @@ class Client:
         set_func(ret_value, *args, **kwargs)
 
     def _update_cache(self):
-        l.debug(f"Updating cache commits for State Cache...")
+        #l.debug(f"Updating cache commits for State Cache...")
         cache_dict = self._get_commits_for_users(git.Repo(self.repo_root))
         self.cache.update_state_cache_commits(cache_dict)
 
         cache_keys = [key for key in cache_dict.keys()]
-        l.debug(f"Updating branches on Users Cache...")
+        #l.debug(f"Updating branches on Users Cache...")
         branch_set = set(cache_keys)
         self.cache.update_user_cache_branches(branch_set)
 
