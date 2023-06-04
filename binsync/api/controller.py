@@ -114,7 +114,7 @@ class BSController:
     The client will be set on connection. The ctx_change_callback will be set by an outside UI
 
     """
-    def __init__(self, artifact_lifter=None, headless=False, reload_time=10, **kwargs):
+    def __init__(self, artifact_lifter=None, headless=False, auto_commit=True, reload_time=10, **kwargs):
         self.headless = headless
         self.reload_time = reload_time
         self.artifact_lifer: BSArtifactLifter = artifact_lifter
@@ -135,6 +135,7 @@ class BSController:
         self.config = None
         self.table_coloring_window = 60 * 30  # 30 mins
         self.merge_level: int = MergeLevel.NON_CONFLICTING
+        self._auto_commit_enabled = auto_commit
 
         # command locks
         self.push_job_scheduler = Scheduler()
@@ -151,6 +152,31 @@ class BSController:
 
     def _init_headless_components(self):
         pass
+
+    @property
+    def auto_commit_enabled(self):
+        return self._auto_commit_enabled
+
+    @auto_commit_enabled.setter
+    def auto_commit_enabled(self, val):
+        self.client.commit_on_update = val
+        self._auto_commit_enabled = val
+
+    @property
+    def auto_push_enabled(self):
+        return self.client.push_on_update
+
+    @auto_push_enabled.setter
+    def auto_push_enabled(self, val):
+        self.client.push_on_update = val
+
+    @property
+    def auto_pull_enabled(self):
+        return self.client.pull_on_update
+
+    @auto_pull_enabled.setter
+    def auto_pull_enabled(self, val):
+        self.client.pull_on_update = val
 
     #
     #   Multithreading updaters, locks, and evaluators
@@ -185,6 +211,9 @@ class BSController:
             self._ui_updater_thread.wait()
 
     def schedule_job(self, cmd_func, *args, blocking=False, **kwargs):
+        if not self._auto_commit_enabled:
+            return None
+
         if blocking:
             return self.push_job_scheduler.schedule_and_wait_job(
                 Job(cmd_func, *args, **kwargs),
