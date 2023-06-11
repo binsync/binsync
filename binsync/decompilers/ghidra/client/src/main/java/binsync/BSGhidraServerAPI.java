@@ -482,4 +482,16 @@ public class BSGhidraServerAPI {
 		return funcs;
 	}
 	
+	public Map<String, Object> getStackVariables(String addr) {
+		var program = this.server.plugin.getCurrentProgram();
+		var func = this.getNearestFunction(this.strToAddr(addr));
+		Map<String, Object> stackVars = new HashMap<>();
+		for (Variable v : func.getAllVariables()) {
+			if (v.isStackVariable()) {
+				stackVars.put(Integer.toHexString(v.getStackOffset()), v);
+			}
+		}
+		return stackVars;
+	}
+	
 }
