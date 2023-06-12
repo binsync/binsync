@@ -71,4 +71,3 @@ jobs:
       with:
         file: "*.zip"
         update_latest_release: true
-
