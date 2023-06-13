@@ -453,12 +453,16 @@ public class BSGhidraServerAPI {
 		// Collect metadata from function
 		Map<String, Object> metadata = new HashMap<>();
 		metadata.put("addr", Integer.decode(addr));
-		metadata.put("size", 0);
+		metadata.put("size", (int) func.getBody().getNumAddresses());
+		
+		// Collect stack vars
+		Map<String, Map<String, Object>> stack_vars = this.getStackVariables(addr);
 		
 		// Add data to the final map
 		Map<String, Object> func_data = new HashMap<>();
 		func_data.put("metadata", metadata);
 		func_data.put("header", header);
+		func_data.put("stack_vars", stack_vars);
 		
 		return func_data;
 	}
