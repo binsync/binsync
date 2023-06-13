@@ -126,7 +126,11 @@ class GhidraBSController(BSController):
             return None
         funcs = {}
         for addr in ret:
-            funcs[addr] = Function(addr, ret[addr]["size"], header=FunctionHeader(ret[addr]["name"], addr), stack_vars=ret["stack_vars"])
+            stack_vars = {}
+            for offset in ret[addr]["stack_vars"]:
+                sv = StackVariable(None, None, None, None, None)
+                stack_vars[offset] = sv.__setstate__(ret[addr]["stack_vars"][offset])
+            funcs[addr] = Function(addr, ret[addr]["size"], header=FunctionHeader(ret[addr]["name"], addr), stack_vars=stack_vars)
         return funcs
 
     def stack_vars(self, addr, **kwargs) -> dict:

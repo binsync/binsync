@@ -456,7 +456,7 @@ public class BSGhidraServerAPI {
 		metadata.put("size", (int) func.getBody().getNumAddresses());
 		
 		// Collect stack vars
-		Map<String, Map<String, Object>> stack_vars = this.getStackVariables(addr);
+		Map<Integer, Map<String, Object>> stack_vars = this.getStackVariables(addr);
 		
 		// Add data to the final map
 		Map<String, Object> func_data = new HashMap<>();
@@ -475,30 +475,33 @@ public class BSGhidraServerAPI {
 		Map<String, Map<String, Object>> funcs = new HashMap<>();
 		for (Function func: fm.getFunctions(true)) {
 			Map<String, Object> func_data = new HashMap<>();
+			Map<Integer, Map<String, Object>> stack_vars = this.getStackVariables("0x"+func.getEntryPoint().toString(false, 0));
 			String addr = "0x"+func.getEntryPoint().toString(false, 0);
 			String name = func.getName();
 			int size = (int) func.getBody().getNumAddresses();
 			func_data.put("name", name);
 			func_data.put("size", size);
+			func_data.put("stack_vars", stack_vars);
 			funcs.put(addr, func_data);
 		}
 		
 		return funcs;
 	}
 	
-	public Map<String, Map<String, Object>> getStackVariables(String addr) {
+	public Map<Integer, Map<String, Object>> getStackVariables(String addr) {
 		var program = this.server.plugin.getCurrentProgram();
 		var func = this.getNearestFunction(this.strToAddr(addr));
-		Map<String, Map<String, Object>> stackVars = new HashMap<>();
+		Map<Integer, Map<String, Object>> stackVars = new HashMap<>();
 		for (Variable v : func.getAllVariables()) {
 			if (v.isStackVariable()) {
 				Map<String, Object> varData = new HashMap<>();
-				varData.put("offset", v.getStackOffset());
+				int offset = v.getStackOffset();
+				varData.put("offset", offset);
 				varData.put("name", v.getName());
 				varData.put("type", v.getDataType().toString());
 				varData.put("size", v.getLength());
 				varData.put("addr", Integer.decode(addr));
-				stackVars.put(Integer.toHexString(v.getStackOffset()), varData);
+				stackVars.put(offset, varData);
 			}
 		}
 		return stackVars;
