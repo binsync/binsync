@@ -128,3 +128,9 @@ class GhidraBSController(BSController):
         for addr in ret:
             funcs[addr] = Function(addr, ret[addr]["size"], header=FunctionHeader(ret[addr]["name"], addr))        
         return funcs
+
+    def stack_vars(self, addr, **kwargs) -> dict:
+        ret = self.ghidra.get_stack_vars()
+        if not ret:
+            return None
+        return ret

@@ -130,7 +130,11 @@ class BSGhidraClient:
     @stringify_args
     def get_functions(self) -> dict:
         return self.server.getFunctions()
-    
+
+    @stringify_args
+    def get_stack_vars(self, addr: int) -> dict:
+        return self.server.getStackVars(addr)
+
     #
     # Global Operations
     #
