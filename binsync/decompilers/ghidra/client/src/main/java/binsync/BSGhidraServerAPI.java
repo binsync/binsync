@@ -511,20 +511,6 @@ public class BSGhidraServerAPI {
 				stackVars.put(offset, varData);
 			}
 		}
-		
-		
-//		for (Variable v : func.getAllVariables()) {
-//			if (v.isStackVariable()) {
-//				Map<String, Object> varData = new HashMap<>();
-//				int offset = v.getStackOffset();
-//				varData.put("offset", offset);
-//				varData.put("name", v.getName());
-//				varData.put("type", v.getDataType().toString());
-//				varData.put("size", v.getLength());
-//				varData.put("addr", Integer.decode(addr));
-//				stackVars.put(offset, varData);
-//			}
-//		}
 		return stackVars;
 	}
 	
