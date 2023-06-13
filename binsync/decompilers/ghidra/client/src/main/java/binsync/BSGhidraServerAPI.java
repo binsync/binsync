@@ -4,6 +4,7 @@ import java.util.Dictionary;
 import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.Map;
+import java.util.ArrayList;
 
 import org.apache.xmlrpc.XmlRpcException;
 import org.apache.xmlrpc.server.*;
@@ -12,6 +13,7 @@ import org.apache.xmlrpc.webserver.WebServer;
 import ghidra.program.database.function.FunctionManagerDB;
 import ghidra.program.model.listing.*;
 import ghidra.program.model.pcode.HighFunctionDBUtil;
+import ghidra.program.model.pcode.HighSymbol;
 import ghidra.program.model.symbol.*;
 import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.exception.InvalidInputException;
@@ -146,6 +148,7 @@ public class BSGhidraServerAPI {
 
 		return this.strToAddr(Integer.toHexString(rebasedAddr));
 	}
+	
 
 	/*
 	 * 
@@ -491,19 +494,37 @@ public class BSGhidraServerAPI {
 	public Map<Integer, Map<String, Object>> getStackVariables(String addr) {
 		var program = this.server.plugin.getCurrentProgram();
 		var func = this.getNearestFunction(this.strToAddr(addr));
+		var dec = this.decompileFunction(func);
+		
+		ArrayList<HighSymbol> symbols = new ArrayList<HighSymbol>();
 		Map<Integer, Map<String, Object>> stackVars = new HashMap<>();
-		for (Variable v : func.getAllVariables()) {
-			if (v.isStackVariable()) {
+		dec.getHighFunction().getLocalSymbolMap().getSymbols().forEachRemaining(symbols::add);
+		for (HighSymbol sym: symbols) {
+			if (sym.getStorage().isStackStorage()) {
 				Map<String, Object> varData = new HashMap<>();
-				int offset = v.getStackOffset();
+				int offset = sym.getStorage().getStackOffset();
 				varData.put("offset", offset);
-				varData.put("name", v.getName());
-				varData.put("type", v.getDataType().toString());
-				varData.put("size", v.getLength());
+				varData.put("name", sym.getName());
+				varData.put("type", sym.getDataType().toString());
+				varData.put("size", sym.getSize());
 				varData.put("addr", Integer.decode(addr));
 				stackVars.put(offset, varData);
 			}
 		}
+		
+		
+//		for (Variable v : func.getAllVariables()) {
+//			if (v.isStackVariable()) {
+//				Map<String, Object> varData = new HashMap<>();
+//				int offset = v.getStackOffset();
+//				varData.put("offset", offset);
+//				varData.put("name", v.getName());
+//				varData.put("type", v.getDataType().toString());
+//				varData.put("size", v.getLength());
+//				varData.put("addr", Integer.decode(addr));
+//				stackVars.put(offset, varData);
+//			}
+//		}
 		return stackVars;
 	}
 	
