@@ -126,7 +126,7 @@ class GhidraBSController(BSController):
             return None
         funcs = {}
         for addr in ret:
-            funcs[addr] = Function(addr, ret[addr]["size"], header=FunctionHeader(ret[addr]["name"], addr))        
+            funcs[addr] = Function(addr, ret[addr]["size"], header=FunctionHeader(ret[addr]["name"], addr), stack_vars=ret["stack_vars"])
         return funcs
 
     def stack_vars(self, addr, **kwargs) -> dict:
