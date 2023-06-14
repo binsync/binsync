@@ -114,7 +114,7 @@ class GhidraBSController(BSController):
     def _decompile(self, function: Function) -> Optional[str]:
         return None
 
-    def to_stack_vars(self, variables) -> dict:
+    def dict_to_stackvars(self, variables) -> dict:
         stack_vars = {}
         for offset in variables:
             sv = StackVariable(None, None, None, None, None)
@@ -133,7 +133,7 @@ class GhidraBSController(BSController):
             return None
         funcs = {}
         for addr in ret:
-            stack_vars = self.to_stack_vars(ret[addr]["stack_vars"])
+            stack_vars = self.dict_to_stackvars(ret[addr]["stack_vars"])
             funcs[addr] = Function(addr, ret[addr]["size"], header=FunctionHeader(ret[addr]["name"], addr), stack_vars=stack_vars)
         return funcs
 
@@ -141,4 +141,4 @@ class GhidraBSController(BSController):
         ret = self.ghidra.get_stack_vars(addr)
         if not ret:
             return None
-        return self.to_stack_vars(ret)
+        return self.dict_to_stackvars(ret)
