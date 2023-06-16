@@ -415,8 +415,8 @@ class BSController:
         Saves the current state of the decompilers database with the file name being the name of the current
         binary and the filename extension being that of the native decompilers save format
         """
-        raise NotImplementedError
-    
+        _l.info("Saving native decompiler database feature is not implemtened in this decompiler. Skipping...")
+
     #
     # Optional Artifact API:
     # A series of functions that allow public access to live artifacts in the decompiler. As an example,
