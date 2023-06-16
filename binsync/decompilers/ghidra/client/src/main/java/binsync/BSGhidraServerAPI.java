@@ -420,6 +420,29 @@ public class BSGhidraServerAPI {
 		
 		return success;
 	}
+	
+	public Map<String, Object> getGlobalVariable(String addr)
+	{
+		var program = this.server.plugin.getCurrentProgram();
+		var symTab = program.getSymbolTable();
+
+		Map<String, Object> global_var = new HashMap<>();
+		for (Symbol sym: symTab.getAllSymbols(true)) {
+			if (sym.getSymbolType() != SymbolType.LABEL) {
+				continue;
+			}
+			
+			if (sym.getAddress().equals(this.strToAddr(addr))) {
+				var lst = program.getListing();
+				var data = lst.getDataAt(this.rebaseAddr(Integer.decode(addr), false));
+				global_var.put("addr", Integer.decode(addr));
+				global_var.put("name", sym.getName());
+				global_var.put("type", data.getDataType().toString());
+				global_var.put("size", data.getLength()); // Currently only functional for types other than undefined
+			}
+		}
+		return global_var;
+	}
 	/*
 	 * TODO:
 	 * Read this to recap on the progress of global vars:
