@@ -435,13 +435,41 @@ public class BSGhidraServerAPI {
 			if (sym.getAddress().equals(this.strToAddr(addr))) {
 				var lst = program.getListing();
 				var data = lst.getDataAt(this.rebaseAddr(Integer.decode(addr), false));
+				if (data == null) {
+					return global_var;
+				}
+				
 				global_var.put("addr", Integer.decode(addr));
 				global_var.put("name", sym.getName());
 				global_var.put("type", data.getDataType().toString());
-				global_var.put("size", data.getLength()); // Currently only functional for types other than undefined
+				if (data.getDataType().toString().equals("undefined")) {
+					global_var.put("size", program.getDefaultPointerSize());
+				} else {
+					global_var.put("size", data.getLength());
+				}
+				break;
 			}
 		}
 		return global_var;
+	}
+
+	public Map<Integer, Map<String, Object>> getGlobalVariables() {
+		var program = this.server.plugin.getCurrentProgram();
+		var symTab = program.getSymbolTable();
+		
+		Map<Integer, Map<String, Object>> global_vars = new HashMap<>();
+		for (Symbol sym: symTab.getAllSymbols(true)) {
+			if (sym.getSymbolType() != SymbolType.LABEL) {
+				continue;
+			}
+			
+			String address_string = sym.getAddress().toString("0x");
+			Map<String, Object> gvar = this.getGlobalVariable(address_string);
+			if (!gvar.equals(new HashMap<>())) {
+				global_vars.put(Integer.decode(address_string), gvar);
+			}
+		}
+		return global_vars;
 	}
 	/*
 	 * TODO:
