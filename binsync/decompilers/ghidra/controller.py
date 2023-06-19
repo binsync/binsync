@@ -6,7 +6,7 @@ from binsync.data import (
     Function, FunctionHeader, StackVariable, GlobalVariable, Comment
 )
 
-from .ghidra_client import BSGhidraClient
+from binsync.decompilers.ghidra.server.ghidra_client import BSGhidraClient
 from .artifact_lifter import GhidraArtifactLifter
 
 l = logging.getLogger(__name__)
@@ -15,22 +15,32 @@ l = logging.getLogger(__name__)
 class GhidraBSController(BSController):
     def __init__(self, **kwargs):
         super(GhidraBSController, self).__init__(GhidraArtifactLifter(self), **kwargs)
-        self.ghidra = BSGhidraClient()
+        self._ghidra_bridge = None
+        self._current_program = None
+        self.ghidra = None
         self.base_addr = None
 
+    def connect_ghidra_bridge(self):
+        import ghidra_bridge
+        self._ghidra_bridge = ghidra_bridge.GhidraBridge(namespace=globals())
+        self._current_program = currentProgram
+
     def binary_hash(self) -> str:
-        return self.ghidra.binary_hash
+        return self._current_program.executableMD5
 
     def active_context(self):
-        return self.ghidra.context()
+        #return self.ghidra.context()
+        return 0
 
     def binary_path(self) -> Optional[str]:
-        return self.ghidra.binary_path
+        return self._current_program.executablePath
 
     def get_func_size(self, func_addr) -> int:
         return 0
 
     def rebase_addr(self, addr, up=True):
+        return addr
+
         if self.base_addr is None:
             self.base_addr = self.ghidra.base_addr
 

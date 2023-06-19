@@ -165,9 +165,10 @@ class Installer:
         return path
 
     def install_ghidra(self, path=None):
+        path = self._home.joinpath('ghidra_scripts').expanduser()
         default_str = f" [default = {path}]"
         ghidra_default_path = path
-        path = self.ask_path(f"Ghidra Install Path{default_str}:")
+        path = self.ask_path(f"Ghidra Scripts Path{default_str}:")
         if path:
             path = path.joinpath("Extensions").joinpath("Ghidra")
         elif ghidra_default_path:
@@ -286,11 +287,17 @@ class BinSyncInstaller(Installer):
         ghidra_path = super().install_ghidra(path=path)
         if ghidra_path is None:
             return None
-        
-        download_url = "https://github.com/angr/binsync/releases/latest/download/binsync-ghidra-plugin.zip"
-        dst_path = ghidra_path.joinpath("binsync-ghidra-plugin.zip")
-        urlretrieve(download_url, dst_path)
-        return dst_path
+
+        src_ghidra_binsync_pkg = self.plugins_path.joinpath("ghidra_binsync")
+        src_vendored = src_ghidra_binsync_pkg.joinpath("binsync_vendored")
+        src_script = src_vendored.joinpath("ghidra_binsync.py")
+
+        dst_ghidra_binsync_pkg = ghidra_path.joinpath("binsync_vendored")
+        dst_ghidra_script = ghidra_path.joinpath("ghidra_binsync.py")
+
+        self.link_or_copy(src_vendored, dst_ghidra_binsync_pkg, is_dir=True)
+        self.link_or_copy(src_script, dst_ghidra_script)
+        return ghidra_path
 
     def install_binja(self, path=None):
         binja_plugin_path = super().install_binja(path=path)
@@ -300,4 +307,4 @@ class BinSyncInstaller(Installer):
         src_path = self.plugins_path.joinpath("binja_binsync")
         dst_path = binja_plugin_path.joinpath("binja_binsync")
         self.link_or_copy(src_path, dst_path, is_dir=True)
-        return dst_path
+        return binja_plugin_path
