@@ -435,10 +435,9 @@ public class BSGhidraServerAPI {
 			if (sym.getAddress().equals(this.strToAddr(addr))) {
 				var lst = program.getListing();
 				var data = lst.getDataAt(this.rebaseAddr(Integer.decode(addr), false));
-				if (data == null) {
+				if (data == null || data.isStructure()) {
 					return global_var;
 				}
-				
 				global_var.put("addr", Integer.decode(addr));
 				global_var.put("name", sym.getName());
 				global_var.put("type", data.getDataType().toString());
@@ -546,7 +545,7 @@ public class BSGhidraServerAPI {
 		var program = this.server.plugin.getCurrentProgram();
 		var func = this.getNearestFunction(this.strToAddr(addr));
 		var dec = this.decompileFunction(func);
-		
+
 		ArrayList<HighSymbol> symbols = new ArrayList<HighSymbol>();
 		Map<Integer, Map<String, Object>> stackVars = new HashMap<>();
 		dec.getHighFunction().getLocalSymbolMap().getSymbols().forEachRemaining(symbols::add);

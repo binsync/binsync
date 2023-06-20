@@ -142,7 +142,15 @@ class BSGhidraClient:
     @stringify_args
     def set_global_var_name(self, addr: int, name: str) -> bool:
         return self.server.setGlobalVarName(addr, name)
-    
+
+    @stringify_args
+    def get_global_var(self, addr: int) -> dict:
+        return self.server.getGlobalVariable(addr)
+
+    @stringify_args
+    def get_global_vars(self) -> dict:
+        return self.server.getGlobalVariables()
+
     #
     # Comment Ops
     #
