@@ -3,10 +3,11 @@ import logging
 
 from binsync.api.controller import BSController, init_checker, fill_event
 from binsync.data import (
-    Function, FunctionHeader, StackVariable, GlobalVariable, Comment
+    Function, FunctionHeader, StackVariable, Comment
 )
 
 from .artifact_lifter import GhidraArtifactLifter
+from .ghidra_api import GhidraAPIWrapper
 
 l = logging.getLogger(__name__)
 
@@ -14,32 +15,36 @@ l = logging.getLogger(__name__)
 class GhidraBSController(BSController):
     def __init__(self, **kwargs):
         super(GhidraBSController, self).__init__(GhidraArtifactLifter(self), **kwargs)
-        self._ghidra_bridge = None
-        self._current_program = None
         self.ghidra = None
+        self._last_addr = None
+        self._last_func = None
         self.base_addr = None
 
     def connect_ghidra_bridge(self):
-        import ghidra_bridge
-        self._ghidra_bridge = ghidra_bridge.GhidraBridge(namespace=globals(), interactive_mode=True)
-        self._current_program = currentProgram
+        self.ghidra = GhidraAPIWrapper(self)
+        return self.ghidra.connected
 
     def binary_hash(self) -> str:
-        return self._current_program.executableMD5
+        return self.ghidra.currentProgram.executableMD5
 
     def active_context(self):
-        #return self.ghidra.context()
-        return 0
+        active_addr = self.ghidra.currentLocation.getAddress().getOffset()
+        if active_addr is None:
+            return Function(0, 0)
+
+        if active_addr != self._last_addr:
+            self._last_addr = active_addr
+            self._last_func = self.gfunc_to_bsfunc(self._get_nearest_function(active_addr))
+
+        return self._last_func
 
     def binary_path(self) -> Optional[str]:
-        return self._current_program.executablePath
+        return self.ghidra.currentProgram.executablePath
 
     def get_func_size(self, func_addr) -> int:
         return 0
 
     def rebase_addr(self, addr, up=True):
-        return addr
-
         if self.base_addr is None:
             self.base_addr = self.ghidra.base_addr
 
@@ -55,17 +60,6 @@ class GhidraBSController(BSController):
 
     def _decompile(self, function: Function) -> Optional[str]:
         return self.ghidra.decompile(function.addr)
-
-    #
-    # Ghidra Specific
-    #
-
-    def connect_ghidra_client(self):
-        return self.ghidra.connect()
-
-    def alert_ghidra_ui_configured(self):
-        status = True if self.check_client() else False
-        self.ghidra.alert_ui_configured(status)
 
     #
     # BinSync API
@@ -131,15 +125,6 @@ class GhidraBSController(BSController):
             stack_vars[offset] = sv.__setstate__(variables[offset])
         return stack_vars
 
-    @staticmethod
-    def dict_to_globals(variables) -> dict:
-        globals = {}
-        for addr in variables:
-            gv = GlobalVariable(None, None, None, None, None)
-            gv.__setstate__(variables[addr])
-            globals[int(addr)] = gv
-        return globals
-
     def function(self, addr, **kwargs) -> Optional[Function]:
         ret = self.ghidra.get_function(addr)
         if not ret:
@@ -162,16 +147,16 @@ class GhidraBSController(BSController):
             return {}
         return self.dict_to_stackvars(ret)
 
-    def global_var(self, addr, **kwargs) -> Optional[GlobalVariable]:
-        ret = self.ghidra.get_global_var(addr)
-        if not ret:
-            return None
-        global_var = GlobalVariable(None, None, None, None, None)
-        global_var.__setstate__(ret)
-        return global_var
+    def _get_nearest_function(self, addr: int):
+        func_manager = self.ghidra.currentProgram.getFunctionManager()
+        return func_manager.getFunctionContaining(self.ghidra.toAddr(addr))
 
-    def global_vars(self, **kwargs) -> dict:
-        ret = self.ghidra.get_global_vars()
-        if not ret:
-            return {}
-        return self.dict_to_globals(ret)
+    def gfunc_to_bsfunc(self, gfunc):
+        if gfunc is None:
+            return None
+
+        bs_func = Function(
+            gfunc.getEntryPoint().getOffset(), gfunc.getBody().getNumAddresses(),
+            header=FunctionHeader(gfunc.getName(), gfunc.getEntryPoint().getOffset())
+        )
+        return bs_func
