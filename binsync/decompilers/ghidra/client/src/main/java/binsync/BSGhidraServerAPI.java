@@ -420,6 +420,57 @@ public class BSGhidraServerAPI {
 		
 		return success;
 	}
+	
+	public Map<String, Object> getGlobalVariable(String addr)
+	{
+		var program = this.server.plugin.getCurrentProgram();
+		var symTab = program.getSymbolTable();
+		var absolute_addr = this.rebaseAddr(Integer.decode(addr), false);
+		
+		Map<String, Object> global_var = new HashMap<>();
+		for (Symbol sym: symTab.getAllSymbols(true)) {
+			if (sym.getSymbolType() != SymbolType.LABEL) {
+				continue;
+			}
+			
+			if (sym.getAddress().equals(absolute_addr)) {
+				var lst = program.getListing();
+				var data = lst.getDataAt(absolute_addr);
+				if (data == null || data.isStructure()) {
+					return global_var;
+				}
+				global_var.put("addr", Integer.decode(addr));
+				global_var.put("name", sym.getName());
+				global_var.put("type", data.getDataType().toString());
+				if (data.getDataType().toString().equals("undefined")) {
+					global_var.put("size", program.getDefaultPointerSize());
+				} else {
+					global_var.put("size", data.getLength());
+				}
+				break;
+			}
+		}
+		return global_var;
+	}
+
+	public Map<Integer, Map<String, Object>> getGlobalVariables() {
+		var program = this.server.plugin.getCurrentProgram();
+		var symTab = program.getSymbolTable();
+		
+		Map<Integer, Map<String, Object>> global_vars = new HashMap<>();
+		for (Symbol sym: symTab.getAllSymbols(true)) {
+			if (sym.getSymbolType() != SymbolType.LABEL) {
+				continue;
+			}
+			
+			String address_string = "0x" + Long.toHexString(sym.getAddress().getOffset());
+			Map<String, Object> gvar = this.getGlobalVariable(address_string);
+			if (!gvar.equals(new HashMap<>())) {
+				global_vars.put(Integer.decode(address_string), gvar);
+			}
+		}
+		return global_vars;
+	}
 	/*
 	 * TODO:
 	 * Read this to recap on the progress of global vars:
@@ -495,7 +546,7 @@ public class BSGhidraServerAPI {
 		var program = this.server.plugin.getCurrentProgram();
 		var func = this.getNearestFunction(this.strToAddr(addr));
 		var dec = this.decompileFunction(func);
-		
+
 		ArrayList<HighSymbol> symbols = new ArrayList<HighSymbol>();
 		Map<Integer, Map<String, Object>> stackVars = new HashMap<>();
 		dec.getHighFunction().getLocalSymbolMap().getSymbols().forEachRemaining(symbols::add);

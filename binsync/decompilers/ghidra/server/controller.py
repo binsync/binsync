@@ -3,7 +3,7 @@ import logging
 
 from binsync.api.controller import BSController, init_checker, fill_event
 from binsync.data import (
-    Function, FunctionHeader, StackVariable, Comment
+    Function, FunctionHeader, StackVariable, GlobalVariable, Comment
 )
 
 from .ghidra_client import BSGhidraClient
@@ -122,6 +122,15 @@ class GhidraBSController(BSController):
             stack_vars[offset] = sv.__setstate__(variables[offset])
         return stack_vars
 
+    @staticmethod
+    def dict_to_globals(variables) -> dict:
+        globals = {}
+        for addr in variables:
+            gv = GlobalVariable(None, None, None, None, None)
+            gv.__setstate__(variables[addr])
+            globals[int(addr)] = gv
+        return globals
+
     def function(self, addr, **kwargs) -> Optional[Function]:
         ret = self.ghidra.get_function(addr)
         if not ret:
@@ -143,3 +152,17 @@ class GhidraBSController(BSController):
         if not ret:
             return {}
         return self.dict_to_stackvars(ret)
+
+    def global_var(self, addr, **kwargs) -> Optional[GlobalVariable]:
+        ret = self.ghidra.get_global_var(addr)
+        if not ret:
+            return None
+        global_var = GlobalVariable(None, None, None, None, None)
+        global_var.__setstate__(ret)
+        return global_var
+
+    def global_vars(self, **kwargs) -> dict:
+        ret = self.ghidra.get_global_vars()
+        if not ret:
+            return {}
+        return self.dict_to_globals(ret)
