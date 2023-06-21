@@ -425,16 +425,17 @@ public class BSGhidraServerAPI {
 	{
 		var program = this.server.plugin.getCurrentProgram();
 		var symTab = program.getSymbolTable();
-
+		var absolute_addr = this.rebaseAddr(Integer.decode(addr), false);
+		
 		Map<String, Object> global_var = new HashMap<>();
 		for (Symbol sym: symTab.getAllSymbols(true)) {
 			if (sym.getSymbolType() != SymbolType.LABEL) {
 				continue;
 			}
 			
-			if (sym.getAddress().equals(this.strToAddr(addr))) {
+			if (sym.getAddress().equals(absolute_addr)) {
 				var lst = program.getListing();
-				var data = lst.getDataAt(this.rebaseAddr(Integer.decode(addr), false));
+				var data = lst.getDataAt(absolute_addr);
 				if (data == null || data.isStructure()) {
 					return global_var;
 				}
@@ -462,7 +463,7 @@ public class BSGhidraServerAPI {
 				continue;
 			}
 			
-			String address_string = sym.getAddress().toString("0x");
+			String address_string = "0x" + Long.toHexString(sym.getAddress().getOffset());
 			Map<String, Object> gvar = this.getGlobalVariable(address_string);
 			if (!gvar.equals(new HashMap<>())) {
 				global_vars.put(Integer.decode(address_string), gvar);
