@@ -6,7 +6,6 @@ from binsync.data import (
     Function, FunctionHeader, StackVariable, GlobalVariable, Comment
 )
 
-from binsync.decompilers.ghidra.server.ghidra_client import BSGhidraClient
 from .artifact_lifter import GhidraArtifactLifter
 
 l = logging.getLogger(__name__)
@@ -22,7 +21,7 @@ class GhidraBSController(BSController):
 
     def connect_ghidra_bridge(self):
         import ghidra_bridge
-        self._ghidra_bridge = ghidra_bridge.GhidraBridge(namespace=globals())
+        self._ghidra_bridge = ghidra_bridge.GhidraBridge(namespace=globals(), interactive_mode=True)
         self._current_program = currentProgram
 
     def binary_hash(self) -> str:
