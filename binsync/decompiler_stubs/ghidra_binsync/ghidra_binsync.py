@@ -1,7 +1,7 @@
 # Starts the BinSync UI and the Ghidra backend server.
 # @author BinSync
 # @category BinSync
-# @menupath Tools.Binsync.Start BinSync
+# @menupath Tools.BinSync.Start BinSync
 # @toolbar python.png
 
 import subprocess
@@ -15,5 +15,4 @@ def start_bs_ui():
 
 if __name__ == "__main__":
     GhidraBridgeServer.run_server(background=True)
-    time.sleep(2)
     start_bs_ui()

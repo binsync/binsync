@@ -1,9 +1,9 @@
-from typing import Optional
+from typing import Optional, Dict
 import logging
 
 from binsync.api.controller import BSController, init_checker, fill_event
 from binsync.data import (
-    Function, FunctionHeader, StackVariable, Comment
+    Function, FunctionHeader, StackVariable, Comment, FunctionArgument, GlobalVariable
 )
 
 from .artifact_lifter import GhidraArtifactLifter
@@ -14,8 +14,9 @@ l = logging.getLogger(__name__)
 
 class GhidraBSController(BSController):
     def __init__(self, **kwargs):
-        super(GhidraBSController, self).__init__(GhidraArtifactLifter(self), **kwargs)
         self.ghidra: Optional[GhidraAPIWrapper] = None
+        super(GhidraBSController, self).__init__(GhidraArtifactLifter(self), **kwargs)
+
         self._last_addr = None
         self._last_func = None
         self.base_addr = None
@@ -60,10 +61,7 @@ class GhidraBSController(BSController):
             return addr - self.base_addr
 
     def goto_address(self, func_addr) -> None:
-        services = self.ghidra.imports["ghidra.app.services"]
-        goto_service_class = services.GoToService.__class__
-        go_to_service = self.ghidra.getState().getTool().getService(goto_service_class)
-        go_to_service.goTo(self.ghidra.toAddr(func_addr))
+        self.ghidra.goTo(self.ghidra.toAddr(func_addr))
 
     def connect_ghidra_bridge(self):
         self.ghidra = GhidraAPIWrapper(self)
@@ -75,8 +73,18 @@ class GhidraBSController(BSController):
 
     @fill_event
     def fill_function_header(self, func_addr, user=None, artifact=None, **kwargs):
-        # TODO: set type, name, and args (last)
-        return False
+        changes = False
+        func_header: FunctionHeader = artifact
+        ghidra_func = self._get_nearest_function(func_addr)
+        src_type = self.ghidra.import_module_object("ghidra.program.model.symbol", "SourceType")
+
+        if func_header.name and func_header.name != ghidra_func.getName():
+            ghidra_func.setName(func_header.name, src_type.USER_DEFINED)
+            changes = True
+
+        # TODO: type
+
+        return changes
 
     @fill_event
     def fill_stack_variable(self, func_addr, offset, user=None, artifact=None, **kwargs):
@@ -120,14 +128,11 @@ class GhidraBSController(BSController):
     # Ghidra Specific API
     #
 
-    def str_type_to_gtype(self, typestr: str) -> Optional["DataType"]:
-        return None
-
-    def _get_nearest_function(self, addr: int):
+    def _get_nearest_function(self, addr: int) -> "GhidraFunction":
         func_manager = self.ghidra.currentProgram.getFunctionManager()
         return func_manager.getFunctionContaining(self.ghidra.toAddr(addr))
 
-    def _gfunc_to_bsfunc(self, gfunc):
+    def _gfunc_to_bsfunc(self, gfunc: "GhidraFunction"):
         if gfunc is None:
             return None
 
@@ -136,3 +141,40 @@ class GhidraBSController(BSController):
             header=FunctionHeader(gfunc.getName(), gfunc.getEntryPoint().getOffset())
         )
         return bs_func
+
+    def _ghidra_decompile(self, func: "GhidraFunction") -> "DecompileResult":
+        dec_interface_cls = self.ghidra.import_module_object("ghidra.app.decompiler", "DecompInterface")
+        consle_monitor_cls = self.ghidra.import_module_object("ghidra.util.task", "ConsoleTaskMonitor")
+
+        dec_interface = dec_interface_cls()
+        dec_interface.openProgram(self.ghidra.currentProgram)
+        dec_results = dec_interface.decompileFunction(func, 0, consle_monitor_cls())
+        return dec_results
+
+    def typestr_to_gtype(self, typestr: str) -> Optional["DataType"]:
+        if not typestr:
+            return None
+
+        dtm_service_class = self.ghidra.import_module_object("ghidra.app.services", "DataTypeManagerService")
+        dtp_class = self.ghidra.import_module_object("ghidra.util.data", "DataTypeParser")
+        dt_service = self.ghidra.getState().getTool().getService(dtm_service_class)
+        dt_parser = dtp_class(dt_service, dtp_class.AllowedDataTypes.ALL)
+        try:
+            parsed_type = dt_parser.parse(typestr)
+        except Exception as e:
+            l.warning(f"Failed to parse type string: {typestr}")
+            return None
+
+        return parsed_type
+
+    def prototype_str_to_gtype(self, progotype_str: str) -> Optional["FunctionDefinitionDataType"]:
+        """
+        Strings must look like:
+        'void functions1(int p1, int p2)'
+        """
+        if not progotype_str:
+            return None
+
+        c_parser_utils_cls = self.ghidra.import_module_object("ghidra.app.util.cparser.C", "CParserUtils")
+        program = self.ghidra.currentProgram
+        return c_parser_utils_cls.parseSignature(program, progotype_str)

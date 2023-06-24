@@ -1,6 +1,9 @@
-import ghidra_bridge
 import time
+import logging
 
+import ghidra_bridge
+
+l = logging.getLogger(__name__)
 
 class GhidraAPIWrapper:
     def __init__(self, controller, connection_timeout=10):
@@ -9,14 +12,11 @@ class GhidraAPIWrapper:
 
         self._ghidra_bridge = None
         self._ghidra_bridge_attrs = {}
-        self.imports = {}
+        self._imports = {}
 
         self.connected = self._connect_ghidra_bridge()
         if not self.connected:
             return
-
-        # dynamically import needed modules
-        self._do_init_imports()
 
     def __getattr__(self, item):
         if item in self._ghidra_bridge_attrs:
@@ -24,14 +24,21 @@ class GhidraAPIWrapper:
         else:
             return self.__getattribute__(item)
 
-    def _do_init_imports(self):
-        init_modules = [
-            "ghidra.app.decompiler",
-            "ghidra.app.services",
-            "ghidra.framework.model",
-        ]
-        for module_name in init_modules:
-            self.imports[module_name] = self._ghidra_bridge.remote_import(module_name)
+    def import_module_object(self, module_name: str, obj_name: str):
+        module = self.import_module(module_name)
+        try:
+            module_obj = getattr(module, obj_name)
+        except AttributeError:
+            l.critical(f"Failed to import {module}.{obj_name}")
+            module_obj = None
+
+        return module_obj
+
+    def import_module(self, module_name: str):
+        if module_name not in self._imports:
+            self._imports[module_name] = self._ghidra_bridge.remote_import(module_name)
+
+        return self._imports[module_name]
 
     def _connect_ghidra_bridge(self):
         start_time = time.time()

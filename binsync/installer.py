@@ -291,12 +291,15 @@ class BinSyncInstaller(Installer):
         src_ghidra_binsync_pkg = self.plugins_path.joinpath("ghidra_binsync")
         src_vendored = src_ghidra_binsync_pkg.joinpath("binsync_vendored")
         src_script = src_ghidra_binsync_pkg.joinpath("ghidra_binsync.py")
+        src_script_shutdown = src_ghidra_binsync_pkg.joinpath("ghidra_binsync_shutdown.py")
 
         dst_ghidra_binsync_pkg = ghidra_path.joinpath("binsync_vendored")
         dst_ghidra_script = ghidra_path.joinpath("ghidra_binsync.py")
+        dst_script_shutdown = ghidra_path.joinpath("ghidra_binsync_shutdown.py")
 
         self.link_or_copy(src_vendored, dst_ghidra_binsync_pkg, is_dir=True)
         self.link_or_copy(src_script, dst_ghidra_script)
+        self.link_or_copy(src_script_shutdown, dst_script_shutdown)
         return ghidra_path
 
     def install_binja(self, path=None):
