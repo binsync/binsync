@@ -27,7 +27,8 @@ class GhidraAPIWrapper:
     def _do_init_imports(self):
         init_modules = [
             "ghidra.app.decompiler",
-            "ghidra.framework.model"
+            "ghidra.app.services",
+            "ghidra.framework.model",
         ]
         for module_name in init_modules:
             self.imports[module_name] = self._ghidra_bridge.remote_import(module_name)

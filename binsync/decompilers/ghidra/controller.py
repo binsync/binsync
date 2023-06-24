@@ -15,14 +15,17 @@ l = logging.getLogger(__name__)
 class GhidraBSController(BSController):
     def __init__(self, **kwargs):
         super(GhidraBSController, self).__init__(GhidraArtifactLifter(self), **kwargs)
-        self.ghidra = None
+        self.ghidra: Optional[GhidraAPIWrapper] = None
         self._last_addr = None
         self._last_func = None
         self.base_addr = None
 
-    def connect_ghidra_bridge(self):
-        self.ghidra = GhidraAPIWrapper(self)
-        return self.ghidra.connected
+    def _init_headless_components(self):
+        self.connect_ghidra_bridge()
+
+    #
+    # Controller API
+    #
 
     def binary_hash(self) -> str:
         return self.ghidra.currentProgram.executableMD5
@@ -34,7 +37,7 @@ class GhidraBSController(BSController):
 
         if active_addr != self._last_addr:
             self._last_addr = active_addr
-            self._last_func = self.gfunc_to_bsfunc(self._get_nearest_function(active_addr))
+            self._last_func = self._gfunc_to_bsfunc(self._get_nearest_function(active_addr))
 
         return self._last_func
 
@@ -42,7 +45,8 @@ class GhidraBSController(BSController):
         return self.ghidra.currentProgram.executablePath
 
     def get_func_size(self, func_addr) -> int:
-        return 0
+        gfunc = self._get_nearest_function(func_addr)
+        return int(gfunc.getBody().getNumAddresses())
 
     def rebase_addr(self, addr, up=True):
         if self.base_addr is None:
@@ -56,53 +60,36 @@ class GhidraBSController(BSController):
             return addr - self.base_addr
 
     def goto_address(self, func_addr) -> None:
-        self.ghidra.goto_address(func_addr)
+        services = self.ghidra.imports["ghidra.app.services"]
+        goto_service_class = services.GoToService.__class__
+        go_to_service = self.ghidra.getState().getTool().getService(goto_service_class)
+        go_to_service.goTo(self.ghidra.toAddr(func_addr))
 
-    def _decompile(self, function: Function) -> Optional[str]:
-        return self.ghidra.decompile(function.addr)
+    def connect_ghidra_bridge(self):
+        self.ghidra = GhidraAPIWrapper(self)
+        return self.ghidra.connected
 
     #
-    # BinSync API
+    # Filler/Setter API
     #
-
-    @fill_event
-    def fill_stack_variable(self, func_addr, offset, user=None, artifact=None, **kwargs):
-        update = False
-        stack_var: StackVariable = artifact
-        if stack_var.name:
-            update |= self.ghidra.set_stack_var_name(stack_var.addr, stack_var.offset, stack_var.name)
-
-        if stack_var.type:
-            update |= self.ghidra.set_stack_var_type(stack_var.addr, stack_var.offset, stack_var.type)
-
-        return update
-
-    @fill_event
-    def fill_global_var(self, var_addr, user=None, artifact=None, **kwargs):
-        update = False
-        update |= self.ghidra.set_global_var_name(var_addr, artifact.name)
-        return update
 
     @fill_event
     def fill_function_header(self, func_addr, user=None, artifact=None, **kwargs):
-        update = False
-        func_header: FunctionHeader = artifact
-        if func_header.name:
-            update |= self.ghidra.set_func_name(func_header.addr, func_header.name)
+        # TODO: set type, name, and args (last)
+        return False
 
-        if func_header.type:
-            update |= self.ghidra.set_func_rettype(func_header.addr, func_header.type)
+    @fill_event
+    def fill_stack_variable(self, func_addr, offset, user=None, artifact=None, **kwargs):
+        return False
 
-        return update
+    @fill_event
+    def fill_global_var(self, var_addr, user=None, artifact=None, **kwargs):
+        # TODO: set type and name
+        return False
 
     @fill_event
     def fill_comment(self, addr, user=None, artifact=None, **kwargs):
-        update = False
-        comment: Comment = artifact
-        if comment.comment:
-            update |= self.ghidra.set_comment(comment.addr, comment.comment, comment.decompiled)
-
-        return update
+        return False
 
     @init_checker
     def magic_fill(self, preference_user=None):
@@ -117,41 +104,30 @@ class GhidraBSController(BSController):
     def _decompile(self, function: Function) -> Optional[str]:
         return None
 
-    @staticmethod
-    def dict_to_stackvars(variables) -> dict:
-        stack_vars = {}
-        for offset in variables:
-            sv = StackVariable(None, None, None, None, None)
-            stack_vars[offset] = sv.__setstate__(variables[offset])
-        return stack_vars
-
     def function(self, addr, **kwargs) -> Optional[Function]:
-        ret = self.ghidra.get_function(addr)
-        if not ret:
-            return None
-        return Function.parse(ret)
+        return None
 
-    def functions(self, **kwargs) -> dict:
-        ret = self.ghidra.get_functions()
-        funcs = {}
-        if not ret:
-            return funcs
-        for addr in ret:
-            stack_vars = self.dict_to_stackvars(ret[addr]["stack_vars"])
-            funcs[addr] = Function(addr, ret[addr]["size"], header=FunctionHeader(ret[addr]["name"], addr), stack_vars=stack_vars)
-        return funcs
+    def functions(self) -> Dict[int, Function]:
+        return {}
 
-    def stack_vars(self, addr, **kwargs) -> dict:
-        ret = self.ghidra.get_stack_vars(addr)
-        if not ret:
-            return {}
-        return self.dict_to_stackvars(ret)
+    def global_var(self, addr) -> Optional[GlobalVariable]:
+        return None
+
+    def global_vars(self) -> Dict[int, GlobalVariable]:
+        return {}
+
+    #
+    # Ghidra Specific API
+    #
+
+    def str_type_to_gtype(self, typestr: str) -> Optional["DataType"]:
+        return None
 
     def _get_nearest_function(self, addr: int):
         func_manager = self.ghidra.currentProgram.getFunctionManager()
         return func_manager.getFunctionContaining(self.ghidra.toAddr(addr))
 
-    def gfunc_to_bsfunc(self, gfunc):
+    def _gfunc_to_bsfunc(self, gfunc):
         if gfunc is None:
             return None
 
