@@ -119,10 +119,42 @@ class GhidraBSController(BSController):
         return {}
 
     def global_var(self, addr) -> Optional[GlobalVariable]:
-        return None
+        symbol_type = self.ghidra.import_module_object("ghidra.program.model.symbol", "SymbolType")
+        symTab = self.ghidra.currentProgram.getSymbolTable()
+        absolute_addr = self.rebase_addr(addr, False)
+        gvar_data = {}
+        for sym in symTab.getAllSymbols(True):
+            if sym.getSymbolType() != symbol_type.LABEL:
+                continue
+            if sym.getAddress() == absolute_addr:
+                lst = self.ghidra.currentProgram.getListing()
+                data = lst.getDataAt(absolute_addr)
+                if not data or data.isStructure():
+                    return None
+                gvar_data["addr"] = addr
+                gvar_data["name"] = sym.getName()
+                gvar_data["type"] = str(data.getDataType())
+                if str(data.getDataType()) == "undefined":
+                    gvar_data["size"] = self.ghidra.currentProgram.getDefaultPointerSize()
+                else:
+                    gvar_data["size"] = data.getLength()
+                global_var = GlobalVariable(None, None, None, None, None)
+                global_var.__setstate__(gvar_data)
+                break
+        return global_var
 
     def global_vars(self) -> Dict[int, GlobalVariable]:
-        return {}
+        symbol_type = self.ghidra.import_module_object("ghidra.program.model.symbol", "SymbolType")
+        symTab = self.ghidra.currentProgram.getSymbolTable()
+        global_vars = {}
+        for sym in symTab.getAllSymbols(True):
+            if sym.getSymbolType() != symbol_type.LABEL:
+                continue
+            offset = sym.getAddress().getOffset()
+            gvar = self.global_var(offset)
+            if gvar:
+                global_vars[offset] = gvar
+        return global_vars
 
     #
     # Ghidra Specific API
