@@ -72,31 +72,103 @@ class GhidraBSController(BSController):
     #
 
     @fill_event
-    def fill_function_header(self, func_addr, user=None, artifact=None, **kwargs):
+    def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
+        decompilation = self._ghidra_decompile(func_addr)
+        changes = super(GhidraBSController, self).fill_function(
+            func_addr, user=user, artifact=artifact, decompilation=decompilation, **kwargs
+        )
+
+        return changes
+
+
+    @fill_event
+    def fill_function_header(self, func_addr, user=None, artifact=None, decompilation=None, **kwargs):
         changes = False
         func_header: FunctionHeader = artifact
-        ghidra_func = self._get_nearest_function(func_addr)
+        ghidra_func = decompilation.getFunction() if decompilation else self._get_nearest_function(func_addr)
         src_type = self.ghidra.import_module_object("ghidra.program.model.symbol", "SourceType")
 
+        # func name
         if func_header.name and func_header.name != ghidra_func.getName():
             ghidra_func.setName(func_header.name, src_type.USER_DEFINED)
             changes = True
 
-        # TODO: type
+        # return type
+        if func_header.type and decompilation is not None:
+            parsed_type = self.typestr_to_gtype(func_header.type)
+            if parsed_type is not None and \
+                    parsed_type != str(decompilation.highFunction.getFunctionPrototype().getReturnType()):
+                ghidra_func.setReturnType(parsed_type, src_type.USER_DEFINED)
+                changes = True
+
+        # args
+        if func_header.args and decompilation is not None:
+            # TODO: do arg names and types
+            pass
 
         return changes
 
     @fill_event
-    def fill_stack_variable(self, func_addr, offset, user=None, artifact=None, **kwargs):
-        return False
+    def fill_stack_variable(self, func_addr, offset, user=None, artifact=None, decompilation=None, **kwargs):
+        stack_var: StackVariable = artifact
+        changes = False
+        ghidra_func = decompilation.getFunction() if decompilation else self._get_nearest_function(func_addr)
+        gstack_var = self._get_gstack_var(ghidra_func, offset)
+        src_type = self.ghidra.import_module_object("ghidra.program.model.symbol", "SourceType")
+
+        if stack_var.name and stack_var.name != gstack_var.getName():
+            gstack_var.setName(stack_var.name, src_type.USER_DEFINED)
+            changes = True
+
+        if stack_var.type:
+            parsed_type = self.typestr_to_gtype(stack_var.type)
+            if parsed_type is not None and parsed_type != str(gstack_var.getDataType()):
+                gstack_var.setDataType(parsed_type, False, True, src_type.USER_DEFINED)
+                changes = True
+
+        return changes
 
     @fill_event
     def fill_global_var(self, var_addr, user=None, artifact=None, **kwargs):
-        # TODO: set type and name
-        return False
+        global_var: GlobalVariable = artifact
+        changes = False
+        symbol_type = self.ghidra.import_module_object("ghidra.program.model.symbol", "SymbolType")
+        rename_label_cmd_cls = self.ghidra.import_module_object("ghidra.app.cmd.label", "RenameLabelCmd")
+        src_type = self.ghidra.import_module_object("ghidra.program.model.symbol", "SourceType")
+        sym_tab = self.ghidra.currentProgram.getSymbolTable()
+        for sym in sym_tab.getAllSymbols(True):
+            if sym.getSymbolType() != symbol_type.LABEL:
+                continue
+
+            if sym.getAddress() != global_var.addr:
+                continue
+
+            if sym.getName() != global_var.name:
+                cmd = rename_label_cmd_cls(sym, global_var.name, src_type.USER_DEFINED)
+                cmd.applyTo(self.ghidra.currentProgram)
+                changes = True
+
+            if global_var.type:
+                # TODO: set type
+                pass
+
+            break
+
+        return changes
 
     @fill_event
     def fill_comment(self, addr, user=None, artifact=None, **kwargs):
+        comment: Comment = artifact
+        code_unit = self.ghidra.import_module_object("ghidra.program.model.listing", "CodeUnit")
+        set_cmt_cmd_cls = self.ghidra.import_module_object("ghidra.app.cmd.comments", "SetCommentCmd")
+        cmt_type = code_unit.PRE_COMMENT if comment.decompiled else code_unit.EOL_COMMENT
+
+        if comment.comment:
+            # TODO: check if comment already exists, and append?
+            return set_cmt_cmd_cls(
+                self.ghidra.toAddr(addr), cmt_type, comment.comment
+            ).applyTo(self.ghidra.currentProgram)
+
         return False
 
     @init_checker
@@ -121,6 +193,7 @@ class GhidraBSController(BSController):
     def global_var(self, addr) -> Optional[GlobalVariable]:
         symbol_type = self.ghidra.import_module_object("ghidra.program.model.symbol", "SymbolType")
         symTab = self.ghidra.currentProgram.getSymbolTable()
+        #XXX: there is no need to rebase the address here, assume addr here is rebased already
         absolute_addr = self.rebase_addr(addr, False)
         gvar_data = {}
         for sym in symTab.getAllSymbols(True):
@@ -131,6 +204,7 @@ class GhidraBSController(BSController):
                 data = lst.getDataAt(absolute_addr)
                 if not data or data.isStructure():
                     return None
+                # dont do this, just make a new global var
                 gvar_data["addr"] = addr
                 gvar_data["name"] = sym.getName()
                 gvar_data["type"] = str(data.getDataType())
@@ -156,6 +230,14 @@ class GhidraBSController(BSController):
                 global_vars[offset] = gvar
         return global_vars
 
+    def stack_variable(self, func_addr, offset) -> Optional[StackVariable]:
+        gstack_var = self._get_gstack_var(func_addr, offset)
+        if gstack_var is None:
+            return None
+
+        # TODO: return a real BS stack variable here!
+        pass
+
     #
     # Ghidra Specific API
     #
@@ -168,6 +250,7 @@ class GhidraBSController(BSController):
         if gfunc is None:
             return None
 
+        # TODO: pack stack variable information as well
         bs_func = Function(
             gfunc.getEntryPoint().getOffset(), gfunc.getBody().getNumAddresses(),
             header=FunctionHeader(gfunc.getName(), gfunc.getEntryPoint().getOffset())
@@ -175,6 +258,11 @@ class GhidraBSController(BSController):
         return bs_func
 
     def _ghidra_decompile(self, func: "GhidraFunction") -> "DecompileResult":
+        """
+        TODO: this needs to be cached!
+        @param func:
+        @return:
+        """
         dec_interface_cls = self.ghidra.import_module_object("ghidra.app.decompiler", "DecompInterface")
         consle_monitor_cls = self.ghidra.import_module_object("ghidra.util.task", "ConsoleTaskMonitor")
 
@@ -183,7 +271,29 @@ class GhidraBSController(BSController):
         dec_results = dec_interface.decompileFunction(func, 0, consle_monitor_cls())
         return dec_results
 
+    def _get_gstack_var(self, func: "GhidraFunction", offset: int) -> Optional["LocalVariableDB"]:
+        """
+        @param func:
+        @param offset:
+        @return:
+        """
+        for var in func.getAllVariables():
+            if not var.isStackVariable():
+                continue
+
+            if var.getStackOffset() == offset:
+                return var
+
+        return None
+
     def typestr_to_gtype(self, typestr: str) -> Optional["DataType"]:
+        """
+        typestr should look something like:
+        `int` or if a struct `struct name`.
+
+        @param typestr:
+        @return:
+        """
         if not typestr:
             return None
 
