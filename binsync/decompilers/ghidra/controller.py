@@ -185,35 +185,47 @@ class GhidraBSController(BSController):
         return None
 
     def function(self, addr, **kwargs) -> Optional[Function]:
-        return None
+        func = self._get_nearest_function(addr)
+        dec = self._ghidra_decompile(func)
+        stack_variables = {}
+        for sym in dec.getHighFunction().getLocalSymbolMap().getSymbols():
+            print(sym)
+            if sym.getStorage().isStackStorage():
+                offset = sym.getStorage().getStackOffset()
+                stack_variables[offset] = StackVariable(offset, sym.getName(), str(sym.getDataType()), sym.getSize(), addr)
+        bs_func = Function(
+            func.getEntryPoint().getOffset(), func.getBody().getNumAddresses(),
+            header=FunctionHeader(func.getName(), func.getEntryPoint().getOffset()),
+            stack_vars=stack_variables
+        )
+        return bs_func
 
     def functions(self) -> Dict[int, Function]:
-        return {}
+        program = self.ghidra.currentProgram
+        fm = program.getFunctionManager()
+        funcs = {}
+        for func in fm.getFunctions(True):
+            print(func)
+            addr = func.getEntryPoint().getOffset()
+            funcs[addr] = self.function(addr)
+        return funcs
 
     def global_var(self, addr) -> Optional[GlobalVariable]:
         symbol_type = self.ghidra.import_module_object("ghidra.program.model.symbol", "SymbolType")
-        symTab = self.ghidra.currentProgram.getSymbolTable()
-        #XXX: there is no need to rebase the address here, assume addr here is rebased already
-        absolute_addr = self.rebase_addr(addr, False)
-        gvar_data = {}
-        for sym in symTab.getAllSymbols(True):
+        symbol_table = self.ghidra.currentProgram.getSymbolTable()
+        for sym in symbol_table.getAllSymbols(True):
             if sym.getSymbolType() != symbol_type.LABEL:
                 continue
-            if sym.getAddress() == absolute_addr:
+            if sym.getAddress() == addr:
                 lst = self.ghidra.currentProgram.getListing()
-                data = lst.getDataAt(absolute_addr)
+                data = lst.getDataAt(addr)
                 if not data or data.isStructure():
                     return None
-                # dont do this, just make a new global var
-                gvar_data["addr"] = addr
-                gvar_data["name"] = sym.getName()
-                gvar_data["type"] = str(data.getDataType())
                 if str(data.getDataType()) == "undefined":
-                    gvar_data["size"] = self.ghidra.currentProgram.getDefaultPointerSize()
+                    size = self.ghidra.currentProgram.getDefaultPointerSize()
                 else:
-                    gvar_data["size"] = data.getLength()
-                global_var = GlobalVariable(None, None, None, None, None)
-                global_var.__setstate__(gvar_data)
+                    size = data.getLength()
+                global_var = GlobalVariable(addr.getOffset(), sym.getName(), str(data.getDataType()), size)
                 break
         return global_var
 
@@ -224,8 +236,9 @@ class GhidraBSController(BSController):
         for sym in symTab.getAllSymbols(True):
             if sym.getSymbolType() != symbol_type.LABEL:
                 continue
+            print(sym.getName())
             offset = sym.getAddress().getOffset()
-            gvar = self.global_var(offset)
+            gvar = self.global_var(sym.getAddress())
             if gvar:
                 global_vars[offset] = gvar
         return global_vars
@@ -250,10 +263,9 @@ class GhidraBSController(BSController):
         if gfunc is None:
             return None
 
-        # TODO: pack stack variable information as well
         bs_func = Function(
             gfunc.getEntryPoint().getOffset(), gfunc.getBody().getNumAddresses(),
-            header=FunctionHeader(gfunc.getName(), gfunc.getEntryPoint().getOffset())
+            header=FunctionHeader(gfunc.getName(), gfunc.getEntryPoint().getOffset()),
         )
         return bs_func
 
