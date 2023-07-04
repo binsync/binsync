@@ -19,7 +19,7 @@
 
 import threading
 import functools
-from typing import Dict, Tuple, Optional, Iterable, Any
+from typing import Dict, Tuple, Optional, Iterable, Any, List
 import hashlib
 import logging
 
@@ -38,7 +38,7 @@ from binsync.api.controller import BSController, fill_event, init_checker
 from binsync.data import (
     State, Function, FunctionHeader, StackVariable,
     Comment, GlobalVariable, Patch,
-    Enum, Struct
+    Enum, Struct, Artifact
 )
 import binsync
 
@@ -123,6 +123,26 @@ class BinjaBSController(BSController):
 
     def goto_address(self, func_addr) -> None:
         self.bv.offset = func_addr
+
+    def xrefs_to(self, artifact: Artifact) -> List[Artifact]:
+        if not isinstance(artifact, Function):
+            l.warning("xrefs_to is only implemented for functions.")
+            return []
+
+        function: Function = self.lower_artifact(artifact)
+        if not function:
+            return []
+
+        bn_xrefs = self.bv.get_code_refs(function.addr)
+        xrefs = []
+        for bn_xref in bn_xrefs:
+            if bn_xref.function is None:
+                continue
+
+            xrefs.append(Function(bn_xref.function.start, 0))
+
+        return xrefs
+
 
     #
     # Fillers

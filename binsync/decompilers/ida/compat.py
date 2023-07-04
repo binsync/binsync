@@ -758,6 +758,10 @@ def get_function_cursor_at():
 #
 
 @execute_write
+def xrefs_to(addr):
+    return list(idautils.XrefsTo(addr))
+
+@execute_write
 def get_ptr_size():
     """
     Gets the size of the ptr, which in affect tells you the bit size of the binary.
