@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from pathlib import Path
 
 import angr
@@ -13,7 +13,7 @@ from binsync.api.controller import (
     fill_event
 )
 from binsync.data import (
-    Function, FunctionHeader, Comment, StackVariable, FunctionArgument
+    Function, FunctionHeader, Comment, StackVariable, FunctionArgument, Artifact
 )
 
 from .artifact_lifter import AngrArtifactLifter
@@ -90,18 +90,41 @@ class AngrBSController(BSController):
 
     def rebase_addr(self, addr, up=False):
         base_addr = self.main_instance.project.loader.main_object.mapped_base
-        is_pie = self.main_instance.project.loader.main_object.pic
+        #is_pie = self.main_instance.project.loader.main_object.pic
 
-        if is_pie:
-            if up:
-                return addr + base_addr
-            elif addr > base_addr:
-                return addr - base_addr
+        if up and addr < base_addr:
+            return addr + base_addr
+        elif not up and addr > base_addr:
+            return addr - base_addr
 
         return addr
 
     def goto_address(self, func_addr):
         self._workspace.jump_to(self.rebase_addr(func_addr, up=True))
+
+    def xrefs_to(self, artifact: Artifact) -> List[Artifact]:
+        if not isinstance(artifact, Function):
+            l.warning("xrefs_to is only implemented for functions.")
+            return []
+
+        function: Function = self.lower_artifact(artifact)
+        program_cfg = self.main_instance.kb.cfgs.get_most_accurate()
+        if program_cfg is None:
+            return []
+
+        func_node = program_cfg.get_any_node(function.addr)
+        if func_node is None:
+            return []
+
+        xrefs = []
+        for node in program_cfg.graph.predecessors(func_node):
+            func_addr = node.function_address
+            if func_addr is None:
+                continue
+
+            xrefs.append(Function(func_addr, 0))
+
+        return xrefs
 
     #
     # Display Fillers

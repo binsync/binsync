@@ -3,7 +3,7 @@ import threading
 import datetime
 import time
 from functools import wraps
-from typing import Dict, Iterable, Optional, Union, TypeVar, Callable
+from typing import Dict, Iterable, Optional, Union, TypeVar, Callable, List
 
 import binsync.data
 from binsync.data import ProjectConfig
@@ -416,6 +416,14 @@ class BSController:
         binary and the filename extension being that of the native decompilers save format
         """
         _l.info("Saving native decompiler database feature is not implemtened in this decompiler. Skipping...")
+
+    def xrefs_to(self, artifact: Artifact) -> List[Artifact]:
+        """
+        Returns a list of artifacts that reference the provided artifact.
+        @param artifact: Artifact to find references to
+        @return: List of artifacts that reference the provided artifact
+        """
+        return []
 
     #
     # Optional Artifact API:

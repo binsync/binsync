@@ -20,7 +20,7 @@
 from functools import wraps
 import threading
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from collections import OrderedDict, defaultdict
 
 import idc
@@ -31,7 +31,7 @@ import ida_hexrays
 import binsync
 from binsync.api.controller import BSController, init_checker, fill_event
 from binsync.data import (
-    StackVariable, Function, FunctionHeader, Struct, Comment, GlobalVariable, Enum
+    StackVariable, Function, FunctionHeader, Struct, Comment, GlobalVariable, Enum, Artifact
 )
 from . import compat
 from .artifact_lifter import IDAArtifactLifter
@@ -177,6 +177,26 @@ class IDABSController(BSController):
             self._decompiler_available = ida_hexrays.init_hexrays_plugin()
 
         return self._decompiler_available
+
+    def xrefs_to(self, artifact: Artifact) -> List[Artifact]:
+        if not isinstance(artifact, Function):
+            _l.warning("xrefs_to is only implemented for functions.")
+            return []
+
+        function: Function = self.lower_artifact(artifact)
+        ida_xrefs = compat.xrefs_to(function.addr)
+        if not ida_xrefs:
+            return []
+
+        xrefs = []
+        for ida_xref in ida_xrefs:
+            from_func_addr = compat.ida_func_addr(ida_xref.frm)
+            if from_func_addr is None:
+                continue
+
+            xrefs.append(Function(from_func_addr, 0))
+
+        return xrefs
 
     #
     # IDA DataBase Fillers
