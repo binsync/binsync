@@ -437,6 +437,14 @@ class ConfigureBSDialog(QDialog):
 
     def connect_client_to_project(self, username, proj_path, initialize=False, remote_url=None, push_on_update=True,
                                   pull_on_update=True, commit_on_update=True):
+        lockfile_path = Path(proj_path) / ".git" / "binsync.lock"
+        if lockfile_path.exists():
+            box_resp = QMessageBox(self).question(None, "Error", "WARNING: Can only have one binsync client touching a local repository at once." +
+                                                  "If the previous client crashed, the lockfile at:" +
+                                                  f"'{lockfile_path.resolve()}'\n" +
+                                                  "must be deleted. Would you like to delete this now?", QMessageBox.Yes | QMessageBox.No)
+            if box_resp == QMessageBox.Yes:
+                lockfile_path.unlink()
         try:
             connection_warnings = self.controller.connect(
                 username, str(proj_path), init_repo=initialize, remote_url=remote_url,
