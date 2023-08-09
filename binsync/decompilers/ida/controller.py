@@ -27,6 +27,8 @@ import idc
 import idaapi
 import ida_struct
 import ida_hexrays
+import idautils
+import ida_offset
 
 import binsync
 from binsync.api.controller import BSController, init_checker, fill_event
@@ -140,6 +142,48 @@ class IDABSController(BSController):
     # Controller Interaction
     #
 
+    def xrefs_to(self, artifact: Artifact) -> list[Artifact]:
+        if isinstance(artifact, Struct):
+            sid = None
+            for struct_idx, struct_id, struct_name in idautils.Structs():
+                if struct_name == artifact.name:
+                    sid = struct_id
+                    break
+            else:
+                return []
+            struct = ida_struct.get_struc(sid)
+            xrefs = set()
+            for offset, name, size in idautils.StructMembers(struct_id):
+                member = ida_struct.get_member_by_name(struct, name)
+                if member is None:
+                    continue
+                for ref in idautils.XrefsTo(member.id):
+                    from_func_addr = compat.ida_func_addr(ref.frm)
+                    if from_func_addr is None:
+                        continue
+                    
+                    xrefs.add(Function(from_func_addr, 0))
+                    
+            return list(xrefs)
+        elif isinstance(artifact, Function):
+            function: Function = self.lower_artifact(artifact)
+            ida_xrefs = compat.xrefs_to(function.addr)
+            if not ida_xrefs:
+                return []
+
+            xrefs = []
+            for ida_xref in ida_xrefs:
+                from_func_addr = compat.ida_func_addr(ida_xref.frm)
+                if from_func_addr is None:
+                    continue
+
+                xrefs.append(Function(from_func_addr, 0))
+
+            return xrefs
+        else:
+            return []
+
+
     def binary_hash(self) -> str:
         return compat.binary_hash()
 
@@ -177,26 +221,7 @@ class IDABSController(BSController):
             self._decompiler_available = ida_hexrays.init_hexrays_plugin()
 
         return self._decompiler_available
-
-    def xrefs_to(self, artifact: Artifact) -> List[Artifact]:
-        if not isinstance(artifact, Function):
-            _l.warning("xrefs_to is only implemented for functions.")
-            return []
-
-        function: Function = self.lower_artifact(artifact)
-        ida_xrefs = compat.xrefs_to(function.addr)
-        if not ida_xrefs:
-            return []
-
-        xrefs = []
-        for ida_xref in ida_xrefs:
-            from_func_addr = compat.ida_func_addr(ida_xref.frm)
-            if from_func_addr is None:
-                continue
-
-            xrefs.append(Function(from_func_addr, 0))
-
-        return xrefs
+        
 
     #
     # IDA DataBase Fillers

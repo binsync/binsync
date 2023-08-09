@@ -17,6 +17,9 @@ class Artifact:
 
     def __init__(self, last_change=None):
         self.last_change = last_change
+    
+    def __hash__(self):
+        return hash(self.__class__.__name__ + ''.join([str(getattr(self,k)) for k in self.__slots__]))
 
     def __getstate__(self) -> Dict:
         """
