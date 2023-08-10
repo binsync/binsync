@@ -27,6 +27,7 @@ from binsync.decompilers import ANGR_DECOMPILER, IDA_DECOMPILER
 _l = logging.getLogger(__name__)
 AUTO_DECOMPILER = "automatic"
 
+
 class AIUserConfigDialog(QDialog):
     TITLE = "AI User Configuration"
 
@@ -88,13 +89,13 @@ class AIUserConfigDialog(QDialog):
         self.row += 1
 
         # decompiler dropdown selection
-        self._decompiler_label = QLabel("Decompiler Backend")
-        self._grid_layout.addWidget(self._decompiler_label, self.row, 0)
-        self._decompiler_dropdown = QComboBox()
-        # TODO: add more decompilers
-        self._decompiler_dropdown.addItems([AUTO_DECOMPILER, ANGR_DECOMPILER])
-        self._grid_layout.addWidget(self._decompiler_dropdown, self.row, 1)
-        self.row += 1
+        #self._decompiler_label = QLabel("Decompiler Backend")
+        #self._grid_layout.addWidget(self._decompiler_label, self.row, 0)
+        #self._decompiler_dropdown = QComboBox()
+        ## TODO: add more decompilers
+        #self._decompiler_dropdown.addItems([AUTO_DECOMPILER, ANGR_DECOMPILER])
+        #self._grid_layout.addWidget(self._decompiler_dropdown, self.row, 1)
+        #self.row += 1
 
         # user_base dropdown selection
         self._user_base_label = QLabel("Base On")
@@ -107,6 +108,13 @@ class AIUserConfigDialog(QDialog):
         all_users = [""] + [curr_user] + all_users
         self._user_base_dropdown.addItems(all_users)
         self._grid_layout.addWidget(self._user_base_dropdown, self.row, 1)
+        self.row += 1
+
+        # range selection
+        self._range_label = QLabel("View Range")
+        self._grid_layout.addWidget(self._range_label, self.row, 0)
+        self._range_input = QLineEdit("")
+        self._grid_layout.addWidget(self._range_input, self.row, 1)
         self.row += 1
 
         # ok/cancel buttons
@@ -131,12 +139,14 @@ class AIUserConfigDialog(QDialog):
         self.api_key = self._api_key_input.text()
         self.binary_path = self._binary_path_input.text()
         self.username = self._username_input.text()
-        self.decompiler_backend = self._decompiler_dropdown.currentText()
+        #self.decompiler_backend = self._decompiler_dropdown.currentText()
+        self.decompiler_backend = AUTO_DECOMPILER
         if self.decompiler_backend == AUTO_DECOMPILER:
             self.decompiler_backend = None
 
         self.base_on = self._user_base_dropdown.currentText()
         self.model = self._model_dropdown.currentText()
+        self.range_str = self._range_input.text()
 
         if not (self.api_key and self.binary_path and self.username):
             if self.model is not None and "gpt" in self.model:
@@ -156,21 +166,12 @@ class AIUserConfigDialog(QDialog):
         self.close()
     
     def threaded_add_ai_user_to_project(self):
+        # angr hack to make sure the workspace is visible!
+        if hasattr(self._controller, "workspace"):
+            globals()['workspace'] = self._controller.workspace
+
         add_ai_user_to_project(
             self.api_key, self.binary_path, self.project_path, username=self.username,
             base_on=self.base_on, headless=True if self.decompiler_backend else False, copy_proj=True, model=self.model,
-            decompiler_backend=self.decompiler_backend
+            decompiler_backend=self.decompiler_backend, range_str=self.range_str
         )
-        """
-        t = Thread(
-            target=add_ai_user_to_project, 
-            args=(self.api_key, self.binary_path, self.project_path,),
-            kwargs={
-                "username": self.username, "base_on": self.base_on,
-                "headless": True if self.decompiler_backend else False, "copy_proj": True, "model": self.model,
-                "decompiler_backend": self.decompiler_backend,
-            }
-        )
-        t.setDaemon(True)
-        t.start()
-        """

@@ -6,6 +6,7 @@ from binsync.data import Function, State
 
 _l = logging.getLogger(__name__)
 
+
 class VARModelBSUser(AIBSUser):
     DEFAULT_USERNAME = "varmodel_user"
 
@@ -33,13 +34,13 @@ class VARModelBSUser(AIBSUser):
         if updated_func is not None:
             # check for at least one change
             for off, new_sv in updated_func.stack_vars.items():
-                if new_sv.name != func.stack_vars[off]:
+                if new_sv.name != func.stack_vars[off].name:
                     break
             else:
                 return 0
 
             for off, new_arg in updated_func.args.items():
-                if new_arg.name != func.args[off]:
+                if new_arg.name != func.args[off].name:
                     break
             else:
                 return 0

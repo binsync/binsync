@@ -1,4 +1,5 @@
 import logging
+from typing import Dict
 
 from dailalib.interfaces import OpenAIInterface
 
@@ -6,6 +7,7 @@ from binsync.extras.ai.ai_bs_user import AIBSUser
 from binsync.data import Function, StackVariable, Comment, State, FunctionHeader
 
 _l = logging.getLogger(__name__)
+
 
 class OpenAIBSUser(AIBSUser):
     DEFAULT_USERNAME = "chatgpt_user"
@@ -17,7 +19,8 @@ class OpenAIBSUser(AIBSUser):
     def run_all_ai_commands_for_dec(self, decompilation: str, func: Function, state: State):
         changes = 0
         artifact_edit_cmds = {
-            self.ai_interface.RETYPE_VARS_CMD, self.ai_interface.RENAME_VARS_CMD, self.ai_interface.RENAME_FUNCS_CMD
+            self.ai_interface.RETYPE_VARS_CMD, self.ai_interface.RENAME_VARS_CMD, self.ai_interface.RENAME_FUNCS_CMD,
+            self.ai_interface.ANSWER_QUESTION_CMD
         }
         cmt_prepends = {
             self.ai_interface.SUMMARIZE_CMD: "==== AI Summarization ====\n",
@@ -28,9 +31,8 @@ class OpenAIBSUser(AIBSUser):
         func_cmt = ""
         new_func = Function(func.addr, func.size, header=FunctionHeader("", func.addr, args={}), stack_vars={})
         for cmd in self.ai_interface.AI_COMMANDS:
-            # TODO: convert this back to what it was before quals, it's made to be fast for now
-            if cmd not in {self.ai_interface.SUMMARIZE_CMD, self.ai_interface.RENAME_FUNCS_CMD,
-                           self.ai_interface.FIND_VULN_CMD, self.ai_interface.RENAME_VARS_CMD}:
+            # TODO: make this more explicit and change what is run
+            if cmd not in {self.ai_interface.ANSWER_QUESTION_CMD}:
                 continue
 
             try:
@@ -95,6 +97,15 @@ class OpenAIBSUser(AIBSUser):
                         state.functions[_func.addr].name = f"gpt_{proposed_name}"
                         _l.info(f"Proposing new name for function {_func} to {proposed_name}")
                         changes += 1
+            elif cmd == self.ai_interface.ANSWER_QUESTION_CMD:
+                answers: Dict[str, str] = resp
+                current_cmts = state.get_func_comments(func.addr)
+                for question, answer in answers.items():
+                    for _, current_cmt in current_cmts.items():
+                        if question in current_cmt.comment:
+                            current_cmt.comment += f"\n{answer}"
+                            state.set_comment(current_cmt)
+                            break
 
         if changes:
             _l.info(f"Proposing new name for function {func} to {new_func}")

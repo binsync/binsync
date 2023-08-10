@@ -44,7 +44,8 @@ class AIBSUser:
         base_on=None,
         controller=None,
         model=None,
-        progress_callback=None
+        progress_callback=None,
+        range_str="",
     ):
         self._base_on = base_on
         self.username = username
@@ -52,6 +53,15 @@ class AIBSUser:
         self._progress_callback = progress_callback
         if bs_proj_path is not None:
             bs_proj_path = Path(bs_proj_path)
+
+        # compute the range
+        if range_str:
+            range_strings = range_str.split("-")
+            self.analysis_min = int(range_strings[0], 0)
+            self.analysis_max = int(range_strings[1], 0)
+        else:
+            self.analysis_max = None
+            self.analysis_min = None
 
         # copy or create the project path into the temp dir
         self.decompiler_backend = decompiler_backend
@@ -83,6 +93,7 @@ class AIBSUser:
         if self._base_on:
             _l.info(f"Basing all AI changes on user {self._base_on}...")
             master_state = self.controller.get_state(user=self._base_on)
+            master_state.user = self.username
         else:
             _l.info("Basing AI on current decompiler changes...")
             master_state = self.controller.get_state()
@@ -93,9 +104,8 @@ class AIBSUser:
             target=self._query_and_commit_changes,
             args=(master_state, decompiled_functions,)
         )
-        t.setDaemon(True)
+        t.daemon = True
         t.start()
-
 
     def _collect_decompiled_functions(self) -> Dict:
         valid_funcs = [
@@ -106,7 +116,7 @@ class AIBSUser:
 
         if not valid_funcs:
             _l.info("No functions with valid size (small or big), to work on...")
-            return ai_initiated_changes
+            return {}
 
         # open a loading bar for progress updates
         pbar = QProgressBarDialog(label_text=f"Decompiling {len(valid_funcs)} functions...")
@@ -118,6 +128,13 @@ class AIBSUser:
         update_amt_per_func = math.ceil(100 / len(valid_funcs))
         callback_stub = self._progress_callback if self._progress_callback is not None else lambda x: x
         for func_addr in tqdm(valid_funcs, desc=f"Decompiling {len(valid_funcs)} functions for analysis..."):
+            if self.analysis_max is not None and func_addr > self.analysis_max:
+                callback_stub(update_amt_per_func)
+                continue
+            if self.analysis_min is not None and func_addr < self.analysis_min:
+                callback_stub(update_amt_per_func)
+                continue
+
             func = self.controller.function(func_addr)
             if func is None:
                 callback_stub(update_amt_per_func)
