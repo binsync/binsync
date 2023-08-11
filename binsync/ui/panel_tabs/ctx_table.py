@@ -1,5 +1,5 @@
 import logging
-
+import datetime
 from binsync.api.controller import BSController
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableView
 from binsync.ui.qt_objects import (
