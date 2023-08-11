@@ -1031,8 +1031,9 @@ class BSController:
         }
         all_users.remove(preference_user)
 
+        # TODO: make structus work in IDA
         target_artifacts = target_artifacts or {
-            Struct: self.fill_struct,
+            #Struct: self.fill_struct,
             Comment: lambda *x, **y: None,
             Function: self.fill_function,
             GlobalVariable: self.fill_global_var,
