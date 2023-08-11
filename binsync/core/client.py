@@ -303,17 +303,30 @@ class Client:
     @atomic_git_action
     def users(self, priority=None, no_cache=False) -> Iterable[User]:
         repo = self.repo
+        attempt_again = True
+        attempted_fix = False
         users = list()
-        for ref in self._get_best_refs(repo).values():
-            #l.debug(f"{ref} NAME: {ref.name}")
-            try:
-                metadata = load_toml_from_file(ref.commit.tree, "metadata.toml", client=self)
-                user = User.from_metadata(metadata)
-                users.append(user)
-            except Exception as e:
-                #l.debug(f"Unable to load user {e}")
-                continue
-        #l.debug(users)
+        force_local_users = False
+
+        while attempt_again:
+            attempt_again = False
+            users = list()
+            for ref in self._get_best_refs(repo, force_local=force_local_users).values():
+                #l.debug(f"{ref} NAME: {ref.name}")
+                try:
+                    metadata = load_toml_from_file(ref.commit.tree, "metadata.toml", client=self)
+                    user = User.from_metadata(metadata)
+                    users.append(user)
+                except Exception as e:
+                    #l.debug(f"Unable to load user {e}")
+                    continue
+
+            if not attempted_fix and not users:
+                # attempt a fix once
+                force_local_users = True
+                attempt_again = True
+                attempted_fix = True
+
         return users
 
     @atomic_git_action
@@ -578,17 +591,21 @@ class Client:
         self.repo.close()
         del self.repo
 
-    def _get_best_refs(self, repo):
+    def _get_best_refs(self, repo, force_local=False):
         candidates = {}
         for ref in repo.refs:  # type: git.Reference
             if f'{BINSYNC_BRANCH_PREFIX}/' not in ref.name:
                 continue
 
             branch_name = ref.name.split("/")[-1]
-            if branch_name in candidates:
-                # if the candidate exists, and the new one is not remote, don't replace it
-                if not ref.is_remote() or ref.remote_name != self.remote:
+            if force_local:
+                if ref.is_remote():
                     continue
+            else:
+                if branch_name in candidates:
+                    # if the candidate exists, and the new one is not remote, don't replace it
+                    if not ref.is_remote() or ref.remote_name != self.remote:
+                        continue
 
             candidates[branch_name] = ref
         return candidates
