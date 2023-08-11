@@ -1,4 +1,5 @@
 import logging
+import time
 
 from binsync.api.controller import BSController, MergeLevel
 from binsync.ui.qt_objects import (

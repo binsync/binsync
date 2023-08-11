@@ -2,6 +2,7 @@ import datetime
 import logging
 from collections import defaultdict
 from typing import Dict
+import time
 
 from binsync.api.controller import BSController
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView
