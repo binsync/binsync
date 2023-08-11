@@ -725,6 +725,9 @@ class BSController:
         # assure state exists
         if not state:
             state = self.get_state(user=user)
+        if not state or not isinstance(state, State):
+            _l.critical("Failed to get a state for push {artifact}, this is likely due to network error. Report me if back trace!")
+            return False
 
         # assure function existence for artifacts requiring a function
         if isinstance(artifact, (FunctionHeader, StackVariable, Comment)) and make_func:

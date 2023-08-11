@@ -415,7 +415,13 @@ class Client:
 
     def all_states(self):
         states = list()
-        for user in self.users(no_cache=True):
+        # promises users in the vent of inability to get new users
+        users = self.users(no_cache=True) or self.users()
+        if not users:
+            l.critical(f"Failed to get users from current project. Report me if possible.")
+            return {}
+
+        for user in users:
             state = self.get_state(user=user.name)
             states.append(state)
 
