@@ -2,6 +2,7 @@ import logging
 import threading
 import datetime
 import time
+import math
 from functools import wraps
 from typing import Dict, Iterable, Optional, Union, TypeVar, Callable, List
 
@@ -1077,7 +1078,7 @@ class BSController:
     #
 
     @init_checker
-    def force_push_function(self, addr: int) -> bool:
+    def force_push_functions(self, func_addrs):
         """
         Collects the function currently stored in the decompiler, not the BS State, and commits it to
         the master users BS Database.
@@ -1088,18 +1089,41 @@ class BSController:
         @param addr:
         @return: Success of committing the Function
         """
-        func = self.function(addr)
-        if not func:
-            _l.info(f"Pushing function {hex(addr)} Failed")
-            return False
+        #do this upfront w/ progress bar
+        if self.headless:
+            _l.critical("Force push is currently not supported headlessly.")
+            return
+
+        from binsync.ui.utils import QProgressBarDialog
+
+        pbar = QProgressBarDialog(label_text=f"Decompiling {len(func_addrs)} functions...")
+        pbar.show()
+
+        funcs = {}
+        update_amt_per_func = math.ceil(100 / len(func_addrs))
+        for func_addr in func_addrs:
+            f = self.function(func_addr)
+            if not f:
+                _l.warning(f"Failed to force push function @ {func_addr:#0x}")
+                pbar.update_progress(update_amt_per_func)
+                continue
+            funcs[func_addr] = f
+            pbar.update_progress(update_amt_per_func)
 
         master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
-        pushed = self.push_artifact(func, state=master_state, commit_msg=f"Forced pushed function {func}")
-        return pushed
+        for func_addr, func_obj in funcs.items():
+            self.schedule_job(
+                self.push_artifact,
+                func_obj,
+                state=master_state,
+                commit_msg=f"Forced pushed function {func_addr:#0x}",
+                priority=SchedSpeed.FAST
+            )
+            _l.info(f"Pushed function @ {func_obj}")
 
 
     @init_checker
-    def force_push_global_artifact(self, lookup_item):
+    def force_push_global_artifacts(self, lookup_item):
         """
         Collects the global artifact (struct, gvar, enum) currently stored in the decompiler, not the BS State,
         and commits it to the master users BS Database.

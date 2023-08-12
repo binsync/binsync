@@ -153,20 +153,26 @@ def set_ida_func_name(func_addr, new_name):
 
 
 @execute_write
-def functions():
+def functions(**kwargs):
+
     blacklisted_segs = ["extern", ".plt", ".plt.sec"]
     func_addrs = list(idautils.Functions())
-    funcs = {}
-    for func_addr in func_addrs:
-        # skip non-text segments
-        if idc.get_segm_name(func_addr) in blacklisted_segs:
-            continue
 
-        func_name = get_func_name(func_addr)
-        func_size = get_func_size(func_addr)
-        func = Function(func_addr, func_size)
-        func.name = func_name
-        funcs[func_addr] = func
+    funcs = {}
+    if "fast" in kwargs:
+        for func_addr in func_addrs:
+            funcs[func_addr] = Function(idc.get_func_name(func_addr), idaapi.get_func(func_addr).size())
+    else:
+        for func_addr in func_addrs:
+            # skip non-text segments
+            if idc.get_segm_name(func_addr) in blacklisted_segs:
+                continue
+
+            func_name = get_func_name(func_addr)
+            func_size = get_func_size(func_addr)
+            func = Function(func_addr, func_size)
+            func.name = func_name
+            funcs[func_addr] = func
 
     return funcs
 
