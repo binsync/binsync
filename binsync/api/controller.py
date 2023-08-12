@@ -728,7 +728,7 @@ class BSController:
         if not state:
             state = self.get_state(user=user)
         if not state or not isinstance(state, State):
-            _l.critical("Failed to get a state for push {artifact}, this is likely due to network error. Report me if back trace!")
+            _l.critical(f"Failed to get a state for push {artifact}, this is likely due to network error. Report me if back trace!")
             return False
 
         # assure function existence for artifacts requiring a function
@@ -1122,13 +1122,10 @@ class BSController:
         """
         master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
         for lookup_item in progress_bar(lookup_items, gui=not self.headless, desc="Scheduling global artifacts to push..."):
-            _l.info(f"Attempting to sync {lookup_item}")
             global_art = self.global_artifact(lookup_item)
-            _l.info(f"Global artifact lookup result: {global_art}")
             if not global_art:
                 continue
             global_art = self.artifact_lifer.lift(global_art)
-            _l.info(f"POST LIFTING: {global_art}")
             self.schedule_job(
                 self.push_artifact,
                 global_art,
@@ -1136,7 +1133,6 @@ class BSController:
                 commit_msg=f"Forced pushed global {global_art}",
                 priority=SchedSpeed.FAST
             )
-            _l.info(f"Pushed global {global_art}")
 
     #
     # Utils

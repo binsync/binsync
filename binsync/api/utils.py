@@ -14,9 +14,20 @@ def progress_bar(items, gui=True, desc="Progressing..."):
         callback_stub = t.update
 
     callback_amt = 100 / len(items) if gui else 1
-    for item in items:
+
+    bucket_size = len(items) / 100.0
+    if bucket_size < 1:
+        callback_amt = int(1 / (bucket_size))
+        bucket_size = 1
+    else:
+        callback_amt = 1
+        bucket_size = math.ceil(bucket_size)
+
+    for i, item in enumerate(items):
         yield item
-        callback_stub(callback_amt)
+        print(i)
+        if i % bucket_size == 0:
+            callback_stub(callback_amt)
 
     if gui:
         # close the progress bar since it may not hit 100%

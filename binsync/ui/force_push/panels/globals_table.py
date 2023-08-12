@@ -79,13 +79,10 @@ class GlobalTableModel(BinsyncTableModel):
         return False
 
     def update_table(self):
-        import datetime
-        l.info(datetime.datetime.now())
         updated_row_keys = set()
         decompiler_structs = self.controller.structs()
         decompiler_gvars = self.controller.global_vars()
         decompiler_enums = self.controller.enums()
-        l.info(datetime.datetime.now())
         self.gvar_name_to_addr_map = {gvar.name: addr for addr, gvar in decompiler_gvars.items()}
         all_artifacts = [(decompiler_structs, "Struct"), (decompiler_gvars, "Variable"), (decompiler_enums, "Enum")]
         for type_artifacts, type_ in all_artifacts:
