@@ -1120,13 +1120,8 @@ class BSController:
         @param lookup_item:
         @return: Success of committing the Artifact
         """
-        if self.headless:
-            _l.critical("Force push is currently not supported headlessly.")
-            return
-
-
         master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
-        for lookup_item in lookup_items:
+        for lookup_item in progress_bar(lookup_items, gui=not self.headless, desc="Scheduling global artifacts to push..."):
             _l.info(f"Attempting to sync {lookup_item}")
             global_art = self.global_artifact(lookup_item)
             _l.info(f"Global artifact lookup result: {global_art}")

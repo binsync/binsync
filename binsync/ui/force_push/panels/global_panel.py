@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 
 from binsync.api.controller import BSController
+from binsync.api.utils import progress_bar
 from binsync.ui.qt_objects import (
     QAbstractItemView,
     QAbstractTableModel,
@@ -154,12 +155,16 @@ class GlobalTableModel(QAbstractTableModel):
             return Qt.ItemFlags(QAbstractTableModel.flags(self, index))
 
     def update_table(self):
+        """ Updates the table with the latest data from the controller. """
+        pbar = progress_bar([1,2,3], gui=True, desc="Collecting structs, variables, and enums from decompiler...")
         decompiler_structs = self.controller.structs()
+        next(pbar)
         decompiler_gvars = self.controller.global_vars()
+        next(pbar)
         decompiler_enums = self.controller.enums()
+        next(pbar)
         self.gvar_name_to_addr_map = {gvar.name: addr for addr, gvar in decompiler_gvars.items()}
         all_artifacts = [(decompiler_structs, "Struct"), (decompiler_gvars, "Variable"), (decompiler_enums, "Enum")]
-        
         for type_artifacts, type_ in all_artifacts:
             for _, artifact in type_artifacts.items():                      
                 row = [type_, artifact.name or artifact.addr, "", -1]
