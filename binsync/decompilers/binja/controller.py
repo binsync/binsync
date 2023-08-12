@@ -318,7 +318,7 @@ class BinjaBSController(BSController):
         bn_members = []
         
         for member_name, value in bs_enum.members.items():
-            bn_members.append({ "name": member_name, "value": value })
+            bn_members.append((member_name, value))
         
         new_type = binaryninja.TypeBuilder.enumeration(self.bv.arch, bn_members)
         
