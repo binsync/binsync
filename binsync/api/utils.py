@@ -25,7 +25,6 @@ def progress_bar(items, gui=True, desc="Progressing..."):
 
     for i, item in enumerate(items):
         yield item
-        print(i)
         if i % bucket_size == 0:
             callback_stub(callback_amt)
 
