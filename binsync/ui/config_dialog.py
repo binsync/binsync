@@ -434,11 +434,10 @@ class ConfigureBSDialog(QDialog):
             push_on_update=not dialog.disable_push, pull_on_update=not dialog.disable_pull,
             commit_on_update=not dialog.disable_commit
         )
-        if successs:
-            self.close()
-        else:
-            self.show()
+        if not successs:
             l.critical("Failed to configure correctly, see above log.")
+
+        self.close()
 
     #
     # Client helpers
