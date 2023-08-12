@@ -58,7 +58,8 @@ def atomic_git_action(f):
             priority=priority
         )
 
-        self._set_cache(f, ret_val, **kwargs)
+        if ret_val:
+            self._set_cache(f, ret_val, **kwargs)
 
         return ret_val if ret_val is not None else {}
 
