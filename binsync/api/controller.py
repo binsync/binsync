@@ -11,6 +11,7 @@ from binsync.data import ProjectConfig
 from binsync.api.artifact_lifter import BSArtifactLifter
 from binsync.core.client import Client, SchedSpeed, Scheduler, Job
 from binsync.api.type_parser import BSTypeParser, BSType
+from binsync.api.utils import progress_bar
 from binsync.data import (
     State, User, Artifact,
     Function, FunctionHeader, StackVariable,
@@ -1086,42 +1087,19 @@ class BSController:
         TODO: push the comments and custom types that are associated with each stack vars
         TODO: refactor to use internal push_function for correct commit message
         """
-        callback_stub = lambda x: None
-        if not self.headless:
-            from binsync.ui.utils import QProgressBarDialog
-            pbar = QProgressBarDialog(label_text=f"Decompiling {len(func_addrs)} functions to push...")
-            pbar.show()
-            callback_stub = pbar.update_progress
-
         funcs = {}
-        update_amt_per_func = math.floor(100 / len(func_addrs))
-        for func_addr in func_addrs:
+        for func_addr in progress_bar(func_addrs, gui=not self.headless, desc="Decompiling functions to push..."):
             f = self.function(func_addr)
             if not f:
                 _l.warning(f"Failed to force push function @ {func_addr:#0x}")
-                callback_stub(update_amt_per_func)
                 continue
 
             funcs[func_addr] = f
-            callback_stub(update_amt_per_func)
-
-        if not self.headless:
-            # pbar will exist!
-            pbar.close()
 
         _l.info(f"Scheduling {len(funcs)} functions to be pushed...")
         master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
 
-        # another progress bar
-        callback_stub = lambda x: None
-        if not self.headless:
-            from binsync.ui.utils import QProgressBarDialog
-            pbar = QProgressBarDialog(label_text=f"Decompiling {len(func_addrs)} functions to push...")
-            pbar.show()
-            callback_stub = pbar.update_progress
-
-        update_amt_per_func = math.floor(100 / len(funcs))
-        for func_addr, func_obj in funcs.items():
+        for func_addr, func_obj in progress_bar(funcs.items(), gui=not self.headless, desc="Scheduling functions to push..."):
             self.schedule_job(
                 self.push_artifact,
                 func_obj,
@@ -1129,11 +1107,8 @@ class BSController:
                 commit_msg=f"Forced pushed function {func_addr:#0x}",
                 priority=SchedSpeed.FAST
             )
-            callback_stub(update_amt_per_func)
-            _l.info(f"Pushed function @ {func_obj}")
 
-        if not self.headless:
-            pbar.close()
+        _l.info("All functions scheduled to be pushed!")
 
 
     @init_checker
