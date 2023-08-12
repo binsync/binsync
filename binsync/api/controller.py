@@ -1078,7 +1078,7 @@ class BSController:
     #
 
     @init_checker
-    def force_push_functions(self, func_addrs):
+    def force_push_functions(self, func_addrs: List):
         """
         Collects the function currently stored in the decompiler, not the BS State, and commits it to
         the master users BS Database.
@@ -1123,7 +1123,7 @@ class BSController:
 
 
     @init_checker
-    def force_push_global_artifacts(self, lookup_item):
+    def force_push_global_artifacts(self, lookup_items: List):
         """
         Collects the global artifact (struct, gvar, enum) currently stored in the decompiler, not the BS State,
         and commits it to the master users BS Database.
@@ -1131,16 +1131,25 @@ class BSController:
         @param lookup_item:
         @return: Success of committing the Artifact
         """
-        global_art = self.global_artifact(lookup_item)
-        
-        if not global_art:
-            _l.info(f"Pushing global artifact {lookup_item if isinstance(lookup_item, str) else hex(lookup_item)} Failed")
-            return False
+        if self.headless:
+            _l.critical("Force push is currently not supported headlessly.")
+            return
+
 
         master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
-        global_art = self.artifact_lifer.lift(global_art)
-        pushed = self.push_artifact(global_art, state=master_state, commit_msg=f"Force pushed {global_art}")
-        return pushed
+        for lookup_item in lookup_items:
+            global_art = self.global_artifact(lookup_item)
+            if not global_art:
+                continue
+            global_art = self.artifact_lifer.lift(global_art)
+            self.schedule_job(
+                self.push_artifact,
+                global_art,
+                state=master_state,
+                commit_msg=f"Forced pushed global {global_art}",
+                priority=SchedSpeed.FAST
+            )
+            _l.info(f"Pushed global {global_art}")
 
     #
     # Utils
