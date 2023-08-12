@@ -166,7 +166,7 @@ class BinjaBSController(BSController):
                 for offset in sorted(bs_struct.members.keys()):
                     bs_memb = bs_struct.members[offset]
                     try:
-                        bn_type = self.bv.parse_type_string(bs_memb.type) if bs_memb.type else None
+                        bn_type = self.bv.parse_type_string(bs_memb.type)[0] if bs_memb.type else None
                     except Exception:
                         bn_type = None
                     finally:
@@ -184,7 +184,7 @@ class BinjaBSController(BSController):
         changed = False
         bs_global_var: GlobalVariable = artifact
         bn_global_var: binaryninja.DataVariable = self.bv.get_data_var_at(var_addr)
-        global_type = self.bv.parse_type_string(bs_global_var.type)
+        global_type, _ = self.bv.parse_type_string(bs_global_var.type)
         
         if bs_global_var and bs_global_var.name:
             if bn_global_var is None:
