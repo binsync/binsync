@@ -48,5 +48,4 @@ class ForcePushUI(QWidget):
 
     def _update_table_data(self):
         for _, table in progress_bar(self.tables.items(), gui=True, desc="Loading functions and globals..."):
-            time.sleep(1)
             table.update_table()
