@@ -28,11 +28,8 @@ class ForcePushUI(QWidget):
         self.tabView.setContentsMargins(0, 0, 0, 0)
 
         # add panel_tabs to tabs
-        pbar = progress_bar([1, 2], gui=True, desc="Loading functions and globals...")
         self._func_table = QFunctionTable(self.controller)
-        next(pbar)
         self._global_table = QGlobalsTable(self.controller)
-        next(pbar)
 
         self.tabView.addTab(self._func_table, "Functions")
         self.tabView.addTab(self._global_table, "Globals")
@@ -49,5 +46,5 @@ class ForcePushUI(QWidget):
         self.setLayout(main_layout)
 
     def _update_table_data(self):
-        for _, table in self.tables.items():
+        for _, table in progress_bar(self.tables.items(), gui=True, desc="Loading functions and globals..."):
             table.update_table()
