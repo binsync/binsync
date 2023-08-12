@@ -3,6 +3,7 @@ from typing import Dict, Set
 
 
 from binsync.api.controller import BSController
+from binsync.api.utils import progress_bar
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView
 from binsync.ui.qt_objects import (
     QWidget,
@@ -74,7 +75,8 @@ class FunctionTableModel(BinsyncTableModel):
 
     def update_table(self):
         updated_row_keys = set()
-        for address, function in self.controller.functions().items():
+        functions = list(progress_bar(self.controller.functions().items(), desc="Loading functions...", gui=True))
+        for address, function in functions:
             self.data_dict[address] = [address, function.name]
             updated_row_keys.add(address)
             self.checks[address] = False
