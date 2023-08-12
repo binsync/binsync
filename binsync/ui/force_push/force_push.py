@@ -1,7 +1,9 @@
 import logging
+import time
 
 from binsync.ui.force_push.panels.functions_table import QFunctionTable
-from binsync.ui.force_push.panels.global_panel import QGlobalsTable
+from binsync.ui.force_push.panels.globals_table import QGlobalsTable
+from binsync.api.utils import progress_bar
 from binsync.ui.qt_objects import (
     QTabWidget,
     QVBoxLayout,
@@ -45,5 +47,5 @@ class ForcePushUI(QWidget):
         self.setLayout(main_layout)
 
     def _update_table_data(self):
-        for _, table in self.tables.items():
+        for _, table in progress_bar(self.tables.items(), gui=True, desc="Loading functions and globals..."):
             table.update_table()

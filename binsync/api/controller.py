@@ -2,6 +2,7 @@ import logging
 import threading
 import datetime
 import time
+import math
 from functools import wraps
 from typing import Dict, Iterable, Optional, Union, TypeVar, Callable, List
 
@@ -10,6 +11,7 @@ from binsync.data import ProjectConfig
 from binsync.api.artifact_lifter import BSArtifactLifter
 from binsync.core.client import Client, SchedSpeed, Scheduler, Job
 from binsync.api.type_parser import BSTypeParser, BSType
+from binsync.api.utils import progress_bar
 from binsync.data import (
     State, User, Artifact,
     Function, FunctionHeader, StackVariable,
@@ -726,7 +728,7 @@ class BSController:
         if not state:
             state = self.get_state(user=user)
         if not state or not isinstance(state, State):
-            _l.critical("Failed to get a state for push {artifact}, this is likely due to network error. Report me if back trace!")
+            _l.critical(f"Failed to get a state for push {artifact}, this is likely due to network error. Report me if back trace!")
             return False
 
         # assure function existence for artifacts requiring a function
@@ -1077,29 +1079,40 @@ class BSController:
     #
 
     @init_checker
-    def force_push_function(self, addr: int) -> bool:
+    def force_push_functions(self, func_addrs: List[int]):
         """
-        Collects the function currently stored in the decompiler, not the BS State, and commits it to
+        Collects the functions currently stored in the decompiler, not the BS State, and commits it to
         the master users BS Database.
 
-        TODO: push the comments and custom types that are associated with each stack var
+        TODO: push the comments and custom types that are associated with each stack vars
         TODO: refactor to use internal push_function for correct commit message
-
-        @param addr:
-        @return: Success of committing the Function
         """
-        func = self.function(addr)
-        if not func:
-            _l.info(f"Pushing function {hex(addr)} Failed")
-            return False
+        funcs = {}
+        for func_addr in progress_bar(func_addrs, gui=not self.headless, desc="Decompiling functions to push..."):
+            f = self.function(func_addr)
+            if not f:
+                _l.warning(f"Failed to force push function @ {func_addr:#0x}")
+                continue
 
+            funcs[func_addr] = f
+
+        _l.info(f"Scheduling {len(funcs)} functions to be pushed...")
         master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
-        pushed = self.push_artifact(func, state=master_state, commit_msg=f"Forced pushed function {func}")
-        return pushed
+
+        for func_addr, func_obj in progress_bar(funcs.items(), gui=not self.headless, desc="Scheduling functions to push..."):
+            self.schedule_job(
+                self.push_artifact,
+                func_obj,
+                state=master_state,
+                commit_msg=f"Forced pushed function {func_addr:#0x}",
+                priority=SchedSpeed.FAST
+            )
+
+        _l.info("All functions scheduled to be pushed!")
 
 
     @init_checker
-    def force_push_global_artifact(self, lookup_item):
+    def force_push_global_artifacts(self, lookup_items: List):
         """
         Collects the global artifact (struct, gvar, enum) currently stored in the decompiler, not the BS State,
         and commits it to the master users BS Database.
@@ -1107,16 +1120,19 @@ class BSController:
         @param lookup_item:
         @return: Success of committing the Artifact
         """
-        global_art = self.global_artifact(lookup_item)
-        
-        if not global_art:
-            _l.info(f"Pushing global artifact {lookup_item if isinstance(lookup_item, str) else hex(lookup_item)} Failed")
-            return False
-
         master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
-        global_art = self.artifact_lifer.lift(global_art)
-        pushed = self.push_artifact(global_art, state=master_state, commit_msg=f"Force pushed {global_art}")
-        return pushed
+        for lookup_item in progress_bar(lookup_items, gui=not self.headless, desc="Scheduling global artifacts to push..."):
+            global_art = self.global_artifact(lookup_item)
+            if not global_art:
+                continue
+            global_art = self.artifact_lifer.lift(global_art)
+            self.schedule_job(
+                self.push_artifact,
+                global_art,
+                state=master_state,
+                commit_msg=f"Forced pushed global {global_art}",
+                priority=SchedSpeed.FAST
+            )
 
     #
     # Utils
