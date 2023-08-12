@@ -2,6 +2,7 @@ import logging
 
 from binsync.ui.force_push.panels.functions_table import QFunctionTable
 from binsync.ui.force_push.panels.globals_table import QGlobalsTable
+from binsync.api.utils import progress_bar
 from binsync.ui.qt_objects import (
     QTabWidget,
     QVBoxLayout,
@@ -27,8 +28,11 @@ class ForcePushUI(QWidget):
         self.tabView.setContentsMargins(0, 0, 0, 0)
 
         # add panel_tabs to tabs
+        pbar = progress_bar([1, 2], gui=True, desc="Loading functions and globals...")
         self._func_table = QFunctionTable(self.controller)
+        next(pbar)
         self._global_table = QGlobalsTable(self.controller)
+        next(pbar)
 
         self.tabView.addTab(self._func_table, "Functions")
         self.tabView.addTab(self._global_table, "Globals")
