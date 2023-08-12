@@ -21,7 +21,8 @@ from binsync.ui.qt_objects import (
     QVBoxLayout,
     QTableWidget,
     QTableWidgetItem,
-    QHeaderView
+    QHeaderView,
+    QAbstractItemView
 )
 from binsync.ui.utils import QCollapsibleBox
 
@@ -288,6 +289,8 @@ class ConfigureBSDialog(QDialog):
         self._prev_proj_table.verticalHeader().setVisible(False)
         self._prev_proj_table.horizontalHeader().setVisible(False)
         self._prev_proj_table.setMaximumHeight(50)
+        self._prev_proj_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self._prev_proj_table.itemDoubleClicked.connect(self._handle_prev_proj_double_click)
         prev_proj_layout.addWidget(self._prev_proj_table)
 
         # buttons
@@ -352,6 +355,10 @@ class ConfigureBSDialog(QDialog):
         self.close()
     
     def _on_ok_clicked(self):
+        self.use_recent_project_config()
+        self.close()
+
+    def _handle_prev_proj_double_click(self):
         self.use_recent_project_config()
         self.close()
 

@@ -1080,7 +1080,6 @@ class BSController:
 
     @init_checker
     def force_push_functions(self, func_addrs: List[int]):
-    def force_push_functions(self, func_addrs: List):
         """
         Collects the functions currently stored in the decompiler, not the BS State, and commits it to
         the master users BS Database.
@@ -1128,10 +1127,13 @@ class BSController:
 
         master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
         for lookup_item in lookup_items:
+            _l.info(f"Attempting to sync {lookup_item}")
             global_art = self.global_artifact(lookup_item)
+            _l.info(f"Global artifact lookup result: {global_art}")
             if not global_art:
                 continue
             global_art = self.artifact_lifer.lift(global_art)
+            _l.info(f"POST LIFTING: {global_art}")
             self.schedule_job(
                 self.push_artifact,
                 global_art,
