@@ -87,7 +87,7 @@ class GlobalTableModel(BinsyncTableModel):
         all_artifacts = [(decompiler_structs, "Struct"), (decompiler_gvars, "Variable"), (decompiler_enums, "Enum")]
         for type_artifacts, type_ in all_artifacts:
             for _, artifact in type_artifacts.items():
-                if type_ == "Struct":
+                if type_ == "Struct" or type_ == "Enum":
                     self.data_dict[artifact.name] = [artifact.name, "", type_]
                     self.checks[artifact.name] = False
                     updated_row_keys.add(artifact.name)
