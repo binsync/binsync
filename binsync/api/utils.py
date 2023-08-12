@@ -13,7 +13,7 @@ def progress_bar(items, gui=True, desc="Progressing..."):
         t = tqdm.tqdm(desc=desc)
         callback_stub = t.update
 
-    callback_amt = math.ceil(100 / len(items)) if gui else 1
+    callback_amt = math.floor(100 / len(items)) if gui else 1
     for item in items:
         yield item
         callback_stub(callback_amt)
