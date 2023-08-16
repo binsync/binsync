@@ -116,10 +116,11 @@ class BSController:
     The client will be set on connection. The ctx_change_callback will be set by an outside UI
 
     """
-    def __init__(self, artifact_lifter=None, headless=False, auto_commit=True, reload_time=10, **kwargs):
+    def __init__(self, artifact_lifter=None, headless=False, auto_commit=True, reload_time=10, callback_on_push=True, **kwargs):
         self.headless = headless
         self.reload_time = reload_time
         self.artifact_lifer: BSArtifactLifter = artifact_lifter
+        self.callback_on_push = callback_on_push
 
         # client created on connection
         self.client = None  # type: Optional[Client]
@@ -146,6 +147,9 @@ class BSController:
         # create a pulling thread, but start on connection
         self._run_updater_threads = False
         self.user_states_update_thread = threading.Thread(target=self.updater_routine)
+
+        # extras settings
+        self.used_ai_user = False
 
         # TODO: make the initialization of this with types of decompiler
         self.type_parser = BSTypeParser()
@@ -701,6 +705,34 @@ class BSController:
 
         return self.lower_artifact(artifact)
 
+    def on_push_artifact(self, artifcat: Artifact, **kwargs):
+        from binsync.extras import EXTRAS_AVAILABLE
+        # TODO: support for non function artifacts
+        if not EXTRAS_AVAILABLE or \
+                not self.callback_on_push or \
+                not self.used_ai_user or \
+                not isinstance(artifcat, Function):
+            return
+
+        from binsync.extras.ai import add_ai_user_to_project, AIBSUser
+        if hasattr(self, "workspace"):
+            globals()['workspace'] = self.workspace
+
+        api_key = os.getenv("OPENAI_API_KEY") or ""
+        username = f"gpt4"
+        project_path = str(Path(self.client.repo_root).absolute())
+        binary_path = str(Path(self.binary_path()).absolute()) if controller.binary_path() else ""
+        base_on = ""
+        model = "gpt-4"
+        decompiler_backend = "automatic"
+        range_str = f"{hex(artifcat.addr)}-{hex(artifcat.addr)}"
+        add_ai_user_to_project(
+            api_key, binary_path, project_path, username,
+            base_on=base_on, headless=True if decompiler_backend else False, copy_proj=True, model=model,
+            decompiler_backend=decompiler_backend, range_str=range_str
+        )
+
+
     @init_checker
     def push_artifact(self, artifact: Artifact, user=None, state=None, commit_msg=None, set_last_change=True, make_func=True, **kwargs) -> bool:
         """
@@ -724,6 +756,7 @@ class BSController:
             _l.info(f"Attempting to push an unsupported Artifact of type {artifact}")
             return False
 
+        self.on_push_artifact(artifact, **kwargs)
         # assure state exists
         if not state:
             state = self.get_state(user=user)

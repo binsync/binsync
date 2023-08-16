@@ -83,7 +83,7 @@ class AIBSUser:
         # connect the controller to a GitClient
         _l.info(f"AI User working on copied project at: {self.project_path}")
         self.controller: BSController = load_decompiler_controller(
-            force_decompiler=self.decompiler_backend, headless=True, binary_path=binary_path,
+            force_decompiler=self.decompiler_backend, headless=True, binary_path=binary_path, callback_on_push=False
         )
         self.controller.connect(username, str(self.project_path), init_repo=create, single_thread=True)
         self.comments = {}

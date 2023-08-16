@@ -32,7 +32,11 @@ class OpenAIBSUser(AIBSUser):
         new_func = Function(func.addr, func.size, header=FunctionHeader("", func.addr, args={}), stack_vars={})
         for cmd in self.ai_interface.AI_COMMANDS:
             # TODO: make this more explicit and change what is run
-            if cmd not in {self.ai_interface.ANSWER_QUESTION_CMD}:
+            if cmd not in {self.ai_interface.ANSWER_QUESTION_CMD,
+                           self.ai_interface.RENAME_VARS_CMD,
+                           self.ai_interface.SUMMARIZE_CMD,
+                           self.ai_interface.RENAME_FUNCS_CMD
+                           }:
                 continue
 
             try:
@@ -43,60 +47,57 @@ class OpenAIBSUser(AIBSUser):
             if not resp:
                 continue
 
-            changes += 1
             if cmd not in artifact_edit_cmds:
                 if cmd == self.ai_interface.ID_SOURCE_CMD:
                     if "http" not in resp:
                         continue
 
                 func_cmt += cmt_prepends.get(cmd, "") + resp + "\n"
+                # fake the comment actually being added to decomp
+                decompilation = f"/* {Comment.linewrap_comment(resp)} */\n" + decompilation
+                changes += 1
+
             elif cmd == self.ai_interface.RENAME_VARS_CMD:
                 all_names = set(sv.name for _, sv in func.stack_vars.items())
                 for off, sv in func.stack_vars.items():
-                    if sv.name in resp:
-                        proposed_name = resp[sv.name]
-                        if not proposed_name:
+                    old_name = sv.name
+                    if old_name in resp:
+                        proposed_name = resp[old_name]
+                        if not proposed_name or proposed_name == old_name or proposed_name in all_names:
                             continue
 
-                        if proposed_name not in all_names:
-                            new_func.stack_vars[off] = StackVariable(sv.offset, proposed_name, None, func.stack_vars[off].size, func.addr)
-                            #self.controller.push_artifact(StackVariable(sv.offset, proposed_name, None, None, func.addr))
-                            #self.controller.schedule_job(
-                            #    self.controller.push_artifact,
-                            #    StackVariable(sv.offset, proposed_name, None, None, func.addr),
-                            #    #blocking=True
-                            #)
+                        if off not in new_func.stack_vars:
+                            new_func.stack_vars[off] = StackVariable(sv.offset, "", None, func.stack_vars[off].size, func.addr)
+
+                        new_func.stack_vars[off].name = proposed_name
+                        decompilation = decompilation.replace(old_name, proposed_name)
+                        changes += 1
 
             elif cmd == self.ai_interface.RETYPE_VARS_CMD:
                 for off, sv in func.stack_vars.items():
-                    if sv.name in resp:
-                        new_func.stack_vars[off] = StackVariable(sv.offset, "", resp[sv.name], func.stack_vars[off].size, func.addr)
-                        #self.controller.push_artifact(StackVariable(sv.offset, sv.name, resp[sv.name], None, func.addr))
-                        #self.controller.schedule_job(
-                        #    self.controller.push_artifact,
-                        #    StackVariable(sv.offset, sv.name, resp[sv.name], None, func.addr),
-                        #    #blocking=True
-                        #)
+                    old_name = sv.name
+                    if old_name in resp:
+                        proposed_type = resp[old_name]
+                        if not proposed_type or proposed_type == sv.type:
+                            continue
+
+                        if off not in new_func.stack_vars:
+                            new_func.stack_vars[off] = StackVariable(sv.offset, "", None, func.stack_vars[off].size, func.addr)
+
+                        new_func.stack_vars[off].type = proposed_type
+                        # we dont update decompilation here because it would be too weird
+                        changes += 1
 
             elif cmd == self.ai_interface.RENAME_FUNCS_CMD:
-                for addr, _func in self.controller.functions().items():
-                    if _func.name in resp:
-                        proposed_name = resp[_func.name]
-                        if proposed_name in self.controller.functions() or not proposed_name:
-                            continue
+                if func.name in resp:
+                    proposed_name = resp[func.name]
+                    if proposed_name in self.controller.functions() or not proposed_name or proposed_name == func.name:
+                        continue
 
-                        # this is the current function we are working in
-                        if _func.name == func.name:
-                            new_func.name = f"gpt_{proposed_name}"
-                            changes += 1
-                            continue
+                    new_func.name = proposed_name
+                    _l.info(f"Proposing new name for function {func.name} to {proposed_name}")
+                    changes += 1
 
-                        # this is some external function
-                        if _func.addr not in state.functions:
-                            state.functions[_func.addr] = Function(_func.addr, _func.size)
-                        state.functions[_func.addr].name = f"gpt_{proposed_name}"
-                        _l.info(f"Proposing new name for function {_func} to {proposed_name}")
-                        changes += 1
             elif cmd == self.ai_interface.ANSWER_QUESTION_CMD:
                 answers: Dict[str, str] = resp
                 current_cmts = state.get_func_comments(func.addr)
@@ -105,10 +106,11 @@ class OpenAIBSUser(AIBSUser):
                         if question in current_cmt.comment:
                             current_cmt.comment += f"\n{answer}"
                             state.set_comment(current_cmt)
+                            changes += 1
                             break
 
         if changes:
-            _l.info(f"Proposing new name for function {func} to {new_func}")
+            _l.info(f"Suggesting updates to {func} with diff: {new_func}")
             state.set_function(new_func)
 
         # send full function comment

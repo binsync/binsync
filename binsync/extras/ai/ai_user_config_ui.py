@@ -175,3 +175,4 @@ class AIUserConfigDialog(QDialog):
             base_on=self.base_on, headless=True if self.decompiler_backend else False, copy_proj=True, model=self.model,
             decompiler_backend=self.decompiler_backend, range_str=self.range_str
         )
+        self._controller.used_ai_user = True

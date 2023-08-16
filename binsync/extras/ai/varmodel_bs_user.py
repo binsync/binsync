@@ -19,7 +19,7 @@ class VARModelBSUser(AIBSUser):
         try:
             from varmodel import VariableRenamingAPI
         except ImportError:
-            _l.error("VARModel is not installed, you will be unable to use this BinSync user.")
+            _l.error("VARModel is not installed and is still closed source. You will be unable to use this BinSync user.")
             return
 
         self._renaming_api = VariableRenamingAPI()
@@ -31,22 +31,10 @@ class VARModelBSUser(AIBSUser):
             _l.warning(f"Skipping {func} due to exception {e}")
             return 0
 
-        if updated_func is not None:
-            # check for at least one change
-            for off, new_sv in updated_func.stack_vars.items():
-                if new_sv.name != func.stack_vars[off].name:
-                    break
-            else:
-                return 0
-
-            for off, new_arg in updated_func.args.items():
-                if new_arg.name != func.args[off].name:
-                    break
-            else:
-                return 0
-
-            _l.info(f"Updating variables in {func}...")
+        if updated_func is not None and (updated_func.args or updated_func.stack_vars):
+            # count changes
+            changes = len(updated_func.args) + len(updated_func.stack_vars)
             state.set_function(updated_func)
-            return 1
+            return changes
 
         return 0
