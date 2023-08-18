@@ -28,7 +28,7 @@ class VARModelBSUser(AIBSUser):
         try:
             updated_func: Function = self._renaming_api.predict_variable_names(decompilation, func)
         except Exception as e:
-            _l.warning(f"Skipping {func} due to exception {e}")
+            _l.warning(f"Skipping {func} due to exception: {e}")
             return 0
 
         if updated_func is not None and (updated_func.args or updated_func.stack_vars):

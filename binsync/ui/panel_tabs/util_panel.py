@@ -61,7 +61,7 @@ class QUtilPanel(QWidget):
         sync_level_layout.addWidget(self._merge_level_label)
         sync_level_layout.addWidget(self._merge_level_combobox)
 
-        self._magic_sync_button = QPushButton("Initiate Magic Sync (BEWARE OF YAN)")
+        self._magic_sync_button = QPushButton("Magic Sync")
         self._magic_sync_button.clicked.connect(self._handle_magic_sync_button)
         self._magic_sync_button.setToolTip("Performs a best effort merge of all existing user data to your state, "
                                            "but won't affect your existing state (this uses a non-conflicting merge).")

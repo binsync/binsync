@@ -145,7 +145,7 @@ class AIBSUser:
                 callback_stub(update_amt_per_func)
                 continue
 
-            decompiled_functions[func.addr] = (decompilation, func)
+            decompiled_functions[func.addr] = (OpenAIInterface.fit_decompilation_to_token_max(decompilation), func)
             callback_stub(update_amt_per_func)
 
         dlg = QMessageBox(None)
@@ -174,7 +174,7 @@ class AIBSUser:
             if ai_initiated_changes:
                 update_cnt += 1
 
-            if update_cnt >= 3:
+            if update_cnt >= 1:
                 update_cnt = 0
                 self.controller.client.commit_state(state, msg="AI Initiated change to functions")
                 self.controller.client.push()
