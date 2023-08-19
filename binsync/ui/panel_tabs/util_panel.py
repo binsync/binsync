@@ -1,7 +1,6 @@
 import logging
-import time
 
-from binsync.api.controller import BSController, MergeLevel
+from binsync.api.controller import  MergeLevel
 from binsync.ui.qt_objects import (
     QCheckBox,
     QComboBox,
@@ -179,10 +178,9 @@ class QUtilPanel(QWidget):
         return extras_group
 
     def _handle_add_ai_user(self):
-        from binsync.extras.ai.ai_user_config_ui import AIUserConfigDialog
+        from dailalib.binsync_plugin.ai_user_config_ui import AIUserConfigDialog
         dialog = AIUserConfigDialog(self.controller)
         dialog.exec_()
-
 
     #
     # Event Handlers
