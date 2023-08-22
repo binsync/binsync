@@ -5,6 +5,8 @@ import time
 import math
 from functools import wraps
 from typing import Dict, Iterable, Optional, Union, TypeVar, Callable, List
+import os
+from pathlib import Path
 
 import binsync.data
 from binsync.data import ProjectConfig
@@ -701,6 +703,9 @@ class BSController:
 
         return self.lower_artifact(artifact)
 
+    def on_push_artifact(self, artifcat: Artifact, **kwargs):
+        pass
+
     @init_checker
     def push_artifact(self, artifact: Artifact, user=None, state=None, commit_msg=None, set_last_change=True, make_func=True, **kwargs) -> bool:
         """
@@ -724,6 +729,7 @@ class BSController:
             _l.info(f"Attempting to push an unsupported Artifact of type {artifact}")
             return False
 
+        self.on_push_artifact(artifact, **kwargs)
         # assure state exists
         if not state:
             state = self.get_state(user=user)

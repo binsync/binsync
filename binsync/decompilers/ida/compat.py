@@ -22,7 +22,6 @@ import binsync
 from binsync.data import (
     Struct, FunctionHeader, FunctionArgument, StackVariable, Function, GlobalVariable, Enum
 )
-from .controller import IDABSController
 
 l = logging.getLogger(__name__)
 
