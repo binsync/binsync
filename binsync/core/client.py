@@ -346,6 +346,12 @@ class Client:
         except MetadataNotFoundError:
             if user == self.master_user:
                 state = State(self.master_user, client=self)
+        except Exception as e:
+            if user == self.master_user:
+                raise
+            else:
+                l.critical(f"Invalid state for {user}, dropping: {e}")
+                state = State(user)
 
         return state
 
@@ -658,7 +664,10 @@ class Client:
         index.remove([fullpath], working_tree=True)
 
     def load_file_from_tree(self, tree: git.Tree, filename):
-        return tree[filename].data_stream.read().decode()
+        try:
+            return tree[filename].data_stream.read().decode()
+        except KeyError:
+            return None
 
     def _get_tree(self, user, repo: git.Repo):
         options = [ref for ref in repo.refs if ref.name.endswith(f"{BINSYNC_BRANCH_PREFIX}/{user}")]
