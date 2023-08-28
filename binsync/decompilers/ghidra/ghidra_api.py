@@ -10,7 +10,7 @@ class GhidraAPIWrapper:
         self._controller = controller
         self._connection_timeout = connection_timeout
 
-        self._ghidra_bridge = None
+        self.bridge = None
         self._ghidra_bridge_attrs = {}
         self._imports = {}
 
@@ -36,7 +36,7 @@ class GhidraAPIWrapper:
 
     def import_module(self, module_name: str):
         if module_name not in self._imports:
-            self._imports[module_name] = self._ghidra_bridge.remote_import(module_name)
+            self._imports[module_name] = self.bridge.remote_import(module_name)
 
         return self._imports[module_name]
 
@@ -45,7 +45,7 @@ class GhidraAPIWrapper:
         successful = False
         while time.time() - start_time < self._connection_timeout:
             try:
-                self._ghidra_bridge = ghidra_bridge.GhidraBridge(namespace=self._ghidra_bridge_attrs, interactive_mode=True)
+                self.bridge = ghidra_bridge.GhidraBridge(namespace=self._ghidra_bridge_attrs, interactive_mode=True)
                 successful = True
             except ConnectionError:
                 time.sleep(1)

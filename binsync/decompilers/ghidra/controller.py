@@ -1,5 +1,6 @@
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Tuple
 import logging
+from functools import wraps
 
 from binsync.api.controller import BSController, init_checker, fill_event
 from binsync.data import (
@@ -10,6 +11,24 @@ from .artifact_lifter import GhidraArtifactLifter
 from .ghidra_api import GhidraAPIWrapper
 
 l = logging.getLogger(__name__)
+
+
+def ghidra_transaction(f):
+    @wraps(f)
+    def _ghidra_transaction(self, *args, **kwargs):
+        op_name = str(f.__qualname__)
+        trans_id = self.ghidra.currentProgram.startTransaction(op_name)
+        ret_val = None
+        try:
+            ret_val = f(self, *args, **kwargs)
+        except Exception as e:
+            l.warning(f"Failed to do Ghidra Transaction {op_name} because {e}")
+        finally:
+            self.ghidra.currentProgram.endTransaction(trans_id, True)
+
+        return ret_val
+
+    return _ghidra_transaction
 
 
 class GhidraBSController(BSController):
@@ -73,15 +92,15 @@ class GhidraBSController(BSController):
 
     @fill_event
     def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
-        decompilation = self._ghidra_decompile(func_addr)
+        decompilation = self._ghidra_decompile(self._get_nearest_function(func_addr))
         changes = super(GhidraBSController, self).fill_function(
             func_addr, user=user, artifact=artifact, decompilation=decompilation, **kwargs
         )
 
         return changes
 
-
     @fill_event
+    @ghidra_transaction
     def fill_function_header(self, func_addr, user=None, artifact=None, decompilation=None, **kwargs):
         changes = False
         func_header: FunctionHeader = artifact
@@ -109,6 +128,7 @@ class GhidraBSController(BSController):
         return changes
 
     @fill_event
+    @ghidra_transaction
     def fill_stack_variable(self, func_addr, offset, user=None, artifact=None, decompilation=None, **kwargs):
         stack_var: StackVariable = artifact
         changes = False
@@ -129,21 +149,20 @@ class GhidraBSController(BSController):
         return changes
 
     @fill_event
+    @ghidra_transaction
     def fill_global_var(self, var_addr, user=None, artifact=None, **kwargs):
-        global_var: GlobalVariable = artifact
         changes = False
-        symbol_type = self.ghidra.import_module_object("ghidra.program.model.symbol", "SymbolType")
+        global_var: GlobalVariable = artifact
+        all_global_vars = self.global_vars()
+
         rename_label_cmd_cls = self.ghidra.import_module_object("ghidra.app.cmd.label", "RenameLabelCmd")
         src_type = self.ghidra.import_module_object("ghidra.program.model.symbol", "SourceType")
-        sym_tab = self.ghidra.currentProgram.getSymbolTable()
-        for sym in sym_tab.getAllSymbols(True):
-            if sym.getSymbolType() != symbol_type.LABEL:
+        for offset, gvar in all_global_vars.items():
+            if offset != var_addr:
                 continue
 
-            if sym.getAddress() != global_var.addr:
-                continue
-
-            if sym.getName() != global_var.name:
+            if global_var.name and global_var.name != gvar.name:
+                sym = self.ghidra.getSymbolAt(self.ghidra.toAddr(var_addr))
                 cmd = rename_label_cmd_cls(sym, global_var.name, src_type.USER_DEFINED)
                 cmd.applyTo(self.ghidra.currentProgram)
                 changes = True
@@ -157,6 +176,7 @@ class GhidraBSController(BSController):
         return changes
 
     @fill_event
+    @ghidra_transaction
     def fill_comment(self, addr, user=None, artifact=None, **kwargs):
         comment: Comment = artifact
         code_unit = self.ghidra.import_module_object("ghidra.program.model.listing", "CodeUnit")
@@ -187,12 +207,19 @@ class GhidraBSController(BSController):
     def function(self, addr, **kwargs) -> Optional[Function]:
         func = self._get_nearest_function(addr)
         dec = self._ghidra_decompile(func)
+        # optimize on remote
+        stack_variable_info: Optional[List[Tuple[int, str, str, int]]] = self.ghidra.bridge.remote_eval(
+            "[(sym.getStorage().getStackOffset(), sym.getName(), str(sym.getDataType()), sym.getSize()) "
+            "for sym in dec.getHighFunction().getLocalSymbolMap().getSymbols() "
+            "if sym.getStorage().isStackStorage()]",
+            dec=dec
+        )
         stack_variables = {}
-        for sym in dec.getHighFunction().getLocalSymbolMap().getSymbols():
-            print(sym)
-            if sym.getStorage().isStackStorage():
-                offset = sym.getStorage().getStackOffset()
-                stack_variables[offset] = StackVariable(offset, sym.getName(), str(sym.getDataType()), sym.getSize(), addr)
+        if stack_variable_info:
+            stack_variables = {
+                offset: StackVariable(offset, name, typestr, size, addr) for offset, name, typestr, size in stack_variable_info
+            }
+
         bs_func = Function(
             func.getEntryPoint().getOffset(), func.getBody().getNumAddresses(),
             header=FunctionHeader(func.getName(), func.getEntryPoint().getOffset()),
@@ -201,22 +228,24 @@ class GhidraBSController(BSController):
         return bs_func
 
     def functions(self) -> Dict[int, Function]:
-        program = self.ghidra.currentProgram
-        fm = program.getFunctionManager()
-        funcs = {}
-        for func in fm.getFunctions(True):
-            print(func)
-            addr = func.getEntryPoint().getOffset()
-            funcs[addr] = self.function(addr)
+        # optimization to speed up remote evaluation
+        name_and_sizes: Optional[List[Tuple[str, int]]] = self.ghidra.bridge.remote_eval(
+            "[(f.getName(), f.getEntryPoint().getOffset()) "
+            "for f in currentProgram.getFunctionManager().getFunctions(True)]"
+        )
+        if name_and_sizes is None:
+            l.warning(f"Failed to get any functions from Ghidra. Did something break?")
+            return {}
+
+        funcs = {
+            addr: Function(addr, 0, header=FunctionHeader(name, addr)) for name, addr in name_and_sizes
+        }
         return funcs
 
     def global_var(self, addr) -> Optional[GlobalVariable]:
-        symbol_type = self.ghidra.import_module_object("ghidra.program.model.symbol", "SymbolType")
-        symbol_table = self.ghidra.currentProgram.getSymbolTable()
-        for sym in symbol_table.getAllSymbols(True):
-            if sym.getSymbolType() != symbol_type.LABEL:
-                continue
-            if sym.getAddress() == addr:
+        light_global_vars = self.global_vars()
+        for offset, global_var in light_global_vars.items():
+            if offset == addr:
                 lst = self.ghidra.currentProgram.getListing()
                 data = lst.getDataAt(addr)
                 if not data or data.isStructure():
@@ -225,31 +254,30 @@ class GhidraBSController(BSController):
                     size = self.ghidra.currentProgram.getDefaultPointerSize()
                 else:
                     size = data.getLength()
-                global_var = GlobalVariable(addr.getOffset(), sym.getName(), str(data.getDataType()), size)
-                break
-        return global_var
+
+                global_var.size = size
+                return global_var
 
     def global_vars(self) -> Dict[int, GlobalVariable]:
         symbol_type = self.ghidra.import_module_object("ghidra.program.model.symbol", "SymbolType")
-        symTab = self.ghidra.currentProgram.getSymbolTable()
-        global_vars = {}
-        for sym in symTab.getAllSymbols(True):
-            if sym.getSymbolType() != symbol_type.LABEL:
-                continue
-            print(sym.getName())
-            offset = sym.getAddress().getOffset()
-            gvar = self.global_var(sym.getAddress())
-            if gvar:
-                global_vars[offset] = gvar
-        return global_vars
+        symbol_table = self.ghidra.currentProgram.getSymbolTable()
+        # optimize by grabbing all symbols at once
+        gvar_addr_and_name: Optional[List[Tuple[str, int]]] = self.ghidra.bridge.remote_eval(
+            "[(sym.getName(), sym.getAddress().getOffset()) "
+            "for sym in symbol_table.getAllSymbols(True) "
+            "if sym.getSymbolType() == symbol_type.LABEL]",
+            symbol_type=symbol_type, symbol_table=symbol_table
+        )
+        gvars = {
+            addr: GlobalVariable(addr, name) for name, addr in gvar_addr_and_name
+        }
+        return gvars
 
     def stack_variable(self, func_addr, offset) -> Optional[StackVariable]:
         gstack_var = self._get_gstack_var(func_addr, offset)
+        # TODO: return a real BS stack variable here!
         if gstack_var is None:
             return None
-
-        # TODO: return a real BS stack variable here!
-        pass
 
     #
     # Ghidra Specific API
