@@ -190,7 +190,10 @@ def bn_func_to_bs(bn_func):
     #
 
     args = {
-        i: FunctionArgument(i, parameter.name, parameter.type.get_string_before_name(), parameter.type.width)
+        i: FunctionArgument(
+            i, parameter.name, parameter.type.get_string_before_name() if parameter.type else None,
+            parameter.type.width if parameter.type else 0
+        )
         for i, parameter in enumerate(bn_func.parameter_vars)
     }
 
@@ -222,7 +225,7 @@ def bn_func_to_bs(bn_func):
         off: binsync.data.StackVariable(
             off,
             var.name,
-            var.type.get_string_before_name(),
+            var.type.get_string_before_name() if var.type else None,
             var_sizes[var],
             bn_func.start
         )
