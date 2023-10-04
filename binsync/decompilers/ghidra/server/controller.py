@@ -3,7 +3,7 @@ import logging
 
 from binsync.api.controller import BSController, init_checker, fill_event
 from binsync.data import (
-    Function, FunctionHeader, StackVariable, GlobalVariable, Comment
+    Function, FunctionHeader, StackVariable, GlobalVariable, Comment, Struct, StructMember
 )
 
 from .ghidra_client import BSGhidraClient
@@ -147,6 +147,14 @@ class GhidraBSController(BSController):
             funcs[addr] = Function(addr, ret[addr]["size"], header=FunctionHeader(ret[addr]["name"], addr), stack_vars=stack_vars)
         return funcs
 
+    def struct(self, name, **kwargs) -> Optional[Struct]:
+        # TODO: Use API to get struct
+        return None
+
+    def structs(self, **kwargs) -> dict:
+        # TODO: Use API to get structs
+        return {}
+    
     def stack_vars(self, addr, **kwargs) -> dict:
         ret = self.ghidra.get_stack_vars(addr)
         if not ret:

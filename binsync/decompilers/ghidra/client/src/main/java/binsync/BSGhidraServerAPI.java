@@ -531,7 +531,17 @@ public class BSGhidraServerAPI {
 	
 	public Map<String, Object> getStruct(String name)
 	{
+		Map<String, Object> struct_data = new HashMap<>();
 		// TODO: implement binsync data packing for python end
+		
+		return struct_data;
+	}
+	
+	public Map<String, Map<String, Object>> getStructs() {
+		Map<String, Map<String, Object>> structs = new HashMap<>();
+		// TODO: build map of structs using getStruct and pack for python end
+		
+		return structs;
 	}
 	
 	/*
