@@ -21,6 +21,7 @@ import ghidra.util.table.mapper.ProgramLocationToAddressTableRowMapper;
 import ghidra.program.model.address.*;
 import ghidra.program.model.data.ByteDataType;
 import ghidra.program.model.data.DataType;
+import ghidra.program.model.data.DataTypeComponent;
 import ghidra.program.flatapi.*;
 import ghidra.app.decompiler.DecompInterface;
 import ghidra.app.decompiler.DecompileOptions;
@@ -494,12 +495,7 @@ public class BSGhidraServerAPI {
 	 * Structs
 	 */
 	
-	public Map<String, Object> getStruct(String name)
-	{
-		// TODO: implement binsync data packing for python end
-	}
-	
-	private Structure getStructByName(String name) {
+	public Structure getStructByName(String name) {
 		return (Structure) this.server.plugin.getCurrentProgram().getDataTypeManager().getDataType("/" + name);
 	}
 	
@@ -511,6 +507,31 @@ public class BSGhidraServerAPI {
 	public void addMemberToStruct(String name, String member) {
 		Structure struct = getStructByName(name);
 		struct.add(ByteDataType.dataType, 1, member, "");
+	}
+	
+	public void retypeStructMember(String name, String member, DataType type) {
+		Structure struct = getStructByName(name);
+		int offset = 0;
+		for (DataTypeComponent dtc : struct.getComponents()) {
+			if (dtc.getFieldName().equals(member)) {
+				offset = dtc.getOffset();
+				for (int i = offset; i < offset + type.getLength(); i++) {
+					struct.clearAtOffset(i);
+				}
+				struct.replaceAtOffset(offset, type, 4, member, "");
+				break;
+			}
+		}
+	}
+	
+	public void expandStruct(String name, int newSize) {
+		Structure struct = getStructByName(name);
+		struct.growStructure(newSize - struct.getLength());
+	}
+	
+	public Map<String, Object> getStruct(String name)
+	{
+		// TODO: implement binsync data packing for python end
 	}
 	
 	/*
