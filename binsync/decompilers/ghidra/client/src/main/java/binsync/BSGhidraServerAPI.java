@@ -19,6 +19,7 @@ import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.exception.InvalidInputException;
 import ghidra.util.table.mapper.ProgramLocationToAddressTableRowMapper;
 import ghidra.program.model.address.*;
+import ghidra.program.model.data.ByteDataType;
 import ghidra.program.model.data.DataType;
 import ghidra.program.flatapi.*;
 import ghidra.app.decompiler.DecompInterface;
@@ -33,6 +34,8 @@ import ghidra.app.util.cparser.C.CParserUtils;
 import ghidra.framework.plugintool.ServiceProvider;
 import ghidra.program.model.data.DataTypeConflictHandler;
 import ghidra.program.model.data.FunctionDefinitionDataType;
+import ghidra.program.model.data.Structure;
+import ghidra.program.model.data.StructureDataType;
 import ghidra.util.data.DataTypeParser; 
 import ghidra.util.data.DataTypeParser.AllowedDataTypes; 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager;
@@ -491,6 +494,25 @@ public class BSGhidraServerAPI {
 	 * Structs
 	 */
 	
+	public Map<String, Object> getStruct(String name)
+	{
+		// TODO: implement binsync data packing for python end
+	}
+	
+	private Structure getStructByName(String name) {
+		return (Structure) this.server.plugin.getCurrentProgram().getDataTypeManager().getDataType("/" + name);
+	}
+	
+	public void addNamedStruct(String name) throws Exception {
+		StructureDataType struct = new StructureDataType(name, 0);
+		this.server.plugin.getCurrentProgram().getDataTypeManager().addDataType(struct, DataTypeConflictHandler.DEFAULT_HANDLER);
+	}
+	
+	public void addMemberToStruct(String name, String member) {
+		Structure struct = getStructByName(name);
+		struct.add(ByteDataType.dataType, 1, member, "");
+	}
+	
 	/*
 	 * Enums
 	 */
@@ -563,6 +585,5 @@ public class BSGhidraServerAPI {
 			}
 		}
 		return stackVars;
-	}
-	
+	}	
 }
