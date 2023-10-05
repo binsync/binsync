@@ -19,9 +19,7 @@ import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.exception.InvalidInputException;
 import ghidra.util.table.mapper.ProgramLocationToAddressTableRowMapper;
 import ghidra.program.model.address.*;
-import ghidra.program.model.data.ByteDataType;
-import ghidra.program.model.data.DataType;
-import ghidra.program.model.data.DataTypeComponent;
+import ghidra.program.model.data.*;
 import ghidra.program.flatapi.*;
 import ghidra.app.decompiler.DecompInterface;
 import ghidra.app.decompiler.DecompileOptions;
@@ -496,7 +494,7 @@ public class BSGhidraServerAPI {
 	 */
 	
 	public Structure getStructByName(String name) {
-		return (Structure) this.server.plugin.getCurrentProgram().getDataTypeManager().getDataType("/" + name);
+		return (Structure) this.server.plugin.getCurrentProgram().getDataTypeManager().getDataType(name);
 	}
 	
 	public void addNamedStruct(String name) throws Exception {
@@ -509,7 +507,7 @@ public class BSGhidraServerAPI {
 		struct.add(ByteDataType.dataType, 1, member, "");
 	}
 	
-	public void retypeStructMember(String name, String member, DataType type) {
+	private void retypeStructMember(String name, String member, DataType type) {
 		Structure struct = getStructByName(name);
 		int offset = 0;
 		for (DataTypeComponent dtc : struct.getComponents()) {
@@ -531,17 +529,47 @@ public class BSGhidraServerAPI {
 	
 	public Map<String, Object> getStruct(String name)
 	{
+		Msg.info(this, name);
 		Map<String, Object> struct_data = new HashMap<>();
-		// TODO: implement binsync data packing for python end
+		Structure struct = getStructByName(name);
+		struct_data.put("name", struct.getName());
+		struct_data.put("size", struct.getLength());
 		
+		var members = struct.getComponents();
+		Map<Integer, Map<String, Object>> binsyncMembers= new HashMap<>();
+		var unnamedMembers = 0;
+		for (var member : members) {
+			Map<String, Object> member_data = new HashMap<>();
+			var member_name = member.getFieldName();
+			if (member_name == null) {
+				member_name = "unnamed" + unnamedMembers;
+				unnamedMembers++;
+			}
+			member_data.put("name", member_name);
+			member_data.put("size",  member.getLength());
+			member_data.put("type", member.getDataType().getName());
+			member_data.put("offset", member.getOffset());
+			binsyncMembers.put(member.getOffset(), member_data);
+		}
+		
+		struct_data.put("members", binsyncMembers);
 		return struct_data;
 	}
 	
 	public Map<String, Map<String, Object>> getStructs() {
-		Map<String, Map<String, Object>> structs = new HashMap<>();
-		// TODO: build map of structs using getStruct and pack for python end
+		var program = this.server.plugin.getCurrentProgram();
+		var dm = program.getDataTypeManager();
+		var structs = dm.getAllStructures();
 		
-		return structs;
+		Map<String, Map<String, Object>> binsyncStructs = new HashMap<>();
+		while (structs.hasNext())
+		{
+			var struct = structs.next();
+			Map<String, Object> struct_data = this.getStruct(struct.getPathName());
+			binsyncStructs.put(struct.getName(), struct_data);
+		}
+		
+		return binsyncStructs;
 	}
 	
 	/*
@@ -574,16 +602,16 @@ public class BSGhidraServerAPI {
 		return func_data;
 	}
 	
-	public Map<String, Map<String, Object>> getFunctions() {
+	public Map<Integer, Map<String, Object>> getFunctions() {
 		var program = this.server.plugin.getCurrentProgram();
 		var fm = program.getFunctionManager();
 		
 		// Iterate through functions and pack data
-		Map<String, Map<String, Object>> funcs = new HashMap<>();
+		Map<Integer, Map<String, Object>> funcs = new HashMap<>();
 		for (Function func: fm.getFunctions(true)) {
 			Map<String, Object> func_data = new HashMap<>();
 			Map<Integer, Map<String, Object>> stack_vars = this.getStackVariables("0x"+func.getEntryPoint().toString(false, 0));
-			String addr = "0x"+func.getEntryPoint().toString(false, 0);
+			int addr = Integer.decode("0x" + func.getEntryPoint().toString());
 			String name = func.getName();
 			int size = (int) func.getBody().getNumAddresses();
 			func_data.put("name", name);

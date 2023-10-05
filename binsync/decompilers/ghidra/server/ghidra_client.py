@@ -136,6 +136,18 @@ class BSGhidraClient:
         return self.server.getStackVars(addr)
 
     #
+    # Structure Operations
+    #
+
+    @stringify_args
+    def get_struct(self, name: str) -> dict:
+        return self.server.getStruct(name)
+
+    @stringify_args
+    def get_structs(self) -> dict:
+        return self.server.getStructs()
+
+    #
     # Global Operations
     #
     

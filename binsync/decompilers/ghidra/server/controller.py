@@ -131,6 +131,16 @@ class GhidraBSController(BSController):
             globals[int(addr)] = gv
         return globals
 
+    @staticmethod
+    def dict_to_structmembers(members) -> dict:
+        # TODO: Actually test this
+        struct_members = {}
+        for offset in members:
+            member = StructMember(None, None, None, None)
+            member.__setstate__(members[offset])
+            struct_members[offset] = member
+        return struct_members
+
     def function(self, addr, **kwargs) -> Optional[Function]:
         ret = self.ghidra.get_function(addr)
         if not ret:
@@ -152,9 +162,16 @@ class GhidraBSController(BSController):
         return None
 
     def structs(self, **kwargs) -> dict:
-        # TODO: Use API to get structs
-        return {}
-    
+        # TODO: Test Functionality
+        ret = self.ghidra.get_structs()
+        structures = {}
+        if not ret:
+            return structures
+        for struct_name in ret:
+            members = self.dict_to_structmembers(ret[struct_name]["members"])
+            structures[struct_name] = Struct(struct_name, ret[struct_name]["size"], members)
+        return structures
+
     def stack_vars(self, addr, **kwargs) -> dict:
         ret = self.ghidra.get_stack_vars(addr)
         if not ret:
