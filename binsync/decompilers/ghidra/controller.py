@@ -208,6 +208,7 @@ class GhidraBSController(BSController):
         func = self._get_nearest_function(addr)
         dec = self._ghidra_decompile(func)
         # optimize on remote
+        # TODO: Figure out why only some stack variables get pushed
         stack_variable_info: Optional[List[Tuple[int, str, str, int]]] = self.ghidra.bridge.remote_eval(
             "[(sym.getStorage().getStackOffset(), sym.getName(), str(sym.getDataType()), sym.getSize()) "
             "for sym in dec.getHighFunction().getLocalSymbolMap().getSymbols() "
@@ -247,6 +248,7 @@ class GhidraBSController(BSController):
         for offset, global_var in light_global_vars.items():
             if offset == addr:
                 lst = self.ghidra.currentProgram.getListing()
+                # TODO: Fix error with getDataAt() from ghidra bridge
                 data = lst.getDataAt(addr)
                 if not data or data.isStructure():
                     return None
@@ -275,9 +277,12 @@ class GhidraBSController(BSController):
 
     def stack_variable(self, func_addr, offset) -> Optional[StackVariable]:
         gstack_var = self._get_gstack_var(func_addr, offset)
-        # TODO: return a real BS stack variable here!
+
         if gstack_var is None:
             return None
+        bs_stack_var = self._gstack_var_to_bsvar(gstack_var)
+        return bs_stack_var
+
 
     #
     # Ghidra Specific API
@@ -286,6 +291,19 @@ class GhidraBSController(BSController):
     def _get_nearest_function(self, addr: int) -> "GhidraFunction":
         func_manager = self.ghidra.currentProgram.getFunctionManager()
         return func_manager.getFunctionContaining(self.ghidra.toAddr(addr))
+
+    def _gstack_var_to_bsvar(self, gstack_var: "LocalVariableDB"):
+        if gstack_var is None:
+            return None
+
+        bs_stack_var = StackVariable(
+            gstack_var.getStackOffset(),
+            gstack_var.getName(),
+            str(gstack_var.getDataType()),
+            gstack_var.getLength(),
+            gstack_var.getFunction().getEntryPoint().getOffset() # Unsure if this is what is wanted here
+        )
+        return bs_stack_var
 
     def _gfunc_to_bsfunc(self, gfunc: "GhidraFunction"):
         if gfunc is None:
