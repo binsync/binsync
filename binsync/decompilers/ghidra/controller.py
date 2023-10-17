@@ -208,7 +208,6 @@ class GhidraBSController(BSController):
         func = self._get_nearest_function(addr)
         dec = self._ghidra_decompile(func)
         # optimize on remote
-        # TODO: Figure out why only some stack variables get pushed
         stack_variable_info: Optional[List[Tuple[int, str, str, int]]] = self.ghidra.bridge.remote_eval(
             "[(sym.getStorage().getStackOffset(), sym.getName(), str(sym.getDataType()), sym.getSize()) "
             "for sym in dec.getHighFunction().getLocalSymbolMap().getSymbols() "
@@ -220,7 +219,6 @@ class GhidraBSController(BSController):
             stack_variables = {
                 offset: StackVariable(offset, name, typestr, size, addr) for offset, name, typestr, size in stack_variable_info
             }
-
         bs_func = Function(
             func.getEntryPoint().getOffset(), func.getBody().getNumAddresses(),
             header=FunctionHeader(func.getName(), func.getEntryPoint().getOffset()),
@@ -275,6 +273,7 @@ class GhidraBSController(BSController):
         }
         return gvars
 
+    # Potentially unneeded in rework and never called?
     def stack_variable(self, func_addr, offset) -> Optional[StackVariable]:
         gstack_var = self._get_gstack_var(func_addr, offset)
 
