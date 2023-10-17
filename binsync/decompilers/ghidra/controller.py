@@ -248,8 +248,8 @@ class GhidraBSController(BSController):
         for offset, global_var in light_global_vars.items():
             if offset == addr:
                 lst = self.ghidra.currentProgram.getListing()
-                # TODO: Fix error with getDataAt() from ghidra bridge
-                data = lst.getDataAt(addr)
+                g_addr = self.ghidra.toAddr(addr)
+                data = lst.getDataAt(g_addr)
                 if not data or data.isStructure():
                     return None
                 if str(data.getDataType()) == "undefined":
