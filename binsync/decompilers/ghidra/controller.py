@@ -245,7 +245,7 @@ class GhidraBSController(BSController):
         ghidra_struct = self._get_struct_by_name(name)
         members: Optional[List[Tuple[str, int, str, int]]] = self.ghidra.bridge.remote_eval(
             # TODO: Figure out how to deal with unnamed members
-            "[(m.getFieldName(), m.getOffset, m.getDataType().getName(), m.getLength()) "
+            "[(m.getFieldName(), m.getOffset(), m.getDataType().getName(), m.getLength()) "
             "for m in ghidra_struct.getComponents() "
             "if m.getFieldName()]",
             ghidra_struct=ghidra_struct
@@ -260,7 +260,7 @@ class GhidraBSController(BSController):
 
     def structs(self) -> Dict[str, Struct]:
         structures = self.ghidra.currentProgram.getDataTypeManager().getAllStructures()
-        name_sizes: Optional[List[Tuple[str, int]]] = self.ghidra.birdge.remote_eval(
+        name_sizes: Optional[List[Tuple[str, int]]] = self.ghidra.bridge.remote_eval(
             "[(s.getPathName(), s.getLength())"
             "for s in currentProgram.getDataTypeManager().getAllStructures()]"
         )
