@@ -2,7 +2,7 @@
 # @author BinSync
 # @category BinSync
 # @menupath Tools.BinSync.Start BinSync
-# @toolbar python.png
+# @toolbar binsync_vendored/binsync.png
 
 import subprocess
 import time

@@ -2,6 +2,7 @@
 # @author BinSync
 # @category BinSync
 # @menupath Tools.BinSync.Shutdown BS Backend
+# @toolbar binsync_vendored/binsync.png
 
 from binsync_vendored.jfx_bridge import bridge
 from binsync_vendored.ghidra_bridge_port import DEFAULT_SERVER_PORT
