@@ -250,8 +250,7 @@ class GhidraBSController(BSController):
     def struct(self, name) -> Optional[Struct]:
         ghidra_struct = self._get_struct_by_name(name)
         members: Optional[List[Tuple[str, int, str, int]]] = self.ghidra.bridge.remote_eval(
-            # TODO: Test new method for unnamed fields
-            "[(m.getFieldName(), m.getOffset(), m.getDataType().getName(), m.getLength()) in m.getFieldName() else "
+            "[(m.getFieldName(), m.getOffset(), m.getDataType().getName(), m.getLength()) if m.getFieldName() else "
             "('field_'+hex(m.getOffset())[2:], m.getOffset(), m.getDataType().getName(), m.getLength()) "
             "for m in ghidra_struct.getComponents()]",
             ghidra_struct=ghidra_struct
