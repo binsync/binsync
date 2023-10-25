@@ -35,9 +35,9 @@ pip3 install binsync && binsync --install
 ```
 
 BinSync is also available in the Binary Ninja plugin manager.
-If you plan on using BS with Ghidra, you need to also do `pip3 install binsync[ghidra]`.
+**If you plan on using BS with Ghidra**, you need to also do `pip3 install binsync[ghidra]`.
 If you plan on using extra BS features, like the ChatGPT User, install the package like this: `pip3 install binsync[extras]`, which will install extra packages for support.
-For full install information, please read our [Quickstart Docs](https://binsync.net/docs/home).
+For full install information, please read our [quickstart docs](https://binsync.net/docs/home).
 
 ## Supported Platforms
 - IDA Pro: **>= 7.3**
