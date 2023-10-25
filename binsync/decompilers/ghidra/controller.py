@@ -129,6 +129,12 @@ class GhidraBSController(BSController):
 
     @fill_event
     @ghidra_transaction
+    def fill_struct(self, struct_name, header=True, members=True, artifact=None, **kwargs):
+        struct: Struct = artifact;
+
+
+    @fill_event
+    @ghidra_transaction
     def fill_stack_variable(self, func_addr, offset, user=None, artifact=None, decompilation=None, **kwargs):
         stack_var: StackVariable = artifact
         changes = False
@@ -244,10 +250,10 @@ class GhidraBSController(BSController):
     def struct(self, name) -> Optional[Struct]:
         ghidra_struct = self._get_struct_by_name(name)
         members: Optional[List[Tuple[str, int, str, int]]] = self.ghidra.bridge.remote_eval(
-            # TODO: Figure out how to deal with unnamed members
-            "[(m.getFieldName(), m.getOffset(), m.getDataType().getName(), m.getLength()) "
-            "for m in ghidra_struct.getComponents() "
-            "if m.getFieldName()]",
+            # TODO: Test new method for unnamed fields
+            "[(m.getFieldName(), m.getOffset(), m.getDataType().getName(), m.getLength()) in m.getFieldName() else "
+            "('field_'+hex(m.getOffset())[2:], m.getOffset(), m.getDataType().getName(), m.getLength()) "
+            "for m in ghidra_struct.getComponents()]",
             ghidra_struct=ghidra_struct
         )
         struct_members = {}
