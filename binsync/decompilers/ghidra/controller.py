@@ -4,7 +4,7 @@ from functools import wraps
 
 from binsync.api.controller import BSController, init_checker, fill_event
 from binsync.data import (
-    Function, FunctionHeader, StackVariable, Comment, FunctionArgument, GlobalVariable
+    Function, FunctionHeader, StackVariable, Comment, FunctionArgument, GlobalVariable, Struct, StructMember
 )
 
 from .artifact_lifter import GhidraArtifactLifter
@@ -241,6 +241,36 @@ class GhidraBSController(BSController):
         }
         return funcs
 
+    def struct(self, name) -> Optional[Struct]:
+        ghidra_struct = self._get_struct_by_name(name)
+        members: Optional[List[Tuple[str, int, str, int]]] = self.ghidra.bridge.remote_eval(
+            # TODO: Figure out how to deal with unnamed members
+            "[(m.getFieldName(), m.getOffset, m.getDataType().getName(), m.getLength()) "
+            "for m in ghidra_struct.getComponents() "
+            "if m.getFieldName()]",
+            ghidra_struct=ghidra_struct
+        )
+        struct_members = {}
+        if members:
+            struct_members = {
+                offset: StructMember(name, offset, typestr, size) for name, offset, typestr, size in members
+            }
+        bs_struct = Struct(ghidra_struct.getName(), ghidra_struct.getLength(), struct_members)
+        return bs_struct
+
+    def structs(self) -> Dict[str, Struct]:
+        structures = self.ghidra.currentProgram.getDataTypeManager().getAllStructures()
+        name_sizes: Optional[List[Tuple[str, int]]] = self.ghidra.birdge.remote_eval(
+            "[(s.getPathName(), s.getLength())"
+            "for s in currentProgram.getDataTypeManager().getAllStructures()]"
+        )
+        structures = {}
+        if name_sizes:
+            structures = {
+                name: Struct(name, size, None) for name, size in name_sizes
+            }
+        return structures
+
     def global_var(self, addr) -> Optional[GlobalVariable]:
         light_global_vars = self.global_vars()
         for offset, global_var in light_global_vars.items():
@@ -286,6 +316,9 @@ class GhidraBSController(BSController):
     #
     # Ghidra Specific API
     #
+
+    def _get_struct_by_name(self, name: str) -> "GhidraStructure":
+        return self.ghidra.currentProgram.getDataTypeManager().getDataType(name);
 
     def _get_nearest_function(self, addr: int) -> "GhidraFunction":
         func_manager = self.ghidra.currentProgram.getFunctionManager()
