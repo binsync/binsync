@@ -80,7 +80,7 @@ def load_decompiler_controller(force_decompiler: str = None, **ctrl_kwargs) -> O
     # we assume if we are nothing else, then we are Ghidra
     is_ghidra = not(has_ida or has_binja or has_angr)
     if is_ghidra or force_decompiler == GHIDRA_DECOMPILER:
-        from binsync.decompilers.ghidra.server.controller import GhidraBSController
+        from binsync.decompilers.ghidra.controller import GhidraBSController
         dec_controller = GhidraBSController(**ctrl_kwargs)
     else:
         raise ValueError("Please use BinSync with our supported decompiler set!")

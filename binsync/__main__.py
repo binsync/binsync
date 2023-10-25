@@ -13,18 +13,18 @@ from binsync.extras import EXTRAS_AVAILABLE
 l = logging.getLogger(__name__)
 
 
-def run_plugin(plugin_name):
-    plugins_path = Path(
-        pkg_resources.resource_filename("binsync", f"decompiler_stubs")
+def run_decompiler_ui(decompiler_name):
+    decompilers_path = Path(
+        pkg_resources.resource_filename("binsync", f"decompilers")
     )
-    if not plugins_path.exists():
+    if not decompilers_path.exists():
         l.error("Known plugins path does not exist, which means BinSync did not install correctly!")
         return False
 
-    sys.path.insert(1, str(plugins_path))
-    plugin = importlib.import_module(f"{plugin_name}_binsync")
-    l.debug(f"Executing {plugin_name} plugin...")
-    return plugin.start()
+    sys.path.insert(1, str(decompilers_path))
+    plugin = importlib.import_module(f"{decompiler_name}")
+    l.debug(f"Executing {decompiler_name} UI...")
+    return plugin.start_ui()
 
 
 def install():
@@ -65,8 +65,8 @@ def main():
         """
     )
     parser.add_argument(
-        "--run-plugin", help="""
-        Execute BinSync decompiler plugin by command line. This is a developer option.
+        "--run-decompiler-ui", help="""
+        Execute the decompiler UI for the current decompiler.
         """
     )
     if EXTRAS_AVAILABLE:
@@ -121,8 +121,8 @@ def main():
         path = Path(args.install_angr_only).expanduser().absolute()
         install_angr(path)
 
-    if args.run_plugin:
-        return run_plugin(args.run_plugin)
+    if args.run_decompiler_ui:
+        return run_decompiler_ui(args.run_decompiler_ui)
 
     if EXTRAS_AVAILABLE and args.ai:
         if not (args.proj_path and args.binary_path):

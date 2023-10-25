@@ -41,17 +41,14 @@ class ControlPanelWindow(QMainWindow):
 
     def configure(self):
         # setup bridge and alert it we are configuring
-        bridge_connected = self.controller.connect_ghidra_client()
+        self.controller.connect_ghidra_bridge()
 
         config = ConfigureBSDialog(self.controller)
         config.show()
         config.exec_()
         client_connected = self.controller.check_client()
 
-        if bridge_connected and client_connected:
-            self.controller.ghidra.alert_ui_configured(client_connected)
-
-        return client_connected and bridge_connected
+        return True
 
     def closeEvent(self, event):
         self.controller.ghidra.server.stop()
