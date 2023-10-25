@@ -1,7 +1,6 @@
 import logging
 import datetime
 from typing import Dict, Set
-import time
 
 from binsync.api.controller import BSController
 from binsync.ui.qt_objects import (

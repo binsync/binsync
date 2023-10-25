@@ -58,7 +58,8 @@ def atomic_git_action(f):
             priority=priority
         )
 
-        self._set_cache(f, ret_val, **kwargs)
+        if ret_val:
+            self._set_cache(f, ret_val, **kwargs)
 
         return ret_val if ret_val is not None else {}
 
@@ -303,17 +304,30 @@ class Client:
     @atomic_git_action
     def users(self, priority=None, no_cache=False) -> Iterable[User]:
         repo = self.repo
+        attempt_again = True
+        attempted_fix = False
         users = list()
-        for ref in self._get_best_refs(repo).values():
-            #l.debug(f"{ref} NAME: {ref.name}")
-            try:
-                metadata = load_toml_from_file(ref.commit.tree, "metadata.toml", client=self)
-                user = User.from_metadata(metadata)
-                users.append(user)
-            except Exception as e:
-                #l.debug(f"Unable to load user {e}")
-                continue
-        #l.debug(users)
+        force_local_users = False
+
+        while attempt_again:
+            attempt_again = False
+            users = list()
+            for ref in self._get_best_refs(repo, force_local=force_local_users).values():
+                #l.debug(f"{ref} NAME: {ref.name}")
+                try:
+                    metadata = load_toml_from_file(ref.commit.tree, "metadata.toml", client=self)
+                    user = User.from_metadata(metadata)
+                    users.append(user)
+                except Exception as e:
+                    #l.debug(f"Unable to load user {e}")
+                    continue
+
+            if not attempted_fix and not users:
+                # attempt a fix once
+                force_local_users = True
+                attempt_again = True
+                attempted_fix = True
+
         return users
 
     @atomic_git_action
@@ -332,6 +346,12 @@ class Client:
         except MetadataNotFoundError:
             if user == self.master_user:
                 state = State(self.master_user, client=self)
+        except Exception as e:
+            if user == self.master_user:
+                raise
+            else:
+                l.critical(f"Invalid state for {user}, dropping: {e}")
+                state = State(user)
 
         return state
 
@@ -415,7 +435,13 @@ class Client:
 
     def all_states(self):
         states = list()
-        for user in self.users(no_cache=True):
+        # promises users in the vent of inability to get new users
+        users = self.users(no_cache=True) or self.users()
+        if not users:
+            l.critical(f"Failed to get users from current project. Report me if possible.")
+            return {}
+
+        for user in users:
             state = self.get_state(user=user.name)
             states.append(state)
 
@@ -572,17 +598,21 @@ class Client:
         self.repo.close()
         del self.repo
 
-    def _get_best_refs(self, repo):
+    def _get_best_refs(self, repo, force_local=False):
         candidates = {}
         for ref in repo.refs:  # type: git.Reference
             if f'{BINSYNC_BRANCH_PREFIX}/' not in ref.name:
                 continue
 
             branch_name = ref.name.split("/")[-1]
-            if branch_name in candidates:
-                # if the candidate exists, and the new one is not remote, don't replace it
-                if not ref.is_remote() or ref.remote_name != self.remote:
+            if force_local:
+                if ref.is_remote():
                     continue
+            else:
+                if branch_name in candidates:
+                    # if the candidate exists, and the new one is not remote, don't replace it
+                    if not ref.is_remote() or ref.remote_name != self.remote:
+                        continue
 
             candidates[branch_name] = ref
         return candidates
@@ -634,7 +664,10 @@ class Client:
         index.remove([fullpath], working_tree=True)
 
     def load_file_from_tree(self, tree: git.Tree, filename):
-        return tree[filename].data_stream.read().decode()
+        try:
+            return tree[filename].data_stream.read().decode()
+        except KeyError:
+            return None
 
     def _get_tree(self, user, repo: git.Repo):
         options = [ref for ref in repo.refs if ref.name.endswith(f"{BINSYNC_BRANCH_PREFIX}/{user}")]

@@ -1,5 +1,6 @@
 import logging
-
+import datetime
+import time
 from binsync.api.controller import BSController
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableView
 from binsync.ui.qt_objects import (
@@ -33,6 +34,8 @@ class CTXTableModel(BinsyncTableModel):
             elif col == 2:
                 return friendly_datetime(self.row_data[row][col])
         elif role == self.SortRole:
+            if col == self.time_col and isinstance(self.row_data[row][col], datetime.datetime):
+                return time.mktime(self.row_data[row][col].timetuple())
             return self.row_data[row][col]
         elif role == Qt.BackgroundRole:
             return self.data_bgcolors[row]

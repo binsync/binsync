@@ -3,7 +3,6 @@ from typing import Dict, Set
 
 
 from binsync.api.controller import BSController
-from binsync.api.utils import progress_bar
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView
 from binsync.ui.qt_objects import (
     QWidget,
@@ -19,7 +18,7 @@ from binsync.ui.qt_objects import (
 l = logging.getLogger(__name__)
 
 
-class FunctionTableModel(BinsyncTableModel):
+class GlobalTableModel(BinsyncTableModel):
     update_signal = Signal(list)
     def __init__(self, controller: BSController, col_headers=None, filter_cols=None, time_col=None,
                  addr_col=None, parent=None):
@@ -41,10 +40,16 @@ class FunctionTableModel(BinsyncTableModel):
         row = index.row()
         if role == Qt.DisplayRole:
             if col == 0:
-                return hex(self.row_data[row][col])
+                if isinstance(self.row_data[index.row()][0], int):
+                    return f"{self.row_data[index.row()][0]:#x}"
+                else:
+                    return self.row_data[index.row()][0]
             elif col == 1:
                 return self.row_data[row][col]
+            elif col == 2:
+                return self.row_data[row][col]
         elif role == self.SortRole:
+
             return self.row_data[row][col]
         elif role == self.FilterRole:
             return f"{hex(self.row_data[row][0])} {self.row_data[row][1]}"
@@ -75,10 +80,21 @@ class FunctionTableModel(BinsyncTableModel):
 
     def update_table(self):
         updated_row_keys = set()
-        for address, function in self.controller.functions().items():
-            self.data_dict[address] = [address, function.name]
-            updated_row_keys.add(address)
-            self.checks[address] = False
+        decompiler_structs = self.controller.structs()
+        decompiler_gvars = self.controller.global_vars()
+        decompiler_enums = self.controller.enums()
+        self.gvar_name_to_addr_map = {gvar.name: addr for addr, gvar in decompiler_gvars.items()}
+        all_artifacts = [(decompiler_structs, "Struct"), (decompiler_gvars, "Variable"), (decompiler_enums, "Enum")]
+        for type_artifacts, type_ in all_artifacts:
+            for _, artifact in type_artifacts.items():
+                if type_ == "Struct" or type_ == "Enum":
+                    self.data_dict[artifact.name] = [artifact.name, "", type_]
+                    self.checks[artifact.name] = False
+                    updated_row_keys.add(artifact.name)
+                else:
+                    self.data_dict[artifact.addr] = [artifact.addr, artifact.name, type_]
+                    self.checks[artifact.addr] = False
+                    updated_row_keys.add(artifact.addr)
         self._update_changed_rows(self.data_dict, updated_row_keys)
 
     @Slot(list)
@@ -129,14 +145,14 @@ class FunctionTableModel(BinsyncTableModel):
         else:
             return Qt.ItemFlags(QAbstractTableModel.flags(self, index))
 
-class FunctionTableView(BinsyncTableView):
-    HEADER = ['Addr', 'Remote Name']
+class GlobalsTableView(BinsyncTableView):
+    HEADER = ['Addr', 'Name', 'Type']
 
     def __init__(self, controller: BSController, filteredit: BinsyncTableFilterLineEdit, stretch_col=None,
                  col_count=None, parent=None):
         super().__init__(controller, filteredit, stretch_col, col_count, parent)
 
-        self.model = FunctionTableModel(controller, self.HEADER, filter_cols=[0, 1], addr_col=0,
+        self.model = GlobalTableModel(controller, self.HEADER, filter_cols=[0, 1], addr_col=0,
                                         parent=parent)
         self.proxymodel.setSourceModel(self.model)
         self.setModel(self.proxymodel)
@@ -147,8 +163,11 @@ class FunctionTableView(BinsyncTableView):
     def update_table(self):
         self.model.update_table()
 
+    def _lookup_addr_for_gvar(self, name):
+        return self.model.gvar_name_to_addr_map[name]
+
     def push(self):
-        addrs_to_push = []
+        artifacts_to_push = []
         first_state_obj = self.model.checkState(
             self.proxymodel.mapToSource(self.proxymodel.index(0, 0, QModelIndex()))
         )
@@ -156,15 +175,21 @@ class FunctionTableView(BinsyncTableView):
 
         self.proxymodel.setFilterFixedString("")
         for i in range(self.proxymodel.rowCount()):
-            proxyIndex = self.proxymodel.index(i, 0, QModelIndex())
+            proxyIndex = self.proxymodel.index(i, 2, QModelIndex())
             mappedIndex = self.proxymodel.mapToSource(proxyIndex)
             model_state = self.model.checkState(mappedIndex)
             is_checked = model_state.value if check_has_value else model_state
             if is_checked:
-                func_addr = int(self.model.data(mappedIndex), 16)
-                addrs_to_push.append(func_addr)
+                type_ = self.model.data(mappedIndex)
+                if type_ == "Variable":
+                    name = self.model.data(mappedIndex.sibling(mappedIndex.row(), 1))
+                else:
+                    name = self.model.data(mappedIndex.sibling(mappedIndex.row(), 0))
+                lookup_item = self._lookup_addr_for_gvar(name) if type_ == "Variable" else name
 
-        self.controller.force_push_functions(addrs_to_push)
+                artifacts_to_push.append(lookup_item)
+
+        self.controller.force_push_global_artifacts(artifacts_to_push)
 
     def check_all(self):
         self.model.setAllCheckStates(True)
@@ -183,7 +208,7 @@ class FunctionTableView(BinsyncTableView):
 
 
 
-class QFunctionTable(QWidget):
+class QGlobalsTable(QWidget):
     """ Wrapper widget to contain the function table classes in one file (prevents bulking up control_panel.py) """
 
     def __init__(self, controller: BSController, parent=None):
@@ -199,7 +224,7 @@ class QFunctionTable(QWidget):
 
     def _init_widgets(self):
         self.filteredit = BinsyncTableFilterLineEdit(parent=self)
-        self.table = FunctionTableView(self.controller, self.filteredit, stretch_col=1, col_count=2)
+        self.table = GlobalsTableView(self.controller, self.filteredit, stretch_col=1, col_count=3)
         layout = QVBoxLayout()
         layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)

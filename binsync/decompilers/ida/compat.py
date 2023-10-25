@@ -22,7 +22,6 @@ import binsync
 from binsync.data import (
     Struct, FunctionHeader, FunctionArgument, StackVariable, Function, GlobalVariable, Enum
 )
-from .controller import IDABSController
 
 l = logging.getLogger(__name__)
 
@@ -153,20 +152,26 @@ def set_ida_func_name(func_addr, new_name):
 
 
 @execute_write
-def functions():
+def functions(**kwargs):
+
     blacklisted_segs = ["extern", ".plt", ".plt.sec"]
     func_addrs = list(idautils.Functions())
-    funcs = {}
-    for func_addr in func_addrs:
-        # skip non-text segments
-        if idc.get_segm_name(func_addr) in blacklisted_segs:
-            continue
 
-        func_name = get_func_name(func_addr)
-        func_size = get_func_size(func_addr)
-        func = Function(func_addr, func_size)
-        func.name = func_name
-        funcs[func_addr] = func
+    funcs = {}
+    if "fast" in kwargs:
+        for func_addr in func_addrs:
+            funcs[func_addr] = Function(idc.get_func_name(func_addr), idaapi.get_func(func_addr).size())
+    else:
+        for func_addr in func_addrs:
+            # skip non-text segments
+            if idc.get_segm_name(func_addr) in blacklisted_segs:
+                continue
+
+            func_name = get_func_name(func_addr)
+            func_size = get_func_size(func_addr)
+            func = Function(func_addr, func_size)
+            func.name = func_name
+            funcs[func_addr] = func
 
     return funcs
 
@@ -756,6 +761,10 @@ def get_function_cursor_at():
 #
 # Other Utils
 #
+
+@execute_write
+def xrefs_to(addr):
+    return list(idautils.XrefsTo(addr))
 
 @execute_write
 def get_ptr_size():

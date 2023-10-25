@@ -150,10 +150,14 @@ def load_toml_from_file(src: Union[pathlib.Path, git.Tree], filename, client=Non
         if not src:
             src = pathlib.Path("../core")
 
-        with open(src.joinpath(filename), "r") as fp:
-            file_data = fp.read()
+        src = src.joinpath(filename)
+        if not src.exists():
+            file_data = None
+        else:
+            with open(src, "r") as fp:
+                file_data = fp.read()
 
-    return toml.loads(file_data)
+    return toml.loads(file_data) if file_data is not None else file_data
 
 
 #
@@ -289,9 +293,8 @@ class State:
         state = cls(None, version=version, client=client)
 
         # load metadata
-        try:
-            metadata = load_toml_from_file(src, "metadata.toml", client=client)
-        except:
+        metadata = load_toml_from_file(src, "metadata.toml", client=client)
+        if metadata is None:
             # metadata is not found
             raise MetadataNotFoundError()
         state.user = metadata["user"]
@@ -301,67 +304,46 @@ class State:
         # load functions
         function_files = list_files_in_dir(src, "functions", client=client)
         for func_file in function_files:
-            try:
-                func_toml = load_toml_from_file(src, func_file, client=client)
-            except:
-                pass
-            else:
-                func = Function.load(func_toml)
-                state.functions[func.addr] = func
+            func_toml = load_toml_from_file(src, func_file, client=client)
+            func = Function.load(func_toml)
+            state.functions[func.addr] = func
 
         # load comments
-        try:
-            comments_toml = load_toml_from_file(src, "comments.toml", client=client)
-        except:
-            pass
-        else:
-            comments = {}
+        comments_toml = load_toml_from_file(src, "comments.toml", client=client)
+        comments = {}
+        if comments_toml:
             for comment in Comment.load_many(comments_toml):
                 comments[comment.addr] = comment
-            state.comments = comments
+        state.comments = comments
 
         # load patches
-        try:
-            patches_toml = load_toml_from_file(src, "patches.toml", client=client)
-        except:
-            pass
-        else:
-            patches = {}
+        patches_toml = load_toml_from_file(src, "patches.toml", client=client)
+        patches = {}
+        if patches_toml:
             for patch in Patch.load_many(patches_toml):
                 patches[patch.offset] = patch
-            state.patches = SortedDict(patches)
+        state.patches = SortedDict(patches)
 
         # load global_vars
-        try:
-            global_vars_toml = load_toml_from_file(src, "global_vars.toml", client=client)
-        except:
-            pass
-        else:
-            global_vars = {}
+        global_vars_toml = load_toml_from_file(src, "global_vars.toml", client=client)
+        global_vars = {}
+        if global_vars_toml:
             for global_var in GlobalVariable.load_many(global_vars_toml):
                 global_vars[global_var.addr] = global_var
-            state.global_vars = SortedDict(global_vars)
+        state.global_vars = SortedDict(global_vars)
 
         # load enums
-        try:
-            enums_toml = load_toml_from_file(src, "enums.toml", client=client)
-        except:
-            pass
-        else:
-            state.enums = {
-                enum.name: enum for enum in Enum.load_many(enums_toml)
-            }
+        enums_toml = load_toml_from_file(src, "enums.toml", client=client)
+        state.enums = {
+            enum.name: enum for enum in Enum.load_many(enums_toml)
+        } if enums_toml else {}
 
         # load structs
         struct_files = list_files_in_dir(src, "structs", client=client)
         for struct_file in struct_files:
-            try:
-                struct_toml = load_toml_from_file(src, struct_file, client=client)
-            except:
-                pass
-            else:
-                struct = Struct.load(struct_toml)
-                state.structs[struct.name] = struct
+            struct_toml = load_toml_from_file(src, struct_file, client=client)
+            struct = Struct.load(struct_toml)
+            state.structs[struct.name] = struct
 
         # clear the dirty bit
         state._dirty = False

@@ -24,11 +24,16 @@ class Job:
         self.kwargs = kwargs
 
         self.ret_value = None
+        self.exception = None
         self.finish_event = threading.Event()
 
     def execute(self):
-        self.ret_value = self.function(*self.args, **self.kwargs)
-        self.finish_event.set()
+        try:
+            self.ret_value = self.function(*self.args, **self.kwargs)
+        except Exception as e:
+            self.exception = e
+        finally:
+            self.finish_event.set()
 
     def __str__(self):
         return f"<Job: {self.function}({self.args}, {self.kwargs})>"
@@ -75,7 +80,10 @@ class Scheduler:
         except Exception as e:
             return FailedJob(e)
         else:
-            return job.ret_value
+            if job.exception is None:
+                return job.ret_value
+            else:
+                raise job.exception
 
     def _complete_a_job(self, block=False):
         if block:

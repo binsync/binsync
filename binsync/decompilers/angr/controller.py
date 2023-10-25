@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from pathlib import Path
 
 import angr
@@ -13,7 +13,7 @@ from binsync.api.controller import (
     fill_event
 )
 from binsync.data import (
-    Function, FunctionHeader, Comment, StackVariable, FunctionArgument
+    Function, FunctionHeader, Comment, StackVariable, FunctionArgument, Artifact
 )
 
 from .artifact_lifter import AngrArtifactLifter
@@ -34,15 +34,15 @@ class AngrBSController(BSController):
     and responsible for running a thread to get new changes from other users.
     """
 
-    def __init__(self, workspace=None, headless=False, binary_path: Path = None):
-        self._workspace = workspace
+    def __init__(self, workspace=None, headless=False, binary_path: Path = None, **kwargs):
+        self.workspace = workspace
         if workspace is None and not headless:
             l.critical("The workspace provided is None, which will result in a broken BinSync.")
             return
 
         self.main_instance = workspace.main_instance if workspace else self
         self._binary_path = Path(binary_path) if binary_path is not None else binary_path
-        super().__init__(artifact_lifter=AngrArtifactLifter(self), headless=headless)
+        super().__init__(artifact_lifter=AngrArtifactLifter(self), headless=headless, **kwargs)
 
     def _init_headless_components(self):
         if self._binary_path is None or not self._binary_path.exists():
@@ -56,7 +56,7 @@ class AngrBSController(BSController):
         return self.main_instance.project.loader.main_object.md5.hex()
 
     def active_context(self):
-        curr_view = self._workspace.view_manager.current_tab
+        curr_view = self.workspace.view_manager.current_tab
         if not curr_view:
             return None
 
@@ -89,19 +89,45 @@ class AngrBSController(BSController):
             return 0
 
     def rebase_addr(self, addr, up=False):
-        base_addr = self.main_instance.project.loader.main_object.mapped_base
         is_pie = self.main_instance.project.loader.main_object.pic
+        if not is_pie:
+            return addr
 
-        if is_pie:
-            if up:
-                return addr + base_addr
-            elif addr > base_addr:
-                return addr - base_addr
+        base_addr = self.main_instance.project.loader.main_object.mapped_base
+        rebased_addr = addr
+        if up and addr < base_addr:
+            rebased_addr = addr + base_addr
+        elif not up and addr > base_addr:
+            rebased_addr = addr - base_addr
 
-        return addr
+        return rebased_addr
 
     def goto_address(self, func_addr):
-        self._workspace.jump_to(self.rebase_addr(func_addr, up=True))
+        self.workspace.jump_to(self.rebase_addr(func_addr, up=True))
+
+    def xrefs_to(self, artifact: Artifact) -> List[Artifact]:
+        if not isinstance(artifact, Function):
+            l.warning("xrefs_to is only implemented for functions.")
+            return []
+
+        function: Function = self.lower_artifact(artifact)
+        program_cfg = self.main_instance.kb.cfgs.get_most_accurate()
+        if program_cfg is None:
+            return []
+
+        func_node = program_cfg.get_any_node(function.addr)
+        if func_node is None:
+            return []
+
+        xrefs = []
+        for node in program_cfg.graph.predecessors(func_node):
+            func_addr = node.function_address
+            if func_addr is None:
+                continue
+
+            xrefs.append(Function(func_addr, 0))
+
+        return xrefs
 
     #
     # Display Fillers
@@ -206,8 +232,9 @@ class AngrBSController(BSController):
             return None
 
         func = Function(_func.addr, _func.size)
+        type_ = _func.prototype.returnty.c_repr() if _func.prototype.returnty else None
         func.header = FunctionHeader(
-            _func.name, _func.addr, type_=_func.prototype.returnty.c_repr() if _func.prototype else None
+            _func.name, _func.addr, type_=type_
         )
 
         try:
@@ -221,7 +248,9 @@ class AngrBSController(BSController):
 
         func.header.args = self.func_args_as_bs_args(decompilation)
         # overwrite type again since it can change with decompilation
-        func.header.type = decompilation.cfunc.functy.returnty.c_repr()
+        if decompilation.cfunc.functy.returnty:
+            func.header.type = decompilation.cfunc.functy.returnty.c_repr()
+
         stack_vars = {
             angr_sv.offset: StackVariable(
                 angr_sv.offset, angr_sv.name, self.stack_var_type_str(decompilation, angr_sv), angr_sv.size, func.addr
@@ -237,7 +266,12 @@ class AngrBSController(BSController):
         if func is None:
             return None
 
-        codegen = self.decompile_function(func)
+        try:
+            codegen = self.decompile_function(func)
+        except Exception as e:
+            l.warning(f"Failed to decompile {func} because {e}")
+            codegen = None
+
         if not codegen or not codegen.text:
             return None
 
@@ -301,12 +335,12 @@ class AngrBSController(BSController):
 
         # refresh the UI after decompiling
         if refresh_gui and not self.headless:
-            self._workspace.reload()
+            self.workspace.reload()
 
             # re-decompile current view to cause a refresh
-            current_tab = self._workspace.view_manager.current_tab
+            current_tab = self.workspace.view_manager.current_tab
             if isinstance(current_tab, CodeView) and current_tab.function == func:
-                self._workspace.decompile_current_function()
+                self.workspace.decompile_current_function()
 
         return decomp
 
@@ -330,7 +364,7 @@ class AngrBSController(BSController):
         except Exception:
             return None
 
-        return var_type.c_repr()
+        return var_type.c_repr() if var_type is not None else None
 
     @staticmethod
     def stack_vars_in_dec(decompilation):
@@ -345,8 +379,9 @@ class AngrBSController(BSController):
             return args
         
         for idx, arg in enumerate(decompilation.cfunc.arg_list):
+            type_ = arg.variable_type.c_repr() if arg.variable_type is not None else None
             args[idx] = FunctionArgument(
-                idx, arg.variable.name, arg.variable_type.c_repr(), arg.variable.size
+                idx, arg.variable.name, type_, arg.variable.size
             )
 
         return args
@@ -361,7 +396,7 @@ class AngrBSController(BSController):
 
     def get_closest_function(self, addr):
         try:
-            func_addr = self._workspace.main_instance.project.kb.cfgs.get_most_accurate()\
+            func_addr = self.workspace.main_instance.project.kb.cfgs.get_most_accurate()\
                 .get_any_node(addr, anyaddr=True)\
                 .function_address
         except AttributeError:

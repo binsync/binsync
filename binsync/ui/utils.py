@@ -171,6 +171,8 @@ class BSUIScheduler(QObject, Scheduler):
     def run(self):
         self._worker_thread()
 
+def plural(value, unit):
+    return f"{value} {unit}{'' if value == 1 else 's'}"
 
 def friendly_datetime(time_before):
     # convert fro unix
@@ -194,13 +196,13 @@ def friendly_datetime(time_before):
     diff_sec = diff.seconds
 
     if diff_days >= 1:
-        s = "%d days" % diff_days
+        s = plural(diff_days, "day")
     elif diff_sec >= 60 * 60:
-        s = "%d hours" % int(diff_sec / 60 / 60)
+        s = plural(int(diff_sec / 60 / 60), "hour")
     elif diff_sec >= 60:
-        s = "%d minutes" % int(diff_sec / 60)
+        s = plural(int(diff_sec / 60), "minute")
     else:
-        s = "%d seconds" % diff_sec
+        s = plural(diff_sec, "second")
 
     s += " ago" if ago else " in the future"
     return s
