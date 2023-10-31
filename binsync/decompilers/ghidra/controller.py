@@ -131,6 +131,7 @@ class GhidraBSController(BSController):
     @ghidra_transaction
     def fill_struct(self, struct_name, header=True, members=True, artifact=None, **kwargs):
         struct: Struct = artifact;
+        # TODO: fill structs
 
 
     @fill_event
