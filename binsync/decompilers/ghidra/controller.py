@@ -130,9 +130,23 @@ class GhidraBSController(BSController):
     @fill_event
     @ghidra_transaction
     def fill_struct(self, struct_name, header=True, members=True, artifact=None, **kwargs):
-        struct: Struct = artifact;
-        # TODO: fill structs
-
+        struct: Struct = artifact
+        ghidra_struct = self._get_struct_by_name(struct_name)
+        data_manager = self.ghidra.currentProgram.getDataTypeManager()
+        # TODO: Also update existing struct instead of making a new one
+        self.ghidra_bridge.remote_exec(
+            "t = currentProgram.startTransaction('update/add struct')\n"
+            "try:\n"
+            "   new_struct = dtm.addDataType(ghidra_struct, "
+            "       ghidra.program.model.data.DataTypeConflictHandler.DEFAULT_HANDLER)\n"
+            "except Exception as ex:\n"
+            "    print(f'Error filling struct {struct_name}: {ex}\n"
+            "finally:\n"
+            "    currentProgram.endTransaction(t, True)\n",
+            dtm=data_manager,
+            ghidra_struct=ghidra_struct,
+            struct_name=struct_name
+        )
 
     @fill_event
     @ghidra_transaction
