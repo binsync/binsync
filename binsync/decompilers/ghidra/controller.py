@@ -130,23 +130,40 @@ class GhidraBSController(BSController):
     @fill_event
     @ghidra_transaction
     def fill_struct(self, struct_name, header=True, members=True, artifact=None, **kwargs):
+        changes = True
         struct: Struct = artifact
-        ghidra_struct = self._get_struct_by_name(struct_name)
+        old_ghidra_struct = self._get_struct_by_name('/'+struct_name)
         data_manager = self.ghidra.currentProgram.getDataTypeManager()
-        # TODO: Also update existing struct instead of making a new one
-        self.ghidra_bridge.remote_exec(
-            "t = currentProgram.startTransaction('update/add struct')\n"
-            "try:\n"
-            "   new_struct = dtm.addDataType(ghidra_struct, "
-            "       ghidra.program.model.data.DataTypeConflictHandler.DEFAULT_HANDLER)\n"
-            "except Exception as ex:\n"
-            "    print(f'Error filling struct {struct_name}: {ex}\n"
-            "finally:\n"
-            "    currentProgram.endTransaction(t, True)\n",
-            dtm=data_manager,
-            ghidra_struct=ghidra_struct,
-            struct_name=struct_name
-        )
+        t = self.ghidra.currentProgram.startTransaction('add struct')
+        try:
+            handler = self.ghidra.import_module_object("ghidra.program.model.data", "DataTypeConflictHandler")
+            structType = self.ghidra.import_module_object("ghidra.program.model.data", "StructureDataType")
+            byteType = self.ghidra.import_module_object("ghidra.program.model.data", "ByteDataType")
+            ghidra_struct = structType(struct_name, 0)
+            for offset in struct.members:
+                member = struct.members[offset]
+                ghidra_struct.add(byteType.dataType, 1, member.name, "")
+                ghidra_struct.growStructure(member.size-1)
+                for dtc in ghidra_struct.getComponents():
+                    if dtc.getFieldName() == member.name:
+                        if member.type:
+                            gtype = self.typestr_to_gtype(member.type)
+                        else:
+                            gtype = self.typestr_to_gtype('undefined'+str(member.size))
+                        for i in range(offset, offset+member.size):
+                            ghidra_struct.clearAtOffset(i)
+                        ghidra_struct.replaceAtOffset(offset, gtype, member.size, member.name, "")
+                        break
+            if old_ghidra_struct:
+                data_manager.replaceDataType(old_ghidra_struct, ghidra_struct, True)
+            else:
+                data_manager.addDataType(ghidra_struct, handler.DEFAULT_HANDLER)
+        except Exception as ex:
+            print(f'Error filling struct {struct_name}: {ex}')
+            changes = False
+        finally:
+            self.ghidra.currentProgram.endTransaction(t, True)
+            return changes
 
     @fill_event
     @ghidra_transaction
