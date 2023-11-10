@@ -287,6 +287,7 @@ class Client:
 
         # commit changes
         self.repo.index.add([os.path.join(state.user, "*")])
+        self.repo.git.add(update=True)
 
         if not self.repo.index.diff("HEAD"):
             return

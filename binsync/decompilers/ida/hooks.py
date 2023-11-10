@@ -23,6 +23,8 @@
 import threading
 from functools import wraps
 import logging
+import pathlib
+import os
 
 import ida_bytes
 import ida_funcs
@@ -443,6 +445,7 @@ class IDBHooks(ida_idp.IDB_Hooks):
         """
         # parse the info of the current struct
         s_name = new_name if new_name else ida_struct.get_struc_name(sid)
+        old_name = old_name if old_name else None
 
         # back out if a stack variable snuck in
         if s_name.startswith("$"):
@@ -455,7 +458,8 @@ class IDBHooks(ida_idp.IDB_Hooks):
         if deleted:
             self.binsync_state_change(
                 self.controller.push_artifact,
-                Struct(s_name, None, {})
+                Struct(s_name, None, {}),
+                old_name=old_name
             )
             return 0
 
@@ -473,7 +477,8 @@ class IDBHooks(ida_idp.IDB_Hooks):
         old_s_name = old_name if old_name else s_name
         self.binsync_state_change(
             self.controller.push_artifact,
-            binsync_struct
+            binsync_struct,
+            old_name=old_name
         )
         return 0
 
