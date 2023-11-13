@@ -3,7 +3,6 @@ import sys
 import logging
 from pathlib import Path
 import importlib
-import pkg_resources
 import os
 
 from binsync.decompilers import BS_SUPPORTED_DECOMPILERS
@@ -14,17 +13,15 @@ l = logging.getLogger(__name__)
 
 
 def run_decompiler_ui(decompiler_name):
-    decompilers_path = Path(
-        pkg_resources.resource_filename("binsync", f"decompilers")
-    )
-    if not decompilers_path.exists():
-        l.error("Known plugins path does not exist, which means BinSync did not install correctly!")
-        return False
+    with importlib.resources.path("binsync", "decompilers") as decompilers_path:
+        if not decompilers_path.exists():
+            l.error("Known plugins path does not exist, which means BinSync did not install correctly!")
+            return False
 
-    sys.path.insert(1, str(decompilers_path))
-    plugin = importlib.import_module(f"{decompiler_name}")
-    l.debug(f"Executing {decompiler_name} UI...")
-    return plugin.start_ui()
+        sys.path.insert(1, str(decompilers_path))
+        plugin = importlib.import_module(f"{decompiler_name}")
+        l.debug(f"Executing {decompiler_name} UI...")
+        return plugin.start_ui()
 
 
 def install():
