@@ -3,7 +3,6 @@ from typing import Dict, Set
 
 
 from binsync.api.controller import BSController
-from binsync.api.utils import progress_bar
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView
 from binsync.ui.qt_objects import (
     QWidget,

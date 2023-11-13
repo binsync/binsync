@@ -11,7 +11,6 @@ from binsync.ui.qt_objects import (
     QAction,
     QWidget,
     QVBoxLayout,
-    QColor,
     Qt
 )
 from binsync.ui.utils import friendly_datetime
@@ -153,7 +152,7 @@ class FunctionTableView(BinsyncTableView):
             menu.addSeparator()
             if isinstance(func_addr, int) and func_addr > 0:
                 menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=user_name))
-            from_menu = menu.addMenu(f"Sync from...")
+            from_menu = menu.addMenu("Sync from...")
             users = self._get_valid_users_for_func(func_addr)
             for username in users:
                 action = from_menu.addAction(username)

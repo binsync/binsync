@@ -1,6 +1,7 @@
 import logging
-from typing import Optional
+import importlib
 import inspect
+from typing import Optional
 
 from .controller import (
     BSController
@@ -45,7 +46,7 @@ def load_decompiler_controller(force_decompiler: str = None, **ctrl_kwargs) -> O
     is_ghidra = False
 
     try:
-        import idaapi
+        importlib.import_module("idaapi")
         has_ida = True
     except ImportError:
         pass
@@ -55,7 +56,7 @@ def load_decompiler_controller(force_decompiler: str = None, **ctrl_kwargs) -> O
         return dec_controller
 
     try:
-        import binaryninja
+        importlib.import_module("binaryninja")
         has_binja = True
     except ImportError:
         pass
@@ -66,8 +67,7 @@ def load_decompiler_controller(force_decompiler: str = None, **ctrl_kwargs) -> O
         return dec_controller
 
     try:
-        import angr
-        import angrmanagement
+        importlib.import_module("angrmanagement")
         has_angr = _find_global_in_call_frames('workspace') is not None
     except ImportError:
         pass
@@ -86,3 +86,17 @@ def load_decompiler_controller(force_decompiler: str = None, **ctrl_kwargs) -> O
         raise ValueError("Please use BinSync with our supported decompiler set!")
 
     return dec_controller
+
+
+__all__ = [
+    "BSController",
+    "BSArtifactLifter",
+    "BSTypeParser",
+    "BSType",
+    "BS_SUPPORTED_DECOMPILERS",
+    "ANGR_DECOMPILER",
+    "BINJA_DECOMPILER",
+    "IDA_DECOMPILER",
+    "GHIDRA_DECOMPILER",
+    "load_decompiler_controller",
+]

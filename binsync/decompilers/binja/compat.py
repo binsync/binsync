@@ -8,29 +8,20 @@ from PySide6.QtWidgets import (
     QApplication,
     QMenu,
     QMainWindow,
-    QTabWidget,
     QMenuBar,
-    QDialog,
-    QVBoxLayout,
-    QLabel,
-    QLineEdit,
-    QHBoxLayout,
-    QPushButton,
-    QMessageBox,
-    QGroupBox,
-    QCheckBox,
 )
 import binaryninja
 from binaryninjaui import DockContextHandler
-from binaryninja.enums import MessageBoxButtonSet, MessageBoxIcon, VariableSourceType
-from binaryninja.mainthread import execute_on_main_thread, is_main_thread
-from binaryninja.types import StructureType, EnumerationType
+from binaryninja.enums import VariableSourceType
 
 import binsync
 from binsync.data import (
-    State, User, Artifact,
-    Function, FunctionHeader, FunctionArgument, StackVariable, StructMember, Struct,
-    Comment, GlobalVariable, Patch, Enum, Struct, StructMember
+    Function,
+    FunctionHeader,
+    FunctionArgument,
+    StructMember,
+    Struct,
+    Enum,
 )
 
 # Some code is derived from https://github.com/NOPDev/BinjaDock/tree/master/defunct
@@ -243,9 +234,9 @@ def bn_func_to_bs(bn_func):
 
 def bn_enum_to_bs(name: str, bn_enum: binaryninja.EnumerationType):
     members = {}
-    
+
     for enum_member in bn_enum.members:
         if isinstance(enum_member, binaryninja.EnumerationMember) and isinstance(enum_member.value, int):
             members[enum_member.name] = enum_member.value
-    
+
     return Enum(name, members)

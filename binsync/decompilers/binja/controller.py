@@ -19,25 +19,20 @@
 
 import threading
 import functools
-from typing import Dict, Tuple, Optional, Iterable, Any, List
+from typing import Dict, Optional, Any, List
 import hashlib
 import logging
 
 from binaryninja import SymbolType
-from binaryninjaui import (
-    UIContext,
-    DockContextHandler,
-    UIActionHandler,
-    Menu,
-)
+from binaryninjaui import UIContext
 import binaryninja
 from binaryninja.enums import VariableSourceType
 from binaryninja.types import StructureType, EnumerationType
 
-from binsync.api.controller import BSController, fill_event, init_checker
+from binsync.api.controller import BSController, fill_event
 from binsync.data import (
-    State, Function, FunctionHeader, StackVariable,
-    Comment, GlobalVariable, Patch,
+    Function, FunctionHeader, StackVariable,
+    Comment, GlobalVariable,
     Enum, Struct, Artifact
 )
 import binsync

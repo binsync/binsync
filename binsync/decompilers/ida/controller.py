@@ -23,13 +23,12 @@ import logging
 from typing import Dict, Optional, List
 from collections import OrderedDict, defaultdict
 
-import idc
 import idaapi
 import ida_struct
 import ida_hexrays
 
 import binsync
-from binsync.api.controller import BSController, init_checker, fill_event
+from binsync.api.controller import BSController, fill_event
 from binsync.data import (
     StackVariable, Function, FunctionHeader, Struct, Comment, GlobalVariable, Enum, Artifact
 )

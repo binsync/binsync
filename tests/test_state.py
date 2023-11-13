@@ -7,7 +7,7 @@ import unittest
 
 from binsync.core.client import Client
 from binsync.data import (
-    Function, FunctionHeader, StackVariable, FunctionArgument, State, Struct, ArtifactType
+    FunctionHeader, StackVariable, FunctionArgument, State, Struct, ArtifactType
 )
 
 

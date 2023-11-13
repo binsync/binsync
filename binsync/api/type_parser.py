@@ -1,6 +1,6 @@
 import re
 import logging
-from collections import OrderedDict, defaultdict, ChainMap
+from collections import ChainMap
 from typing import Optional
 
 import pycparser

@@ -1,6 +1,5 @@
 import pathlib
 import os
-from typing import Union, Dict
 import logging
 
 import toml
@@ -151,7 +150,7 @@ class GlobalConfig(Config):
         if path.is_dir():
             path = path.joinpath(BS_GLOBAL_CONFIG_FILENAME)
         elif path.name != BS_GLOBAL_CONFIG_FILENAME:
-            l.warning(f"")
+            l.warning("")
             path = path.parent.joinpath(BS_GLOBAL_CONFIG_FILENAME)
 
         return path
