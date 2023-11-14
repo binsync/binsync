@@ -39,6 +39,8 @@ BinSync is also available in the Binary Ninja plugin manager.
 If you plan on using extra BS features, like the ChatGPT User, install the package like this: `pip3 install binsync[extras]`, which will install extra packages for support.
 For full install information, please read our [quickstart docs](https://binsync.net/docs/home).
 
+If you are planning on installing the package to be editable (`-e`), like in a developer install, make sure `pip>=23.0.0`.
+
 ## Supported Platforms
 - IDA Pro: **>= 7.3**
 - Binary Ninja: **>= 2.4**
