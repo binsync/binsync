@@ -79,7 +79,7 @@ class GlobalsTableModel(BinsyncTableModel):
                         artifact_key = artifact.addr
                         artifact_name += f" ({hex(artifact.addr)})"
                     else:
-                        l.critical(f"Attempted to parse an unparsable global type!")
+                        l.critical("Attempted to parse an unparsable global type!")
                         return
 
                     cmenu_cache[artifact_key].append((user_name, global_type[0]))
@@ -193,7 +193,7 @@ class GlobalsTableView(BinsyncTableView):
             menu.addSeparator()
             action = menu.addAction("Sync")
             action.triggered.connect(filler_func(user_name))
-            from_menu = menu.addMenu(f"Sync from...")
+            from_menu = menu.addMenu("Sync from...")
             for username in self._get_valid_users_for_global(global_name, global_type):
                 action = from_menu.addAction(username)
                 action.triggered.connect(filler_func(username))

@@ -9,7 +9,6 @@ from angr.analyses.decompiler.structured_codegen import DummyStructuredCodeGener
 import binsync
 from binsync.api.controller import (
     BSController,
-    init_checker,
     fill_event
 )
 from binsync.data import (

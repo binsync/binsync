@@ -3,11 +3,7 @@ import pkg_resources
 from pathlib import Path
 
 from PySide6.QtWidgets import QVBoxLayout
-from PySide6.QtCore import Qt
 from binaryninjaui import (
-    UIContext,
-    DockHandler,
-    DockContextHandler,
     UIAction,
     UIActionHandler,
     Menu,
@@ -18,7 +14,6 @@ from binaryninjaui import (
 import binaryninja
 from binaryninja.types import StructureType, EnumerationType
 from binaryninja import SymbolType
-from binaryninja.interaction import show_message_box
 from binaryninja.binaryview import BinaryDataNotification
 
 from collections import defaultdict
@@ -29,12 +24,9 @@ set_ui_version("PySide6")
 from binsync.ui.config_dialog import ConfigureBSDialog
 from binsync.ui.control_panel import ControlPanel
 from binsync.ui.qt_objects import QImage
-from .compat import bn_enum_to_bs, find_main_window, BinjaDockWidget, create_widget, bn_struct_to_bs, bn_func_to_bs
+from .compat import bn_enum_to_bs, find_main_window, BinjaDockWidget, bn_struct_to_bs, bn_func_to_bs
 from .controller import BinjaBSController
-from binsync.data import (
-    Artifact,
-    Function, FunctionHeader, FunctionArgument, Comment, GlobalVariable, Enum, StructMember
-)
+from binsync.data import FunctionHeader, GlobalVariable
 
 l = logging.getLogger(__name__)
 
@@ -155,7 +147,7 @@ class DataMonitor(BinaryDataNotification):
 
         l.debug(f"Symbol update Requested on {sym}...")
         if sym.type == SymbolType.FunctionSymbol:
-            l.debug(f"   -> Function Symbol")
+            l.debug("   -> Function Symbol")
             func = view.get_function_at(sym.address)
             bs_func = bn_func_to_bs(func)
             self._controller.schedule_job(
@@ -163,7 +155,7 @@ class DataMonitor(BinaryDataNotification):
                 FunctionHeader(sym.name, sym.address, type_=bs_func.header.type, args=bs_func.header.args)
             )
         elif sym.type == SymbolType.DataSymbol:
-            l.debug(f"   -> Data Symbol")
+            l.debug("   -> Data Symbol")
             var: binaryninja.DataVariable = view.get_data_var_at(sym.address)
             
             self._controller.schedule_job(
@@ -220,7 +212,7 @@ class BinjaPlugin:
         Sidebar.addSidebarWidgetType(self.sidebar_widget_type)
 
     def _init_bv_dependencies(self, bv):
-        l.debug(f"Starting data hook")
+        l.debug("Starting data hook")
         start_data_monitor(bv, self.controllers[bv])
 
     def _launch_config(self, bn_context):

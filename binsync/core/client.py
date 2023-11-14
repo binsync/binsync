@@ -217,7 +217,7 @@ class Client:
                     self.repo = git.Repo.init(self.repo_root)
                     self._setup_repo()
                 else:
-                    raise Exception(f"Failed to connect or create a BinSync repo")
+                    raise Exception("Failed to connect or create a BinSync repo")
 
         stored = self._get_stored_hash()
         if stored != self.binary_hash:
@@ -438,7 +438,7 @@ class Client:
         # promises users in the vent of inability to get new users
         users = self.users(no_cache=True) or self.users()
         if not users:
-            l.critical(f"Failed to get users from current project. Report me if possible.")
+            l.critical("Failed to get users from current project. Report me if possible.")
             return {}
 
         for user in users:

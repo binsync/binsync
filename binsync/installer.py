@@ -3,7 +3,6 @@ from pathlib import Path
 import textwrap
 import pkg_resources
 import shutil
-from urllib.request import urlretrieve
 
 from binsync.data.configuration import GlobalConfig
 
@@ -248,7 +247,7 @@ class BinSyncInstaller(Installer):
     def __init__(self):
         super().__init__(targets=Installer.DECOMPILERS)
         self.plugins_path = Path(
-            pkg_resources.resource_filename("binsync", f"decompiler_stubs")
+            pkg_resources.resource_filename("binsync", "decompiler_stubs")
         )
 
     def display_prologue(self):

@@ -5,7 +5,6 @@
 # @toolbar binsync_vendored/binsync.png
 
 import subprocess
-import time
 from binsync_vendored.ghidra_bridge_server import GhidraBridgeServer
 
 

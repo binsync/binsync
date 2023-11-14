@@ -4,7 +4,7 @@ from functools import wraps
 
 from binsync.api.controller import BSController, init_checker, fill_event
 from binsync.data import (
-    Function, FunctionHeader, StackVariable, Comment, FunctionArgument, GlobalVariable, Struct, StructMember
+    Function, FunctionHeader, StackVariable, Comment, GlobalVariable, Struct, StructMember
 )
 
 from .artifact_lifter import GhidraArtifactLifter
@@ -265,7 +265,7 @@ class GhidraBSController(BSController):
             "for f in currentProgram.getFunctionManager().getFunctions(True)]"
         )
         if name_and_sizes is None:
-            l.warning(f"Failed to get any functions from Ghidra. Did something break?")
+            l.warning("Failed to get any functions from Ghidra. Did something break?")
             return {}
 
         funcs = {

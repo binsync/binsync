@@ -66,7 +66,7 @@ class Scheduler:
 
     def schedule_job(self, job: Job, priority=SchedSpeed.SLOW):
         if not self._work:
-            l.warning(f"The job scheduler is not currently set to work, but you are still scheduling a job...")
+            l.warning("The job scheduler is not currently set to work, but you are still scheduling a job...")
 
         #l.debug(f"Job scheduled: {job} with priority {priority}")
         self._job_queue.put_nowait(

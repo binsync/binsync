@@ -13,7 +13,6 @@ import threading
 from functools import wraps
 import typing
 import logging
-from time import time, sleep
 
 import idc, idaapi, ida_kernwin, ida_hexrays, ida_funcs, \
     ida_bytes, ida_struct, ida_idaapi, ida_typeinf, idautils, ida_enum

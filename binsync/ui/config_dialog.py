@@ -337,7 +337,7 @@ class ConfigureBSDialog(QDialog):
             username = parts[-1]
             proj_path = ":".join(parts[:-1])
         except Exception:
-            l.warning(f"Config file is corrupted!")
+            l.warning("Config file is corrupted!")
 
         return username, proj_path
 

@@ -1,5 +1,7 @@
+import importlib
+
 try:
-    import angrmanagement
+    importlib.import_module("angrmanagement")
     AM_PRESENT = True
 except ImportError:
     AM_PRESENT = False

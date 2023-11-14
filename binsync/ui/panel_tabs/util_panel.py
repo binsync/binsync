@@ -248,21 +248,21 @@ class QUtilPanel(QWidget):
 
     def _handle_auto_commit_toggle(self, state):
         if state == Qt.Checked:
-            l.info(f"Disabling auto-commit!")
+            l.info("Disabling auto-commit!")
             self.controller.auto_commit_enabled = False
         else:
             self.controller.auto_commit_enabled = True
 
     def _handle_auto_push_toggle(self, state):
         if state == Qt.Checked:
-            l.info(f"Disabling auto-push!")
+            l.info("Disabling auto-push!")
             self.controller.auto_push_enabled = False
         else:
             self.controller.auto_push_enabled = True
 
     def _handle_auto_pull_toggle(self, state):
         if state == Qt.Checked:
-            l.info(f"Disabling auto-pull!")
+            l.info("Disabling auto-pull!")
             self.controller.auto_pull_enabled = False
         else:
             self.controller.auto_pull_enabled = True

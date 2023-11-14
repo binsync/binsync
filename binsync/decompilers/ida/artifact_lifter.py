@@ -2,8 +2,6 @@ import logging
 
 from binsync.api import BSArtifactLifter
 
-from . import compat
-
 l = logging.getLogger(name=__name__)
 
 

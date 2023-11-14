@@ -2,11 +2,8 @@ import logging
 import threading
 import datetime
 import time
-import math
 from functools import wraps
-from typing import Dict, Iterable, Optional, Union, TypeVar, Callable, List
-import os
-from pathlib import Path
+from typing import Dict, Iterable, Optional, Union, List
 
 import binsync.data
 from binsync.data import ProjectConfig
@@ -265,7 +262,7 @@ class BSController:
             if not self.headless:
                 all_states = self.client.all_states()
                 if not all_states:
-                    _l.warning(f"There were no states remote or local.")
+                    _l.warning("There were no states remote or local.")
                     continue
 
                 # update context knowledge every loop iteration
@@ -800,7 +797,7 @@ class BSController:
         master_state = master_state if master_state is not None else self.get_state(priority=SchedSpeed.FAST)
         artifact_type = ARTIFACT_FILL_MAP.get(filler_func.__name__, None)
         if not artifact_type:
-            _l.warning(f"Attempting to Fill an unknown type! Stopping Fill...")
+            _l.warning("Attempting to Fill an unknown type! Stopping Fill...")
             return None
 
         art_getter = self.ARTIFACT_GET_MAP.get(artifact_type)
@@ -854,7 +851,7 @@ class BSController:
         @param members:
         @return:
         """
-        _l.debug(f"Fill Struct is not implemented in your decompiler.")
+        _l.debug("Fill Struct is not implemented in your decompiler.")
         return False
 
     @fill_event
@@ -867,7 +864,7 @@ class BSController:
         @param state:
         @return:
         """
-        _l.debug(f"Fill Global Var is not implemented in your decompiler.")
+        _l.debug("Fill Global Var is not implemented in your decompiler.")
         return False
 
     @fill_event
@@ -880,22 +877,22 @@ class BSController:
         @param state:
         @return:
         """
-        _l.debug(f"Fill Enum is not implemented in your decompiler.")
+        _l.debug("Fill Enum is not implemented in your decompiler.")
         return False
 
     @fill_event
     def fill_stack_variable(self, func_addr, offset, user=None, artifact=None, **kwargs):
-        _l.debug(f"Fill Stack Var is not implemented in your decompiler.")
+        _l.debug("Fill Stack Var is not implemented in your decompiler.")
         return False
 
     @fill_event
     def fill_function_header(self, func_addr, user=None, artifact=None, **kwargs):
-        _l.debug(f"Fill Function Header is not implemented in your decompiler.")
+        _l.debug("Fill Function Header is not implemented in your decompiler.")
         return False
 
     @fill_event
     def fill_comment(self, addr, user=None, artifact=None, **kwargs):
-        _l.debug(f"Fill Comments is not implemented in your decompiler.")
+        _l.debug("Fill Comments is not implemented in your decompiler.")
         return False
 
     @fill_event
@@ -1030,7 +1027,7 @@ class BSController:
         self.save_native_decompiler_database()
 
         if self.merge_level == MergeLevel.OVERWRITE:
-            _l.warning(f"Using Magic Sync with OVERWRITE is not supported, switching to NON-CONFLICTING")
+            _l.warning("Using Magic Sync with OVERWRITE is not supported, switching to NON-CONFLICTING")
 
         # re-order users for the prefered user to be at the front of the queue (if they exist)
         all_users = list(self.usernames(priority=SchedSpeed.FAST))
@@ -1078,7 +1075,7 @@ class BSController:
                 except Exception as e:
                     _l.info(f"Banishing exception: {e}")
 
-        _l.info(f"Magic Syncing Completed!")
+        _l.info("Magic Syncing Completed!")
 
     #
     # Force Push

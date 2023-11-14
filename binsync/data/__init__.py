@@ -9,3 +9,22 @@ from binsync.data.global_variable import GlobalVariable
 from binsync.data.enum import Enum
 from binsync.data.state import State, ArtifactType
 from binsync.data.configuration import ProjectConfig, GlobalConfig
+
+__all__ = [
+    "User",
+    "Artifact",
+    "Function",
+    "FunctionHeader",
+    "FunctionArgument",
+    "Comment",
+    "Patch",
+    "StackVariable",
+    "StructMember",
+    "Struct",
+    "GlobalVariable",
+    "Enum",
+    "State",
+    "ArtifactType",
+    "ProjectConfig",
+    "GlobalConfig",
+]

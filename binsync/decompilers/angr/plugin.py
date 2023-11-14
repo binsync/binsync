@@ -1,7 +1,6 @@
 # pylint: disable=wrong-import-position,wrong-import-order
 import logging
 
-import binsync
 from angrmanagement.plugins import BasePlugin
 from angrmanagement.ui.workspace import Workspace
 from binsync.ui.version import set_ui_version
@@ -12,7 +11,7 @@ from .control_panel_view import ControlPanelView
 from .controller import AngrBSController
 
 from binsync.data import (
-    StackVariable, Function, FunctionHeader, Comment
+    StackVariable, FunctionHeader, Comment
 )
 
 l = logging.getLogger(__name__)
@@ -53,7 +52,7 @@ class BinSyncPlugin(BasePlugin):
     # BinSync GUI Hooks
     #
 
-    MENU_BUTTONS = (f'Configure Binsync ...', 'Toggle Binsync Panel')
+    MENU_BUTTONS = ('Configure Binsync ...', 'Toggle Binsync Panel')
     MENU_CONFIG_ID = 0
     MENU_TOGGLE_PANEL_ID = 1
 
