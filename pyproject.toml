@@ -30,7 +30,7 @@ content-type = "text/markdown"
 
 [project.optional-dependencies]
 test = [
-    "angr-management==9.2.68",
+    "angr-management",
     "pytest-qt",
     "PySide6-Essentials>=6.4.2",
     "flake8",
