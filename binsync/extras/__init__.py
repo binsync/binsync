@@ -8,7 +8,7 @@ _l = logging.getLogger(__name__)
 EXTRAS_AVAILABLE = True
 try:
     # AI Extras
-    importlib.import_module("datalib")
+    importlib.import_module("dailalib")
 except ImportError:
     _l.info("Extras not installed, some features will not be available.")
     EXTRAS_AVAILABLE = False
