@@ -33,21 +33,24 @@ class AngrBSController(BSController):
     and responsible for running a thread to get new changes from other users.
     """
 
-    def __init__(self, workspace=None, headless=False, binary_path: Path = None, **kwargs):
+    def __init__(self, workspace=None, headless=False, binary_path: Path = None, arch=None, **kwargs):
         self.workspace = workspace
         if workspace is None and not headless:
             l.critical("The workspace provided is None, which will result in a broken BinSync.")
             return
 
         self.main_instance = workspace.main_instance if workspace else self
+        self._arch = arch
         self._binary_path = Path(binary_path) if binary_path is not None else binary_path
+        if self.main_instance is self and self._binary_path:
+            self.project = angr.Project(str(self._binary_path), auto_load_libs=False, arch=self._arch)
+
         super().__init__(artifact_lifter=AngrArtifactLifter(self), headless=headless, **kwargs)
 
     def _init_headless_components(self):
         if self._binary_path is None or not self._binary_path.exists():
             return
 
-        self.project = angr.Project(str(self._binary_path), auto_load_libs=False)
         cfg = self.project.analyses.CFG(show_progressbar=True, normalize=True, data_references=True)
         self.project.analyses.CompleteCallingConventions(cfg=cfg, recover_variables=True)
 
@@ -230,8 +233,12 @@ class AngrBSController(BSController):
         except KeyError:
             return None
 
+        if len(list(_func.blocks)) <= 2:
+            return None
+
         func = Function(_func.addr, _func.size)
-        type_ = _func.prototype.returnty.c_repr() if _func.prototype.returnty else None
+        proto = _func.prototype if _func.prototype else None
+        type_ = _func.prototype.returnty.c_repr() if proto and proto.returnty else None
         func.header = FunctionHeader(
             _func.name, _func.addr, type_=type_
         )
@@ -247,7 +254,8 @@ class AngrBSController(BSController):
 
         func.header.args = self.func_args_as_bs_args(decompilation)
         # overwrite type again since it can change with decompilation
-        if decompilation.cfunc.functy.returnty:
+        functy = decompilation.cfunc.functy if decompilation.cfunc else None
+        if functy and functy.returnty:
             func.header.type = decompilation.cfunc.functy.returnty.c_repr()
 
         stack_vars = {
@@ -263,6 +271,8 @@ class AngrBSController(BSController):
     def _decompile(self, function: Function) -> Optional[str]:
         func = self.main_instance.project.kb.functions.get(function.addr, None)
         if func is None:
+            return None
+        if len(list(func.blocks)) <= 5:
             return None
 
         try:
@@ -287,8 +297,6 @@ class AngrBSController(BSController):
         view.focus()
 
     def _headless_decompile(self, func):
-        cfg = self.project.kb.cfgs.get_most_accurate()
-        self.project.analyses.CompleteCallingConventions(cfg=cfg, recover_variables=True)
         all_optimization_passes = angr.analyses.decompiler.optimization_passes.get_default_optimization_passes(
             "AMD64", "linux"
         )
@@ -297,10 +305,11 @@ class AngrBSController(BSController):
             if o.param == "structurer_cls"
         ][0], "phoenix")]
 
+        if not func.normalized:
+            func.normalize()
         self.main_instance.project.analyses.Decompiler(
             func, flavor='pseudocode', options=options, optimization_passes=all_optimization_passes
         )
-
 
     def _angr_management_decompile(self, func):
         # recover direct pseudocode
