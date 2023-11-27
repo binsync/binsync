@@ -1,4 +1,4 @@
-__version__ = "3.25.2"
+__version__ = "3.26.0"
 
 #
 # logging
