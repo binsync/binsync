@@ -270,7 +270,7 @@ class BinSyncInstaller(Installer):
         src_ida_binsync_py = self.plugins_path.joinpath("ida_binsync.py")
         dst_ida_binsync_py = ida_plugin_path.joinpath("ida_binsync.py")
         self.link_or_copy(src_ida_binsync_py, dst_ida_binsync_py)
-        return dst_ida_binsync_py
+        return ida_plugin_path
 
     def install_angr(self, path=None):
         angr_plugin_path = super().install_angr(path=path)
@@ -280,7 +280,7 @@ class BinSyncInstaller(Installer):
         src_angr_binsync_pkg = self.plugins_path.joinpath("angr_binsync")
         dst_angr_binsync_pkg = angr_plugin_path.joinpath("angr_binsync")
         self.link_or_copy(src_angr_binsync_pkg, dst_angr_binsync_pkg, is_dir=True)
-        return dst_angr_binsync_pkg
+        return angr_plugin_path
 
     def install_ghidra(self, path=None):
         ghidra_path = super().install_ghidra(path=path)
