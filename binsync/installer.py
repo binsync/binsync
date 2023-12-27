@@ -168,17 +168,12 @@ class Installer:
         default_str = f" [default = {path}]"
         ghidra_default_path = path
         path = self.ask_path(f"Ghidra Scripts Path{default_str}:")
-        if path:
-            path = path.joinpath("Extensions").joinpath("Ghidra")
-        elif ghidra_default_path:
+        if not path or not path.absolute().exists():
             path = ghidra_default_path
-        else:
-            return None
-
         if not path.absolute().exists():
             return None
 
-        return path
+        return path.absolute()
 
     def install_binja(self, path=None):
         binja_install_path = path or self._home.joinpath(".binaryninja").joinpath("plugins").expanduser()
