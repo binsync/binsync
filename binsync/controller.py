@@ -6,12 +6,12 @@ from functools import wraps
 from typing import Dict, Iterable, Optional, Union, List
 
 import binsync.data
-from binsync.data import ProjectConfig
-from binsync.api.artifact_lifter import BSArtifactLifter
+from libbs.data import ProjectConfig
+from binsync.api.artifact_lifter import ArtifactLifter
 from binsync.core.client import Client, SchedSpeed, Scheduler, Job
 from binsync.api.type_parser import BSTypeParser, BSType
 from binsync.api.utils import progress_bar
-from binsync.data import (
+from libbs.data import (
     State, User, Artifact,
     Function, FunctionHeader, StackVariable,
     Comment, GlobalVariable, Patch,
@@ -118,7 +118,7 @@ class BSController:
     def __init__(self, artifact_lifter=None, headless=False, auto_commit=True, reload_time=10, **kwargs):
         self.headless = headless
         self.reload_time = reload_time
-        self.artifact_lifer: BSArtifactLifter = artifact_lifter
+        self.artifact_lifer: ArtifactLifter = artifact_lifter
 
         # client created on connection
         self.client = None  # type: Optional[Client]
@@ -188,7 +188,7 @@ class BSController:
             return
 
         # after this point you can import anything from UI and it is safe!
-        from binsync.ui.qt_objects import (
+        from libbs.ui.qt_objects import (
             QThread
         )
         from binsync.ui.utils import BSUIScheduler

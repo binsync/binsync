@@ -8,8 +8,8 @@ from typing import Optional
 import filelock
 
 from binsync.core.client import ConnectionWarnings, BINSYNC_ROOT_BRANCH
-from binsync.data.configuration import ProjectConfig
-from binsync.ui.qt_objects import (
+from binsync.configuration import ProjectConfig
+from libbs.ui.qt_objects import (
     QCheckBox,
     QDialog,
     QDir,

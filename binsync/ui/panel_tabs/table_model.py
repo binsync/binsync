@@ -2,8 +2,8 @@ import logging
 import datetime
 from typing import Dict, Set
 
-from binsync.api.controller import BSController
-from binsync.ui.qt_objects import (
+from binsync.controller import BSController
+from libbs.ui.qt_objects import (
     QAbstractItemView,
     QAbstractTableModel,
     QHeaderView,

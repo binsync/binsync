@@ -4,9 +4,9 @@ from collections import defaultdict
 import re
 import time
 
-from binsync.api.controller import BSController
+from binsync.controller import BSController
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView
-from binsync.ui.qt_objects import (
+from libbs.ui.qt_objects import (
     QMenu,
     QAction,
     QWidget,

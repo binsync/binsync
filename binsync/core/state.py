@@ -10,7 +10,7 @@ import toml
 from sortedcontainers import SortedDict
 
 
-from binsync.data import (
+from libbs.data import (
     Comment,
     Enum,
     Function,
@@ -20,7 +20,7 @@ from binsync.data import (
     StackVariable,
     Struct,
 )
-from binsync.data.artifact import TomlHexEncoder
+from libbs.data.artifact import TomlHexEncoder
 from binsync.core.errors import MetadataNotFoundError
 
 
@@ -130,7 +130,7 @@ def list_files_in_dir(src: Union[pathlib.Path, git.Tree], dir_name, client=None)
 
     # load from filesystem
     if not src:
-        src = pathlib.Path("../core")
+        src = pathlib.Path("")
 
     if not src.joinpath(pathlib.Path(dir_name)).exists():
         return []
@@ -147,7 +147,7 @@ def load_toml_from_file(src: Union[pathlib.Path, git.Tree], filename, client=Non
         file_data = client.load_file_from_tree(src, filename)
     else:
         if not src:
-            src = pathlib.Path("../core")
+            src = pathlib.Path("")
 
         src = src.joinpath(filename)
         if not src.exists():
@@ -238,7 +238,7 @@ class State:
 
         # dump using filesystem
         if not dst:
-            dst = pathlib.Path("../core")
+            dst = pathlib.Path("")
 
         out_path = dst.joinpath(filename)
         pathlib.Path(out_path).parent.mkdir(parents=True, exist_ok=True)

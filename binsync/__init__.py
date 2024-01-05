@@ -1,4 +1,4 @@
-__version__ = "3.26.0"
+__version__ = "4.0.0"
 
 #
 # logging
@@ -11,5 +11,5 @@ loggers = Loggers()
 del Loggers
 del logging
 
-import binsync.data
-import binsync.api
+def create_plugin():
+    pass

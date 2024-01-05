@@ -4,9 +4,9 @@ from collections import defaultdict
 from typing import Dict
 import time
 
-from binsync.api.controller import BSController
+from binsync.controller import BSController
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView
-from binsync.ui.qt_objects import (
+from libbs.ui.qt_objects import (
     QMenu,
     QAction,
     QWidget,
@@ -15,7 +15,7 @@ from binsync.ui.qt_objects import (
 )
 from binsync.ui.utils import friendly_datetime
 from binsync.core.scheduler import SchedSpeed
-from binsync.data import Function
+from libbs.data import Function
 
 l = logging.getLogger(__name__)
 

@@ -15,7 +15,7 @@ from binaryninjaui import DockContextHandler
 from binaryninja.enums import VariableSourceType
 
 import binsync
-from binsync.data import (
+from libbs.data import (
     Function,
     FunctionHeader,
     FunctionArgument,

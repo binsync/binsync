@@ -19,14 +19,14 @@ from binaryninja.binaryview import BinaryDataNotification
 from collections import defaultdict
 import logging
 
-from binsync.ui.version import set_ui_version
+from libbs.ui.version import set_ui_version
 set_ui_version("PySide6")
 from binsync.ui.config_dialog import ConfigureBSDialog
 from binsync.ui.control_panel import ControlPanel
-from binsync.ui.qt_objects import QImage
+from libbs.ui.qt_objects import QImage
 from .compat import bn_enum_to_bs, find_main_window, BinjaDockWidget, bn_struct_to_bs, bn_func_to_bs
 from .controller import BinjaBSController
-from binsync.data import FunctionHeader, GlobalVariable
+from libbs.data import FunctionHeader, GlobalVariable
 
 l = logging.getLogger(__name__)
 

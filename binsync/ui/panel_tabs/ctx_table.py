@@ -1,9 +1,9 @@
 import logging
 import datetime
 import time
-from binsync.api.controller import BSController
+from binsync.controller import BSController
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableView
-from binsync.ui.qt_objects import (
+from libbs.ui.qt_objects import (
     QMenu,
     QAction,
     Qt

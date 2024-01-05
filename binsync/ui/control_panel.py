@@ -6,7 +6,7 @@ from binsync.ui.panel_tabs.ctx_table import QCTXTable
 from binsync.ui.panel_tabs.functions_table import QFunctionTable
 from binsync.ui.panel_tabs.globals_table import QGlobalsTable
 from binsync.ui.panel_tabs.util_panel import QUtilPanel
-from binsync.ui.qt_objects import (
+from libbs.ui.qt_objects import (
     QLabel,
     QMenu,
     QStatusBar,

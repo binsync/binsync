@@ -18,7 +18,7 @@ import idautils
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
 from PyQt5.QtCore import Qt
 
-from binsync.ui.version import set_ui_version
+from libbs.ui.version import set_ui_version
 set_ui_version("PyQt5")
 from binsync.ui.config_dialog import ConfigureBSDialog
 from binsync.ui.control_panel import ControlPanel

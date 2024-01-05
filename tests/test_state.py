@@ -6,7 +6,7 @@ import json
 import unittest
 
 from binsync.core.client import Client
-from binsync.data import (
+from libbs.data import (
     FunctionHeader, StackVariable, FunctionArgument, State, Struct, ArtifactType
 )
 

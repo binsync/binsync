@@ -1,7 +1,7 @@
 import logging
 import sys
 
-from binsync.ui.qt_objects import QMainWindow, QApplication
+from libbs.ui.qt_objects import QMainWindow, QApplication
 from binsync.ui.control_panel import ControlPanel
 from binsync.ui.config_dialog import ConfigureBSDialog
 

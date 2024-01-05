@@ -34,6 +34,7 @@ test = [
     "pytest-qt",
     "flake8",
     "pytest",
+    "libbs"
 ]
 ghidra = [
     "ghidra_bridge",

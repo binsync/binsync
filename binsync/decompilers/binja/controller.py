@@ -29,8 +29,8 @@ import binaryninja
 from binaryninja.enums import VariableSourceType
 from binaryninja.types import StructureType, EnumerationType
 
-from binsync.api.controller import BSController, fill_event
-from binsync.data import (
+from binsync.controller import BSController, fill_event
+from libbs.data import (
     Function, FunctionHeader, StackVariable,
     Comment, GlobalVariable,
     Enum, Struct, Artifact

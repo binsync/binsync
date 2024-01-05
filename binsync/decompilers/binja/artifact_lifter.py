@@ -1,7 +1,7 @@
-from binsync.api import BSArtifactLifter
+from binsync.api import ArtifactLifter
 
 
-class BinjaArtifactLifter(BSArtifactLifter):
+class BinjaArtifactLifter(ArtifactLifter):
     lift_map = {
         "int64_t": "long",
         "uint64_t": "unsigned long",

@@ -1,4 +1,4 @@
-from binsync.ui.version import ui_version
+from libbs.ui.version import ui_version
 
 if ui_version == "PySide2":
     from PySide2.QtCore import (

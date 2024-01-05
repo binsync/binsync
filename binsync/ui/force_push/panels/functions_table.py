@@ -2,9 +2,9 @@ import logging
 from typing import Dict, Set
 
 
-from binsync.api.controller import BSController
+from binsync.controller import BSController
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView
-from binsync.ui.qt_objects import (
+from libbs.ui.qt_objects import (
     QWidget,
     QVBoxLayout,
     Qt,
