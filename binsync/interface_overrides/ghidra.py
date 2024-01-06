@@ -2,11 +2,11 @@ import logging
 import sys
 
 from libbs.ui.qt_objects import QMainWindow, QApplication
+
+
 from binsync.ui.control_panel import ControlPanel
 from binsync.ui.config_dialog import ConfigureBSDialog
-
-from .controller import GhidraBSController
-
+from binsync.controller import BSController
 
 l = logging.getLogger(__name__)
 
@@ -22,9 +22,8 @@ class ControlPanelWindow(QMainWindow):
         self.setWindowTitle("BinSync")
         self.width_hint = 300
 
-        self.controller: GhidraBSController = GhidraBSController()
+        self.controller = BSController()
         self.control_panel = ControlPanel(self.controller)
-
         self._init_widgets()
 
     #
@@ -54,7 +53,7 @@ class ControlPanelWindow(QMainWindow):
         self.controller.ghidra.server.stop()
 
 
-def start_ui():
+def start_remote_ui():
     app = QApplication()
     cp_window = ControlPanelWindow()
 

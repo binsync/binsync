@@ -1,15 +1,14 @@
-# REPLACE_ME: with the description of the plugin you want displayed in Ghidra, and update below items
-# @author YourNameHere
-# @category YourCategoryHere
-# @menupath Tools.MyPlugin.Replace me with short desc shown in Tools>MyPlugin menu
+# A cross-decompiler collaboration plugin
+# @author BinSync Team
+# @category Collaboration
+# @menupath Tools.BinSync.Start UI...
 
-# REPLACE_ME: replace the command to run your plugin from Ghidra Python2 side
-library_command = "my_library_name --run"
+library_command = "binsync -s ghidra"
 
 
 def create_plugin(*args, **kwargs):
     # REPLACE_ME this import with an import of your plugin's create_plugin function
-    from my_library_name import create_plugin as _create_plugin
+    from binsync import create_plugin as _create_plugin
     return _create_plugin(*args, **kwargs)
 
 # =============================================================================
@@ -31,7 +30,7 @@ if sys.version[0] == "2":
         raise RuntimeError(
             "Failed to run the Python3 backed. It's likely Python3 is not in your Path inside Ghidra.")
 else:
-    # Try plugin discovery for other decompilers
+    # Try plugin discovery for other interface_overrides
     try:
         import idaapi
         has_ida = True

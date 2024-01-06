@@ -50,7 +50,7 @@ class BinSyncSidebarWidget(SidebarWidget):
 class BinSyncSidebarWidgetType(SidebarWidgetType):
     def __init__(self, bn_plugin):
         bs_img_path = Path(
-            pkg_resources.resource_filename("binsync", "decompilers/binja/binsync_binja_logo.png")
+            pkg_resources.resource_filename("binsync", "interface_overrides/binja/binsync_binja_logo.png")
         ).absolute()
         if not bs_img_path.exists():
             raise FileNotFoundError("Could not find BinSync logo image")

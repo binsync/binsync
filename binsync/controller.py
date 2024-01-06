@@ -5,18 +5,19 @@ import time
 from functools import wraps
 from typing import Dict, Iterable, Optional, Union, List
 
-import binsync.data
-from libbs.data import ProjectConfig
-from binsync.api.artifact_lifter import ArtifactLifter
-from binsync.core.client import Client, SchedSpeed, Scheduler, Job
-from binsync.api.type_parser import BSTypeParser, BSType
-from binsync.api.utils import progress_bar
+from libbs.ui.utils import progress_bar
 from libbs.data import (
-    State, User, Artifact,
+    Artifact,
     Function, FunctionHeader, StackVariable,
     Comment, GlobalVariable, Patch,
     Enum, Struct
 )
+from libbs.api import DecompilerInterface
+
+from binsync.core.client import Client, SchedSpeed, Scheduler, Job
+from binsync.core.state import State
+from binsync.core.user import User
+from binsync.configuration import ProjectConfig
 
 _l = logging.getLogger(name=__name__)
 
@@ -115,10 +116,11 @@ class BSController:
     The client will be set on connection. The ctx_change_callback will be set by an outside UI
 
     """
-    def __init__(self, artifact_lifter=None, headless=False, auto_commit=True, reload_time=10, **kwargs):
+    def __init__(self, headless=False, auto_commit=True, reload_time=10, deci_class_override=None, **kwargs):
         self.headless = headless
         self.reload_time = reload_time
-        self.artifact_lifer: ArtifactLifter = artifact_lifter
+        self.decompiler_interface = deci_class_override() if deci_class_override \
+            else DecompilerInterface.discover_interface()  # type: DecompilerInterface
 
         # client created on connection
         self.client = None  # type: Optional[Client]
@@ -146,13 +148,15 @@ class BSController:
         self._run_updater_threads = False
         self.user_states_update_thread = threading.Thread(target=self.updater_routine)
 
-        # TODO: make the initialization of this with types of decompiler
-        self.type_parser = BSTypeParser()
         if self.headless:
             self._init_headless_components()
 
     def _init_headless_components(self):
         pass
+
+    #
+    # Git Properties
+    #
 
     @property
     def auto_commit_enabled(self):
@@ -180,7 +184,7 @@ class BSController:
         self.client.pull_on_update = val
 
     #
-    #   Multithreading updaters, locks, and evaluators
+    # Multithreading updaters, locks, and evaluators
     #
 
     def _init_ui_components(self):
@@ -287,7 +291,7 @@ class BSController:
         self.ui_callback(states)
 
     def _check_and_notify_ctx(self, states):
-        active_ctx = self.active_context()
+        active_ctx = self.decompiler_interface.active_context()
         if active_ctx is None or self.last_ctx == active_ctx:
             return
 
@@ -313,7 +317,7 @@ class BSController:
     #
 
     def connect(self, user, path, init_repo=False, remote_url=None, single_thread=False, **kwargs):
-        binary_hash = self.binary_hash()
+        binary_hash = self.decompiler_interface.binary_hash
         self.client = Client(
             user, path, binary_hash, init_repo=init_repo, remote_url=remote_url, **kwargs
         )
@@ -353,315 +357,20 @@ class BSController:
         for user in self.users(priority=priority):
             yield user.name
 
-    #
-    # Override Mandatory API:
-    # These functions create a public API for things that hold a reference to the Controller from either another
-    # thread or object. This is most useful for use in the UI, which can use this API to make general requests from
-    # the decompiler regardless of internal decompiler API.
-    #
-
-    def binary_hash(self) -> str:
-        """
-        Returns a hex string of the currently loaded binary in the decompiler. For most cases,
-        this will simply be a md5hash of the binary.
-
-        @rtype: hex string
-        """
-        raise NotImplementedError
-
-    def active_context(self) -> binsync.data.Function:
-        """
-        Returns an binsync Function. Currently only functions are supported as current contexts.
-        This function will be called very frequently, so its important that its implementation is fast
-        and can be done many times in the decompiler.
-        """
-        raise NotImplementedError
-
-    def binary_path(self) -> Optional[str]:
-        """
-        Returns a string that is the path of the currently loaded binary. If there is no binary loaded
-        then None should be returned.
-
-        @rtype: path-like string (/path/to/binary)
-        """
-        raise NotImplementedError
-
     def get_func_size(self, func_addr) -> int:
         """
-        Returns the size of a function
-
-        @param func_addr:
-        @return:
+        TODO find out how to replace this func
         """
         raise NotImplementedError
-
-    def goto_address(self, func_addr) -> None:
-        """
-        Relocates decompiler display to provided address
-
-        @param func_addr:
-        @return:
-        """
-        raise NotImplementedError
-
-    @property
-    def decompiler_available(self) -> bool:
-        """
-        @return: True if decompiler is available for decompilation, False if otherwise
-        """
-        return True
 
     def save_native_decompiler_database(self):
         """
-        Saves the current state of the decompilers database with the file name being the name of the current
-        binary and the filename extension being that of the native decompilers save format
+        TODO: find out how to replace this func
+
+        Saves the current state of the interface_overrides database with the file name being the name of the current
+        binary and the filename extension being that of the native interface_overrides save format
         """
         _l.info("Saving native decompiler database feature is not implemtened in this decompiler. Skipping...")
-
-    def xrefs_to(self, artifact: Artifact) -> List[Artifact]:
-        """
-        Returns a list of artifacts that reference the provided artifact.
-        @param artifact: Artifact to find references to
-        @return: List of artifacts that reference the provided artifact
-        """
-        return []
-
-    #
-    # Optional Artifact API:
-    # A series of functions that allow public access to live artifacts in the decompiler. As an example,
-    # `function(addr)` will return the current Function at addr that the user would be seeing. This is useful
-    # for having a common interface of reading data from other decompilers.
-    #
-
-    def functions(self) -> Dict[int, Function]:
-        """
-        Returns a dict of binsync.Functions that contain the addr, name, and size of each function in the decompiler.
-        Note: this does not contain the live data of the Artifact, only the minimum knowledge to that the Artifact
-        exists. To get live data, use the singleton function of the same name.
-
-        @return:
-        """
-        return {}
-
-    def function(self, addr, **kwargs) -> Optional[Function]:
-        return None
-
-    def global_vars(self) -> Dict[int, GlobalVariable]:
-        """
-        Returns a dict of binsync.GlobalVariable that contain the addr and size of each global var.
-        Note: this does not contain the live data of the Artifact, only the minimum knowledge to that the Artifact
-        exists. To get live data, use the singleton function of the same name.
-
-        @return:
-        """
-        return {}
-
-    def global_var(self, addr) -> Optional[GlobalVariable]:
-        return None
-
-    def structs(self) -> Dict[str, Struct]:
-        """
-        Returns a dict of binsync.Structs that contain the name and size of each struct in the decompiler.
-        Note: this does not contain the live data of the Artifact, only the minimum knowledge to that the Artifact
-        exists. To get live data, use the singleton function of the same name.
-
-        @return:
-        """
-        return {}
-
-    def struct(self, name) -> Optional[Struct]:
-        return None
-
-    def enums(self) -> Dict[str, Enum]:
-        """
-        Returns a dict of binsync.Enum that contain the name of the enums in the decompiler.
-        Note: this does not contain the live data of the Artifact, only the minimum knowledge to that the Artifact
-        exists. To get live data, use the singleton function of the same name.
-
-        @return:
-        """
-        return {}
-
-    def enum(self, name) -> Optional[Enum]:
-        return None
-
-    def patches(self) -> Dict[int, Patch]:
-        """
-        Returns a dict of binsync.Patch that contain the addr of each Patch and the bytes.
-        Note: this does not contain the live data of the Artifact, only the minimum knowledge to that the Artifact
-        exists. To get live data, use the singleton function of the same name.
-
-        @return:
-        """
-        return {}
-
-    def patch(self, addr) -> Optional[Patch]:
-        return None
-
-    def global_artifacts(self):
-        """
-        Returns a light version of all artifacts that are global (non function associated):
-        - structs, gvars, enums
-
-        @return:
-        """
-        g_artifacts = {}
-        for f in [self.structs, self.global_vars, self.enums]:
-            g_artifacts.update(f())
-
-        return g_artifacts
-
-    def global_artifact(self, lookup_item: Union[str, int]):
-        """
-        Returns a live binsync.data version of the Artifact located at the lookup_item location, which can
-        lookup any artifact supported in `global_artifacts`
-
-        @param lookup_item:
-        @return:
-        """
-
-        if isinstance(lookup_item, int):
-            return self.global_var(lookup_item)
-        elif isinstance(lookup_item, str):
-            artifact = self.struct(lookup_item)
-            if artifact:
-                return artifact
-
-            artifact = self.enum(lookup_item)
-            return artifact
-
-        return None
-
-    def decompile(self, addr: int) -> Optional[str]:
-        if not self.decompiler_available:
-            return None
-
-        # TODO: make this a function call after transitioning decompiler artifacts to LiveState
-        for search_addr in (addr, self.artifact_lifer.lower_addr(addr)):
-            func_found = False
-            for func_addr, func in self.functions().items():
-                if func.addr <= search_addr < (func.addr + func.size):
-                    func_found = True
-                    break
-            else:
-                func = None
-
-            if func_found:
-                break
-        else:
-            return None
-
-        try:
-            decompilation = self._decompile(func)
-        except Exception as e:
-            _l.warning(f"Failed to decompile function at {hex(addr)}: {e}")
-            decompilation = None
-
-        return decompilation
-
-    def _decompile(self, function: Function) -> Optional[str]:
-        return None
-
-    #
-    # Setters:
-    # Work like Fillers, except can function without a BS Client. In effect, this allows you to
-    # change the decompilers objects using BinSync objects.
-    # TODO: all the code in this category set_* is experimental and not ready for production use
-    # all this code should be implemented in the other decompilers or moved to a different project
-    #
-
-    def set_artifact(self, artifact: Artifact, lower=True, **kwargs) -> bool:
-        """
-        Sets a BinSync Artifact into the decompilers local database. This operations allows you to change
-        what the native decompiler sees with BinSync Artifacts. This is different from opertions on a BinSync State,
-        since this is native to the decompiler
-
-        >>> func = Function(0xdeadbeef, 0x800)
-        >>> func.name = "main"
-        >>> controller.set_artifact(func)
-
-        @param artifact:
-        @param lower:       Wether to convert the Artifacts types and offset into the local decompilers format
-        @return:            True if the Artifact was succesfuly set into the decompiler
-        """
-        set_map = {
-            Function: self.set_function,
-            FunctionHeader: self.set_function_header,
-            StackVariable: self.set_stack_variable,
-            Comment: self.set_comment,
-            GlobalVariable: self.set_global_var,
-            Struct: self.set_struct,
-            Enum: self.set_enum,
-            Patch: self.set_patch,
-            Artifact: None,
-        }
-
-        if lower:
-            artifact = self.lower_artifact(artifact)
-
-        setter = set_map.get(type(artifact), None)
-        if setter is None:
-            _l.critical(f"Unsupported object is attempting to be set, please check your object: {artifact}")
-            return False
-
-        return setter(artifact, **kwargs)
-
-    def set_function(self, func: Function, **kwargs) -> bool:
-        update = False
-        header = func.header
-        if header is not None:
-            update = self.set_function_header(header, **kwargs)
-
-        if func.stack_vars:
-            for variable in func.stack_vars.values():
-                update |= self.set_stack_variable(variable, **kwargs)
-
-        return update
-
-    def set_function_header(self, fheader: FunctionHeader, **kwargs) -> bool:
-        return False
-
-    def set_stack_variable(self, svar: StackVariable, **kwargs) -> bool:
-        return False
-
-    def set_comment(self, comment: Comment, **kwargs) -> bool:
-        return False
-
-    def set_global_var(self, gvar: GlobalVariable, **kwargs) -> bool:
-        return False
-
-    def set_struct(self, struct: Struct, header=True, members=True, **kwargs) -> bool:
-        return False
-
-    def set_enum(self, enum: Enum, **kwargs) -> bool:
-        return False
-
-    def set_patch(self, path: Patch, **kwargs) -> bool:
-        return False
-
-    #
-    # Change Callback API
-    # TODO: all the code in this category on_* is experimental and not ready for production use
-    # all this code should be implemented in the other decompilers or moved to a different project
-    #
-
-    def on_function_header_changed(self, fheader: FunctionHeader):
-        pass
-
-    def on_stack_variable_changed(self, svar: StackVariable):
-        pass
-
-    def on_comment_changed(self, comment: Comment):
-        pass
-
-    def on_struct_changed(self, struct: Struct):
-        pass
-
-    def on_enum_changed(self, enum: Enum):
-        pass
-
-    def on_global_variable_changed(self, gvar: GlobalVariable):
-        pass
 
     #
     # Client API & Shortcuts
@@ -1191,7 +900,7 @@ class BSController:
         if not type_str:
             return None
 
-        type_: BSType = self.type_parser.parse_type(type_str)
+        type_: BSType = self.decompiler_interface.type_parser.parse_type(type_str)
         if not type_:
             # it was not parseable
             return None
@@ -1243,7 +952,7 @@ class BSController:
     #
 
     def load_saved_config(self):
-        config = ProjectConfig.load_from_file(self.binary_path() or "")
+        config = ProjectConfig.load_from_file(self.decompiler_interface.binary_path or "")
         if not config:
             return
         self.config = config

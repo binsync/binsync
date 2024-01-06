@@ -5,7 +5,7 @@ from pathlib import Path
 import importlib
 import os
 
-from binsync.decompilers import BS_SUPPORTED_DECOMPILERS
+from binsync.interface_overrides import BS_SUPPORTED_DECOMPILERS
 from binsync.installer import BinSyncInstaller
 from binsync.extras import EXTRAS_AVAILABLE
 
@@ -13,7 +13,7 @@ l = logging.getLogger(__name__)
 
 
 def run_decompiler_ui(decompiler_name):
-    with importlib.resources.path("binsync", "decompilers") as decompilers_path:
+    with importlib.resources.path("binsync", "interface_overrides") as decompilers_path:
         if not decompilers_path.exists():
             l.error("Known plugins path does not exist, which means BinSync did not install correctly!")
             return False
@@ -51,8 +51,8 @@ def main():
     )
     parser.add_argument(
         "--install", action="store_true", help="""
-        Install the BinSync core to supported decompilers as plugins. This option will start an interactive
-        prompt asking for install paths for all supported decompilers. Each install path is optional and 
+        Install the BinSync core to supported interface_overrides as plugins. This option will start an interactive
+        prompt asking for install paths for all supported interface_overrides. Each install path is optional and 
         will be skipped if not path is provided during install. 
         """
     )

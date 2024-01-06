@@ -113,7 +113,6 @@ class BinsyncPlugin(GenericBSAngrManagementPlugin):
         # call option mapped to each menu pos
         mapping.get(idx)()
 
-
     def open_sync_config_dialog(self):
         if self.workspace.main_instance.project.am_none:
             # project does not exist yet

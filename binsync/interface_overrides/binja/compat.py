@@ -13,16 +13,16 @@ from PySide6.QtWidgets import (
 import binaryninja
 from binaryninjaui import DockContextHandler
 from binaryninja.enums import VariableSourceType
-
-import binsync
-from libbs.data import (
-    Function,
-    FunctionHeader,
-    FunctionArgument,
-    StructMember,
-    Struct,
-    Enum,
+from PySide6.QtWidgets import QVBoxLayout
+from binaryninjaui import (
+    UIAction,
+    UIActionHandler,
+    Menu,
+    SidebarWidget,
+    SidebarWidgetType,
+    Sidebar,
 )
+import binaryninja
 
 # Some code is derived from https://github.com/NOPDev/BinjaDock/tree/master/defunct
 # Thanks @NOPDev
@@ -156,87 +156,3 @@ class BinjaWidget(QWidget):
         # self._core = _instance()
         # self._core.addTabWidget(self, tabname)
 
-#
-# Converters
-#
-
-
-def bn_struct_to_bs(name, bn_struct):
-    members = {
-        member.offset: StructMember(str(member.name), member.offset, str(member.type), member.type.width)
-        for member in bn_struct.members if member.offset is not None
-    }
-
-    return Struct(
-        str(name),
-        bn_struct.width if bn_struct.width is not None else 0,
-        members
-    )
-
-
-def bn_func_to_bs(bn_func):
-
-    #
-    # header: name, ret type, args
-    #
-
-    args = {
-        i: FunctionArgument(
-            i, parameter.name, parameter.type.get_string_before_name() if parameter.type else None,
-            parameter.type.width if parameter.type else 0
-        )
-        for i, parameter in enumerate(bn_func.parameter_vars)
-    }
-
-    sync_header = FunctionHeader(
-        bn_func.name,
-        bn_func.start,
-        type_=bn_func.return_type.get_string_before_name(),
-        args=args
-    )
-
-    #
-    # stack vars
-    #
-
-    binja_stack_vars = {
-        v.storage: v for v in bn_func.stack_layout if v.source_type == VariableSourceType.StackVariableSourceType
-    }
-    sorted_stack = sorted(bn_func.stack_layout, key=lambda x: x.storage)
-    var_sizes = {}
-
-    for off, var in binja_stack_vars.items():
-        i = sorted_stack.index(var)
-        if i + 1 >= len(sorted_stack):
-            var_sizes[var] = 0
-        else:
-            var_sizes[var] = var.storage - sorted_stack[i].storage
-
-    bs_stack_vars = {
-        off: binsync.data.StackVariable(
-            off,
-            var.name,
-            var.type.get_string_before_name() if var.type else None,
-            var_sizes[var],
-            bn_func.start
-        )
-        for off, var in binja_stack_vars.items()
-    }
-
-    try:
-        size = bn_func.highest_address - bn_func.start
-    except Exception as e:
-        size = 0
-        l.critical(f"Failed to grab the size of function because {e}. It's possible the function "
-                   f"is not yet known to Binary Ninja.")
-
-    return Function(bn_func.start, size, header=sync_header, stack_vars=bs_stack_vars)
-
-def bn_enum_to_bs(name: str, bn_enum: binaryninja.EnumerationType):
-    members = {}
-
-    for enum_member in bn_enum.members:
-        if isinstance(enum_member, binaryninja.EnumerationMember) and isinstance(enum_member.value, int):
-            members[enum_member.name] = enum_member.value
-
-    return Enum(name, members)

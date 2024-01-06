@@ -164,7 +164,7 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         # casually open a pseudocode window, this prevents magic sync from spawning pseudocode windows
         # in weird locations upon an initial run
         func_addr = next(idautils.Functions())
-        if controller.decompiler_available:
+        if controller.decompiler_interface.decompiler_available:
             ida_hexrays.open_pseudocode(func_addr, ida_hexrays.OPF_NO_WAIT | ida_hexrays.OPF_REUSE)
 
         # then attempt to flip back to IDA View-A
