@@ -11,7 +11,8 @@ import filelock
 import git
 import git.exc
 
-from libbs.data import User, GlobalConfig
+from binsync.core.user import User
+from binsync.configuration import GlobalConfig
 from binsync.core.errors import ExternalUserCommitError, MetadataNotFoundError
 from binsync.core.state import State, load_toml_from_file
 from binsync.core.scheduler import Scheduler, Job, SchedSpeed

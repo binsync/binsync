@@ -30,6 +30,9 @@ class BinSyncInstaller(LibBSPluginInstaller):
         dst = Path(path) / src.name
         self.link_or_copy(src, dst, symlink=True)
 
+    def install_angr(self, path=None, interactive=True):
+        self.info("Skipping angr install since BinSync is shipped with angr...")
+
     def install_ida(self, path=None, interactive=True):
         path = super().install_ida(path=path, interactive=interactive)
         if not path:

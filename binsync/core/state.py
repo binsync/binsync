@@ -10,7 +10,7 @@ import toml
 from sortedcontainers import SortedDict
 
 
-from libbs.data import (
+from libbs.artifacts import (
     Comment,
     Enum,
     Function,
@@ -20,7 +20,7 @@ from libbs.data import (
     StackVariable,
     Struct,
 )
-from libbs.data.artifact import TomlHexEncoder
+from libbs.artifacts import TomlHexEncoder
 from binsync.core.errors import MetadataNotFoundError
 
 

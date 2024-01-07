@@ -2,7 +2,7 @@ import logging
 
 from binsync.ui.force_push.panels.functions_table import QFunctionTable
 from binsync.ui.force_push.panels.globals_table import QGlobalsTable
-from binsync.api.utils import progress_bar
+from libbs.api.utils import progress_bar
 from libbs.ui.qt_objects import (
     QTabWidget,
     QVBoxLayout,

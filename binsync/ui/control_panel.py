@@ -1,6 +1,6 @@
 import logging
 
-import binsync.data
+import libbs.artifacts
 from binsync.ui.panel_tabs.activity_table import QActivityTable
 from binsync.ui.panel_tabs.ctx_table import QCTXTable
 from binsync.ui.panel_tabs.functions_table import QFunctionTable
@@ -63,7 +63,7 @@ class ControlPanel(QWidget):
         self.update_ready.emit(status)
 
     def ctx_callback(self, states):
-        if isinstance(self.controller.last_ctx, binsync.data.Function):
+        if isinstance(self.controller.last_ctx, libbs.artifacts.Function):
             self._ctx_table.update_table(states, new_ctx=self.controller.last_ctx.addr)
 
         self.ctx_change.emit()

@@ -5,8 +5,8 @@ import time
 from functools import wraps
 from typing import Dict, Iterable, Optional, Union, List
 
-from libbs.ui.utils import progress_bar
-from libbs.data import (
+from libbs.api.utils import progress_bar
+from libbs.artifacts import (
     Artifact,
     Function, FunctionHeader, StackVariable,
     Comment, GlobalVariable, Patch,
@@ -116,11 +116,15 @@ class BSController:
     The client will be set on connection. The ctx_change_callback will be set by an outside UI
 
     """
-    def __init__(self, headless=False, auto_commit=True, reload_time=10, deci_class_override=None, **kwargs):
+    def __init__(self, decompiler_interface: DecompilerInterface = None, headless=False, auto_commit=True, reload_time=10, **kwargs):
         self.headless = headless
         self.reload_time = reload_time
-        self.decompiler_interface = deci_class_override() if deci_class_override \
-            else DecompilerInterface.discover_interface()  # type: DecompilerInterface
+        if decompiler_interface is None:
+            _l.warning("No decompiler interface was passed to the controller, this may cause errors. We will auto-discover one.")
+            self.deci = DecompilerInterface.discover_interface()
+        else:
+            self.deci = decompiler_interface
+
 
         # client created on connection
         self.client = None  # type: Optional[Client]
@@ -291,7 +295,7 @@ class BSController:
         self.ui_callback(states)
 
     def _check_and_notify_ctx(self, states):
-        active_ctx = self.decompiler_interface.active_context()
+        active_ctx = self.deci.active_context()
         if active_ctx is None or self.last_ctx == active_ctx:
             return
 
@@ -317,7 +321,7 @@ class BSController:
     #
 
     def connect(self, user, path, init_repo=False, remote_url=None, single_thread=False, **kwargs):
-        binary_hash = self.decompiler_interface.binary_hash
+        binary_hash = self.deci.binary_hash
         self.client = Client(
             user, path, binary_hash, init_repo=init_repo, remote_url=remote_url, **kwargs
         )
@@ -357,12 +361,6 @@ class BSController:
         for user in self.users(priority=priority):
             yield user.name
 
-    def get_func_size(self, func_addr) -> int:
-        """
-        TODO find out how to replace this func
-        """
-        raise NotImplementedError
-
     def save_native_decompiler_database(self):
         """
         TODO: find out how to replace this func
@@ -375,12 +373,6 @@ class BSController:
     #
     # Client API & Shortcuts
     #
-
-    def lift_artifact(self, artifact: Artifact) -> Artifact:
-        return self.artifact_lifer.lift(artifact)
-
-    def lower_artifact(self, artifact: Artifact) -> Artifact:
-        return self.artifact_lifer.lower(artifact)
 
     @init_checker
     def get_state(self, user=None, version=None, priority=None, no_cache=False) -> State:
@@ -447,7 +439,7 @@ class BSController:
         if isinstance(artifact, (FunctionHeader, StackVariable, Comment)) and make_func:
             func_addr = artifact.func_addr if hasattr(artifact, "func_addr") else artifact.addr
             if func_addr and not state.get_function(func_addr):
-                self.push_artifact(Function(func_addr, self.get_func_size(func_addr)), state=state, set_last_change=set_last_change)
+                self.push_artifact(Function(func_addr, self.deci.get_func_size(func_addr)), state=state, set_last_change=set_last_change)
 
         # lift artifact into standard BinSync format
         artifact = self.lift_artifact(artifact)
@@ -604,12 +596,14 @@ class BSController:
         _l.debug("Fill Comments is not implemented in your decompiler.")
         return False
 
+
     @fill_event
     def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
         """
         Grab all relevant information from the specified user and fill the @func_addr.
         """
-        dec_func: Function = self.function(func_addr, **kwargs)
+        lifted_func_addr = self.deci.artifact_lifer.lift_addr(func_addr)
+        dec_func: Function = self.deci.functions[lifted_func_addr]
         if not dec_func:
             _l.warning(f"The function at {hex(func_addr)} does not exist in your decompiler.")
             dec_func = Function(None, None)
@@ -900,7 +894,7 @@ class BSController:
         if not type_str:
             return None
 
-        type_: BSType = self.decompiler_interface.type_parser.parse_type(type_str)
+        type_: BSType = self.deci.type_parser.parse_type(type_str)
         if not type_:
             # it was not parseable
             return None
@@ -952,7 +946,7 @@ class BSController:
     #
 
     def load_saved_config(self):
-        config = ProjectConfig.load_from_file(self.decompiler_interface.binary_path or "")
+        config = ProjectConfig.load_from_file(self.deci.binary_path or "")
         if not config:
             return
         self.config = config

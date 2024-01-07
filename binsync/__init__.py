@@ -18,7 +18,7 @@ def create_plugin(*args, **kwargs):
     from libbs.decompilers import IDA_DECOMPILER, ANGR_DECOMPILER, BINJA_DECOMPILER, GHIDRA_DECOMPILER
     from binsync.controller import BSController
 
-    # first discover the current decompiler and grab the overrides
+    # First discover the current decompiler and grab the overrides for BinSync specific UI
     current_decompiler = DecompilerInterface.find_current_decompiler()
     if current_decompiler == IDA_DECOMPILER:
         from binsync.interface_overrides.ida import IDABSInterface
@@ -35,10 +35,12 @@ def create_plugin(*args, **kwargs):
     else:
         raise ValueError(f"Unknown decompiler {current_decompiler}")
 
-    # now apply the overrides and create a BinSync controller
-    if current_decompiler == GHIDRA_DECOMPILER:
-        from binsync.interface_overrides.ghidra import start_remote_ui
-        # this will block until the user is done using BinSync
-        start_remote_ui()
-    else:
-        return BSController(deci_cls_override=deci_cls)
+    # We will now create the plugin in the decompiler, which will create the Control Panel in the UI of the specified
+    # decompiler. That Control Panel will be provided a reference to the current constructing deci bellow, which
+    # will also be passed to future control panels as they are created.
+    deci = deci_cls(
+        plugin_name="BinSync",
+        init_plugin=True,
+        ui_init_args=args,
+        ui_init_kwargs=kwargs
+    )

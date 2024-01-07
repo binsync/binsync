@@ -26,7 +26,7 @@ from binsync.ui.control_panel import ControlPanel
 from libbs.ui.qt_objects import QImage
 from .compat import bn_enum_to_bs, find_main_window, BinjaDockWidget, bn_struct_to_bs, bn_func_to_bs
 from .controller import BinjaBSController
-from libbs.data import FunctionHeader, GlobalVariable
+from libbs.artifacts import FunctionHeader, GlobalVariable
 
 l = logging.getLogger(__name__)
 

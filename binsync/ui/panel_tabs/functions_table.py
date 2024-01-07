@@ -15,7 +15,7 @@ from libbs.ui.qt_objects import (
 )
 from binsync.ui.utils import friendly_datetime
 from binsync.core.scheduler import SchedSpeed
-from libbs.data import Function
+from libbs.artifacts import Function
 
 l = logging.getLogger(__name__)
 

@@ -36,24 +36,9 @@ else:
         has_ida = True
     except ImportError:
         has_ida = False
-    try:
-        import angrmanagement
-        has_angr = True
-    except ImportError:
-        has_angr = False
 
-    if not has_ida and not has_angr:
+    if not has_ida:
         create_plugin()
-    elif has_angr:
-        from angrmanagement.plugins import BasePlugin
-        class AngrBSPluginThunk(BasePlugin):
-            def __init__(self, workspace):
-                super().__init__(workspace)
-                globals()["workspace"] = workspace
-                self.plugin = create_plugin()
-
-            def teardown(self):
-                pass
 
 
 def PLUGIN_ENTRY(*args, **kwargs):
