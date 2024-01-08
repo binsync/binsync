@@ -1,23 +1,21 @@
+import datetime
 import logging
-import pathlib
 import os
+import pathlib
 import re
 import subprocess
-import datetime
-from functools import wraps
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Dict
 
 import filelock
 import git
 import git.exc
 
-from binsync.data import User, GlobalConfig
-from binsync.core.errors import ExternalUserCommitError, MetadataNotFoundError
-from binsync.data.state import State, load_toml_from_file
-from binsync.core.scheduler import Scheduler, Job, SchedSpeed
 from binsync.core.cache import Cache
-
+from binsync.core.errors import ExternalUserCommitError, MetadataNotFoundError
 from binsync.core.git_actions_util import atomic_git_action
+from binsync.core.scheduler import SchedSpeed, Scheduler
+from binsync.data import GlobalConfig, User
+from binsync.data.state import State, load_toml_from_file
 
 log = logging.getLogger(__name__)
 BINSYNC_BRANCH_PREFIX = 'binsync'
@@ -65,7 +63,7 @@ class Client:
         self.repo_root = repo_root
         self.binary_hash = binary_hash
         self.remote = remote
-        self.repo = None
+        # self.repo: Optional[git.Repo] = None # TODO: Ask if there's two repo varaibles
         self.repo_lock = None
         self.pull_on_update = pull_on_update
         self.push_on_update = push_on_update
@@ -76,8 +74,8 @@ class Client:
             raise Exception(f"Bad username: {master_user}")
 
         # ssh-agent info
-        self.ssh_agent_pid = ssh_agent_pid  # type: int
-        self.ssh_auth_sock = ssh_auth_sock  # type: str
+        self.ssh_agent_pid: Optional[int] = ssh_agent_pid  # type: int
+        self.ssh_auth_sock: Optional[str] = ssh_auth_sock  # type: str
         self.connection_warnings = []
 
         # job scheduler
@@ -91,11 +89,16 @@ class Client:
 
         # timestamps
         self._commit_interval = commit_interval
-        self._last_push_time = None  # type: datetime.datetime
-        self.last_push_attempt_time = None  # type: datetime.datetime
-        self._last_pull_time = None  # type: datetime.datetime
-        self.last_pull_attempt_time = None  # type: datetime.datetime
-        self._last_commit_time = None # type: datetime.datetime
+        # type: datetime.datetime
+        self._last_push_time: Optional[datetime.datetime] = None
+        # type: datetime.datetime
+        self.last_push_attempt_time: Optional[datetime.datetime] = None
+        # type: datetime.datetime
+        self._last_pull_time: Optional[datetime.datetime] = None
+        # type: datetime.datetime
+        self.last_pull_attempt_time: Optional[datetime.datetime] = None
+        # type: datetime.datetime
+        self._last_commit_time: Optional[datetime.datetime] = None
 
         # load or update the global binsync config
         self.global_config = self._load_or_update_config()
@@ -132,7 +135,7 @@ class Client:
                 branch = self.repo.create_head(self.user_branch_name)
         branch.checkout()
 
-    def _get_or_init_binsync_repo(self, remote_url, init_repo):
+    def _get_or_init_binsync_repo(self, remote_url: Optional[str], init_repo: bool):
         """
         Gets the BinSync repo from either a local or remote git location and then sets up the repo as well
         as checks that the repo is the right repo for the current binary.
@@ -207,7 +210,8 @@ class Client:
         with open(os.path.join(self.repo_root, ".gitignore"), "w") as f:
             f.write(".git/*\n")
         with open(os.path.join(self.repo_root, "binary_hash"), "w") as f:
-            f.write(self.binary_hash)
+            # TODO: Check if binary hash works with bytes decoded.
+            f.write(self.binary_hash.decode())
         self.repo.index.add([".gitignore", "binary_hash"])
         self.repo.index.commit("Root commit")
         self.repo.create_head(BINSYNC_ROOT_BRANCH)
@@ -281,7 +285,7 @@ class Client:
                     metadata = load_toml_from_file(ref.commit.tree, "metadata.toml", client=self)
                     user = User.from_metadata(metadata)
                     users.append(user)
-                except Exception as e:
+                except Exception:
                     #l.debug(f"Unable to load user {e}")
                     continue
 
@@ -340,7 +344,7 @@ class Client:
                 self.repo.git.pull("--all")
                 self._last_pull_time = datetime.datetime.now(tz=datetime.timezone.utc)
                 self.active_remote = True
-            except Exception as e:
+            except Exception:
                 #l.debug(f"Pull exception {e}")
                 self.active_remote = False
 
@@ -355,13 +359,14 @@ class Client:
             self.repo.git.checkout(branch)
             try:
                 self.repo.git.merge()
-            except Exception as e:
+            except Exception:
                 #l.debug(f"Failed to merge on {branch} with {e}")
                 pass
 
         self._update_cache()
 
     @atomic_git_action
+    # TODO: What are these parameters supposed to do?
     def push(self, print_error=False, priority=SchedSpeed.AVERAGE):
         """
         Push local changes to the remote side.
@@ -376,11 +381,12 @@ class Client:
                 self.repo.remotes[self.remote].push(BINSYNC_ROOT_BRANCH)
                 self.repo.remotes[self.remote].push(self.user_branch_name)
             self._last_push_time = datetime.datetime.now(tz=datetime.timezone.utc)
-            # log.debug("Push completed successfully at %s", self._last_push_ts)
+            log.debug("Push completed successfully at %s",
+                      self._last_push_time)
             self.active_remote = True
         except git.exc.GitCommandError as ex:
             self.active_remote = False
-            # log.debug(f"Failed to push b/c {ex}")
+            log.debug(f"Failed to push b/c {ex}")
 
     @property
     @atomic_git_action
@@ -468,7 +474,7 @@ class Client:
 
             try:
                 self.repo.git.checkout('--track', branch.name)
-            except git.GitCommandError as e:
+            except git.GitCommandError:
                 continue
 
 
@@ -561,9 +567,20 @@ class Client:
         self.repo.close()
         del self.repo
 
-    def _get_best_refs(self, repo, force_local=False):
+    def _get_best_refs(self, repo: git.Repo, force_local=False) -> Dict[str, git.Reference]:
+        """
+        Get the best references (branches) in the Git repository.
+
+        Args:
+            repo (git.Repo): The Git repository.
+            force_local (bool, optional): Whether to force considering only local branches. Defaults to False.
+
+        Returns:
+            Dict[str, git.Reference]: A dictionary of branch names and corresponding git.Reference objects.
+        """
         candidates = {}
-        for ref in repo.refs:  # type: git.Reference
+        # type: git.Reference # Sorry if you need this typed, I think that type annotations for the parameter will help
+        for ref in repo.refs:  
             if f'{BINSYNC_BRANCH_PREFIX}/' not in ref.name:
                 continue
 
