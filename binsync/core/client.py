@@ -17,8 +17,9 @@ from binsync.data.state import State, load_toml_from_file
 from binsync.core.scheduler import Scheduler, Job, SchedSpeed
 from binsync.core.cache import Cache
 
+from binsync.core.git_actions_util import atomic_git_action
 
-l = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 BINSYNC_BRANCH_PREFIX = 'binsync'
 BINSYNC_ROOT_BRANCH = f'{BINSYNC_BRANCH_PREFIX}/__root__'
 
@@ -27,44 +28,6 @@ logging.getLogger("git").setLevel(logging.ERROR)
 
 class ConnectionWarnings:
     HASH_MISMATCH = 0
-
-
-def atomic_git_action(f):
-    """
-    Assures that any function called with this decorator will execute in-order, atomically, on a single thread.
-    This all assumes that the function you are passing is a member of the Client class, which will also have
-    a scheduler. This also means that this can only be called after the scheduler is started. This also requires a
-    Cache. Generally, just never call functions with this decorator until the Client is done initing.
-
-    This function will also attempt to check the cache for requested data on the same thread the original call
-    was made from. If not found, the atomic scheduling is done.
-
-    @param f:   A Client object function
-    @return:
-    """
-    @wraps(f)
-    def _atomic_git_action(self: "Client", *args, **kwargs):
-        no_cache = kwargs.get("no_cache", False)
-        if not no_cache:
-            # cache check
-            cache_item = self.check_cache_(f, **kwargs)
-            if cache_item is not None:
-                return cache_item
-
-        # non cache available, queue it up!
-        priority = kwargs.get("priority", None) or SchedSpeed.SLOW
-        ret_val = self.scheduler.schedule_and_wait_job(
-            Job(f, self, *args, **kwargs),
-            priority=priority
-        )
-
-        if ret_val:
-            self._set_cache(f, ret_val, **kwargs)
-
-        return ret_val if ret_val is not None else {}
-
-    return _atomic_git_action
-
 
 class Client:
     def __init__(
@@ -295,7 +258,7 @@ class Client:
         try:
             commit = index.commit(msg)
         except Exception as e:
-            l.warning(f"Internal Git Commit Error: {e}")
+            log.warning(f"Internal Git Commit Error: {e}")
             return
         self._last_commit_time = datetime.datetime.now(tz=datetime.timezone.utc)
         master_user_branch.commit = commit
@@ -350,7 +313,7 @@ class Client:
             if user == self.master_user:
                 raise
             else:
-                l.critical(f"Invalid state for {user}, dropping: {e}")
+                log.critical(f"Invalid state for {user}, dropping: {e}")
                 state = State(user)
 
         return state
@@ -413,11 +376,11 @@ class Client:
                 self.repo.remotes[self.remote].push(BINSYNC_ROOT_BRANCH)
                 self.repo.remotes[self.remote].push(self.user_branch_name)
             self._last_push_time = datetime.datetime.now(tz=datetime.timezone.utc)
-            #l.debug("Push completed successfully at %s", self._last_push_ts)
+            # log.debug("Push completed successfully at %s", self._last_push_ts)
             self.active_remote = True
         except git.exc.GitCommandError as ex:
             self.active_remote = False
-            #l.debug(f"Failed to push b/c {ex}")
+            # log.debug(f"Failed to push b/c {ex}")
 
     @property
     @atomic_git_action
@@ -438,7 +401,7 @@ class Client:
         # promises users in the vent of inability to get new users
         users = self.users(no_cache=True) or self.users()
         if not users:
-            l.critical("Failed to get users from current project. Report me if possible.")
+            log.critical("Failed to get users from current project. Report me if possible.")
             return {}
 
         for user in users:
@@ -736,5 +699,3 @@ class Client:
         #l.debug(f"Updating branches on Users Cache...")
         branch_set = set(cache_keys)
         self.cache.update_user_cache_branches(branch_set)
-
-
