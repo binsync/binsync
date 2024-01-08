@@ -121,7 +121,7 @@ class BSController:
         self.reload_time = reload_time
         if decompiler_interface is None:
             _l.warning("No decompiler interface was passed to the controller, this may cause errors. We will auto-discover one.")
-            self.deci = DecompilerInterface.discover_interface()
+            self.deci = DecompilerInterface.discover()
         else:
             self.deci = decompiler_interface
 
