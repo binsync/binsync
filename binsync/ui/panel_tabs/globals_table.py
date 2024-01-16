@@ -3,6 +3,9 @@ import datetime
 from collections import defaultdict
 import re
 import time
+from enum import Enum
+
+from libbs.artifacts import GlobalVariable, Struct
 
 from binsync.controller import BSController
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView
@@ -179,13 +182,13 @@ class GlobalsTableView(BinsyncTableView):
                 return
 
             if global_type == "S":
-                filler_func = lambda username: lambda chk=False: self.controller.fill_struct(global_name, user=username)
+                filler_func = lambda username: lambda chk=False: self.controller.fill_artifact(global_name, artifact_type=Struct, user=username)
             elif global_type == "V":
                 var_addr = int(re.findall(r'0x[a-f,0-9]+', global_name.split(" ")[1])[0], 16)
                 global_name = var_addr
-                filler_func = lambda username: lambda chk=False: self.controller.fill_global_var(global_name, user=username)
+                filler_func = lambda username: lambda chk=False: self.controller.fill_artifact(global_name, artifact_type=GlobalVariable, user=username)
             elif global_type == "E":
-                filler_func = lambda username: lambda chk=False: self.controller.fill_enum(global_name, user=username)
+                filler_func = lambda username: lambda chk=False: self.controller.fill_artifact(global_name, artifact_type=Enum, user=username)
             else:
                 l.warning(f"Invalid global table sync option: {global_type}")
                 return

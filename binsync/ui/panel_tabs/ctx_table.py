@@ -1,6 +1,9 @@
 import logging
 import datetime
 import time
+
+from libbs.artifacts import Function
+
 from binsync.controller import BSController
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableView
 from libbs.ui.qt_objects import (
@@ -117,7 +120,7 @@ class QCTXTable(BinsyncTableView):
             user_name = self.model.row_data[idx.row()][0]
 
             menu.addSeparator()
-            menu.addAction("Sync", lambda: self.controller.fill_function(self.model.saved_ctx, user=user_name))
+            menu.addAction("Sync", lambda: self.controller.fill_artifact(self.model.saved_ctx, artifact_type=Function, user=user_name))
 
         menu.popup(self.mapToGlobal(event.pos()))
 

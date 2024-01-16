@@ -27,8 +27,9 @@ def create_plugin(*args, **kwargs):
         from binsync.interface_overrides.binja import BinjaBSInterface
         deci_cls = BinjaBSInterface
     elif current_decompiler == ANGR_DECOMPILER:
-        from binsync.interface_overrides.angr import BSAngrInterface
-        deci_cls = BSAngrInterface
+        # angr: special cased since BinSync is shipped in angr
+        pass
+        deci_cls = None
     elif current_decompiler == GHIDRA_DECOMPILER:
         from binsync.interface_overrides.ghidra import GhidraBSInterface
         deci_cls = GhidraBSInterface
@@ -38,9 +39,13 @@ def create_plugin(*args, **kwargs):
     # We will now create the plugin in the decompiler, which will create the Control Panel in the UI of the specified
     # decompiler. That Control Panel will be provided a reference to the current constructing deci bellow, which
     # will also be passed to future control panels as they are created.
+    if deci_cls is None:
+        raise NotImplementedError("BinSync is shipped with angr, so it cannot be loaded as a plugin.")
+
     deci = deci_cls(
         plugin_name="BinSync",
         init_plugin=True,
         ui_init_args=args,
         ui_init_kwargs=kwargs
     )
+    return deci.gui_plugin

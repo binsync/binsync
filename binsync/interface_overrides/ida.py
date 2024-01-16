@@ -1,71 +1,40 @@
-# ----------------------------------------------------------------------------
-# This file is simply the entrypoint from the initial call in ida_binsync,
-# which will setup all the hooks for both the UI and IDB changes, and will
-# also create the config window.
-#
-# ----------------------------------------------------------------------------
 import logging
-import os
 
 from PyQt5 import sip
-from PyQt5.QtCore import QObject
-
-import idaapi
-import ida_kernwin
-import idc
-import ida_hexrays
-import idautils
+from PyQt5.QtGui import QKeyEvent
+from PyQt5 import QtCore
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
 from PyQt5.QtCore import Qt
 
+import idaapi
+import ida_kernwin
+import ida_hexrays
+import idautils
+
 from libbs.ui.version import set_ui_version
 set_ui_version("PyQt5")
+from libbs.decompilers.ida.compat import has_older_hexrays_version
+from libbs.decompilers.ida.interface import IDAInterface
+from libbs.decompilers.ida.compat import GenericIDAPlugin
+
 from binsync.ui.config_dialog import ConfigureBSDialog
 from binsync.ui.control_panel import ControlPanel
+from binsync.controller import BSController
 from binsync import __version__ as VERSION
 
-from .hooks import MasterHook, IdaHotkeyHook
-from .controller import IDABSController
-from . import compat
-
-l = logging.getLogger(__name__)
-controller = IDABSController()
+_l = logging.getLogger(__name__)
 
 # disable the annoying "Running Python script" wait box that freezes IDA at times
 idaapi.set_script_timeout(0)
 
 
 #
-#   UI Hook, placed here for convenience of reading UI implementation
+# Hooks for building the UI
 #
 
-class ScreenHook(ida_kernwin.View_Hooks):
-    def __init__(self):
-        super(ScreenHook, self).__init__()
-        self.hooked = False
-
-    def view_click(self, view, event):
-        form_type = idaapi.get_widget_type(view)
-        decomp_view = idaapi.get_widget_vdui(view)
-        if not form_type:
-            return
-
-        # check if view is decomp or disassembly before doing expensive ea lookup
-        if not decomp_view and not form_type == idaapi.BWN_DISASM:
-            return
-
-        ea = idc.get_screen_ea()
-        if not ea:
-            return
-
-        controller.update_active_context(ea)
-#
-#   Action Handlers
-#
-
-class IDAActionHandler(idaapi.action_handler_t):
+class AlwaysActiveAction(idaapi.action_handler_t):
     def __init__(self, action, plugin, typ):
-        super(IDAActionHandler, self).__init__()
+        super(AlwaysActiveAction, self).__init__()
         self.action = action
         self.plugin = plugin
         self.typ = typ
@@ -74,9 +43,28 @@ class IDAActionHandler(idaapi.action_handler_t):
         return idaapi.AST_ENABLE_ALWAYS
 
 
+class IdaHotkeyHook(ida_kernwin.UI_Hooks):
+    def __init__(self, keys_to_pass, uiptr):
+        super().__init__()
+        self.keys_to_pass = keys_to_pass
+        self.ui = uiptr
+
+    def preprocess_action(self, action_name):
+        uie = ida_kernwin.input_event_t()
+        ida_kernwin.get_user_input_event(uie)
+        key_event = uie.get_source_QEvent()
+        keycode = key_event.key()
+        if keycode[0] in self.keys_to_pass:
+            ke = QKeyEvent(QtCore.QEvent.KeyPress, keycode[0], QtCore.Qt.NoModifier)
+            # send new event
+            self.ui.event(ke)
+            # consume the event so ida doesn't take it
+            return 1
+        return 0
+
 
 #
-# Control Panel
+# Control Panel UI
 #
 
 class ControlPanelViewWrapper(object):
@@ -102,59 +90,50 @@ class ControlPanelViewWrapper(object):
         self.widget.setLayout(layout)
 
 #
-#   Base Plugin
+# Overloaded Plugin Classes
 #
 
 
-class BinsyncPlugin(QObject, idaapi.plugin_t):
+class BinsyncPlugin(GenericIDAPlugin):
     """Plugin entry point. Does most of the skinning magic."""
 
     flags = idaapi.PLUGIN_FIX
-    comment = "Syncing dbs between users"
+    comment = "Syncing user changes between decompilers"
 
-    help = "This is help"
+    help = "BinSync: syncing user changes between decompilers"
     wanted_name = "BinSync: Configure..."
     wanted_hotkey = "Ctrl-Shift-B"
 
     def __init__(self, *args, **kwargs):
-        print("[BinSync] {} loaded!".format(VERSION))
-
-        QObject.__init__(self, *args, **kwargs)
-        idaapi.plugin_t.__init__(self)
-        self.hooks_started = False
+        print(f"[BinSync] {VERSION} loaded!")
+        super().__init__(*args, **kwargs)
+        self.controller = BSController(decompiler_interface=self.interface)
 
     def open_config_dialog(self):
-        dialog = ConfigureBSDialog(controller)
+        dialog = ConfigureBSDialog(self.controller)
 
         dialog.dialog_uihook = IdaHotkeyHook([Qt.Key_Return, Qt.Key_Tab, Qt.Key_Backtab], dialog)
         if not dialog.dialog_uihook.hook():
-            l.warning("Failed to hook ida hotkeys for SyncConfig")
+            _l.warning("Failed to hook ida hotkeys for SyncConfig")
 
         dialog.exec_()
-
         dialog.dialog_uihook.unhook()
-
-        if not controller.check_client():
+        if not self.controller.check_client():
             return
 
-        controller._crashing_version = compat.has_older_hexrays_version()
-        if not self.hooks_started:
-            self.action_hooks.hook()
-            self.view_hook.hook()
-
+        self.controller._crashing_version = has_older_hexrays_version()
         self.open_control_panel()
-
         if dialog.open_magic_sync:
             #display_magic_sync_dialog(controller)
-            l.debug("Magic Sync is disabled on startup for now.")
+            _l.debug("Magic Sync is disabled on startup for now.")
 
     def open_control_panel(self):
         """
         Open the control panel view and attach it to IDA View-A or Pseudocode-A.
         """
-        wrapper = ControlPanelViewWrapper(controller)
+        wrapper = ControlPanelViewWrapper(self.controller)
         if not wrapper.twidget:
-            l.info("BinSync is unable to find a widget to attach to. You are likely running headlessly")
+            _l.info("BinSync is unable to find a widget to attach to. You are likely running headlessly")
             return None
 
         flags = idaapi.PluginForm.WOPN_TAB | idaapi.PluginForm.WOPN_RESTORE | idaapi.PluginForm.WOPN_PERSIST
@@ -164,7 +143,7 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
         # casually open a pseudocode window, this prevents magic sync from spawning pseudocode windows
         # in weird locations upon an initial run
         func_addr = next(idautils.Functions())
-        if controller.deci.decompiler_available:
+        if self.controller.deci.decompiler_available:
             ida_hexrays.open_pseudocode(func_addr, ida_hexrays.OPF_NO_WAIT | ida_hexrays.OPF_REUSE)
 
         # then attempt to flip back to IDA View-A
@@ -189,21 +168,18 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
             # attach the panel to the found target
             idaapi.set_dock_pos(ControlPanelViewWrapper.NAME, target, idaapi.DP_RIGHT)
 
-    def install_actions(self):
-        self.install_control_panel_action()
-
     def install_control_panel_action(self):
         action_id = "binsync:control_panel"
         action_desc = idaapi.action_desc_t(
             action_id,
             "BinSync: ~C~ontrol Panel",
-            IDAActionHandler(self.open_control_panel, None, None),
+            AlwaysActiveAction(self.open_control_panel, None, None),
             None,
             "Open the BinSync control panel",
         )
         result = idaapi.register_action(action_desc)
         if not result:
-            l.info("BinSync is unable to find a widget to attach to. You are likely running headlessly")
+            _l.info("BinSync is unable to find a widget to attach to. You are likely running headlessly")
             return None
 
         result = idaapi.attach_action_to_menu(
@@ -212,46 +188,23 @@ class BinsyncPlugin(QObject, idaapi.plugin_t):
             idaapi.SETMENU_INS,
         )
         if not result:
-            l.info("BinSync is unable to find a widget to attach to. You are likely running headlessly")
+            _l.info("BinSync is unable to find a widget to attach to. You are likely running headlessly")
             return None
 
-    def _init_hooks(self):
-        # Hook UI Startup in IDA
-        self.install_actions()
-
-        # init later
-        self.view_hook = ScreenHook()
-        # Hook IDB & Decomp Actions in IDA
-        self.action_hooks = MasterHook(controller)
-
     def init(self):
-        self._init_hooks()
-
+        self.install_control_panel_action()
         return idaapi.PLUGIN_KEEP
 
     def run(self, arg):
         self.open_config_dialog()
 
     def term(self):
-        if controller:
-            controller.stop_worker_routines()
-
-#
-#   Utils
-#
+        if self.controller:
+            self.controller.stop_worker_routines()
+            del self.controller.deci
+            del self.controller
 
 
-def plugin_resource(resource_name):
-    """
-    Return the full path for a given plugin resource file.
-    """
-    plugin_path = os.path.abspath(os.path.dirname(__file__))
-
-    return os.path.join(
-        plugin_path,
-        resource_name
-    )
-
-
-
-
+class IDABSInterface(IDAInterface):
+    def _init_gui_plugin(self, *args, **kwargs):
+        return BinsyncPlugin(*args, name=self._plugin_name, interface=self, **kwargs)

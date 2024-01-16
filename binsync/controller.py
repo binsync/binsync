@@ -10,9 +10,10 @@ from libbs.artifacts import (
     Artifact,
     Function, FunctionHeader, StackVariable,
     Comment, GlobalVariable, Patch,
-    Enum, Struct
+    Enum, Struct, FunctionArgument, StructMember
 )
 from libbs.api import DecompilerInterface
+from libbs.api.type_parser import CType
 
 from binsync.core.client import Client, SchedSpeed, Scheduler, Job
 from binsync.core.state import State
@@ -79,6 +80,9 @@ class FakeSyncLock:
 #
 
 class BSController:
+    CHANGE_WATCHERS = (
+        FunctionHeader, StackVariable, Comment, GlobalVariable, Enum, Struct
+    )
 
     ARTIFACT_SET_MAP = {
         Function: State.set_function,
@@ -125,6 +129,18 @@ class BSController:
         else:
             self.deci = decompiler_interface
 
+        # callbacks for changes to artifacts
+        for typ in self.CHANGE_WATCHERS:
+            self.deci.artifact_write_callbacks[typ].append(self.push_artifact)
+        # artifact map
+        self.artifact_dict_map = {
+            Function: self.deci.functions,
+            Comment: self.deci.comments,
+            GlobalVariable: self.deci.global_vars,
+            Enum: self.deci.enums,
+            Struct: self.deci.structs,
+            Patch: self.deci.patches
+        }
 
         # client created on connection
         self.client = None  # type: Optional[Client]
@@ -145,7 +161,7 @@ class BSController:
         self._auto_commit_enabled = auto_commit
 
         # command locks
-        self.push_job_scheduler = Scheduler()
+        self.push_job_scheduler = Scheduler(name="PushJobScheduler")
         self.sync_lock = threading.Lock()
 
         # create a pulling thread, but start on connection
@@ -310,6 +326,8 @@ class BSController:
         self.push_job_scheduler.start_worker_thread()
 
         self._init_ui_components()
+        # start the callbacks for edits to artifacts
+        self.deci.start_artifact_watchers()
 
     def stop_worker_routines(self):
         self._run_updater_threads = False
@@ -401,9 +419,6 @@ class BSController:
 
         return self.lower_artifact(artifact)
 
-    def on_push_artifact(self, artifcat: Artifact, **kwargs):
-        pass
-
     @init_checker
     def push_artifact(self, artifact: Artifact, user=None, state=None, commit_msg=None, set_last_change=True, make_func=True, **kwargs) -> bool:
         """
@@ -417,8 +432,9 @@ class BSController:
         @param state:
         @return:
         """
-        _l.debug(f"Running push now for {artifact}")
+        _l.debug(f"Attempting to push %s...", artifact)
         if not artifact:
+            _l.warning(f"Attempting to push a None artifact, skipping...")
             return False
 
         try:
@@ -427,7 +443,6 @@ class BSController:
             _l.info(f"Attempting to push an unsupported Artifact of type {artifact}")
             return False
 
-        self.on_push_artifact(artifact, **kwargs)
         # assure state exists
         if not state:
             state = self.get_state(user=user)
@@ -442,7 +457,7 @@ class BSController:
                 self.push_artifact(Function(func_addr, self.deci.get_func_size(func_addr)), state=state, set_last_change=set_last_change)
 
         # lift artifact into standard BinSync format
-        artifact = self.lift_artifact(artifact)
+        artifact = self.deci.art_lifter.lift(artifact)
 
         # set the artifact in the target state, likely master
         _l.debug(f"Setting an artifact now into {state} as {artifact}")
@@ -463,65 +478,62 @@ class BSController:
     # cause a save of the BS state.
     #
 
-    def fill_event_handler(self, filler_func, *identifiers,
-                           artifact=None, user=None, state=None, master_state=None, merge_level=None, blocking=False,
-                           commit_msg=None,
-                           **kwargs
-                           ):
-        """
-        fill_event_handler is the function called before every `fill_<artifact>` function. This handler is responsible
-        for assuring a variety of things exist for subsequent call to `fill_<artifact>`.
-
-        @param filler_func:
-        @param identifiers:
-        @param artifact:
-        @param user:
-        @param state:
-        @param master_state:
-        @param merge_level:
-        @param blocking:
-        @param kwargs:
-        @return:
-        """
-
-        ARTIFACT_FILL_MAP = {
-            self.fill_function.__name__: Function,
-            self.fill_function_header.__name__: FunctionHeader,
-            self.fill_stack_variable.__name__: StackVariable,
-            self.fill_comment.__name__: Comment,
-            self.fill_global_var.__name__: GlobalVariable,
-            self.fill_struct.__name__: Struct,
-            self.fill_enum.__name__: Enum
-        }
-
+    def fill_artifact(
+        self,
+        *identifiers,
+        artifact_type=None,
+        artifact=None,
+        user=None,
+        state=None,
+        master_state=None,
+        merge_level=None,
+        blocking=False,
+        commit_msg=None,
+        **kwargs
+    ):
         state = state if state is not None else self.get_state(user=user, priority=SchedSpeed.FAST)
         master_state = master_state if master_state is not None else self.get_state(priority=SchedSpeed.FAST)
-        artifact_type = ARTIFACT_FILL_MAP.get(filler_func.__name__, None)
-        if not artifact_type:
-            _l.warning("Attempting to Fill an unknown type! Stopping Fill...")
-            return None
+        artifact_type = artifact_type if artifact_type is not None else artifact.__class__
+        # TODO: make this work for multiple identifiers (stack vars)
+        identifiers = list(identifiers)
+        if isinstance(identifiers[0], int):
+            identifiers[0] = self.deci.art_lifter.lift_addr(identifiers[0])
+        if artifact_type is StackVariable:
+            identifiers[1] = self.deci.art_lifter.lift_stack_offset(identifiers[1])
+        identifier = identifiers[0]
 
-        art_getter = self.ARTIFACT_GET_MAP.get(artifact_type)
-        master_artifact = artifact if artifact else self.lower_artifact(art_getter(master_state, *identifiers))
+        # find the state getter and artifact dict for the artifact
+        art_dict = self.artifact_dict_map[artifact_type]
+        art_state_getter = self.ARTIFACT_GET_MAP[artifact_type]
+
+        # construct and merge the incoming changes from user (or target state) into the master
+        # state (which also maybe defined by an artifact being passed in)
+        master_artifact = artifact if artifact \
+            else self.deci.art_lifter.lower(art_state_getter(master_state, *identifiers))
         merged_artifact = self.merge_artifacts(
-            master_artifact,  self.lower_artifact(art_getter(state, *identifiers)),
+            master_artifact, self.deci.art_lifter.lower(art_state_getter(state, *identifiers)),
             merge_level=merge_level, master_state=master_state
         )
+        # merged artifacts never have a last changed to specify they were just merged
         merged_artifact.last_change = None
 
+        # lock all other threads from doing things inside the decompiler while we are setting changes
         lock = self.sync_lock if not self.sync_lock.locked() else FakeSyncLock()
         with lock:
             try:
-                fill_changes = filler_func(
-                    self,
-                    *identifiers,
-                    artifact=merged_artifact, user=user, state=state, master_state=master_state, merge_level=merge_level,
-                    **kwargs
-                )
+                # import all user defined types
+                self.discover_and_importer_user_defined_types(merged_artifact, state=state, master_state=master_state)
+                # set the imports into the decompiler
+                art_dict[identifier] = merged_artifact
+
+                # TODO: figure out a way to do this in LibBS
+                if artifact_type is Function:
+                    for cmt in state.get_func_comments(merged_artifact.addr):
+                        self.deci.comments[cmt.addr] = cmt
+                fill_changes = True
             except Exception as e:
                 fill_changes = False
                 _l.error(f"Failed to fill artifact {merged_artifact} because of an error {e}")
-
 
         _l.info(
             f"Successfully synced new changes from {state.user} for {merged_artifact}" if fill_changes
@@ -541,107 +553,11 @@ class BSController:
 
         return fill_changes
 
-    @fill_event
-    def fill_struct(self, struct_name, header=True, members=True, artifact=None, **kwargs):
-        """
-
-        @param struct_name:
-        @param user:
-        @param state:
-        @param header:
-        @param members:
-        @return:
-        """
-        _l.debug("Fill Struct is not implemented in your decompiler.")
-        return False
-
-    @fill_event
-    def fill_global_var(self, var_addr, user=None, artifact=None, **kwargs):
-        """
-        Grab a global variable for a specified address and fill it locally
-
-        @param var_addr:
-        @param user:
-        @param state:
-        @return:
-        """
-        _l.debug("Fill Global Var is not implemented in your decompiler.")
-        return False
-
-    @fill_event
-    def fill_enum(self, enum_name, user=None, artifact=None, **kwargs):
-        """
-        Grab an enum and fill it locally
-
-        @param enum_name:
-        @param user:
-        @param state:
-        @return:
-        """
-        _l.debug("Fill Enum is not implemented in your decompiler.")
-        return False
-
-    @fill_event
-    def fill_stack_variable(self, func_addr, offset, user=None, artifact=None, **kwargs):
-        _l.debug("Fill Stack Var is not implemented in your decompiler.")
-        return False
-
-    @fill_event
-    def fill_function_header(self, func_addr, user=None, artifact=None, **kwargs):
-        _l.debug("Fill Function Header is not implemented in your decompiler.")
-        return False
-
-    @fill_event
-    def fill_comment(self, addr, user=None, artifact=None, **kwargs):
-        _l.debug("Fill Comments is not implemented in your decompiler.")
-        return False
-
-
-    @fill_event
-    def fill_function(self, func_addr, user=None, artifact=None, **kwargs):
-        """
-        Grab all relevant information from the specified user and fill the @func_addr.
-        """
-        lifted_func_addr = self.deci.artifact_lifer.lift_addr(func_addr)
-        dec_func: Function = self.deci.functions[lifted_func_addr]
-        if not dec_func:
-            _l.warning(f"The function at {hex(func_addr)} does not exist in your decompiler.")
-            dec_func = Function(None, None)
-
-        master_func: Function = artifact
-        changes = False
-
-        # function header
-        if master_func.header and master_func.header != dec_func.header:
-            # type is user made (a struct)
-            changes |= self.import_user_defined_type(master_func.header.type, **kwargs)
-            changes |= self.fill_function_header(func_addr, artifact=master_func.header, **kwargs)
-
-        # stack vars
-        if master_func.stack_vars and master_func.stack_vars != dec_func.stack_vars:
-            for offset, sv in master_func.stack_vars.items():
-                dec_sv = dec_func.stack_vars.get(offset, None)
-                if not dec_sv:
-                    _l.warning(f"Decompiler stack var not found at {offset}")
-
-                if dec_sv == sv:
-                    continue
-
-                corrected_off = dec_sv.offset if dec_sv and dec_sv.offset else sv.offset
-                changes |= self.import_user_defined_type(sv.type, **kwargs)
-                changes |= self.fill_stack_variable(func_addr, corrected_off, artifact=sv, **kwargs)
-
-        # comments
-        for addr, cmt in kwargs['state'].get_func_comments(func_addr).items():
-            changes |= self.fill_comment(addr, artifact=cmt, **kwargs)
-
-        return changes
-
     def fill_functions(self, user=None, **kwargs):
         change = False
         master_state, state = self.get_master_and_user_state(user=user, **kwargs)
         for addr, func in state.functions.items():
-            change |= self.fill_function(addr, state=state, master_state=master_state)
+            change |= self.fill_artifact(addr, artifact_type=Function, state=state, master_state=master_state)
 
         return change
 
@@ -657,10 +573,10 @@ class BSController:
         # only do struct headers for circular references
         master_state, state = self.get_master_and_user_state(user=user, **kwargs)
         for name, struct in state.structs.items():
-            changes |= self.fill_struct(name, user=user, state=state, master_state=master_state, members=False)
+            changes |= self.fill_artifact(name, artifact_type=Struct, user=user, state=state, master_state=master_state, members=False)
 
         for name, struct in state.structs.items():
-            changes |= self.fill_struct(name, user=user, state=state, master_state=master_state, header=False)
+            changes |= self.fill_artifact(name, artifact_type=Struct, user=user, state=state, master_state=master_state, header=False)
 
         return changes
 
@@ -675,7 +591,7 @@ class BSController:
         changes = False
         master_state, state = self.get_master_and_user_state(user=user, **kwargs)
         for name, enum in state.enums.items():
-            changes |= self.fill_enum(name, user=user, state=state, master_state=master_state)
+            changes |= self.fill_artifact(name, artifact_type=Enum, user=user, state=state, master_state=master_state)
 
         return changes
 
@@ -683,7 +599,7 @@ class BSController:
         changes = False
         master_state, state = self.get_master_and_user_state(user=user, **kwargs)
         for off, gvar in state.global_vars.items():
-            changes |= self.fill_global_var(off, user=user, state=state, master_state=master_state)
+            changes |= self.fill_artifact(off, artifact_type=GlobalVariable, user=user, state=state, master_state=master_state)
 
         return changes
 
@@ -746,9 +662,9 @@ class BSController:
         target_artifacts = target_artifacts or {
             #Struct: self.fill_struct,
             Comment: lambda *x, **y: None,
-            Function: self.fill_function,
-            GlobalVariable: self.fill_global_var,
-            Enum: self.fill_enum
+            Function: self.fill_artifact,
+            GlobalVariable: self.fill_artifact,
+            Enum: self.fill_artifact
         }
 
         for artifact_type, filler_func in target_artifacts.items():
@@ -772,7 +688,7 @@ class BSController:
                 _l.debug(f"Filling artifact {pref_art} now...")
                 try:
                     filler_func(
-                        identifier, artifact=pref_art, state=master_state,  commit_msg=f"Magic Synced {pref_art}",
+                        identifier, artifact_type=artifact_type, artifact=pref_art, state=master_state,  commit_msg=f"Magic Synced {pref_art}",
                         merge_level=MergeLevel.NON_CONFLICTING
                     )
                 except Exception as e:
@@ -890,11 +806,50 @@ class BSController:
 
         return known_arts
 
+    def discover_and_importer_user_defined_types(self, artifact: Artifact, master_state=None, state=None):
+        imported_types = False
+        if not artifact:
+            return imported_types
+
+        if isinstance(artifact, Function):
+            # header
+            if artifact.header:
+                imported_types |= self.discover_and_importer_user_defined_types(artifact.header, master_state=master_state, state=state)
+
+            # stack vars
+            if artifact.stack_vars:
+                for sv in artifact.stack_vars.values():
+                    imported_types |= self.discover_and_importer_user_defined_types(sv, master_state=master_state, state=state)
+        elif isinstance(artifact, FunctionHeader):
+            # ret type
+            if artifact.type:
+                imported_types |= self.import_user_defined_type(artifact.type, master_state=master_state, state=state)
+
+            # args
+            if artifact.args:
+                for arg in artifact.args.values():
+                    imported_types |= self.discover_and_importer_user_defined_types(arg, master_state=master_state, state=state)
+        elif isinstance(artifact, FunctionArgument):
+            imported_types |= self.import_user_defined_type(artifact.type, master_state=master_state, state=state)
+        elif isinstance(artifact, StackVariable):
+            imported_types |= self.import_user_defined_type(artifact.type, master_state=master_state, state=state)
+        elif isinstance(artifact, GlobalVariable):
+            imported_types |= self.import_user_defined_type(artifact.type, master_state=master_state, state=state)
+        elif isinstance(artifact, Struct):
+            for memb in artifact.members.values():
+                imported_types |= self.discover_and_importer_user_defined_types(memb, master_state=master_state, state=state)
+        elif isinstance(artifact, StructMember):
+            imported_types |= self.import_user_defined_type(artifact.type, master_state=master_state, state=state)
+        else:
+            _l.warning(f"Unsupported artifact type {artifact} for user defined type discovery")
+
+        return imported_types
+
     def type_is_user_defined(self, type_str, state=None):
         if not type_str:
             return None
 
-        type_: BSType = self.deci.type_parser.parse_type(type_str)
+        type_: CType = self.deci.type_parser.parse_type(type_str)
         if not type_:
             # it was not parseable
             return None
@@ -928,7 +883,7 @@ class BSController:
                 _l.info(f"Nested undefined structs detected, pulling all structs from {state.user}")
                 break
 
-        changes = self.fill_struct(base_type_str, state=state, **kwargs) if not nested_undefined_structs \
+        changes = self.fill_artifact(base_type_str, artifact_type=Struct, state=state, **kwargs) if not nested_undefined_structs \
             else self.fill_structs(state=state, **kwargs)
         return changes
 

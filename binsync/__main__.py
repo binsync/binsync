@@ -5,7 +5,7 @@ from pathlib import Path
 import importlib
 import os
 
-from binsync.interface_overrides import BS_SUPPORTED_DECOMPILERS
+from libbs.decompilers import SUPPORTED_DECOMPILERS
 from binsync.installer import BinSyncInstaller
 from binsync.extras import EXTRAS_AVAILABLE
 
@@ -106,7 +106,7 @@ def main():
             The optional decompiler of that will be used in the extras command. 
             """,
             type=str,
-            choices=BS_SUPPORTED_DECOMPILERS
+            choices=SUPPORTED_DECOMPILERS
         )
 
     args = parser.parse_args()

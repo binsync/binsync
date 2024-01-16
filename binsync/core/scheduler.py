@@ -3,7 +3,7 @@ import logging
 from queue import PriorityQueue
 from threading import Thread
 
-l = logging.getLogger(__name__)
+_l = logging.getLogger(__name__)
 
 
 class SchedSpeed:
@@ -46,8 +46,9 @@ class Job:
 
 
 class Scheduler:
-    def __init__(self, sleep_interval=0.05):
+    def __init__(self, sleep_interval=0.05, name="Scheduler"):
         self.sleep_interval = sleep_interval
+        self.name = name
         self._worker = Thread(target=self._worker_thread)
         self._job_queue = PriorityQueue()
         self._work = False
@@ -66,9 +67,8 @@ class Scheduler:
 
     def schedule_job(self, job: Job, priority=SchedSpeed.SLOW):
         if not self._work:
-            l.warning("The job scheduler is not currently set to work, but you are still scheduling a job...")
+            _l.warning("%s is not currently set to work, but you are still scheduling a job...", self.name)
 
-        #l.debug(f"Job scheduled: {job} with priority {priority}")
         self._job_queue.put_nowait(
             (priority, job,)
         )
@@ -93,5 +93,5 @@ class Scheduler:
         else:
             return
 
-        #l.debug(f"Completing scheduled job now: {job}")
+        _l.debug("%s: completing scheduled job now: %s", self.name, job)
         job.execute()

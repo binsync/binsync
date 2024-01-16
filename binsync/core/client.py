@@ -120,7 +120,7 @@ class Client:
 
         # job scheduler
         self.cache = Cache()
-        self.scheduler = Scheduler()
+        self.scheduler = Scheduler(name="GitScheduler")
 
         # create, init, and checkout Git repo
         self.repo = self._get_or_init_binsync_repo(remote_url, init_repo)
