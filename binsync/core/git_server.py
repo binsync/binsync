@@ -1,4 +1,5 @@
 import datetime
+from enum import Enum
 import logging
 import os
 import pathlib
@@ -6,6 +7,9 @@ import re
 import subprocess
 from functools import wraps
 from typing import Iterable, Optional, Dict
+
+from xmlrpc.server import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
+import threading
 
 import filelock
 import git
@@ -27,6 +31,16 @@ logging.getLogger("git").setLevel(logging.ERROR)
 class ConnectionWarnings:
     HASH_MISMATCH = 0
 
+
+class GitServerMode(Enum):
+    """
+    The GitServerMode enum is used to determine what mode the GitServer is in. This is used to determine
+    what actions the GitServer will take when it is updated. The currently supported modes are:
+    1. Object mode: does not spin up a real server at all and instead just does the operations in the same thread
+    2. Server mode: spins up a server and takes requests over a PyRPC to do Git operations
+    """
+    OBJECT = 1
+    SERVER = 2
 
 def atomic_git_action(f):
     """
@@ -81,6 +95,7 @@ class GitServer:
             push_on_update=True,
             pull_on_update=True,
             commit_on_update=True,
+            server_mode: GitServerMode = GitServerMode.OBJECT,
             **kwargs,
     ):
         """
@@ -98,6 +113,7 @@ class GitServer:
         :param ssh_agent_pid:       SSH Agent PID
         :param ssh_auth_sock:       SSH Auth Socket
         """
+        self.server_mode = server_mode
         self.master_user = master_user
         self.repo_root = repo_root
         self.binary_hash = binary_hash
@@ -122,9 +138,11 @@ class GitServer:
         self.scheduler = Scheduler()
 
         # create, init, and checkout Git repo
-        self.repo = self._get_or_init_binsync_repo(remote_url, init_repo)
-        self.scheduler.start_worker_thread()
-        self._get_or_init_user_branch()
+        # Assume that the repo is already initialized if it exists
+        if self.server_mode == GitServerMode.OBJECT:
+            self.repo = self._get_or_init_binsync_repo(remote_url, init_repo)
+            self.scheduler.start_worker_thread()
+            self._get_or_init_user_branch()
 
         # timestamps
         self._commit_interval = commit_interval  # type: datetime.datetime
@@ -139,6 +157,16 @@ class GitServer:
 
         self.active_remote = True
 
+        # start the server mode if we are in server mode in a new thread
+        self.server_mode = server_mode
+        self.shutdown_event = threading.Event()
+        if self.server_mode == GitServerMode.SERVER:
+            self.server = None
+            # TODO: Test gracefully stopping the server
+            self.server_thread = threading.Thread(target=self._init_server_mode)
+            self.server_thread.daemon = True
+            self.server_thread.start()
+
     def __del__(self):
         if self.repo_lock is not None:
             self.repo_lock.release()
@@ -146,6 +174,51 @@ class GitServer:
     #
     # Initializers
     #
+
+    def _init_server_mode(self):
+        """
+        Starts the server mode of the GitServer. This will start a PyRPC server that will listen for requests
+        to do Git operations. This is the mode that is used when the GitServer is used as a remote server.
+
+        @return:
+        """
+
+        class RequestHandler(SimpleXMLRPCRequestHandler):
+            rpc_paths = ('/RPC2',)
+
+        self.server = SimpleXMLRPCServer(("localhost", 6969), requestHandler=RequestHandler)
+        self.server.register_introspection_functions()
+        self.server.register_function(self.commit_state, "commit_state")
+        self.server.register_function(self.users, "users")
+        self.server.register_function(self.get_state, "get_state")
+        self.server.register_function(self.pull, "pull")
+        self.server.register_function(self.push, "push")
+        self.server.register_function(self.has_remote, "has_remote")
+        self.server.register_function(self.echo, "echo")  # TODO: Remove this, it's just for testing
+        self.server.register_function(self.stop_server, "stop_server")
+        self.server.serve_forever()
+
+    def echo(self, msg):
+        return msg
+
+    def stop_server(self):
+        """
+        Stops the server mode of the GitServer. This will stop the PyRPC server that is listening for requests
+        to do Git operations. This is the mode that is used when the GitServer is used as a remote server.
+
+        @return:
+        """
+
+        if self.server is not None:
+            print("Stopping server")
+            self.shutdown_event.set()
+            self.server.shutdown()
+        else:
+            print("Server might be already running, not started, or already stopped.")
+        if self.server_thread:
+            # Gracefully stop the server thread with a timeout
+            self.server_thread.join(timeout=3)
+
 
     def _load_or_update_config(self):
         config = GlobalConfig.load_from_file(None) or GlobalConfig(None)
@@ -422,7 +495,7 @@ class GitServer:
             self.active_remote = False
             log.debug(f"Failed to push b/c {ex}")
 
-    @property
+    # @property
     @atomic_git_action
     def has_remote(self, priority=SchedSpeed.FAST):
         """
@@ -462,11 +535,11 @@ class GitServer:
 
         # do a pull if there is a remote repo connected
         self.last_pull_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
-        if self.has_remote and self.pull_on_update:
+        if self.has_remote() and self.pull_on_update:
             self.pull()
 
         self.last_push_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
-        if self.has_remote and self.push_on_update:
+        if self.has_remote() and self.push_on_update:
             self.push()
 
     #
@@ -549,6 +622,7 @@ class GitServer:
         """
         self.repo.git.checkout(self.user_branch_name)
 
+    # TODO: Remove from server implementation.
     @staticmethod
     def discover_ssh_agent(ssh_agent_cmd):
         proc = subprocess.Popen(ssh_agent_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
