@@ -4,6 +4,7 @@ import os
 import pathlib
 import re
 import subprocess
+from xmlrpc.client import ServerProxy
 from functools import wraps
 from typing import Iterable, Optional, Dict
 
@@ -13,6 +14,7 @@ import git.exc
 
 from binsync.core.cache import Cache
 from binsync.core.errors import ExternalUserCommitError, MetadataNotFoundError
+from binsync.core.git_server import GitServer, GitServerMode
 from binsync.core.scheduler import SchedSpeed, Scheduler, Job
 from binsync.data import GlobalConfig, User
 from binsync.data.state import State, load_toml_from_file
@@ -81,6 +83,7 @@ class Client:
         push_on_update=True,
         pull_on_update=True,
         commit_on_update=True,
+        use_git_server=False,
         **kwargs,
     ):
         """
@@ -138,6 +141,24 @@ class Client:
         self.global_config = self._load_or_update_config()
 
         self.active_remote = True
+
+        # Creation/Usage of a Git Server
+        self.use_git_server = use_git_server
+        # Initialize the Git Server if needed
+        self.server_proxy = None
+        if self.use_git_server:
+            try:
+                # Pass in the Client object to the GitServer for testing convenience
+                """
+                TODO: When this fails it'll usually be because the port is already in use. In this case we 
+                should try to just make a server proxy instead of initializing a new GitServer.
+                That way we have multiple clients 
+                """
+                self.git_server = GitServer(server_mode=GitServerMode.SERVER, **self.__dict__)
+                self.server_proxy = ServerProxy(f"http://localhost:6969/RPC2")
+
+            except Exception as e:
+                log.exception(f"Failed to initialize Git Server: {e}")
 
     def __del__(self):
         if self.repo_lock is not None:
@@ -245,7 +266,7 @@ class Client:
             f.write(".git/*\n")
         with open(os.path.join(self.repo_root, "binary_hash"), "w") as f:
             # TODO: Check if binary hash works with bytes decoded.
-            f.write(self.binary_hash.decode())
+            f.write(self.binary_hash)
         self.repo.index.add([".gitignore", "binary_hash"])
         self.repo.index.commit("Root commit")
         self.repo.create_head(BINSYNC_ROOT_BRANCH)
@@ -276,6 +297,10 @@ class Client:
 
     @atomic_git_action
     def commit_state(self, state, msg="Generic Change", priority=None):
+        # Use the server if it's available
+        if self.use_git_server:
+            return self.server_proxy.commit_state(state, msg)
+
         if self.master_user != state.user:
             raise ExternalUserCommitError(f"User {self.master_user} is not allowed to commit to user {state.user}")
 
@@ -304,6 +329,10 @@ class Client:
 
     @atomic_git_action
     def users(self, priority=None, no_cache=False) -> Iterable[User]:
+        # Use the server if it's available
+        if self.use_git_server:
+            return self.server_proxy.users()
+
         repo = self.repo
         attempt_again = True
         attempted_fix = False
@@ -333,6 +362,10 @@ class Client:
 
     @atomic_git_action
     def get_state(self, user=None, version=None, priority=None, no_cache=False):
+        # Use the server if it's available
+        if self.use_git_server:
+            return self.server_proxy.get_state(user, version)
+
         if user is None:
             user = self.master_user
 
@@ -363,6 +396,10 @@ class Client:
 
         :return:    None
         """
+        # Use the server if it's available
+        if self.use_git_server:
+            self.server_proxy.pull()
+
         self.last_pull_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
         try:
             env = self.ssh_agent_env()
@@ -407,6 +444,10 @@ class Client:
 
         :return:    None
         """
+        # Use the server if it's available
+        if self.use_git_server:
+            self.server_proxy.push()
+
         self.last_push_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
         self._checkout_to_master_user()
         try:
@@ -430,12 +471,22 @@ class Client:
 
         :return:    True if there is a remote, False otherwise.
         """
+        if self.use_git_server:
+            return self.server_proxy.has_remote()
         return self.remote and any(r.name == self.remote for r in self.repo.remotes)
 
     #
     # Non-Atomic Public API
     #
 
+    def shutdown_server(self):
+        if self.use_git_server:
+            # TODO: Try using git_server to make requests instead of proxy to experiment.
+            self.git_server.stop_server()
+    def echo(self, msg):
+        if self.use_git_server:
+            return self.server_proxy.echo(msg)
+        return "Not using server"
     def all_states(self):
         states = list()
         # promises users in the vent of inability to get new users
