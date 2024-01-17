@@ -4,6 +4,7 @@ import os
 import pathlib
 import re
 import subprocess
+from functools import wraps
 from typing import Iterable, Optional, Dict
 
 import filelock
@@ -12,8 +13,7 @@ import git.exc
 
 from binsync.core.cache import Cache
 from binsync.core.errors import ExternalUserCommitError, MetadataNotFoundError
-from binsync.core.git_actions_util import atomic_git_action
-from binsync.core.scheduler import SchedSpeed, Scheduler
+from binsync.core.scheduler import SchedSpeed, Scheduler, Job
 from binsync.data import GlobalConfig, User
 from binsync.data.state import State, load_toml_from_file
 
@@ -26,6 +26,45 @@ logging.getLogger("git").setLevel(logging.ERROR)
 
 class ConnectionWarnings:
     HASH_MISMATCH = 0
+
+
+def atomic_git_action(f):
+    """
+    Assures that any function called with this decorator will execute in-order, atomically, on a single thread.
+    This all assumes that the function you are passing is a member of the Client class, which will also have
+    a scheduler. This also means that this can only be called after the scheduler is started. This also requires a
+    Cache. Generally, just never call functions with this decorator until the Client is done initing.
+
+    This function will also attempt to check the cache for requested data on the same thread the original call
+    was made from. If not found, the atomic scheduling is done.
+
+    @param f:   A Client object function
+    @return:
+    """
+
+    @wraps(f)
+    def _atomic_git_action(self: "Client", *args, **kwargs):
+        no_cache = kwargs.get("no_cache", False)
+        if not no_cache:
+            # cache check
+            cache_item = self.check_cache_(f, **kwargs)
+            if cache_item is not None:
+                return cache_item
+
+        # non cache available, queue it up!
+        priority = kwargs.get("priority", None) or SchedSpeed.SLOW
+        ret_val = self.scheduler.schedule_and_wait_job(
+            Job(f, self, *args, **kwargs),
+            priority=priority
+        )
+
+        if ret_val:
+            self._set_cache(f, ret_val, **kwargs)
+
+        return ret_val if ret_val is not None else {}
+
+    return _atomic_git_action
+
 
 class Client:
     def __init__(
@@ -63,7 +102,7 @@ class Client:
         self.repo_root = repo_root
         self.binary_hash = binary_hash
         self.remote = remote
-        # self.repo: Optional[git.Repo] = None # TODO: Ask if there's two repo varaibles
+        # self.repo: Optional[git.Repo] = None # TODO: Ask if there's two repo variables
         self.repo_lock = None
         self.pull_on_update = pull_on_update
         self.push_on_update = push_on_update
@@ -88,16 +127,11 @@ class Client:
         self._get_or_init_user_branch()
 
         # timestamps
-        self._commit_interval = commit_interval
-        # type: datetime.datetime
+        self._commit_interval = commit_interval  # type: datetime.datetime
         self._last_push_time: Optional[datetime.datetime] = None
-        # type: datetime.datetime
         self.last_push_attempt_time: Optional[datetime.datetime] = None
-        # type: datetime.datetime
         self._last_pull_time: Optional[datetime.datetime] = None
-        # type: datetime.datetime
         self.last_pull_attempt_time: Optional[datetime.datetime] = None
-        # type: datetime.datetime
         self._last_commit_time: Optional[datetime.datetime] = None
 
         # load or update the global binsync config
@@ -579,8 +613,7 @@ class Client:
             Dict[str, git.Reference]: A dictionary of branch names and corresponding git.Reference objects.
         """
         candidates = {}
-        # type: git.Reference # Sorry if you need this typed, I think that type annotations for the parameter will help
-        for ref in repo.refs:  
+        for ref in repo.refs:  # type: git.Reference
             if f'{BINSYNC_BRANCH_PREFIX}/' not in ref.name:
                 continue
 
