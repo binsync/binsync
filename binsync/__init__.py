@@ -45,7 +45,7 @@ def create_plugin(*args, **kwargs):
     deci = deci_cls(
         plugin_name="BinSync",
         init_plugin=True,
-        ui_init_args=args,
-        ui_init_kwargs=kwargs
+        gui_init_args=args,
+        gui_init_kwargs=kwargs
     )
     return deci.gui_plugin

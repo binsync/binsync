@@ -192,17 +192,19 @@ class BinsyncPlugin(GenericIDAPlugin):
             return None
 
     def init(self):
+        super().init()
         self.install_control_panel_action()
         return idaapi.PLUGIN_KEEP
 
     def run(self, arg):
+        super().run(arg)
         self.open_config_dialog()
 
     def term(self):
         if self.controller:
             self.controller.stop_worker_routines()
-            del self.controller.deci
             del self.controller
+            super().term()
 
 
 class IDABSInterface(IDAInterface):

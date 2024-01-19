@@ -125,7 +125,6 @@ class ControlPanel(QWidget):
         self._ctx_table.reload()
 
     def _update_table_data(self, states):
-        #import remote_pdb; remote_pdb.RemotePdb("localhost", 4444).set_trace()
 
         for _, table in self.tables.items():
             table.update_table(states)
