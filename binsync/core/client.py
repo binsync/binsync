@@ -75,6 +75,7 @@ class Client:
         binary_hash: bytes,
         remote: str = "origin",
         commit_interval: int = 10,
+        commit_batch_size: int = 10,
         init_repo: bool = False,
         remote_url: Optional[str] = None,
         ssh_agent_pid: Optional[int] = None,
@@ -82,6 +83,7 @@ class Client:
         push_on_update=True,
         pull_on_update=True,
         commit_on_update=True,
+
         **kwargs,
     ):
         """
@@ -119,7 +121,7 @@ class Client:
         self.connection_warnings = []
 
         # job scheduler
-        self.cache = Cache()
+        self.cache = Cache(master_user=master_user)
         self.scheduler = Scheduler(name="GitScheduler")
 
         # create, init, and checkout Git repo
@@ -129,6 +131,7 @@ class Client:
 
         # timestamps
         self._commit_interval = commit_interval
+        self._commit_batch_size = commit_batch_size
         self._last_push_time = None  # type: datetime.datetime
         self.last_push_attempt_time = None  # type: datetime.datetime
         self._last_pull_time = None  # type: datetime.datetime
@@ -139,6 +142,8 @@ class Client:
         self.global_config = self._load_or_update_config()
 
         self.active_remote = True
+        # force a state update on init
+        self.master_state = self.get_state(no_cache=True)
 
     def __del__(self):
         if self.repo_lock is not None:
@@ -255,6 +260,14 @@ class Client:
     #
 
     @property
+    def master_state(self):
+        return self.cache.get_state(user=self.master_user)
+
+    @master_state.setter
+    def master_state(self, state):
+        self.cache.set_state(state, user=self.master_user)
+
+    @property
     def last_push_ts(self):
         return self._last_push_time
 
@@ -275,11 +288,13 @@ class Client:
     #
 
     @atomic_git_action
-    def commit_state(self, state, msg="Generic Change", priority=None):
+    def commit_state(self, state, msg="Generic Change", priority=None, no_checkout=False):
         if self.master_user != state.user:
             raise ExternalUserCommitError(f"User {self.master_user} is not allowed to commit to user {state.user}")
 
-        self._checkout_to_master_user()
+        if not no_checkout:
+            self._checkout_to_master_user()
+
         master_user_branch = next(o for o in self.repo.branches if o.name == self.user_branch_name)
         index = self.repo.index
 
@@ -346,6 +361,7 @@ class Client:
             )
         except MetadataNotFoundError:
             if user == self.master_user:
+                # create of the first state ever
                 state = State(self.master_user, client=self)
         except Exception as e:
             if user == self.master_user:
@@ -454,9 +470,16 @@ class Client:
         in the case of dirty files.
         """
         # attempt to commit dirty files in a update phase
-        master_state = self.get_state(no_cache=True)
-        if master_state and master_state.dirty:
-            self.commit_state(master_state, msg=commit_msg)
+        for i in range(self._commit_batch_size):
+            if self.cache.queued_master_state_changes.empty():
+                break
+
+            state = self.cache.queued_master_state_changes.get()
+            self.commit_state(
+                state,
+                msg="State batch update",
+                no_checkout=i > 0
+            )
 
         # do a pull if there is a remote repo connected
         self.last_pull_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
@@ -731,11 +754,11 @@ class Client:
     def _update_cache(self):
         #l.debug(f"Updating cache commits for State Cache...")
         cache_dict = self._get_commits_for_users(git.Repo(self.repo_root))
-        self.cache.update_state_cache_commits(cache_dict)
+        self.cache.clear_state_cache(cache_dict)
 
         cache_keys = [key for key in cache_dict.keys()]
         #l.debug(f"Updating branches on Users Cache...")
         branch_set = set(cache_keys)
-        self.cache.update_user_cache_branches(branch_set)
+        self.cache.clear_user_branch_cache(branch_set)
 
 

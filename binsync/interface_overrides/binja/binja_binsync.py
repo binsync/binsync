@@ -89,7 +89,7 @@ class DataMonitor(BinaryDataNotification):
         self._func_before_change = None
 
     def function_updated(self, view, func_):
-        if self._controller.sync_lock.locked() or self._func_before_change is None:
+        if self._controller.sync_semaphore.locked() or self._func_before_change is None:
             # In the case of syncing, recording updates can cause infinite loops
             # In the case of None function before change, this means a function is being created
             # which is not supported as a change currently
@@ -113,7 +113,7 @@ class DataMonitor(BinaryDataNotification):
             # check if the headers differ
             if self._func_before_change.header.diff(bs_func.header):
                 self._controller.schedule_job(
-                    self._controller.push_artifact,
+                    self._controller.commit_artifact,
                     bs_func.header
                 )
                 
@@ -129,20 +129,20 @@ class DataMonitor(BinaryDataNotification):
                         continue
 
                     self._controller.schedule_job(
-                        self._controller.push_artifact,
+                        self._controller.commit_artifact,
                         new_var
                     )
 
             self._func_before_change = None
 
     def function_update_requested(self, view, func):
-        if not self._controller.sync_lock.locked() and self._func_addr_requested is None:
+        if not self._controller.sync_semaphore.locked() and self._func_addr_requested is None:
             l.debug(f"Update on {func} requested...")
             self._func_addr_requested = func.start
             self._func_before_change = bn_func_to_bs(func)
     
     def symbol_updated(self, view, sym):
-        if self._controller.sync_lock.locked():
+        if self._controller.sync_semaphore.locked():
             return
 
         l.debug(f"Symbol update Requested on {sym}...")
@@ -151,7 +151,7 @@ class DataMonitor(BinaryDataNotification):
             func = view.get_function_at(sym.address)
             bs_func = bn_func_to_bs(func)
             self._controller.schedule_job(
-                self._controller.push_artifact,
+                self._controller.commit_artifact,
                 FunctionHeader(sym.name, sym.address, type_=bs_func.header.type, args=bs_func.header.args)
             )
         elif sym.type == SymbolType.DataSymbol:
@@ -159,7 +159,7 @@ class DataMonitor(BinaryDataNotification):
             var: binaryninja.DataVariable = view.get_data_var_at(sym.address)
             
             self._controller.schedule_job(
-                self._controller.push_artifact,
+                self._controller.commit_artifact,
                 GlobalVariable(var.address, var.name, type_=str(var.type), size=var.type.width)
             )
         else:
@@ -169,19 +169,19 @@ class DataMonitor(BinaryDataNotification):
     def type_defined(self, view, name, type_):
         l.debug(f"Type Defined: {name} {type_}")
         name = str(name)
-        if self._controller.sync_lock.locked():
+        if self._controller.sync_semaphore.locked():
             return 
         
         if isinstance(type_, StructureType):
             bs_struct = bn_struct_to_bs(name, type_)
             self._controller.schedule_job(
-                self._controller.push_artifact,
+                self._controller.commit_artifact,
                 bs_struct
             )
 
         elif isinstance(type_, EnumerationType):
             bs_enum = bn_enum_to_bs(name, type_)
-            self._controller.schedule_job(self._controller.push_artifact, bs_enum)
+            self._controller.schedule_job(self._controller.commit_artifact, bs_enum)
 
 
 def start_data_monitor(view, controller):

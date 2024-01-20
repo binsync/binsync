@@ -67,19 +67,20 @@ class MergeLevel:
     MERGE = 2
 
 
-class FakeSyncLock:
-    def __enter__(self):
-        pass
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        pass
-
-
 #
 #   Controller
 #
 
 class BSController:
+    """
+    The BinSync Controller is the main interface for syncing with the BinSync Client which preforms git tasks
+    such as pull and push. In the Controller higher-level tasks are done such as updating UI with changes
+    and preforming syncs and pushes on data users need/change.
+
+    All class properties that have a "= None" means they must be set during runtime by an outside process.
+    The client will be set on connection. The ctx_change_callback will be set by an outside UI
+
+    """
     CHANGE_WATCHERS = (
         FunctionHeader, StackVariable, Comment, GlobalVariable, Enum, Struct
     )
@@ -111,15 +112,8 @@ class BSController:
         (Enum, GET_MANY): State.get_enums,
     }
 
-    """
-    The BinSync Controller is the main interface for syncing with the BinSync Client which preforms git tasks
-    such as pull and push. In the Controller higher-level tasks are done such as updating UI with changes
-    and preforming syncs and pushes on data users need/change.
+    DEFAULT_SEMAPHORE_SIZE = 100
 
-    All class properties that have a "= None" means they must be set during runtime by an outside process.
-    The client will be set on connection. The ctx_change_callback will be set by an outside UI
-
-    """
     def __init__(self, decompiler_interface: DecompilerInterface = None, headless=False, auto_commit=True, reload_time=10, **kwargs):
         self.headless = headless
         self.reload_time = reload_time
@@ -131,7 +125,7 @@ class BSController:
 
         # callbacks for changes to artifacts
         for typ in self.CHANGE_WATCHERS:
-            self.deci.artifact_write_callbacks[typ].append(self.push_artifact)
+            self.deci.artifact_write_callbacks[typ].append(self._commit_initiated_changes)
         # artifact map
         self.artifact_dict_map = {
             Function: self.deci.functions,
@@ -162,7 +156,7 @@ class BSController:
 
         # command locks
         self.push_job_scheduler = Scheduler(name="PushJobScheduler")
-        self.sync_lock = threading.Lock()
+        self.sync_semaphore = threading.Semaphore(value=self.DEFAULT_SEMAPHORE_SIZE)
 
         # create a pulling thread, but start on connection
         self._run_updater_threads = False
@@ -408,29 +402,29 @@ class BSController:
         if not state:
             state = self.get_state(user=user)
 
-        try:
-            artifact = get_artifact_func(state, *identifiers)
-        except Exception:
-            _l.warning(f"Failed to pull an supported Artifact of type {type_} with {identifiers}")
-            return None
+        artifact = get_artifact_func(state, *identifiers)
 
         if not artifact:
             return artifact
 
-        return self.lower_artifact(artifact)
+        return artifact
+
+    def _commit_initiated_changes(self, *args, **kwargs):
+        """
+        A special wrapper for callbacks to only commit artifacts when they are changed by the user, and not
+        when they are being pulled in from another users (avoids infinite loops)
+
+        @param args:
+        @param kwargs:
+        @return:
+        """
+        if self.sync_semaphore._value == self.DEFAULT_SEMAPHORE_SIZE:
+            self.commit_artifact(*args, **kwargs)
 
     @init_checker
-    def push_artifact(self, artifact: Artifact, user=None, state=None, commit_msg=None, set_last_change=True, make_func=True, **kwargs) -> bool:
+    def commit_artifact(self, artifact: Artifact, commit_msg=None, set_last_change=True, make_func=True, **kwargs) -> bool:
         """
-        Every pusher artifact does three things
-        1. Get the state setter function based on the class of the Obj
-        2. Get the commit msg of the obj based on the class
-        3. Lift the obj based on the Controller lifters
-
-        @param artifact:
-        @param user:
-        @param state:
-        @return:
+        This function is NOT thread safe. You must call it in the order you want commits to appear.
         """
         _l.debug(f"Attempting to push %s...", artifact)
         if not artifact:
@@ -438,35 +432,35 @@ class BSController:
             return False
 
         try:
-            set_artifact_func = self.ARTIFACT_SET_MAP[artifact.__class__]
+            set_art_func = self.ARTIFACT_SET_MAP[artifact.__class__]
+            get_art_func = self.ARTIFACT_GET_MAP[artifact.__class__]
         except KeyError:
             _l.info(f"Attempting to push an unsupported Artifact of type {artifact}")
             return False
 
-        # assure state exists
-        if not state:
-            state = self.get_state(user=user)
-        if not state or not isinstance(state, State):
-            _l.critical(f"Failed to get a state for push {artifact}, this is likely due to network error. Report me if back trace!")
-            return False
-
-        # assure function existence for artifacts requiring a function
+        state: State = self.client.master_state
+        # assure functions existence for artifacts requiring a function
         if isinstance(artifact, (FunctionHeader, StackVariable, Comment)) and make_func:
-            func_addr = artifact.func_addr if hasattr(artifact, "func_addr") else artifact.addr
-            if func_addr and not state.get_function(func_addr):
-                self.push_artifact(Function(func_addr, self.deci.get_func_size(func_addr)), state=state, set_last_change=set_last_change)
+            func_addr = self.deci.art_lifter.lift_addr(artifact.func_addr if hasattr(artifact, "func_addr") else artifact.addr)
+            if func_addr is not None and not state.get_function(func_addr):
+                state.set_function(
+                    self.deci.art_lifter.lift(Function(func_addr, self.deci.get_func_size(func_addr))),
+                    set_last_change=set_last_change
+                )
 
-        # lift artifact into standard BinSync format
+        # take the current changes and layer them on top of the change in the state now
         artifact = self.deci.art_lifter.lift(artifact)
+        identifiers = DecompilerInterface.get_identifiers(artifact)
+        current_art = get_art_func(state, *identifiers)
+        merged_artifact = self.merge_artifacts(current_art, artifact, merge_level=MergeLevel.OVERWRITE)
 
         # set the artifact in the target state, likely master
         _l.debug(f"Setting an artifact now into {state} as {artifact}")
-        was_set = set_artifact_func(state, artifact, set_last_change=set_last_change, **kwargs)
+        was_set = set_art_func(state, merged_artifact, set_last_change=set_last_change, **kwargs)
 
         # TODO: make was_set reliable
         _l.debug(f"{state} committing now with {commit_msg or artifact.commit_msg}")
-        self.client.commit_state(state, msg=commit_msg or artifact.commit_msg)
-
+        self.client.master_state = state
         return was_set
 
     #
@@ -492,14 +486,9 @@ class BSController:
         **kwargs
     ):
         state = state if state is not None else self.get_state(user=user, priority=SchedSpeed.FAST)
-        master_state = master_state if master_state is not None else self.get_state(priority=SchedSpeed.FAST)
+        master_state = self.client.master_state
         artifact_type = artifact_type if artifact_type is not None else artifact.__class__
         # TODO: make this work for multiple identifiers (stack vars)
-        identifiers = list(identifiers)
-        if isinstance(identifiers[0], int):
-            identifiers[0] = self.deci.art_lifter.lift_addr(identifiers[0])
-        if artifact_type is StackVariable:
-            identifiers[1] = self.deci.art_lifter.lift_stack_offset(identifiers[1])
         identifier = identifiers[0]
 
         # find the state getter and artifact dict for the artifact
@@ -508,28 +497,30 @@ class BSController:
 
         # construct and merge the incoming changes from user (or target state) into the master
         # state (which also maybe defined by an artifact being passed in)
-        master_artifact = artifact if artifact \
-            else self.deci.art_lifter.lower(art_state_getter(master_state, *identifiers))
+        master_artifact = artifact if artifact else art_state_getter(master_state, *identifiers)
+        target_artifact = art_state_getter(state, *identifiers)
+        if target_artifact is not None:
+            # specify to BinSync that this is not user-changed, but merged from someone else
+            target_artifact.reset_last_change()
+
         merged_artifact = self.merge_artifacts(
-            master_artifact, self.deci.art_lifter.lower(art_state_getter(state, *identifiers)),
+            master_artifact, target_artifact,
             merge_level=merge_level, master_state=master_state
         )
-        # merged artifacts never have a last changed to specify they were just merged
-        merged_artifact.last_change = None
 
-        # lock all other threads from doing things inside the decompiler while we are setting changes
-        lock = self.sync_lock if not self.sync_lock.locked() else FakeSyncLock()
-        with lock:
+        # alert others that we are about to change things in the decompiler
+        with self.sync_semaphore:
             try:
                 # import all user defined types
-                self.discover_and_importer_user_defined_types(merged_artifact, state=state, master_state=master_state)
+                self.discover_and_sync_user_types(merged_artifact, state=state, master_state=master_state)
                 # set the imports into the decompiler
                 art_dict[identifier] = merged_artifact
 
-                # TODO: figure out a way to do this in LibBS
+                # TODO: figure out a way to do this inside LibBS (getting all comments for a func)
                 if artifact_type is Function:
-                    for cmt in state.get_func_comments(merged_artifact.addr):
-                        self.deci.comments[cmt.addr] = cmt
+                    for addr, cmt in state.get_func_comments(merged_artifact.addr).items():
+                        self.fill_artifact(addr, artifact_type=Comment, artifact=cmt)
+
                 fill_changes = True
             except Exception as e:
                 fill_changes = False
@@ -541,12 +532,11 @@ class BSController:
         )
 
         if blocking:
-            self.push_artifact(merged_artifact, state=master_state, set_last_change=False, commit_msg=commit_msg)
+            self.commit_artifact(merged_artifact, set_last_change=False, commit_msg=commit_msg)
         else:
             self.schedule_job(
-                self.push_artifact,
+                self.commit_artifact,
                 merged_artifact,
-                state=master_state,
                 set_last_change=False,
                 commit_msg=commit_msg
             )
@@ -723,7 +713,7 @@ class BSController:
 
         for func_addr, func_obj in progress_bar(funcs.items(), gui=not self.headless, desc="Scheduling functions to push..."):
             self.schedule_job(
-                self.push_artifact,
+                self.commit_artifact,
                 func_obj,
                 state=master_state,
                 commit_msg=f"Forced pushed function {func_addr:#0x}",
@@ -749,7 +739,7 @@ class BSController:
                 continue
             global_art = self.artifact_lifer.lift(global_art)
             self.schedule_job(
-                self.push_artifact,
+                self.commit_artifact,
                 global_art,
                 state=master_state,
                 commit_msg=f"Forced pushed global {global_art}",
@@ -767,12 +757,13 @@ class BSController:
         if art2 is None:
             return art1.copy()
 
-        if merge_level == MergeLevel.OVERWRITE or (not art1) or (art1 == art2):
+        if not art1 or (art1 == art2):
             return art2.copy() if art2 else None
 
-        if merge_level == MergeLevel.NON_CONFLICTING:
+        if merge_level == MergeLevel.OVERWRITE or (not art1) or (art1 == art2):
+            merge_art = art1.overwrite_merge(art2)
+        elif merge_level == MergeLevel.NON_CONFLICTING:
             merge_art = art1.nonconflict_merge(art2, **kwargs)
-
         elif merge_level == MergeLevel.MERGE:
             _l.warning("Manual Merging is not currently supported, using non-conflict syncing...")
             merge_art = art1.nonconflict_merge(art2, **kwargs)
@@ -806,7 +797,7 @@ class BSController:
 
         return known_arts
 
-    def discover_and_importer_user_defined_types(self, artifact: Artifact, master_state=None, state=None):
+    def discover_and_sync_user_types(self, artifact: Artifact, master_state=None, state=None):
         imported_types = False
         if not artifact:
             return imported_types
@@ -814,34 +805,34 @@ class BSController:
         if isinstance(artifact, Function):
             # header
             if artifact.header:
-                imported_types |= self.discover_and_importer_user_defined_types(artifact.header, master_state=master_state, state=state)
+                imported_types |= self.discover_and_sync_user_types(artifact.header, master_state=master_state, state=state)
 
             # stack vars
             if artifact.stack_vars:
                 for sv in artifact.stack_vars.values():
-                    imported_types |= self.discover_and_importer_user_defined_types(sv, master_state=master_state, state=state)
+                    imported_types |= self.discover_and_sync_user_types(sv, master_state=master_state, state=state)
         elif isinstance(artifact, FunctionHeader):
             # ret type
             if artifact.type:
-                imported_types |= self.import_user_defined_type(artifact.type, master_state=master_state, state=state)
+                imported_types |= self.sync_user_type(artifact.type, master_state=master_state, state=state)
 
             # args
             if artifact.args:
                 for arg in artifact.args.values():
-                    imported_types |= self.discover_and_importer_user_defined_types(arg, master_state=master_state, state=state)
+                    imported_types |= self.discover_and_sync_user_types(arg, master_state=master_state, state=state)
         elif isinstance(artifact, FunctionArgument):
-            imported_types |= self.import_user_defined_type(artifact.type, master_state=master_state, state=state)
+            imported_types |= self.sync_user_type(artifact.type, master_state=master_state, state=state)
         elif isinstance(artifact, StackVariable):
-            imported_types |= self.import_user_defined_type(artifact.type, master_state=master_state, state=state)
+            imported_types |= self.sync_user_type(artifact.type, master_state=master_state, state=state)
         elif isinstance(artifact, GlobalVariable):
-            imported_types |= self.import_user_defined_type(artifact.type, master_state=master_state, state=state)
+            imported_types |= self.sync_user_type(artifact.type, master_state=master_state, state=state)
         elif isinstance(artifact, Struct):
             for memb in artifact.members.values():
-                imported_types |= self.discover_and_importer_user_defined_types(memb, master_state=master_state, state=state)
+                imported_types |= self.discover_and_sync_user_types(memb, master_state=master_state, state=state)
         elif isinstance(artifact, StructMember):
-            imported_types |= self.import_user_defined_type(artifact.type, master_state=master_state, state=state)
+            imported_types |= self.sync_user_type(artifact.type, master_state=master_state, state=state)
         else:
-            _l.warning(f"Unsupported artifact type {artifact} for user defined type discovery")
+            _l.debug(f"Unsupported artifact type %s for user defined type discovery", artifact)
 
         return imported_types
 
@@ -861,7 +852,7 @@ class BSController:
         base_type_str = type_.base_type.type
         return base_type_str if base_type_str in state.structs.keys() else None
 
-    def import_user_defined_type(self, type_str, **kwargs):
+    def sync_user_type(self, type_str, **kwargs):
         state = kwargs.pop('state')
         master_state = kwargs['master_state']
         base_type_str = self.type_is_user_defined(type_str, state=state)
