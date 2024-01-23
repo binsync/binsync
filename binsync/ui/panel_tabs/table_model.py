@@ -269,7 +269,7 @@ class BinsyncTableView(QTableView):
         row_idx = self.selectionModel().selectedIndexes()[0]
         tls_row_idx = self.proxymodel.mapToSource(row_idx)
         row = self.model.row_data[tls_row_idx.row()]
-        self.controller.deci.goto_address(row[self.model.addr_col])
+        self.controller.deci.gui_goto(row[self.model.addr_col])
 
     def _col_hide_handler(self, index):
         """ Helper function to hide/show columns from context menu """

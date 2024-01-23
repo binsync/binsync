@@ -305,7 +305,7 @@ class BSController:
         self.ui_callback(states)
 
     def _check_and_notify_ctx(self, states):
-        active_ctx = self.deci.active_context()
+        active_ctx = self.deci.gui_active_context()
         if active_ctx is None or self.last_ctx == active_ctx:
             return
 
@@ -450,6 +450,9 @@ class BSController:
 
         # take the current changes and layer them on top of the change in the state now
         artifact = self.deci.art_lifter.lift(artifact)
+        if not set_last_change:
+            artifact.reset_last_change()
+
         identifiers = DecompilerInterface.get_identifiers(artifact)
         current_art = get_art_func(state, *identifiers)
         merged_artifact = self.merge_artifacts(current_art, artifact, merge_level=MergeLevel.OVERWRITE)
@@ -481,7 +484,7 @@ class BSController:
         state=None,
         master_state=None,
         merge_level=None,
-        blocking=False,
+        blocking=True,
         commit_msg=None,
         **kwargs
     ):
