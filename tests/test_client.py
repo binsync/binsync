@@ -48,7 +48,7 @@ class TestClient(unittest.TestCase):
             # git is still running at least on windows
             client.shutdown()
 
-    def test_commit_msgs(self):
+    def test_commit_messages(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             client = Client("user0", tmpdir, "fake_hash", init_repo=True)
             state = client.master_state
