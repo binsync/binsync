@@ -271,11 +271,11 @@ class BSController:
 
             # do git pull/push operations if a remote exist for the client
             if self.client.last_pull_attempt_time is None:
-                self.client.update(commit_msg="User created")
+                self.client.commit_and_update_states(commit_msg="User created")
 
             # update every reload_time
             elif int(now.timestamp() - self.client.last_pull_attempt_time.timestamp()) >= self.reload_time:
-                self.client.update()
+                self.client.commit_and_update_states()
                 
             if not self.headless:
                 all_states = self.client.all_states()
@@ -422,7 +422,7 @@ class BSController:
             self.commit_artifact(*args, **kwargs)
 
     @init_checker
-    def commit_artifact(self, artifact: Artifact, commit_msg=None, set_last_change=True, make_func=True, **kwargs) -> bool:
+    def commit_artifact(self, artifact: Artifact, commit_msg=None, set_last_change=True, make_func=True, from_user=None, **kwargs) -> bool:
         """
         This function is NOT thread safe. You must call it in the order you want commits to appear.
         """
@@ -459,10 +459,10 @@ class BSController:
 
         # set the artifact in the target state, likely master
         _l.debug(f"Setting an artifact now into {state} as {artifact}")
-        was_set = set_art_func(state, merged_artifact, set_last_change=set_last_change, **kwargs)
+        was_set = set_art_func(state, merged_artifact, set_last_change=set_last_change, from_user=from_user, **kwargs)
 
         # TODO: make was_set reliable
-        _l.debug(f"{state} committing now with {commit_msg or artifact.commit_msg}")
+        _l.debug(f"{state} committing now with {commit_msg}")
         self.client.master_state = state
         return was_set
 
@@ -488,7 +488,8 @@ class BSController:
         commit_msg=None,
         **kwargs
     ):
-        state = state if state is not None else self.get_state(user=user, priority=SchedSpeed.FAST)
+        state: State = state if state is not None else self.get_state(user=user, priority=SchedSpeed.FAST)
+        user = user or state.user
         master_state = self.client.master_state
         artifact_type = artifact_type if artifact_type is not None else artifact.__class__
         # TODO: make this work for multiple identifiers (stack vars)
@@ -522,7 +523,7 @@ class BSController:
                 # TODO: figure out a way to do this inside LibBS (getting all comments for a func)
                 if artifact_type is Function:
                     for addr, cmt in state.get_func_comments(merged_artifact.addr).items():
-                        self.fill_artifact(addr, artifact_type=Comment, artifact=cmt)
+                        self.fill_artifact(addr, artifact_type=Comment, artifact=cmt, state=state, user=user)
 
                 fill_changes = True
             except Exception as e:
@@ -535,13 +536,14 @@ class BSController:
         )
 
         if blocking:
-            self.commit_artifact(merged_artifact, set_last_change=False, commit_msg=commit_msg)
+            self.commit_artifact(merged_artifact, set_last_change=False, commit_msg=commit_msg, from_user=user)
         else:
             self.schedule_job(
                 self.commit_artifact,
                 merged_artifact,
                 set_last_change=False,
-                commit_msg=commit_msg
+                commit_msg=commit_msg,
+                from_user=user,
             )
 
         return fill_changes

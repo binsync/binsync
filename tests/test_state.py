@@ -7,8 +7,9 @@ import unittest
 
 from binsync.core.client import Client
 from libbs.artifacts import (
-    FunctionHeader, StackVariable, FunctionArgument, State, Struct, ArtifactType
+    FunctionHeader, StackVariable, FunctionArgument, Struct,
 )
+from binsync.core.state import State, ArtifactType
 
 
 class TestState(unittest.TestCase):
@@ -18,7 +19,6 @@ class TestState(unittest.TestCase):
         self.assertEqual(state.user, "user0")
 
     def test_state_dumping(self):
-
         with tempfile.TemporaryDirectory() as tmpdir:
             # create a client only for accurate git usage
             client = Client("user0", tmpdir, "fake_hash", init_repo=True)
@@ -41,7 +41,7 @@ class TestState(unittest.TestCase):
             state.set_function_header(func_header)
 
             # dump and commit state to tree
-            client.commit_state(state)
+            client._commit_state(state)
 
             # load the state
             state_tree = client._get_tree(state.user, client.repo)

@@ -6,6 +6,7 @@ import subprocess
 import datetime
 from functools import wraps
 from typing import Iterable, Optional
+from pathlib import Path
 
 import filelock
 import git
@@ -68,6 +69,8 @@ def atomic_git_action(f):
 
 
 class Client:
+    DEFAULT_COMMIT_MSG = "Generic BS Commit"
+
     def __init__(
         self,
         master_user: str,
@@ -83,7 +86,6 @@ class Client:
         push_on_update=True,
         pull_on_update=True,
         commit_on_update=True,
-
         **kwargs,
     ):
         """
@@ -120,6 +122,8 @@ class Client:
         self.ssh_auth_sock = ssh_auth_sock  # type: str
         self.connection_warnings = []
 
+        self._repo_lock_path = Path(self.repo_root + "/.git/binsync.lock")
+
         # job scheduler
         self.cache = Cache(master_user=master_user)
         self.scheduler = Scheduler(name="GitScheduler")
@@ -146,8 +150,7 @@ class Client:
         self.master_state = self.get_state(no_cache=True)
 
     def __del__(self):
-        if self.repo_lock is not None:
-            self.repo_lock.release()
+        self.shutdown()
 
     #
     # Initializers
@@ -231,7 +234,7 @@ class Client:
 
         assert not self.repo.bare, "it should not be a bare repo"
 
-        self.repo_lock = filelock.FileLock(self.repo_root + "/.git/binsync.lock")
+        self.repo_lock = filelock.FileLock(str(self._repo_lock_path))
         try:
             self.repo_lock.acquire(timeout=0)
         except filelock.Timeout as e:
@@ -260,7 +263,7 @@ class Client:
     #
 
     @property
-    def master_state(self):
+    def master_state(self) -> State:
         return self.cache.get_state(user=self.master_user)
 
     @master_state.setter
@@ -286,36 +289,6 @@ class Client:
     #
     # Atomic Public API
     #
-
-    @atomic_git_action
-    def commit_state(self, state, msg="Generic Change", priority=None, no_checkout=False):
-        if self.master_user != state.user:
-            raise ExternalUserCommitError(f"User {self.master_user} is not allowed to commit to user {state.user}")
-
-        if not no_checkout:
-            self._checkout_to_master_user()
-
-        master_user_branch = next(o for o in self.repo.branches if o.name == self.user_branch_name)
-        index = self.repo.index
-
-        # dump the state
-        state.dump(index)
-
-        # commit changes
-        self.repo.index.add([os.path.join(state.user, "*")])
-
-        if not self.repo.index.diff("HEAD"):
-            return
-
-        # commit if there is any difference
-        try:
-            commit = index.commit(msg)
-        except Exception as e:
-            l.warning(f"Internal Git Commit Error: {e}")
-            return
-        self._last_commit_time = datetime.datetime.now(tz=datetime.timezone.utc)
-        master_user_branch.commit = commit
-        state._dirty = False
 
     @atomic_git_action
     def users(self, priority=None, no_cache=False) -> Iterable[User]:
@@ -372,8 +345,98 @@ class Client:
 
         return state
 
+    @property
     @atomic_git_action
-    def pull(self, priority=SchedSpeed.AVERAGE):
+    def has_remote(self, priority=SchedSpeed.FAST):
+        """
+        If there is a remote configured for our local repo.
+
+        :return:    True if there is a remote, False otherwise.
+        """
+        return self.remote and any(r.name == self.remote for r in self.repo.remotes)
+
+    def all_states(self):
+        states = list()
+        # promises users in the event of inability to get new users
+        users = self.users(no_cache=True) or self.users()
+        if not users:
+            l.critical("Failed to get users from current project. Report me if possible.")
+            return {}
+
+        for user in users:
+            state = self.get_state(user=user.name)
+            states.append(state)
+
+        return states
+
+    def commit_master_state(self, commit_msg=None):
+        # attempt to commit dirty files in a update phase
+        for i in range(self._commit_batch_size):
+            if self.cache.queued_master_state_changes.empty():
+                break
+
+            state = self.cache.queued_master_state_changes.get()
+            self._commit_state(
+                state,
+                msg=commit_msg or state.last_commit_msg,
+                no_checkout=i > 0
+            )
+
+        self.cache._master_state._dirty = False
+
+    def commit_and_update_states(self, commit_msg=None):
+        """
+        Update both the local and remote repo knowledge of files through pushes/pulls and commits
+        in the case of dirty files.
+        """
+        self.commit_master_state(commit_msg=commit_msg)
+
+        # do a pull if there is a remote repo connected
+        self.last_pull_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
+        if self.has_remote and self.pull_on_update:
+            self._pull()
+
+        self.last_push_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
+        if self.has_remote and self.push_on_update:
+            self._push()
+
+    #
+    # Git Backend
+    #
+
+    @atomic_git_action
+    def _commit_state(self, state, msg=None, priority=None, no_checkout=False):
+        msg = msg or self.DEFAULT_COMMIT_MSG
+        if self.master_user != state.user:
+            raise ExternalUserCommitError(f"User {self.master_user} is not allowed to commit to user {state.user}")
+
+        if not no_checkout:
+            self._checkout_to_master_user()
+
+        master_user_branch = next(o for o in self.repo.branches if o.name == self.user_branch_name)
+        index = self.repo.index
+
+        # dump the state
+        state.dump(index)
+
+        # commit changes
+        self.repo.index.add([os.path.join(state.user, "*")])
+
+        if not self.repo.index.diff("HEAD"):
+            return
+
+        # commit if there is any difference
+        try:
+            commit = index.commit(msg)
+        except Exception as e:
+            l.warning(f"Internal Git Commit Error: {e}")
+            return
+        self._last_commit_time = datetime.datetime.now(tz=datetime.timezone.utc)
+        master_user_branch.commit = commit
+        state._dirty = False
+
+    @atomic_git_action
+    def _pull(self, priority=SchedSpeed.AVERAGE):
         """
         Pull changes from the remote side.
 
@@ -416,7 +479,7 @@ class Client:
         self._update_cache()
 
     @atomic_git_action
-    def push(self, print_error=False, priority=SchedSpeed.AVERAGE):
+    def _push(self, print_error=False, priority=SchedSpeed.AVERAGE):
         """
         Push local changes to the remote side.
 
@@ -435,60 +498,6 @@ class Client:
         except git.exc.GitCommandError as ex:
             self.active_remote = False
             #l.debug(f"Failed to push b/c {ex}")
-
-    @property
-    @atomic_git_action
-    def has_remote(self, priority=SchedSpeed.FAST):
-        """
-        If there is a remote configured for our local repo.
-
-        :return:    True if there is a remote, False otherwise.
-        """
-        return self.remote and any(r.name == self.remote for r in self.repo.remotes)
-
-    #
-    # Non-Atomic Public API
-    #
-
-    def all_states(self):
-        states = list()
-        # promises users in the vent of inability to get new users
-        users = self.users(no_cache=True) or self.users()
-        if not users:
-            l.critical("Failed to get users from current project. Report me if possible.")
-            return {}
-
-        for user in users:
-            state = self.get_state(user=user.name)
-            states.append(state)
-
-        return states
-
-    def update(self, commit_msg="Generic Change"):
-        """
-        Update both the local and remote repo knowledge of files through pushes/pulls and commits
-        in the case of dirty files.
-        """
-        # attempt to commit dirty files in a update phase
-        for i in range(self._commit_batch_size):
-            if self.cache.queued_master_state_changes.empty():
-                break
-
-            state = self.cache.queued_master_state_changes.get()
-            self.commit_state(
-                state,
-                msg="State batch update",
-                no_checkout=i > 0
-            )
-
-        # do a pull if there is a remote repo connected
-        self.last_pull_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
-        if self.has_remote and self.pull_on_update:
-            self.pull()
-
-        self.last_push_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
-        if self.has_remote and self.push_on_update:
-            self.push()
 
     #
     # Git Updates
@@ -618,9 +627,19 @@ class Client:
 
         return ssh_agent_pid, ssh_agent_sock
 
-    def close(self):
-        self.repo.close()
-        del self.repo
+    def shutdown(self):
+        if hasattr(self, "repo"):
+            self.repo.close()
+            del self.repo
+
+        self.scheduler.stop_worker_thread()
+
+        if self.repo_lock is not None:
+            self.repo_lock.release()
+            # force delete it!
+            if self._repo_lock_path.exists():
+                self._repo_lock_path.unlink(missing_ok=True)
+
 
     def _get_best_refs(self, repo, force_local=False):
         candidates = {}

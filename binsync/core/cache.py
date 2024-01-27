@@ -58,13 +58,14 @@ class Cache:
     #
 
     def set_state(self, state, user=None, **kwargs):
+        copied_state = state.copy()
         if not user or user == self._master_user:
             with self.master_state_lock:
-                self.queued_master_state_changes.put_nowait(state)
-                self._master_state = state
+                self.queued_master_state_changes.put_nowait(copied_state)
+                self._master_state = copied_state
         else:
             with self.state_lock:
-                self.state_cache[user].state = state
+                self.state_cache[user].state = copied_state
 
     def set_users(self, users, **kwargs):
         with self.user_lock:

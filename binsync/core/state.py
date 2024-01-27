@@ -41,21 +41,22 @@ class ArtifactType:
 # Helper Funcs
 #
 
-def dirty_checker(f):
+def update_dirty_flag(f):
     @wraps(f)
-    def dirtycheck(self, *args, **kwargs):
+    def _update_dirty_flag(self, *args, **kwargs):
         r = f(self, *args, **kwargs)
         if r is True:
             self._dirty = True
         return r
 
-    return dirtycheck
+    return _update_dirty_flag
 
 
 def update_last_change(f):
     @wraps(f)
     def _update_last_change(self, *args, **kwargs):
         should_set = kwargs.pop('set_last_change', True)
+        from_user = kwargs.pop('from_user', None)
         artifact = args[0]
 
         # make a function if one does not exist
@@ -63,7 +64,11 @@ def update_last_change(f):
             func = self.get_or_make_function(artifact.addr)
 
         if not should_set:
+            from_user_msg = f" from {from_user}" if from_user else ""
+            self.last_commit_msg = f"Merged in {artifact}{from_user_msg}"
             return f(self, *args, **kwargs)
+
+        self.last_commit_msg = f"Updated {artifact}"
         artifact.last_change = datetime.datetime.now(tz=datetime.timezone.utc)
 
         # Comment
@@ -171,13 +176,14 @@ class State:
     :ivar int version:  Version of the state, starting from 0.
     """
 
-    def __init__(self, user, version=None, client=None, last_push_time=None):
+    def __init__(self, user, version=None, client=None, last_push_time=None, last_commit_msg=None, dirty=True):
         # metadata info
         self.user = user  # type: str
         self.version = version if version is not None else 0  # type: int
         self.last_push_artifact = -1
         self.last_push_artifact_type = -1
         self.last_push_time = last_push_time or datetime.datetime.now(tz=datetime.timezone.utc)
+        self.last_commit_msg = last_commit_msg
 
         # the client
         self.client = client  # type: Optional[Client]
@@ -191,7 +197,7 @@ class State:
         self.enums: Dict[str, Enum] = {}
 
         # state is dirty on creation (metadata)
-        self._dirty = True  # type: bool
+        self._dirty = dirty  # type: bool
 
     def __eq__(self, other):
         if isinstance(other, State):
@@ -204,8 +210,7 @@ class State:
         return False
 
     def copy(self):
-        state = State(self.user, version=self.version, client=self.client, last_push_time=self.last_push_time)
-        state._dirty = False
+        state = State(self.user, version=self.version, client=self.client, last_push_time=self.last_push_time, last_commit_msg=self.last_commit_msg, dirty=self._dirty)
         artifacts = ["functions", "comments", "structs", "patches", "global_vars", "enums"]
         for artifact in artifacts:
             setattr(
@@ -252,6 +257,7 @@ class State:
             "last_push_time": self.last_push_time,
             "last_push_artifact": self.last_push_artifact,
             "last_push_artifact_type": self.last_push_artifact_type,
+            "last_commit_msg": self.last_commit_msg,
         }
         self._dump_data(dst, 'metadata.toml', toml.dumps(d, encoder=TomlHexEncoder()).encode())
 
@@ -352,7 +358,7 @@ class State:
     # Setters
     #
 
-    @dirty_checker
+    @update_dirty_flag
     @update_last_change
     def set_function(self, function: Function, set_last_change=True, **kwargs):
         if function.addr in self.functions and self.functions[function.addr] == function:
@@ -361,7 +367,7 @@ class State:
         self.functions[function.addr] = function
         return True
 
-    @dirty_checker
+    @update_dirty_flag
     @update_last_change
     def set_function_header(self, func_header: FunctionHeader, set_last_change=True, **kwargs):
         if func_header.addr in self.functions and self.functions[func_header.addr] == func_header:
@@ -370,7 +376,7 @@ class State:
         self.functions[func_header.addr].header = func_header
         return True
 
-    @dirty_checker
+    @update_dirty_flag
     @update_last_change
     def set_comment(self, comment: Comment, append=False, set_last_change=True, **kwargs):
         if not comment:
@@ -392,7 +398,7 @@ class State:
 
         return False
 
-    @dirty_checker
+    @update_dirty_flag
     @update_last_change
     def set_patch(self, patch, addr, set_last_change=True, **kwargs):
         if not patch:
@@ -409,7 +415,7 @@ class State:
 
         return False
 
-    @dirty_checker
+    @update_dirty_flag
     @update_last_change
     def set_stack_variable(self, variable: StackVariable, set_last_change=True, **kwargs):
         if not variable:
@@ -430,7 +436,7 @@ class State:
 
         return False
 
-    @dirty_checker
+    @update_dirty_flag
     @update_last_change
     def set_struct(self, struct: Struct, old_name=None, set_last_change=True, **kwargs):
         """
@@ -466,7 +472,7 @@ class State:
 
         return False
 
-    @dirty_checker
+    @update_dirty_flag
     @update_last_change
     def set_global_var(self, gloabl_var: GlobalVariable, set_last_change=True, **kwargs):
         try:
@@ -480,7 +486,7 @@ class State:
 
         return False
 
-    @dirty_checker
+    @update_dirty_flag
     @update_last_change
     def set_enum(self, enum: Enum, set_last_change=True, **kwargs):
         try:
@@ -633,38 +639,6 @@ class State:
     #
     # Utils
     #
-
-    def diff_comments(self, other_comments: Dict[int, Comment], diff_range=None):
-        """
-
-        :param other_comments:
-        :param diff_range: [start_addr, end_addr]
-        :return:
-        """
-        diff_dict = {}
-
-        for addr, cmt in self.comments.items():
-            # if addr is less than start or bigger than end
-            if diff_range and (diff_range[0] > addr or addr >= diff_range[1]):
-                continue
-
-            try:
-                other_cmt = other_comments[addr]
-            except KeyError:
-                other_cmt = None
-
-            diff_dict[addr] = cmt.diff(other_cmt)
-
-        for addr, cmt in other_comments.items():
-            if diff_range and (diff_range[0] > addr or addr >= diff_range[1]):
-                continue
-
-            if addr in diff_dict:
-                continue
-
-            diff_dict[addr] = cmt.diff(None)
-
-        return diff_dict
 
     def find_func_for_addr(self, search_addr):
         for func_addr, func in self.functions.items():
