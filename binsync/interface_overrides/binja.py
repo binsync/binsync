@@ -13,18 +13,19 @@ from binaryninjaui import (
     SidebarWidgetType,
     Sidebar,
 )
-import binaryninja
 
 from libbs.plugin_installer import PluginInstaller
+from libbs.decompilers.binja.interface import BinjaInterface
+
 from binsync.controller import BSController
 from binsync.ui.control_panel import ControlPanel
 from binsync.ui.config_dialog import ConfigureBSDialog
 
 
 class BinSyncSidebarWidget(SidebarWidget):
-    def __init__(self, bv, bn_plugin, name="BinSync"):
+    def __init__(self, bv, bs_interface, name="BinSync"):
         super().__init__(name)
-        self._controller = bn_plugin.controllers[bv]
+        self._controller = bs_interface.controllers[bv]
         self._controller.bv = bv
         self._widget = ControlPanel(self._controller)
 
@@ -51,49 +52,41 @@ class BinSyncSidebarWidgetType(SidebarWidgetType):
         return BinSyncSidebarWidget(data, self.plugin)
 
 
-class BinjaPlugin:
-    def __init__(self):
-        # controller stored by a binary view
+class BinjaBSInterface(BinjaInterface):
+    def __init__(self, *args, **kwargs):
         self.controllers = defaultdict(BSController)
         self.sidebar_widget_type = None
+        super().__init__(*args, **kwargs)
 
-        if binaryninja.core_ui_enabled():
-            self._init_ui()
+    def _init_gui_components(self, *args, **kwargs):
+        if super()._init_gui_components(*args, **kwargs):
+            # config dialog
+            configure_binsync_id = "BinSync: Configure..."
+            UIAction.registerAction(configure_binsync_id)
+            UIActionHandler.globalActions().bindAction(
+                configure_binsync_id, UIAction(self._launch_bs_config)
+            )
+            Menu.mainMenu("Plugins").addAction(configure_binsync_id, "BinSync")
 
-    def _init_ui(self):
-        # config dialog
-        configure_binsync_id = "BinSync: Configure..."
-        UIAction.registerAction(configure_binsync_id)
-        UIActionHandler.globalActions().bindAction(
-            configure_binsync_id, UIAction(self._launch_config)
-        )
-        Menu.mainMenu("Plugins").addAction(configure_binsync_id, "BinSync")
+            # control panel widget
+            self.sidebar_widget_type = BinSyncSidebarWidgetType(self)
+            Sidebar.addSidebarWidgetType(self.sidebar_widget_type)
 
-        # control panel widget
-        self.sidebar_widget_type = BinSyncSidebarWidgetType(self)
-        Sidebar.addSidebarWidgetType(self.sidebar_widget_type)
-
-    def _init_bv_dependencies(self, bv):
-        """
-        TODO: Add the start artifact watcher call here
-        """
-        pass
-
-    def _launch_config(self, bn_context):
+    def _launch_bs_config(self, bn_context):
         bv = bn_context.binaryView
-        controller_bv = self.controllers[bv]
+        bs_controller = self.controllers[bv]
 
         if bv is not None:
-            controller_bv.bv = bv
+            bs_controller.deci.bv = bv
 
-        # exit early if we already configed
-        if (controller_bv.bv is not None and controller_bv.check_client()) or bv is None:
+        # exit early if we already configured
+        if (bs_controller.deci.bv is not None and bs_controller.check_client()) or bv is None:
             return
 
         # configure
-        dialog = ConfigureBSDialog(controller_bv)
+        dialog = ConfigureBSDialog(bs_controller)
         dialog.exec_()
 
-        # if the config was successful init a full client
-        if controller_bv.check_client():
-            self._init_bv_dependencies(bv)
+        # if the config was successful start the artifact watchers
+        if bs_controller.check_client():
+            self.start_artifact_watchers()

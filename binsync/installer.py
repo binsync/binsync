@@ -57,12 +57,13 @@ class BinSyncInstaller(LibBSPluginInstaller):
             return
 
         # binja requires a folder for the plugin
-        bs_binja_dir = path / "binsync"
+        bs_binja_dir = path / "binsync_plugin"
         if bs_binja_dir.exists():
             shutil.rmtree(bs_binja_dir)
         bs_binja_dir.mkdir()
 
         # copy things to the new folder
-        self.link_or_copy(self.stub_files / "__init__.py", bs_binja_dir / "__init__.py")
+        self.link_or_copy(self.stub_files / "__init__.py", bs_binja_dir / "__init__.py", symlink=True)
         self.link_or_copy(self.stub_files / "plugin.json", bs_binja_dir / "plugin.json")
+        self.link_or_copy(self.stub_files / "requirements.txt", bs_binja_dir / "requirements.txt")
         return path

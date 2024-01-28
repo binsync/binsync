@@ -17,7 +17,8 @@ def create_plugin(*args, **kwargs):
 
 import sys
 # Python 2 has special requirements for Ghidra, which forces us to use a different entry point
-# and scope for defining plugin entry points
+# and scope for defining plugin entry points.
+# The Python 3 side has been edited since currently every supported decompiler must import create_plugin
 if sys.version[0] == "2":
     # Do Ghidra Py2 entry point
     import subprocess
@@ -29,16 +30,6 @@ if sys.version[0] == "2":
     if process.poll() is not None:
         raise RuntimeError(
             "Failed to run the Python3 backed. It's likely Python3 is not in your Path inside Ghidra.")
-else:
-    # Try plugin discovery for other interface_overrides
-    try:
-        import idaapi
-        has_ida = True
-    except ImportError:
-        has_ida = False
-
-    if not has_ida:
-        create_plugin()
 
 
 def PLUGIN_ENTRY(*args, **kwargs):
