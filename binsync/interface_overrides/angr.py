@@ -6,7 +6,6 @@ from libbs.ui.version import set_ui_version
 set_ui_version("PySide6")
 
 from libbs.ui.qt_objects import QVBoxLayout
-from libbs.decompilers.angr.interface import AngrInterface
 from libbs.decompilers.angr.compat import GenericBSAngrManagementPlugin
 
 from angrmanagement.ui.views.view import BaseView

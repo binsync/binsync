@@ -1,19 +1,10 @@
 from collections import defaultdict
-from pathlib import Path
-import pkg_resources
 
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import (
-    QDockWidget,
-    QWidget,
-    QApplication,
-    QMenu,
-    QMainWindow,
-    QMenuBar,
     QVBoxLayout
 )
 
-from binaryninjaui import DockContextHandler
 from binaryninjaui import (
     UIAction,
     UIActionHandler,
@@ -24,88 +15,10 @@ from binaryninjaui import (
 )
 import binaryninja
 
+from libbs.plugin_installer import PluginInstaller
 from binsync.controller import BSController
 from binsync.ui.control_panel import ControlPanel
 from binsync.ui.config_dialog import ConfigureBSDialog
-
-
-def find_main_window():
-    main_window = None
-    for x in QApplication.allWidgets():
-        if not isinstance(x, QDockWidget):
-            continue
-        main_window = x.parent()
-        if isinstance(main_window, (QMainWindow, QWidget)):
-            break
-        else:
-            main_window = None
-
-    if main_window is None:
-        # oops cannot find the main window
-        raise Exception("Main window is not found.")
-    return main_window
-
-
-dockwidgets = [ ]
-
-class BinjaWidgetBase:
-    def __init__(self):
-        self._main_window = None
-        self._menu_bar = None
-        self._plugin_menu = None
-
-    @property
-    def main_window(self):
-        if self._main_window is None:
-            self._main_window = find_main_window()
-        return self._main_window
-
-    @property
-    def menu_bar(self):
-        if self._menu_bar is None:
-            self._menu_bar = next(
-                iter(x for x in self._main_window.children() if isinstance(x, QMenuBar))
-            )
-        return self._menu_bar
-
-    @property
-    def plugin_menu(self):
-        if self._plugin_menu is None:
-            self._plugin_menu = next(
-                iter(
-                    x
-                    for x in self._menu_bar.children()
-                    if isinstance(x, QMenu) and x.title() == u"Plugins"
-                )
-            )
-        return self._plugin_menu
-
-    def add_tool_menu_action(self, name, func):
-        self.plugin_menu.addAction(name, func)
-
-
-class BinjaDockWidget(QWidget, DockContextHandler):
-    def __init__(self, name, parent=None):
-        QWidget.__init__(self, parent)
-        DockContextHandler.__init__(self, self, name)
-
-        self.base = BinjaWidgetBase()
-
-        # self.hide()
-        self.show()
-
-    def toggle(self):
-        if self.isVisible():
-            self.hide()
-        else:
-            self.show()
-
-
-class BinjaWidget(QWidget):
-    def __init__(self, tabname):
-        super(BinjaWidget, self).__init__()
-        # self._core = _instance()
-        # self._core.addTabWidget(self, tabname)
 
 
 class BinSyncSidebarWidget(SidebarWidget):
@@ -122,11 +35,13 @@ class BinSyncSidebarWidget(SidebarWidget):
 
 class BinSyncSidebarWidgetType(SidebarWidgetType):
     def __init__(self, bn_plugin):
-        bs_img_path = Path(
-            pkg_resources.resource_filename("binsync", "interface_overrides/binja/binsync_binja_logo.png")
-        ).absolute()
+        binsync_files = PluginInstaller.find_pkg_files("binsync")
+        if not binsync_files or not binsync_files.exists():
+            raise FileNotFoundError("Failed to find the BinSync package! Is your install corrupted?")
+
+        bs_img_path = binsync_files / "stub_files" / "binsync_binja_logo.png"
         if not bs_img_path.exists():
-            raise FileNotFoundError("Could not find BinSync logo image")
+            raise FileNotFoundError("Could not find BinSync logo image!")
 
         self._bs_logo = QImage(str(bs_img_path))
         self.plugin = bn_plugin
@@ -134,19 +49,6 @@ class BinSyncSidebarWidgetType(SidebarWidgetType):
 
     def createWidget(self, frame, data):
         return BinSyncSidebarWidget(data, self.plugin)
-
-
-#
-# Other
-#
-
-def instance():
-    main_window = find_main_window()
-    try:
-        dock = [x for x in main_window.children() if isinstance(x, BinjaDockWidget)][0]
-    except:
-        dock = BinjaDockWidget("dummy")
-    return dock
 
 
 class BinjaPlugin:
