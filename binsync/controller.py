@@ -168,6 +168,10 @@ class BSController:
     def _init_headless_components(self):
         pass
 
+    def shutdown(self):
+        self.stop_worker_routines()
+        self.deci.shutdown()
+
     #
     # Git Properties
     #

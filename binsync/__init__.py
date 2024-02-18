@@ -31,21 +31,19 @@ def create_plugin(*args, **kwargs):
         pass
         deci_cls = None
     elif current_decompiler == GHIDRA_DECOMPILER:
-        from binsync.interface_overrides.ghidra import GhidraBSInterface
-        deci_cls = GhidraBSInterface
+        pass
+        deci_cls = None
     else:
         raise ValueError(f"Unknown decompiler {current_decompiler}")
 
     # We will now create the plugin in the decompiler, which will create the Control Panel in the UI of the specified
     # decompiler. That Control Panel will be provided a reference to the current constructing deci bellow, which
     # will also be passed to future control panels as they are created.
-    if deci_cls is None:
-        raise NotImplementedError("BinSync is shipped with angr, so it cannot be loaded as a plugin.")
-
-    deci = deci_cls(
-        plugin_name="BinSync",
-        init_plugin=True,
-        gui_init_args=args,
-        gui_init_kwargs=kwargs
-    )
-    return deci.gui_plugin
+    if deci_cls is not None:
+        deci = deci_cls(
+            plugin_name="BinSync",
+            init_plugin=True,
+            gui_init_args=args,
+            gui_init_kwargs=kwargs
+        )
+        return deci.gui_plugin

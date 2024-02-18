@@ -1,8 +1,11 @@
 import logging
 import sys
 
+from libbs.ui.version import set_ui_version
+set_ui_version("PySide6")
 from libbs.ui.qt_objects import QMainWindow, QApplication
-
+from libbs.api import DecompilerInterface
+from libbs.decompilers import GHIDRA_DECOMPILER
 
 from binsync.ui.control_panel import ControlPanel
 from binsync.ui.config_dialog import ConfigureBSDialog
@@ -22,13 +25,10 @@ class ControlPanelWindow(QMainWindow):
         self.setWindowTitle("BinSync")
         self.width_hint = 300
 
-        self.controller = BSController()
+        self._interface = DecompilerInterface.discover(force_decompiler=GHIDRA_DECOMPILER)
+        self.controller = BSController(decompiler_interface=self._interface)
         self.control_panel = ControlPanel(self.controller)
         self._init_widgets()
-
-    #
-    # Private methods
-    #
 
     def _init_widgets(self):
         self.control_panel.show()
@@ -39,21 +39,16 @@ class ControlPanelWindow(QMainWindow):
     #
 
     def configure(self):
-        # setup bridge and alert it we are configuring
-        self.controller.connect_ghidra_bridge()
-
         config = ConfigureBSDialog(self.controller)
         config.show()
         config.exec_()
-        client_connected = self.controller.check_client()
-
-        return True
+        return self.controller.check_client()
 
     def closeEvent(self, event):
-        self.controller.ghidra.server.stop()
+        self.controller.shutdown()
 
 
-def start_remote_ui():
+def start_ghidra_remote_ui():
     app = QApplication()
     cp_window = ControlPanelWindow()
 

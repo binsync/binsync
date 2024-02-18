@@ -5,23 +5,13 @@ from pathlib import Path
 import importlib
 import os
 
-from libbs.decompilers import SUPPORTED_DECOMPILERS
+from libbs.decompilers import SUPPORTED_DECOMPILERS, GHIDRA_DECOMPILER
+
 from binsync.installer import BinSyncInstaller
 from binsync.extras import EXTRAS_AVAILABLE
+from binsync.interface_overrides.ghidra import start_ghidra_remote_ui
 
 l = logging.getLogger(__name__)
-
-
-def run_decompiler_ui(decompiler_name):
-    with importlib.resources.path("binsync", "interface_overrides") as decompilers_path:
-        if not decompilers_path.exists():
-            l.error("Known plugins path does not exist, which means BinSync did not install correctly!")
-            return False
-
-        sys.path.insert(1, str(decompilers_path))
-        plugin = importlib.import_module(f"{decompiler_name}")
-        l.debug(f"Executing {decompiler_name} UI...")
-        return plugin.start_ui()
 
 
 def install():
@@ -62,8 +52,8 @@ def main():
         """
     )
     parser.add_argument(
-        "--run-decompiler-ui", help="""
-        Execute the decompiler UI for the current decompiler.
+        "-s", "--server", choices=[GHIDRA_DECOMPILER], help="""
+        Execute the decompiler server for headless connection (only Ghidra supported).
         """
     )
     if EXTRAS_AVAILABLE:
@@ -118,8 +108,9 @@ def main():
         path = Path(args.install_angr_only).expanduser().absolute()
         install_angr(path)
 
-    if args.run_decompiler_ui:
-        return run_decompiler_ui(args.run_decompiler_ui)
+    if args.server and args.server == GHIDRA_DECOMPILER:
+        from binsync.interface_overrides.ghidra import start_ghidra_remote_ui
+        start_ghidra_remote_ui()
 
     if EXTRAS_AVAILABLE and args.ai:
         if not (args.proj_path and args.binary_path):

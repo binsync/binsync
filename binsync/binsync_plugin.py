@@ -28,8 +28,7 @@ if sys.version[0] == "2":
     GhidraBridgeServer.run_server(background=True)
     process = subprocess.Popen(full_command.split(" "))
     if process.poll() is not None:
-        raise RuntimeError(
-            "Failed to run the Python3 backed. It's likely Python3 is not in your Path inside Ghidra.")
+        raise RuntimeError("Failed to run the Python3 backed. It's likely Python3 is not in your Path inside Ghidra.")
 
 
 def PLUGIN_ENTRY(*args, **kwargs):
