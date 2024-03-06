@@ -72,9 +72,9 @@ class FunctionTableModel(BinsyncTableModel):
             return True
         return False
 
-    def update_table(self):
+    def update_table(self) -> None:
         updated_row_keys = set()
-        for address, function in self.controller.functions().items():
+        for address, function in self.controller.deci.functions.items():
             self.data_dict[address] = [address, function.name]
             updated_row_keys.add(address)
             self.checks[address] = False

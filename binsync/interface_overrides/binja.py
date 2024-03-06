@@ -1,5 +1,6 @@
 from collections import defaultdict
 
+import remote_pdb
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import (
     QVBoxLayout
@@ -53,6 +54,13 @@ class BinSyncSidebarWidgetType(SidebarWidgetType):
 
 
 class BinjaBSInterface(BinjaInterface):
+    """
+    This is fairly complicated due to the way you make plugins in Binary Ninja. Every plugin is supposed to be aware
+    of BV, which it uses to interact with the BN core. This BS Interface it to first create a UI that loads into
+    binary ninja regardless of what binary you are interacting with. Then, inside the config launcher a new
+    BS Interface is created to watch artifacts for THAT specific BN BV.
+    """
+
     def __init__(self, *args, **kwargs):
         self.controllers = defaultdict(BSController)
         self.sidebar_widget_type = None
@@ -76,17 +84,16 @@ class BinjaBSInterface(BinjaInterface):
         bv = bn_context.binaryView
         bs_controller = self.controllers[bv]
 
-        if bv is not None:
-            bs_controller.deci.bv = bv
-
         # exit early if we already configured
         if (bs_controller.deci.bv is not None and bs_controller.check_client()) or bv is None:
             return
 
         # configure
+        self.bv = bv
+        bs_controller.deci.bv = bv
         dialog = ConfigureBSDialog(bs_controller)
         dialog.exec_()
 
         # if the config was successful start the artifact watchers
         if bs_controller.check_client():
-            self.start_artifact_watchers()
+            bs_controller.deci.start_artifact_watchers()

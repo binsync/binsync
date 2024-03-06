@@ -118,7 +118,6 @@ class BSController:
         self.headless = headless
         self.reload_time = reload_time
         if decompiler_interface is None:
-            _l.warning("No decompiler interface was passed to the controller, this may cause errors. We will auto-discover one.")
             self.deci = DecompilerInterface.discover()
         else:
             self.deci = decompiler_interface
@@ -703,34 +702,25 @@ class BSController:
     def force_push_functions(self, func_addrs: List[int]):
         """
         Collects the functions currently stored in the decompiler, not the BS State, and commits it to
-        the master users BS Database.
+        the master users BS Database. Function addrs should be in the lifted form.
 
         TODO: push the comments and custom types that are associated with each stack vars
         TODO: refactor to use internal push_function for correct commit message
         """
-        funcs = {}
+        master_state: State = self.client.master_state
+        committed = 0
         for func_addr in progress_bar(func_addrs, gui=not self.headless, desc="Decompiling functions to push..."):
-            f = self.function(func_addr)
+            f = self.deci.functions[func_addr]
             if not f:
                 _l.warning(f"Failed to force push function @ {func_addr:#0x}")
                 continue
 
-            funcs[func_addr] = f
+            master_state.functions[f.addr] = f
+            committed += 1
 
-        _l.info(f"Scheduling {len(funcs)} functions to be pushed...")
-        master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
-
-        for func_addr, func_obj in progress_bar(funcs.items(), gui=not self.headless, desc="Scheduling functions to push..."):
-            self.schedule_job(
-                self.commit_artifact,
-                func_obj,
-                state=master_state,
-                commit_msg=f"Forced pushed function {func_addr:#0x}",
-                priority=SchedSpeed.FAST
-            )
-
-        _l.info("All functions scheduled to be pushed!")
-
+        # commit the master state back!
+        self.client.master_state = master_state
+        self.deci.info(f"Function force push successful: committed {committed} functions.")
 
     @init_checker
     def force_push_global_artifacts(self, lookup_items: List):
@@ -741,19 +731,27 @@ class BSController:
         @param lookup_item:
         @return: Success of committing the Artifact
         """
-        master_state: State = self.client.get_state(priority=SchedSpeed.FAST)
-        for lookup_item in progress_bar(lookup_items, gui=not self.headless, desc="Scheduling global artifacts to push..."):
-            global_art = self.global_artifact(lookup_item)
-            if not global_art:
-                continue
-            global_art = self.artifact_lifer.lift(global_art)
-            self.schedule_job(
-                self.commit_artifact,
-                global_art,
-                state=master_state,
-                commit_msg=f"Forced pushed global {global_art}",
-                priority=SchedSpeed.FAST
-            )
+        master_state: State = self.client.master_state
+        committed = 0
+        for lookup_key in lookup_items:
+            if isinstance(lookup_key, int):
+                art = self.deci.global_vars[lookup_key]
+                master_state.global_vars[art.addr] = art
+            else:
+                art = None
+                # structs always first
+                try:
+                    art = self.deci.structs[lookup_key]
+                    master_state.structs[lookup_key] = art
+                except KeyError:
+                    pass
+
+                if art is None:
+                    master_state.enums[lookup_key] = self.deci.enums[lookup_key]
+            committed += 1
+
+        self.client.master_state = master_state
+        self.deci.info(f"Globals force push successful: committed {committed} artifacts.")
 
     #
     # Utils

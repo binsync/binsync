@@ -49,7 +49,7 @@ class BinsyncPlugin(GenericBSAngrManagementPlugin):
     """
     def __init__(self, workspace: "Workspace"):
         """
-        The entry point for the BinSync plugin. This class is respobsible for both initializing the GUI and
+        The entry point for the BinSync plugin. This class is responsible for both initializing the GUI and
         deiniting it as well. The BinSync plugin also starts the BinsyncController, which is a threaded class
         that pushes and pulls changes every so many seconds.
 
