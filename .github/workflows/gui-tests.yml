@@ -25,8 +25,8 @@ jobs:
           --exec /usr/bin/Xvfb -- :99 -screen 0 1920x1200x24 -ac +extension GLX
         python -m pip install --upgrade pip
         pip install -e .[test]
-        AM_INSTALL=$(dirname $(python3 -c "import angrmanagement; print(angrmanagement.__file__)"))
-        binsync --install-angr-only $AM_INSTALL 
+        AM_INSTALL=$(dirname $(python3 -c "import angrmanagement; print(angrmanagement.__file__)"))/plugins/
+        binsync --cli-install angr --install-path $AM_INSTALL
 
     - name: Pytest
       env:

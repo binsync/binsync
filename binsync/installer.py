@@ -32,8 +32,25 @@ class BinSyncInstaller(LibBSPluginInstaller):
         dst = Path(path) / src.name
         self.link_or_copy(src, dst, symlink=True)
 
-    def install_angr(self, path=None, interactive=True):
-        self.info("Skipping angr install since BinSync is shipped with angr...")
+    def install_angr(self, path=None, interactive=True, force=False):
+        if not force:
+            self.info("Skipping angr install since BinSync is shipped with angr...")
+            return
+
+        path = super().install_angr(path=path, interactive=interactive)
+        if not path:
+            return
+
+        angr_stub_files = self.stub_files / "angr_files"
+        angr_binsync_plugin_dir = path / "angr_binsync"
+        if angr_binsync_plugin_dir.exists():
+            shutil.rmtree(angr_binsync_plugin_dir)
+        angr_binsync_plugin_dir.mkdir()
+
+        # copy things to the new folder
+        self.link_or_copy(angr_stub_files / "__init__.py", angr_binsync_plugin_dir / "__init__.py", symlink=True)
+        self.link_or_copy(angr_stub_files / "plugin.toml", angr_binsync_plugin_dir / "plugin.toml")
+        return path
 
     def install_ida(self, path=None, interactive=True):
         path = super().install_ida(path=path, interactive=interactive)

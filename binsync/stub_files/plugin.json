@@ -1,7 +1,7 @@
 {
 	"pluginmetadataversion" : 2,
 	"name": "BinSync",
-	"type": ["core", "ui"],
+	"type": ["sync"],
 	"api": ["python3"],
 	"description": "Adds support for cross-decompiler collab in the BinSync supported decompilers.",
 	"longdescription": "Adds support for cross-decompiler collab in the BinSync supported decompilers.",
