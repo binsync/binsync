@@ -21,7 +21,7 @@ dependencies = [
     "pycparser",
     "prompt_toolkit",
     "tqdm",
-    "libbs"
+    "libbs>=1.0.0"
 ]
 dynamic = ["version"]
 
@@ -35,7 +35,6 @@ test = [
     "pytest-qt",
     "flake8",
     "pytest",
-    "libbs>=1.0.0"
 ]
 ghidra = [
     "ghidra_bridge",
