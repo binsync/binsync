@@ -4,9 +4,9 @@ import time
 from typing import Dict
 from collections import defaultdict
 
-from binsync.api.controller import BSController
+from binsync.controller import BSController
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView
-from binsync.ui.qt_objects import (
+from libbs.ui.qt_objects import (
     QMenu,
     QAction,
     QWidget,
@@ -15,7 +15,7 @@ from binsync.ui.qt_objects import (
 )
 from binsync.ui.utils import friendly_datetime
 from binsync.core.scheduler import SchedSpeed
-from binsync.data import Function
+from libbs.artifacts import Function
 
 l = logging.getLogger(__name__)
 
@@ -151,13 +151,13 @@ class FunctionTableView(BinsyncTableView):
 
             menu.addSeparator()
             if isinstance(func_addr, int) and func_addr > 0:
-                menu.addAction("Sync", lambda: self.controller.fill_function(func_addr, user=user_name))
+                menu.addAction("Sync", lambda: self.controller.fill_artifact(func_addr, artifact_type=Function, user=user_name))
             from_menu = menu.addMenu("Sync from...")
             users = self._get_valid_users_for_func(func_addr)
             for username in users:
                 action = from_menu.addAction(username)
                 action.triggered.connect(
-                    lambda checked=False, name=username: self.controller.fill_function(func_addr, user=name))
+                    lambda checked=False, name=username: self.controller.fill_artifact(func_addr, artifact_type=Function, user=name))
         menu.popup(self.mapToGlobal(event.pos()))
 
 

@@ -2,9 +2,9 @@ import logging
 from typing import Dict, Set
 
 
-from binsync.api.controller import BSController
+from binsync.controller import BSController
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView
-from binsync.ui.qt_objects import (
+from libbs.ui.qt_objects import (
     QWidget,
     QVBoxLayout,
     Qt,
@@ -80,9 +80,9 @@ class GlobalTableModel(BinsyncTableModel):
 
     def update_table(self):
         updated_row_keys = set()
-        decompiler_structs = self.controller.structs()
-        decompiler_gvars = self.controller.global_vars()
-        decompiler_enums = self.controller.enums()
+        decompiler_structs = self.controller.deci.structs
+        decompiler_gvars = self.controller.deci.global_vars
+        decompiler_enums = self.controller.deci.enums
         self.gvar_name_to_addr_map = {gvar.name: addr for addr, gvar in decompiler_gvars.items()}
         all_artifacts = [(decompiler_structs, "Struct"), (decompiler_gvars, "Variable"), (decompiler_enums, "Enum")]
         for type_artifacts, type_ in all_artifacts:

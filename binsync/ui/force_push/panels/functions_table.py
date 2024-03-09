@@ -2,9 +2,9 @@ import logging
 from typing import Dict, Set
 
 
-from binsync.api.controller import BSController
+from binsync.controller import BSController
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView
-from binsync.ui.qt_objects import (
+from libbs.ui.qt_objects import (
     QWidget,
     QVBoxLayout,
     Qt,
@@ -72,9 +72,9 @@ class FunctionTableModel(BinsyncTableModel):
             return True
         return False
 
-    def update_table(self):
+    def update_table(self) -> None:
         updated_row_keys = set()
-        for address, function in self.controller.functions().items():
+        for address, function in self.controller.deci.functions.items():
             self.data_dict[address] = [address, function.name]
             updated_row_keys.add(address)
             self.checks[address] = False

@@ -2,8 +2,8 @@ import logging
 import datetime
 from typing import Dict, Set
 
-from binsync.api.controller import BSController
-from binsync.ui.qt_objects import (
+from binsync.controller import BSController
+from libbs.ui.qt_objects import (
     QAbstractItemView,
     QAbstractTableModel,
     QHeaderView,
@@ -269,7 +269,7 @@ class BinsyncTableView(QTableView):
         row_idx = self.selectionModel().selectedIndexes()[0]
         tls_row_idx = self.proxymodel.mapToSource(row_idx)
         row = self.model.row_data[tls_row_idx.row()]
-        self.controller.goto_address(row[self.model.addr_col])
+        self.controller.deci.gui_goto(row[self.model.addr_col])
 
     def _col_hide_handler(self, index):
         """ Helper function to hide/show columns from context menu """

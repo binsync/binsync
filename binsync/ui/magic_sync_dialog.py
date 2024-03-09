@@ -1,6 +1,6 @@
 import logging
 
-from .qt_objects import (
+from libbs.ui.qt_objects import (
     QDialog,
     QDialogButtonBox,
     QGridLayout,

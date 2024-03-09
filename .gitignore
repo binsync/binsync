@@ -35,10 +35,3 @@ dist
 *.db
 .DS_Store
 .pytest_cache/
-binsync/decompilers/ghidra/client/build/
-binsync/decompilers/ghidra/client/dist/
-binsync/decompilers/ghidra/client/bin/
-binsync/decompilers/ghidra/client/.gradle/
-binsync/decompilers/ghidra/client/.classpath
-binsync/decompilers/ghidra/client/.project
-binsync/decompilers/ghidra/client/Ghidra/

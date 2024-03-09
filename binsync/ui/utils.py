@@ -1,7 +1,7 @@
 import datetime
 import logging
 
-from binsync.ui.qt_objects import (
+from libbs.ui.qt_objects import (
     QFrame,
     QWidget,
     QScrollArea,
@@ -162,7 +162,7 @@ class BSUIScheduler(QObject, Scheduler):
     """
     def __init__(self, sleep_interval=0.05):
         QObject.__init__(self)
-        Scheduler.__init__(self, sleep_interval=sleep_interval)
+        Scheduler.__init__(self, sleep_interval=sleep_interval, name="UIScheduler")
         self._work = True
 
     def stop(self):

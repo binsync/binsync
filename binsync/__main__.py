@@ -1,27 +1,14 @@
 import argparse
-import sys
 import logging
 from pathlib import Path
-import importlib
 import os
 
-from binsync.decompilers import BS_SUPPORTED_DECOMPILERS
+from libbs.decompilers import SUPPORTED_DECOMPILERS, GHIDRA_DECOMPILER, ANGR_DECOMPILER, IDA_DECOMPILER, BINJA_DECOMPILER
+
 from binsync.installer import BinSyncInstaller
 from binsync.extras import EXTRAS_AVAILABLE
 
 l = logging.getLogger(__name__)
-
-
-def run_decompiler_ui(decompiler_name):
-    with importlib.resources.path("binsync", "decompilers") as decompilers_path:
-        if not decompilers_path.exists():
-            l.error("Known plugins path does not exist, which means BinSync did not install correctly!")
-            return False
-
-        sys.path.insert(1, str(decompilers_path))
-        plugin = importlib.import_module(f"{decompiler_name}")
-        l.debug(f"Executing {decompiler_name} UI...")
-        return plugin.start_ui()
 
 
 def install():
@@ -39,31 +26,37 @@ def install_angr(path):
 
 def main():
     parser = argparse.ArgumentParser(
-            description="""
-            The BinSync Command Line Util. This is the script interface to BinSync that allows you to
-            do a variety of things that are independent of running in a decompiler like installing, 
-            testing plugin code, and merging databases.
-            """,
-            epilog="""
-            Examples:
-            binsync --install
-            """
+        description="""
+        The BinSync Command Line Util. This is the script interface to BinSync that allows you to
+        do a variety of things that are independent of running in a decompiler like installing, 
+        testing plugin code, and merging databases.
+        """,
+        epilog="""
+        Examples:
+        binsync --install
+        """
     )
     parser.add_argument(
-        "--install", action="store_true", help="""
-        Install the BinSync core to supported decompilers as plugins. This option will start an interactive
-        prompt asking for install paths for all supported decompilers. Each install path is optional and 
+        "-i", "--install", action="store_true", help="""
+        Install the BinSync core to supported interface_overrides as plugins. This option will start an interactive
+        prompt asking for install paths for all supported interface_overrides. Each install path is optional and 
         will be skipped if not path is provided during install. 
         """
     )
     parser.add_argument(
-        "--install-angr-only", type=Path, help="""
+        "--cli-install", type=str, choices=SUPPORTED_DECOMPILERS, help="""
+        Does a non-interactive install useful for installing in a script or in a docker container. 
+        Must be used with the `--install-path` parameter.
+        """
+    )
+    parser.add_argument(
+        "--install-path", type=Path, help="""
         Does a non-interactive install for angr only from the provided path.
         """
     )
     parser.add_argument(
-        "--run-decompiler-ui", help="""
-        Execute the decompiler UI for the current decompiler.
+        "-s", "--server", choices=[GHIDRA_DECOMPILER], help="""
+        Execute the decompiler server for headless connection (only Ghidra supported).
         """
     )
     if EXTRAS_AVAILABLE:
@@ -106,20 +99,46 @@ def main():
             The optional decompiler of that will be used in the extras command. 
             """,
             type=str,
-            choices=BS_SUPPORTED_DECOMPILERS
+            choices=SUPPORTED_DECOMPILERS
         )
 
     args = parser.parse_args()
 
-    if args.install:
+    if args.cli_install:
+        install_path = args.install_path
+        if install_path is None:
+            raise RuntimeError("You must provide an install path via --install-path if you use CLI install")
+
+        install_path = Path(install_path).expanduser().absolute()
+        if not install_path.exists():
+            raise ValueError("You must provide a valid path for CLI install")
+
+        installer = BinSyncInstaller()
+        target = args.cli_install
+        if target == ANGR_DECOMPILER:
+            install_func = installer.install_angr
+        elif target == IDA_DECOMPILER:
+            install_func = installer.install_ida
+        elif target == BINJA_DECOMPILER:
+            install_func = installer.install_binja
+        elif target == GHIDRA_DECOMPILER:
+            install_func = installer.install_ghidra
+        else:
+            raise ValueError("Invalid install target choice")
+
+        if target == ANGR_DECOMPILER:
+            install_func(path=install_path, interactive=False, force=True)
+        else:
+            install_func(path=install_path, interactive=False)
+    elif args.install:
         install()
 
-    if args.install_angr_only:
-        path = Path(args.install_angr_only).expanduser().absolute()
-        install_angr(path)
+    if args.server:
+        if args.server != GHIDRA_DECOMPILER:
+            raise ValueError("Only Ghidra is supported for use as a server")
 
-    if args.run_decompiler_ui:
-        return run_decompiler_ui(args.run_decompiler_ui)
+        from binsync.interface_overrides.ghidra import start_ghidra_remote_ui
+        start_ghidra_remote_ui()
 
     if EXTRAS_AVAILABLE and args.ai:
         if not (args.proj_path and args.binary_path):

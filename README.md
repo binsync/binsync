@@ -114,7 +114,7 @@ that BinSync supports. Currently, this API only works with read-only operations,
 
 The below script runs in any decompiler that BinSync supports:
 ```python
-from binsync.api import load_decompiler_controller
+from libbs.api import load_decompiler_controller
 controller = load_decompiler_controller()
 structs = controller.structs()
 for addr in controller.functions():

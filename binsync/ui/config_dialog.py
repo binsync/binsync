@@ -8,8 +8,8 @@ from typing import Optional
 import filelock
 
 from binsync.core.client import ConnectionWarnings, BINSYNC_ROOT_BRANCH
-from binsync.data.configuration import ProjectConfig
-from binsync.ui.qt_objects import (
+from binsync.configuration import ProjectConfig
+from libbs.ui.qt_objects import (
     QCheckBox,
     QDialog,
     QDir,
@@ -176,7 +176,7 @@ class CreateBSProjectDialog(BSProjectDialog):
         if not path.name:
             l.info("No name specified for saved project. Using binary name...")
             try:
-                filename = Path(self.controller.binary_path()).name
+                filename = Path(self.controller.deci.binary_path).name
             except Exception as e:
                 filename = str(int(time.time()))
                 l.warning(f"Failed to grab binary name because {e}. Maybe the decompiler is not ready for API use? "
@@ -196,7 +196,7 @@ class CreateBSProjectDialog(BSProjectDialog):
         super()._on_ok_clicked()
 
     def _get_speculated_save_path(self):
-        binary_path = self.controller.binary_path()
+        binary_path = self.controller.deci.binary_path
         if binary_path is not None:
             binary_path = Path(binary_path)
 
@@ -532,7 +532,7 @@ class ConfigureBSDialog(QDialog):
             self.controller.config.remote = remote
         else:
             config = ProjectConfig(
-                self.controller.binary_path() or "",
+                self.controller.deci.binary_path or "",
                 user=user,
                 repo_path=repo,
                 remote=remote

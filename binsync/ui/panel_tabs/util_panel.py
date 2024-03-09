@@ -1,7 +1,7 @@
 import logging
 
-from binsync.api.controller import  MergeLevel
-from binsync.ui.qt_objects import (
+from binsync.controller import  MergeLevel
+from libbs.ui.qt_objects import (
     QCheckBox,
     QComboBox,
     QGroupBox,
@@ -16,7 +16,7 @@ from binsync.ui.qt_objects import (
 )
 from binsync.ui.magic_sync_dialog import MagicSyncDialog
 from binsync.ui.force_push import ForcePushUI
-from binsync.api.controller import BSController
+from binsync.controller import BSController
 from binsync.extras import EXTRAS_AVAILABLE
 
 l = logging.getLogger(__name__)

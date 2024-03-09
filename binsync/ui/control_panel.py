@@ -1,12 +1,12 @@
 import logging
 
-import binsync.data
+import libbs.artifacts
 from binsync.ui.panel_tabs.activity_table import QActivityTable
 from binsync.ui.panel_tabs.ctx_table import QCTXTable
 from binsync.ui.panel_tabs.functions_table import QFunctionTable
 from binsync.ui.panel_tabs.globals_table import QGlobalsTable
 from binsync.ui.panel_tabs.util_panel import QUtilPanel
-from binsync.ui.qt_objects import (
+from libbs.ui.qt_objects import (
     QLabel,
     QMenu,
     QStatusBar,
@@ -63,7 +63,7 @@ class ControlPanel(QWidget):
         self.update_ready.emit(status)
 
     def ctx_callback(self, states):
-        if isinstance(self.controller.last_ctx, binsync.data.Function):
+        if isinstance(self.controller.last_ctx, libbs.artifacts.Function):
             self._ctx_table.update_table(states, new_ctx=self.controller.last_ctx.addr)
 
         self.ctx_change.emit()
@@ -125,7 +125,6 @@ class ControlPanel(QWidget):
         self._ctx_table.reload()
 
     def _update_table_data(self, states):
-        #import remote_pdb; remote_pdb.RemotePdb("localhost", 4444).set_trace()
 
         for _, table in self.tables.items():
             table.update_table(states)
