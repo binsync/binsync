@@ -324,7 +324,7 @@ class TestBinsyncGUI(object):
                 raise Exception("Repo updates never made it to table!")
 
             print("Checking data for correctness..")
-            top_func_addr_lowered = control_panel.controller.artifact_lifer.lower_addr(top_change_func[0])
+            top_func_addr_lowered = control_panel.controller.deci.art_lifter.lower_addr(top_change_func[0])
             assert top_func_addr_lowered == func.addr
             assert top_change_func[1] == ""
             assert top_change_func[2] == user_1
@@ -371,7 +371,7 @@ class TestBinsyncGUI(object):
             else:
                 raise Exception("Repo updates never made it to table!")
 
-            top_func_addr_lowered = control_panel.controller.artifact_lifer.lower_addr(top_change_func[0])
+            top_func_addr_lowered = control_panel.controller.deci.art_lifter.lower_addr(top_change_func[0])
             assert top_func_addr_lowered == func.addr
             assert top_change_func[1] == ""
             assert top_change_func[2] == user_1
