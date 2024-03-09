@@ -21,6 +21,7 @@ from libbs.artifacts import (
     Struct,
 )
 from libbs.artifacts import TomlHexEncoder
+from binsync import __version__ as BS_VERS
 from binsync.core.errors import MetadataNotFoundError
 
 
@@ -176,10 +177,10 @@ class State:
     :ivar int version:  Version of the state, starting from 0.
     """
 
-    def __init__(self, user, version=None, client=None, last_push_time=None, last_commit_msg=None, dirty=True):
+    def __init__(self, user: str, version: str = None, client=None, last_push_time=None, last_commit_msg=None, dirty=True):
         # metadata info
         self.user = user  # type: str
-        self.version = version if version is not None else 0  # type: int
+        self.version = version or str(BS_VERS)
         self.last_push_artifact = -1
         self.last_push_artifact_type = -1
         self.last_push_time = last_push_time or datetime.datetime.now(tz=datetime.timezone.utc)
@@ -291,11 +292,11 @@ class State:
         self._dump_data(dst, 'enums.toml', toml.dumps(Enum.dump_many(self.enums), encoder=TomlHexEncoder()).encode())
 
     @classmethod
-    def parse(cls, src: Union[pathlib.Path, git.Tree], version=None, client=None):
+    def parse(cls, src: Union[pathlib.Path, git.Tree], client=None):
         if isinstance(src, str):
             src = pathlib.Path(src)
 
-        state = cls(None, version=version, client=client)
+        state = cls(None, client=client)
 
         # load metadata
         metadata = load_toml_from_file(src, "metadata.toml", client=client)
@@ -303,7 +304,7 @@ class State:
             # metadata is not found
             raise MetadataNotFoundError()
         state.user = metadata["user"]
-        state.version = version if version is not None else metadata["version"]
+        state.version = metadata["version"]
         state.last_push_time = metadata.get("last_push_time", None)
 
         # load functions

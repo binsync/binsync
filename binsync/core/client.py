@@ -320,7 +320,7 @@ class Client:
         return users
 
     @atomic_git_action
-    def get_state(self, user=None, version=None, priority=None, no_cache=False):
+    def get_state(self, user=None, priority=None, no_cache=False):
         if user is None:
             user = self.master_user
 
@@ -329,7 +329,6 @@ class Client:
         try:
             state = State.parse(
                 self._get_tree(user, repo),
-                version=version,
                 client=self
             )
         except MetadataNotFoundError:
