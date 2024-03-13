@@ -1,4 +1,3 @@
 include LICENSE
 include README.md
-recursive-include binsync/decompiler_stubs *.json *.toml
-recursive-include binsync/decompilers *.png
+recursive-include binsync/stub_files *.png *.json *.toml
