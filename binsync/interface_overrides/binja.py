@@ -1,6 +1,5 @@
 from collections import defaultdict
 
-import remote_pdb
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import (
     QVBoxLayout
