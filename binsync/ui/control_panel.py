@@ -30,7 +30,7 @@ class QContextStatusBar(QStatusBar):
         if self.controller.last_ctx:
             ctx_name = self.controller.last_ctx.name
             ctx_addr = self.controller.last_ctx.addr
-            menu.addAction(f"Force Push {ctx_name}@{hex(ctx_addr)}", lambda : self.controller.force_push_function(ctx_addr))
+            menu.addAction(f"Force Push {ctx_name}@{hex(ctx_addr)}", lambda : self.controller.force_push_functions([ctx_addr]))
             menu.popup(self.mapToGlobal(event.pos()))
 
 class ControlPanel(QWidget):
