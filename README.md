@@ -47,7 +47,7 @@ If you are planning on installing the package to be editable (`-e`), like in a d
 - angr-management: **>= 9.0**
 - Ghidra: **>= 10.1**
 
-All versions require **Python >= 3.4** and **Git** installed on your system. Ghidra support is still very much in early stage, so only expect the minimal features like artifact name syncing and comments.
+All versions require **Python >= 3.7** and **Git** installed on your system. Ghidra support is still very much in early stage, so only expect the minimal features like artifact name syncing and comments.
 
 
 ## Decompiler Support Progress
@@ -108,33 +108,4 @@ To understand the difference between artifact support, pull, push, and auto push
 | Auto Push 	                        | :white_check_mark:                       | :white_check_mark:		               | :x:					                            | :x:					                        | :x: 					                     | :white_check_mark: 					         |
 
 ## Scripting
-Since BinSync needs to lift (and lower) most artifact components, BinSync offers a generic API to work with decompilers
-that BinSync supports. Currently, this API only works with read-only operations, but has 
-[work](https://github.com/binsync/binsync/issues/260) in the pipeline to get write support as well.
-
-The below script runs in any decompiler that BinSync supports:
-```python
-from libbs.api import load_decompiler_controller
-controller = load_decompiler_controller()
-structs = controller.structs()
-for addr in controller.functions():
-    function = controller.function(addr)
-    for _, arg in function.args.items():
-        if arg.type in structs:
-            print(f"Argument {arg} is a struct type: {structs[arg.type]}")
-    print(f"Analyzed function (lifted form): {controller.lift_artifact(function)}")
-```
-
-Here is a snippet of the output in Binja (which looks very similar in IDA and angr):
-```python
-...
-Analyzed function (lifted form): <Function: void frame_dummy(args=0); @0x400640 vars=2 len=0x22>
-Analyzed function (lifted form): <Function: long authenticate(args=2); @0x400664 vars=7 len=0x89>
-Analyzed function (lifted form): <Function: long accepted(args=0); @0x4006ed vars=2 len=0x10>
-Analyzed function (lifted form): <Function: long rejected(args=0); @0x4006fd vars=2 len=0x20>
-Analyzed function (lifted form): <Function: int main(args=3); @0x40071d vars=9 len=0xb8>
-...
-```
-
-To understand what is available, it's best to look at the [controller]() code, as well as what data is available in
-artifacts you care about. 
+For scripting please see [Lib BinSync](https://github.com/binsync/libbs), which allows you to do all lifting and data manipulation in Python.
