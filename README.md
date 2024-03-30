@@ -47,7 +47,7 @@ If you are planning on installing the package to be editable (`-e`), like in a d
 - angr-management: **>= 9.0**
 - Ghidra: **>= 10.1**
 
-All versions require **Python >= 3.4** and **Git** installed on your system. Ghidra support is still very much in early stage, so only expect the minimal features like artifact name syncing and comments.
+All versions require **Python >= 3.7** and **Git** installed on your system. Ghidra support is still very much in early stage, so only expect the minimal features like artifact name syncing and comments.
 
 
 ## Decompiler Support Progress
