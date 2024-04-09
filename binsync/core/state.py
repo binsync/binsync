@@ -2,6 +2,7 @@ import logging
 import os
 import pathlib
 import datetime
+import re
 from functools import wraps
 from typing import Dict, Optional, Union, List
 
@@ -41,6 +42,13 @@ class ArtifactType:
 #
 # Helper Funcs
 #
+
+def sanitize_name(unsafe_name: str) -> str:
+    """
+    C style name sanitization. Replaces all non-alphanumeric characters with underscores.
+    This should always be used when creating files from named C-like objects in the decompiler, like structs.
+    """
+    return re.sub(r"[^a-zA-Z0-9_]", "_", unsafe_name)
 
 def update_dirty_flag(f):
     @wraps(f)
@@ -276,7 +284,8 @@ class State:
 
         # dump structs, one file per struct in ./structs/
         for s_name, struct in self.structs.items():
-            path = pathlib.Path('structs').joinpath(f"{s_name}.toml")
+            safe_name = sanitize_name(s_name)
+            path = pathlib.Path('structs').joinpath(f"{safe_name}.toml")
             self._dump_data(dst, path, struct.dump().encode())
 
         # dump comments
