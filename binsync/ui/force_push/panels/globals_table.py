@@ -52,7 +52,7 @@ class GlobalTableModel(BinsyncTableModel):
 
             return self.row_data[row][col]
         elif role == self.FilterRole:
-            if isinstance(self.row_data[row], int):
+            if isinstance(self.row_data[row][0], int):
                 return f"{hex(self.row_data[row][0])} {self.row_data[row][1]}"
             return f"{self.row_data[row][0]}"
         elif role == Qt.CheckStateRole and index.column() == 0:
