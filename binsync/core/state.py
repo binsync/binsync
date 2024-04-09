@@ -2,6 +2,7 @@ import logging
 import os
 import pathlib
 import datetime
+import re
 from functools import wraps
 from typing import Dict, Optional, Union, List
 
@@ -43,8 +44,11 @@ class ArtifactType:
 #
 
 def sanitize_name(unsafe_name: str) -> str:
-    bad_characters = ['\\', '/', ':', '*', '?', '"', '<', '>', '|']
-    return "".join(char if char not in bad_characters else "_" for char in unsafe_name)
+    """
+    C style name sanitization. Replaces all non-alphanumeric characters with underscores.
+    This should always be used when creating files from named C-like objects in the decompiler, like structs.
+    """
+    return re.sub(r"[^a-zA-Z0-9_]", "_", unsafe_name)
 
 def update_dirty_flag(f):
     @wraps(f)
