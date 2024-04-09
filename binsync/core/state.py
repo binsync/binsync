@@ -42,6 +42,10 @@ class ArtifactType:
 # Helper Funcs
 #
 
+def sanitize_name(unsafe_name: str) -> str:
+    bad_characters = ['\\', '/', ':', '*', '?', '"', '<', '>', '|']
+    return "".join(char if char not in bad_characters else "_" for char in unsafe_name)
+
 def update_dirty_flag(f):
     @wraps(f)
     def _update_dirty_flag(self, *args, **kwargs):
@@ -276,7 +280,8 @@ class State:
 
         # dump structs, one file per struct in ./structs/
         for s_name, struct in self.structs.items():
-            path = pathlib.Path('structs').joinpath(f"{s_name}.toml")
+            safe_name = sanitize_name(s_name)
+            path = pathlib.Path('structs').joinpath(f"{safe_name}.toml")
             self._dump_data(dst, path, struct.dump().encode())
 
         # dump comments
