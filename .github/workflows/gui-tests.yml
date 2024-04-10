@@ -13,10 +13,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Set up Python 3.11
+    - name: Set up Python 3.7
       uses: actions/setup-python@v2
       with:
-        python-version: "3.11"
+        python-version: "3.7"
     - name: Install dependencies
       run: |
         sudo apt-get update && sudo apt-get install libegl1 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
