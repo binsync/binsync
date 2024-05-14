@@ -428,6 +428,7 @@ class BSController:
     def commit_artifact(self, artifact: Artifact, commit_msg=None, set_last_change=True, make_func=True, from_user=None, **kwargs) -> bool:
         """
         This function is NOT thread safe. You must call it in the order you want commits to appear.
+        Additionally, the Artifact must be LIFTED before committing it!
         """
         _l.debug(f"Attempting to push %s...", artifact)
         if not artifact:
@@ -444,15 +445,14 @@ class BSController:
         state: State = self.client.master_state
         # assure functions existence for artifacts requiring a function
         if isinstance(artifact, (FunctionHeader, StackVariable, Comment)) and make_func:
-            func_addr = self.deci.art_lifter.lift_addr(artifact.func_addr if hasattr(artifact, "func_addr") else artifact.addr)
+            func_addr = artifact.func_addr if hasattr(artifact, "func_addr") else artifact.addr
             if func_addr is not None and not state.get_function(func_addr):
                 state.set_function(
-                    self.deci.art_lifter.lift(Function(func_addr, self.deci.get_func_size(func_addr))),
+                    Function(func_addr, self.deci.get_func_size(func_addr)),
                     set_last_change=set_last_change
                 )
 
         # take the current changes and layer them on top of the change in the state now
-        artifact = self.deci.art_lifter.lift(artifact)
         if not set_last_change:
             artifact.reset_last_change()
 
