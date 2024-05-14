@@ -18,7 +18,7 @@ jobs:
       with:
         python-version: "3.8"
     - name: Set branch name
-      run: echo "BRANCH_NAME=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
+      run: echo "BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_ENV
     - name: Install dependencies
       run: |
         sudo apt-get update && sudo apt-get install libegl1 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
