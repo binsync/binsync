@@ -27,7 +27,6 @@ jobs:
           --exec /usr/bin/Xvfb -- :99 -screen 0 1920x1200x24 -ac +extension GLX
         python -m pip install --upgrade pip
         (git clone https://github.com/binsync/libbs.git /tmp/libbs && cd /tmp/libbs && git checkout $BRANCH_NAME && pip install .)
-        (git clone https://github.com/angr/angr-dev.git /tmp/angr-dev && cd /tmp/angr-dev && ./extremely-simple-setup.sh)
         pip install .[test]
         AM_INSTALL=$(dirname $(python3 -c "import angrmanagement; print(angrmanagement.__file__)"))/plugins/
         binsync --cli-install angr --install-path $AM_INSTALL
