@@ -31,7 +31,6 @@ content-type = "text/markdown"
 
 [project.optional-dependencies]
 test = [
-    "angr-management",
     "pytest-qt",
     "flake8",
     "pytest",
