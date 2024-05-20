@@ -448,7 +448,7 @@ class BSController:
             func_addr = artifact.func_addr if hasattr(artifact, "func_addr") else artifact.addr
             if func_addr is not None and not state.get_function(func_addr):
                 state.set_function(
-                    Function(func_addr, self.deci.get_func_size(func_addr)),
+                    Function(addr=func_addr, size=self.deci.get_func_size(func_addr)),
                     set_last_change=set_last_change
                 )
 
