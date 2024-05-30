@@ -29,6 +29,7 @@ jobs:
         (git clone https://github.com/binsync/libbs.git /tmp/libbs && cd /tmp/libbs && git checkout $BRANCH_NAME && pip install .)
         pip install .[test]
         AM_INSTALL=$(dirname $(python3 -c "import angrmanagement; print(angrmanagement.__file__)"))/plugins/
+        echo $AM_INSTALL
         binsync --cli-install angr --install-path $AM_INSTALL
 
     - name: Pytest
