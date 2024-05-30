@@ -74,7 +74,7 @@ class BinsyncPlugin(GenericBSAngrManagementPlugin):
     # BinSync Menu
     #
 
-    MENU_BUTTONS = ('Configure Binsync ...', 'Toggle Binsync Panel')
+    MENU_BUTTONS = ('Start Binsync...', 'Toggle Binsync Panel')
     MENU_CONFIG_ID = 0
     MENU_TOGGLE_PANEL_ID = 1
 
