@@ -12,6 +12,8 @@ from sortedcontainers import SortedDict
 
 
 from libbs.artifacts import (
+    Artifact,
+    ArtifactFormat,
     Comment,
     Enum,
     Function,
@@ -156,7 +158,7 @@ def list_files_in_dir(src: Union[pathlib.Path, git.Tree], dir_name, client=None)
     ]
 
 
-def load_toml_from_file(src: Union[pathlib.Path, git.Tree], filename, client=None):
+def file_to_str(src: Union[pathlib.Path, git.Tree], filename, client=None) -> Optional[str]:
     if client and isinstance(src, git.Tree):
         file_data = client.load_file_from_tree(src, filename)
     else:
@@ -170,7 +172,22 @@ def load_toml_from_file(src: Union[pathlib.Path, git.Tree], filename, client=Non
             with open(src, "r") as fp:
                 file_data = fp.read()
 
+    return file_data
+
+
+def toml_file_to_dict(src: Union[pathlib.Path, git.Tree], filename, client=None):
+    file_data = file_to_str(src, filename, client=client)
     return toml.loads(file_data) if file_data is not None else file_data
+
+
+def toml_file_to_artifact(src: Union[pathlib.Path, git.Tree], filename, artifact_cls, client=None) -> Optional[Artifact]:
+    file_data = file_to_str(src, filename, client=client)
+    return artifact_cls.loads(file_data, fmt=ArtifactFormat.TOML) if file_data is not None else None
+
+
+def toml_file_to_artifacts(src: Union[pathlib.Path, git.Tree], filename, artifact_cls, client=None) -> List[Artifact]:
+    file_data = file_to_str(src, filename, client=client)
+    return artifact_cls.loads_many(file_data, fmt=ArtifactFormat.TOML) if file_data is not None else []
 
 
 #
@@ -280,25 +297,25 @@ class State:
         # dump functions, one file per function in ./functions/
         for addr, func in self.functions.items():
             path = pathlib.Path('functions').joinpath("%08x.toml" % addr)
-            self._dump_data(dst, path, func.dump().encode())
+            self._dump_data(dst, path, func.dumps(fmt=ArtifactFormat.TOML).encode())
 
         # dump structs, one file per struct in ./structs/
         for s_name, struct in self.structs.items():
             safe_name = sanitize_name(s_name)
             path = pathlib.Path('structs').joinpath(f"{safe_name}.toml")
-            self._dump_data(dst, path, struct.dump().encode())
+            self._dump_data(dst, path, struct.dumps(fmt=ArtifactFormat.TOML).encode())
 
         # dump comments
-        self._dump_data(dst, 'comments.toml', toml.dumps(Comment.dump_many(self.comments), encoder=TomlHexEncoder()).encode())
+        self._dump_data(dst, 'comments.toml', Comment.dumps_many(list(self.comments.values())).encode())
 
         # dump patches
-        self._dump_data(dst, 'patches.toml', toml.dumps(Patch.dump_many(self.patches), encoder=TomlHexEncoder()).encode())
+        self._dump_data(dst, 'patches.toml', Patch.dumps_many(list(self.patches.values())).encode())
 
         # dump global vars
-        self._dump_data(dst, 'global_vars.toml', toml.dumps(GlobalVariable.dump_many(self.global_vars), encoder=TomlHexEncoder()).encode())
+        self._dump_data(dst, 'global_vars.toml', GlobalVariable.dumps_many(list(self.global_vars.values())).encode())
 
         # dump enums
-        self._dump_data(dst, 'enums.toml', toml.dumps(Enum.dump_many(self.enums), encoder=TomlHexEncoder()).encode())
+        self._dump_data(dst, 'enums.toml', Enum.dumps_many(list(self.enums.values()), key_attr="name").encode())
 
     @classmethod
     def parse(cls, src: Union[pathlib.Path, git.Tree], client=None):
@@ -308,7 +325,7 @@ class State:
         state = cls(None, client=client)
 
         # load metadata
-        metadata = load_toml_from_file(src, "metadata.toml", client=client)
+        metadata = toml_file_to_dict(src, "metadata.toml", client=client)
         if metadata is None:
             # metadata is not found
             raise MetadataNotFoundError()
@@ -319,45 +336,29 @@ class State:
         # load functions
         function_files = list_files_in_dir(src, "functions", client=client)
         for func_file in function_files:
-            func_toml = load_toml_from_file(src, func_file, client=client)
-            func = Function.load(func_toml)
+            func: Function = toml_file_to_artifact(src, func_file, Function, client=client)
             state.functions[func.addr] = func
 
         # load comments
-        comments_toml = load_toml_from_file(src, "comments.toml", client=client)
-        comments = {}
-        if comments_toml:
-            for comment in Comment.load_many(comments_toml):
-                comments[comment.addr] = comment
-        state.comments = comments
+        cmts: List[Comment] = toml_file_to_artifacts(src, "comments.toml", Comment, client=client)
+        state.comments = {cmt.addr: cmt for cmt in cmts}
 
         # load patches
-        patches_toml = load_toml_from_file(src, "patches.toml", client=client)
-        patches = {}
-        if patches_toml:
-            for patch in Patch.load_many(patches_toml):
-                patches[patch.offset] = patch
-        state.patches = SortedDict(patches)
+        patches: List[Patch] = toml_file_to_artifacts(src, "patches.toml", Patch, client=client)
+        state.patches = {patch.offset: patch for patch in patches}
 
         # load global_vars
-        global_vars_toml = load_toml_from_file(src, "global_vars.toml", client=client)
-        global_vars = {}
-        if global_vars_toml:
-            for global_var in GlobalVariable.load_many(global_vars_toml):
-                global_vars[global_var.addr] = global_var
-        state.global_vars = SortedDict(global_vars)
+        gvars: List[GlobalVariable] = toml_file_to_artifacts(src, "global_vars.toml", GlobalVariable, client=client)
+        state.global_vars = {gvar.addr: gvar for gvar in gvars}
 
         # load enums
-        enums_toml = load_toml_from_file(src, "enums.toml", client=client)
-        state.enums = {
-            enum.name: enum for enum in Enum.load_many(enums_toml)
-        } if enums_toml else {}
+        enums: List[Enum] = toml_file_to_artifacts(src, "enums.toml", Enum, client=client)
+        state.enums = {enum.name: enum for enum in enums}
 
         # load structs
         struct_files = list_files_in_dir(src, "structs", client=client)
         for struct_file in struct_files:
-            struct_toml = load_toml_from_file(src, struct_file, client=client)
-            struct = Struct.load(struct_toml)
+            struct: Struct = toml_file_to_artifact(src, struct_file, Struct, client=client)
             state.structs[struct.name] = struct
 
         # clear the dirty bit
