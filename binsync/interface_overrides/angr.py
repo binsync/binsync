@@ -20,6 +20,7 @@ if typing.TYPE_CHECKING:
 
 _l = logging.getLogger(__name__)
 
+
 class ControlPanelView(BaseView):
     """
     The class for the window that shows changes/info to BinSync data. This includes things like
@@ -27,7 +28,7 @@ class ControlPanelView(BaseView):
     """
 
     def __init__(self, instance, default_docking_position, controller, *args, **kwargs):
-        super().__init__('sync', instance.workspace, default_docking_position, *args, **kwargs)
+        super().__init__('sync', instance, instance.workspace, default_docking_position, *args, **kwargs)
         self.base_caption = "BinSync: Control Panel"
         self.controller: BSController = controller
         self.control_panel = ControlPanel(self.controller)
@@ -73,7 +74,7 @@ class BinsyncPlugin(GenericBSAngrManagementPlugin):
     # BinSync Menu
     #
 
-    MENU_BUTTONS = ('Start Binsync...', 'Toggle Binsync Panel')
+    MENU_BUTTONS = ('Configure Binsync ...', 'Toggle Binsync Panel')
     MENU_CONFIG_ID = 0
     MENU_TOGGLE_PANEL_ID = 1
 
