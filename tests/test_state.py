@@ -6,7 +6,7 @@ import unittest
 
 from binsync.core.client import Client
 from libbs.artifacts import (
-    FunctionHeader, Struct,
+    FunctionHeader, Struct, StructMember,
 )
 from binsync.core.state import State, ArtifactType
 
@@ -15,7 +15,7 @@ class TestState(unittest.TestCase):
 
     def test_state_creation(self):
         state = State("user0")
-        self.assertEqual(state.user, "user0")
+        assert state.user == "user0"
 
     def test_state_dumping(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -26,7 +26,7 @@ class TestState(unittest.TestCase):
             # dump to the current repo, current branch
             state.dump(client.repo.index)
             metadata_path = os.path.join(tmpdir, "metadata.toml")
-            self.assertTrue(os.path.isfile(metadata_path))
+            assert os.path.isfile(metadata_path) is True
 
     def test_state_loading(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -38,6 +38,15 @@ class TestState(unittest.TestCase):
             state.version = 1
             func_header = FunctionHeader("some_name", 0x400080)
             state.set_function_header(func_header)
+            my_struct = Struct(
+                name="some_struct",
+                size=8,
+                members={
+                    0: StructMember(name="member1", offset=0, type_="int", size=4),
+                    4: StructMember(name="member2", offset=4, type_="int", size=4)
+                }
+            )
+            state.set_struct(my_struct)
 
             # dump and commit state to tree
             client._commit_state(state)
@@ -46,10 +55,11 @@ class TestState(unittest.TestCase):
             state_tree = client._get_tree(state.user, client.repo)
             new_state = State.parse(state_tree, client=client)
 
-            self.assertEqual(new_state.user, "user0")
-            self.assertEqual(new_state.version, 1)
-            self.assertEqual(len(new_state.functions), 1)
-            self.assertEqual(new_state.functions[0x400080].header, func_header)
+            assert new_state.user == "user0"
+            assert new_state.version == 1
+            assert len(new_state.functions) == 1
+            assert new_state.functions[0x400080].header == func_header
+            assert new_state.structs["some_struct"] == my_struct
 
     def test_state_last_push(self):
         state = State("user0")
