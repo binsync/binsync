@@ -196,10 +196,8 @@ def toml_file_to_artifacts(src: Union[pathlib.Path, git.Tree], filename, artifac
 
 class State:
     """
-    The state.
-
-    :ivar str user:     Name of the user.
-    :ivar int version:  Version of the state, starting from 0.
+    A State object is a collection of artifacts that is tied to a specific user, binary, and time. Normally,
+    this means a state is only tied to one commit in Git.
     """
 
     def __init__(self, user: str, version: str = None, client=None, last_push_time=None, last_commit_msg=None, dirty=True):
