@@ -21,7 +21,7 @@ dependencies = [
     "pycparser",
     "prompt_toolkit",
     "tqdm",
-    "libbs>=1.5.2"
+    "libbs==1.5.2"
 ]
 dynamic = ["version"]
 
