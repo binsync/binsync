@@ -390,8 +390,8 @@ class BSController:
     #
 
     @init_checker
-    def get_state(self, user=None, version=None, priority=None, no_cache=False) -> State:
-        return self.client.get_state(user=user, version=version, priority=priority, no_cache=no_cache)
+    def get_state(self, user=None, priority=None, no_cache=False) -> State:
+        return self.client.get_state(user=user, priority=priority, no_cache=no_cache)
 
     @init_checker
     def pull_artifact(self, type_: Artifact, *identifiers, many=False, user=None, state=None) -> Optional[Artifact]:
