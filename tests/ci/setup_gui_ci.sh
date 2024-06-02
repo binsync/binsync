@@ -1,3 +1,4 @@
+#!/bin/bash
 # install X11 required packages for spawning non-monitored windows
 sudo apt-get update && sudo apt-get install -y \
   libegl1 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
