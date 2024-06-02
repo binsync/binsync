@@ -28,7 +28,7 @@ class ControlPanelView(BaseView):
     """
 
     def __init__(self, instance, default_docking_position, controller, *args, **kwargs):
-        super().__init__('sync', instance, instance.workspace, default_docking_position, *args, **kwargs)
+        super().__init__('sync', instance.workspace, default_docking_position, *args, **kwargs)
         self.base_caption = "BinSync: Control Panel"
         self.controller: BSController = controller
         self.control_panel = ControlPanel(self.controller)
