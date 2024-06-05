@@ -157,7 +157,7 @@ class Client:
     #
 
     def _load_or_update_config(self):
-        config = BinSyncBSConfig.load_from_file(None) or GlobalConfig(None)
+        config = BinSyncBSConfig.load_from_file(None) or BinSyncBSConfig(None)
         config.add_recent_project_path(self.repo_root, self.master_user)
         config.save()
         return config

@@ -6,9 +6,6 @@ import toml
 
 from libbs.configuration import BSConfig
 
-BS_CONFIG_POSTFIX = "bsconf"
-BS_GLOBAL_CONFIG_FILENAME = f".global.{BS_CONFIG_POSTFIX}"
-
 l = logging.getLogger(__name__)
 
 # TODO: Add file locking to prevent simultaneous file accessing
