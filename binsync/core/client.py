@@ -13,7 +13,7 @@ import git
 import git.exc
 
 from binsync.core.user import User
-from binsync.configuration import GlobalConfig
+from binsync.configuration import BinSyncBSConfig
 from binsync.core.errors import ExternalUserCommitError, MetadataNotFoundError
 from binsync.core.state import State, load_toml_from_file
 from binsync.core.scheduler import Scheduler, Job, SchedSpeed
@@ -157,7 +157,7 @@ class Client:
     #
 
     def _load_or_update_config(self):
-        config = GlobalConfig.load_from_file(None) or GlobalConfig(None)
+        config = BinSyncBSConfig.load_from_file(None) or GlobalConfig(None)
         config.add_recent_project_path(self.repo_root, self.master_user)
         config.save()
         return config
