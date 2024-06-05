@@ -4,6 +4,8 @@ import logging
 
 import toml
 
+from libbs.configuration import BSConfig
+
 BS_CONFIG_POSTFIX = "bsconf"
 BS_GLOBAL_CONFIG_FILENAME = f".global.{BS_CONFIG_POSTFIX}"
 
