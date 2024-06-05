@@ -8,7 +8,7 @@ from typing import Optional
 import filelock
 
 from binsync.core.client import ConnectionWarnings, BINSYNC_ROOT_BRANCH
-from binsync.configuration import ProjectConfig
+from binsync.configuration import BinSyncBSConfig
 from libbs.ui.qt_objects import (
     QCheckBox,
     QDialog,
@@ -355,7 +355,7 @@ class ConfigureBSDialog(QDialog):
 
     def _on_cancel_clicked(self):
         self.close()
-    
+
     def _on_ok_clicked(self):
         self.use_recent_project_config()
         self.close()
@@ -455,10 +455,12 @@ class ConfigureBSDialog(QDialog):
                 lock_exists = True
 
             if lock_exists:
-                box_resp = QMessageBox(self).question(None, "Error", "WARNING: Can only have one binsync client touching a local repository at once." +
+                box_resp = QMessageBox(self).question(None, "Error",
+                                                      "WARNING: Can only have one binsync client touching a local repository at once." +
                                                       "If the previous client crashed, the lockfile at:" +
                                                       f"'{lockfile_path.resolve()}'\n" +
-                                                      "must be deleted. Would you like to delete this now?", QMessageBox.Yes | QMessageBox.No)
+                                                      "must be deleted. Would you like to delete this now?",
+                                                      QMessageBox.Yes | QMessageBox.No)
                 if box_resp == QMessageBox.Yes:
                     lockfile_path.unlink()
             else:
@@ -509,13 +511,15 @@ class ConfigureBSDialog(QDialog):
             )
 
     def load_saved_config(self):
+        binary_name = Path(self.controller.deci.binary_path).name
         config = self.controller.load_saved_config()
         if not config:
             return None
 
-        user = config.user or ""
-        repo = config.repo_path or ""
-        remote = config.remote if config.remote and not config.repo_path else ""
+        project_data = config.project_data[binary_name]
+        user = project_data["user"] or ""
+        repo = project_data["repo_path"] or ""
+        remote = project_data["remote"] if project_data["remote"] and not project_data["repo_path"] else ""
 
         if not user and not repo:
             return None
@@ -526,19 +530,19 @@ class ConfigureBSDialog(QDialog):
         if remote and not repo:
             repo = str(Path(self.controller.client.repo_root).absolute())
 
+        binary_name = Path(self.controller.deci.binary_path).name
         if self.controller.config:
-            self.controller.config.user = user
-            self.controller.config.repo_path = repo
-            self.controller.config.remote = remote
+            project_data = self.controller.config.project_data[binary_name]
+            project_data["user"] = user
+            project_data["repo_path"] = repo
+            project_data["remote"] = remote
         else:
-            config = ProjectConfig(
-                self.controller.deci.binary_path or "",
-                user=user,
-                repo_path=repo,
-                remote=remote
-            )
-            if not config:
-                return config
+            config = BinSyncBSConfig()
+            config.save_project_data(self.controller.deci.binary_path,
+                                     user=user,
+                                     repo_path=repo,
+                                     remote=remote
+                                     )
             self.controller.config = config
 
         return self.controller.config.save()
