@@ -8,7 +8,7 @@ from libbs.configuration import BSConfig
 
 l = logging.getLogger(__name__)
 
-# TODO: Add file locking to prevent simultaneous file access
+# TODO: Add file locking to prevent simultaneous file accesses
 class BinSyncBSConfig(BSConfig):
     __slots__ = BSConfig.__slots__ + (
         "project_data",
