@@ -7,12 +7,12 @@ name = "binsync"
 classifiers = [
     "License :: OSI Approved :: BSD License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
 ]
 license = {text = "BSD 2 Clause"}
 description = "A Collaboration framework for binary analysis tasks."
 urls = {Homepage = "https://github.com/angr/binsync"}
-requires-python = ">= 3.7"
+requires-python = ">= 3.8"
 dependencies = [
     "sortedcontainers",
     "toml",
