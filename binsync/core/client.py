@@ -15,7 +15,7 @@ import git.exc
 from binsync.core.user import User
 from binsync.configuration import GlobalConfig
 from binsync.core.errors import ExternalUserCommitError, MetadataNotFoundError
-from binsync.core.state import State, load_toml_from_file
+from binsync.core.state import State, toml_file_to_dict
 from binsync.core.scheduler import Scheduler, Job, SchedSpeed
 from binsync.core.cache import Cache
 
@@ -304,7 +304,7 @@ class Client:
             for ref in self._get_best_refs(repo, force_local=force_local_users).values():
                 #l.debug(f"{ref} NAME: {ref.name}")
                 try:
-                    metadata = load_toml_from_file(ref.commit.tree, "metadata.toml", client=self)
+                    metadata = toml_file_to_dict(ref.commit.tree, "metadata.toml", client=self)
                     user = User.from_metadata(metadata)
                     users.append(user)
                 except Exception as e:
