@@ -39,6 +39,10 @@ class AlwaysActiveAction(idaapi.action_handler_t):
         self.plugin = plugin
         self.typ = typ
 
+    def activate(self, ctx):
+        self.action()
+        return 1
+
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
 
