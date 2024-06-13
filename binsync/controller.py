@@ -19,7 +19,7 @@ from libbs.api.type_parser import CType
 from binsync.core.client import Client, SchedSpeed, Scheduler, Job
 from binsync.core.state import State
 from binsync.core.user import User
-from binsync.configuration import BinSyncBSConfig
+from binsync.configuration import BinSyncBSConfig, _hashfile, ProjectData
 
 _l = logging.getLogger(name=__name__)
 
@@ -908,12 +908,14 @@ class BSController:
 
         self.config = config
         binary_name = pathlib.Path(self.deci.binary_path).name
-        project_data_dict = self.config.project_data
-        self.table_coloring_window = (project_data_dict[binary_name]["table_coloring_window"]
+        bin_hash = _hashfile(self.deci.binary_path)
+        project_data_dict = self.config.recent_projects[bin_hash]
+        project_data = ProjectData.get_from_state(project_data_dict)
+        self.table_coloring_window = (config.table_coloring_window
                                       or self.table_coloring_window)
-        self.merge_level = project_data_dict["merge_level"] or self.merge_level
+        self.merge_level = config.merge_level or self.merge_level
 
-        if project_data_dict["log_level"] == "debug":
+        if config.log_level == "debug":
             logging.getLogger("binsync").setLevel("DEBUG")
             logging.getLogger("ida_binsync").setLevel("DEBUG")
 
