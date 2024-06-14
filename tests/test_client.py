@@ -132,7 +132,7 @@ class TestClient(unittest.TestCase):
             
             # on the creation of the client, it will load the master_state, which will result in an
             # exception because the TOML fails to load
-            self.assertRaises(toml.decoder.TomlDecodeError, lambda: Client("user0", tmpdir, "fake_hash"))
+            self.assertRaises(toml.decoder.TomlDecodeError, lambda: Client("user0", tmpdir, "fake_hash", tmpdir+"/fake_bin"))
             
 
 if __name__ == "__main__":
