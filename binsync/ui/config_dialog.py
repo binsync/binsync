@@ -532,10 +532,15 @@ class ConfigureBSDialog(QDialog):
 
         binary_name = Path(self.controller.deci.binary_path).name
         if self.controller.config:
-            project_data = self.controller.config.project_data[binary_name]
-            project_data["user"] = user
-            project_data["repo_path"] = repo
-            project_data["remote"] = remote
+            self.controller.config.save_project_data(self.controller.deci.binary_path,
+                                                     user=user,
+                                                     repo_path=repo,
+                                                     remote=remote
+                                                     )
+            # project_data = self.controller.config.project_data[binary_name]
+            # project_data["user"] = user
+            # project_data["repo_path"] = repo
+            # project_data["remote"] = remote
         else:
             config = BinSyncBSConfig()
             config.save_project_data(self.controller.deci.binary_path,

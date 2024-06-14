@@ -20,7 +20,7 @@ class TestState(unittest.TestCase):
     def test_state_dumping(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             # create a client only for accurate git usage
-            client = Client("user0", tmpdir, "fake_hash", init_repo=True)
+            client = Client("user0", tmpdir, "fake_hash", tmpdir+"/fake_bin", init_repo=True)
             state = State("user0", client=client)
 
             # dump to the current repo, current branch
@@ -31,7 +31,7 @@ class TestState(unittest.TestCase):
     def test_state_loading(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             # create a client only for accurate git usage
-            client = Client("user0", tmpdir, "fake_hash", init_repo=True)
+            client = Client("user0", tmpdir, "fake_hash", tmpdir+"/fake_bin", init_repo=True)
             state = State("user0", client=client)
 
             # create a state for dumping

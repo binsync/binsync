@@ -13,7 +13,7 @@ import git
 import git.exc
 
 from binsync.core.user import User
-from binsync.configuration import BinSyncBSConfig
+from binsync.configuration import BinSyncBSConfig, ProjectData
 from binsync.core.errors import ExternalUserCommitError, MetadataNotFoundError
 from binsync.core.state import State, toml_file_to_dict
 from binsync.core.scheduler import Scheduler, Job, SchedSpeed
@@ -76,6 +76,7 @@ class Client:
         master_user: str,
         repo_root: str,
         binary_hash: bytes,
+        binary_path: str,
         remote: str = "origin",
         commit_interval: int = 10,
         commit_batch_size: int = 10,
@@ -96,6 +97,7 @@ class Client:
         :param master_user:         Username of the user that is initing the client (the master user)
         :param repo_root:           Path to the BinSync repo where the project will be stored
         :param binary_hash:         The hash, usually md5, of the binary the client is connected for
+        :param binary_path:         The path of the binary the client is connected fors
         :param remote:              The optional Git remote (usually origin)
         :param commit_interval:     The seconds between each commit in the worker thread
         :param init_repo:           Bool to decide initing for both remote and local repos
@@ -106,6 +108,7 @@ class Client:
         self.master_user = master_user
         self.repo_root = repo_root
         self.binary_hash = binary_hash
+        self.binary_path = binary_path
         self.remote = remote
         self.repo = None
         self.repo_lock = None
@@ -157,8 +160,9 @@ class Client:
     #
 
     def _load_or_update_config(self):
+        project_data = ProjectData(self.binary_path, self.master_user, self.repo_root, self.remote)
         config = BinSyncBSConfig.load_from_file() or BinSyncBSConfig()
-        config.add_recent_project_data(self.repo_root, self.master_user)
+        config.add_recent_project_data(self.binary_hash, project_data)
         config.save()
         return config
 

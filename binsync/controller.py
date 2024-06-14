@@ -338,8 +338,9 @@ class BSController:
 
     def connect(self, user, path, init_repo=False, remote_url=None, single_thread=False, **kwargs):
         binary_hash = self.deci.binary_hash
+        binary_path = self.deci.binary_path
         self.client = Client(
-            user, path, binary_hash, init_repo=init_repo, remote_url=remote_url, **kwargs
+            user, path, binary_hash, binary_path, init_repo=init_repo, remote_url=remote_url, **kwargs
         )
 
         if not single_thread:
@@ -907,10 +908,6 @@ class BSController:
         _l.info(f"Loaded configuration file: '{self.config.save_location}'")
 
         self.config = config
-        binary_name = pathlib.Path(self.deci.binary_path).name
-        bin_hash = _hashfile(self.deci.binary_path)
-        project_data_dict = self.config.recent_projects[bin_hash]
-        project_data = ProjectData.get_from_state(project_data_dict)
         self.table_coloring_window = (config.table_coloring_window
                                       or self.table_coloring_window)
         self.merge_level = config.merge_level or self.merge_level
