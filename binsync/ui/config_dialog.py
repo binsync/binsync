@@ -8,7 +8,7 @@ from typing import Optional
 import filelock
 
 from binsync.core.client import ConnectionWarnings, BINSYNC_ROOT_BRANCH
-from binsync.configuration import BinSyncBSConfig
+from binsync.configuration import BinSyncBSConfig, ProjectData
 from libbs.ui.qt_objects import (
     QCheckBox,
     QDialog,
@@ -511,15 +511,19 @@ class ConfigureBSDialog(QDialog):
             )
 
     def load_saved_config(self):
+        binary_hash = self.controller.deci.binary_hash
         binary_name = Path(self.controller.deci.binary_path).name
         config = self.controller.load_saved_config()
         if not config:
             return None
 
-        project_data = config.project_data[binary_name]
-        user = project_data["user"] or ""
-        repo = project_data["repo_path"] or ""
-        remote = project_data["remote"] if project_data["remote"] and not project_data["repo_path"] else ""
+        if binary_hash not in config.recent_projects.keys():
+            return None
+
+        project_data = ProjectData.get_from_state(config.recent_projects[binary_hash][0])
+        user = project_data.user or ""
+        repo = project_data.repo_path or ""
+        remote = project_data.remote if project_data.remote and not project_data.repo_path else ""
 
         if not user and not repo:
             return None
@@ -530,7 +534,6 @@ class ConfigureBSDialog(QDialog):
         if remote and not repo:
             repo = str(Path(self.controller.client.repo_root).absolute())
 
-        binary_name = Path(self.controller.deci.binary_path).name
         if self.controller.config:
             self.controller.config.save_project_data(self.controller.deci.binary_path,
                                                      user=user,

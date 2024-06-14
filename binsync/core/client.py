@@ -160,7 +160,7 @@ class Client:
     #
 
     def _load_or_update_config(self):
-        project_data = ProjectData(self.binary_path, self.master_user, self.repo_root, self.remote)
+        project_data = ProjectData(pathlib.Path(self.binary_path).name, self.master_user, self.repo_root, self.remote)
         config = BinSyncBSConfig.load_from_file() or BinSyncBSConfig()
         config.add_recent_project_data(self.binary_hash, project_data)
         config.save()

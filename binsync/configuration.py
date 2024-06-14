@@ -19,8 +19,8 @@ class ProjectData:
         "remote",
     )
 
-    def __init__(self, binary_path, user=None, repo_path=None, remote=None):
-        self.binary_name = pathlib.Path(binary_path).name
+    def __init__(self, binary_name, user=None, repo_path=None, remote=None):
+        self.binary_name = binary_name
         self.user = user
         self.repo_path = repo_path
         self.remote = remote
@@ -37,7 +37,7 @@ class ProjectData:
 
     @classmethod
     def get_from_state(cls, data):
-        proj_data = cls(data['binary_path'])
+        proj_data = cls(data['binary_name'])
         proj_data.__setstate__(data)
         return proj_data
 
@@ -67,25 +67,30 @@ class BinSyncBSConfig(BSConfig):
         self.recent_projects = recent_projects
 
     def save_project_data(self, binary_path, user=None, repo_path=None, remote=None):
-        project_data = {"binary_path": binary_path, "user": user, "repo_path": repo_path, "remote": remote}
+        project_data = {"binary_name": pathlib.Path(binary_path).name, "user": user, "repo_path": repo_path, "remote": remote}
         projectData = ProjectData.get_from_state(project_data)
         binary_hash = _hashfile(binary_path)
         self.add_recent_project_data(binary_hash, projectData)
 
     def add_recent_project_data(self, binary_hash, projectData):
         if self.recent_projects is None:
-            self.recent_projects = OrderedDict()
+            self.recent_projects = {}
 
         if binary_hash not in self.recent_projects.keys():
-            self.recent_projects.update({binary_hash: []})
-            self.recent_projects.move_to_end(binary_hash, last=False)
+            self.recent_projects = _dict_insert(self.recent_projects, binary_hash, [])
 
         if projectData.__getstate__() not in self.recent_projects[binary_hash]:
             self.recent_projects[binary_hash].insert(0, projectData.__getstate__())
 
         self.recent_projects[binary_hash] = self.recent_projects[binary_hash][0:5]
-        self.recent_projects = OrderedDict(itertools.islice(self.recent_projects.items(), 10))
+        self.recent_projects = dict(itertools.islice(self.recent_projects.items(), 10))
 
+
+def _dict_insert(dictionary, key, value):
+    new_dict = {key: value}
+    for k, v in dictionary.items():
+        new_dict[k] = v
+    return new_dict
 
 def _hashfile(path):
     with open(path, 'rb') as f:
