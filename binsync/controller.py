@@ -337,6 +337,7 @@ class BSController:
     #
 
     def connect(self, user, path, init_repo=False, remote_url=None, single_thread=False, **kwargs):
+        breakpoint()
         binary_hash = self.deci.binary_hash
         binary_path = self.deci.binary_path
         self.client = Client(

@@ -67,7 +67,7 @@ class BinSyncBSConfig(BSConfig):
         self.recent_projects = recent_projects
 
     def save_project_data(self, binary_path, user=None, repo_path=None, remote=None):
-        project_data = {"binary_name": pathlib.Path(binary_path).name, "user": user, "repo_path": repo_path, "remote": remote}
+        project_data = {"binary_name": pathlib.Path(binary_path).name, "user": user, "repo_path": str(repo_path), "remote": remote}
         projectData = ProjectData.get_from_state(project_data)
         binary_hash = _hashfile(binary_path)
         self.add_recent_project_data(binary_hash, projectData)

@@ -315,12 +315,18 @@ class ConfigureBSDialog(QDialog):
         self._main_layout.addLayout(buttons_layout)
 
     def _fill_table_with_configs(self):
-        self._prev_proj_table.setRowCount(1)
+        top_confs = self.load_saved_config()
+
+        if top_confs is None:
+            self._prev_proj_table.setRowCount(1)
+            self._prev_proj_table.setColumnCount(1)
+            return
+
+        self._prev_proj_table.setRowCount(len(top_confs))
         self._prev_proj_table.setColumnCount(1)
 
-        top_conf = self.load_saved_config()
-        if top_conf is not None:
-            self._prev_proj_table.setItem(0, 0, QTableWidgetItem(top_conf))
+        for i, top_conf in enumerate(top_confs):
+            self._prev_proj_table.setItem(i, 0, QTableWidgetItem(top_conf))
             self._prev_proj_table.selectRow(0)
 
     def _get_selected_config_row(self):
@@ -512,7 +518,6 @@ class ConfigureBSDialog(QDialog):
 
     def load_saved_config(self):
         binary_hash = self.controller.deci.binary_hash
-        binary_name = Path(self.controller.deci.binary_path).name
         config = self.controller.load_saved_config()
         if not config:
             return None
@@ -520,15 +525,20 @@ class ConfigureBSDialog(QDialog):
         if binary_hash not in config.recent_projects.keys():
             return None
 
-        project_data = ProjectData.get_from_state(config.recent_projects[binary_hash][0])
-        user = project_data.user or ""
-        repo = project_data.repo_path or ""
-        remote = project_data.remote if project_data.remote and not project_data.repo_path else ""
+        project_data_dicts = config.recent_projects[binary_hash]
+        confs = []
+        for project_state in project_data_dicts:
+            project_data = ProjectData.get_from_state(project_state)
+            user = project_data.user or ""
+            repo = project_data.repo_path or ""
+            remote = project_data.remote if project_data.remote and not project_data.repo_path else ""
 
-        if not user and not repo:
-            return None
+            if not user and not repo:
+                confs.append(None)
 
-        return f"{repo}:{user}"
+            confs.append(f"{repo}:{user}")
+
+        return confs
 
     def save_config(self, user, repo, remote) -> Optional[str]:
         if remote and not repo:
@@ -540,10 +550,6 @@ class ConfigureBSDialog(QDialog):
                                                      repo_path=repo,
                                                      remote=remote
                                                      )
-            # project_data = self.controller.config.project_data[binary_name]
-            # project_data["user"] = user
-            # project_data["repo_path"] = repo
-            # project_data["remote"] = remote
         else:
             config = BinSyncBSConfig()
             config.save_project_data(self.controller.deci.binary_path,
