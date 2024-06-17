@@ -79,6 +79,7 @@ class BinSyncBSConfig(BSConfig):
         if binary_hash not in self.recent_projects.keys():
             self.recent_projects = _dict_insert(self.recent_projects, binary_hash, [])
 
+        # TODO: fix duplicate project data addition as the below does not work
         if projectData.__getstate__() not in self.recent_projects[binary_hash]:
             self.recent_projects[binary_hash].insert(0, projectData.__getstate__())
 
