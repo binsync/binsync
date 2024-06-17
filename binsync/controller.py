@@ -19,7 +19,7 @@ from libbs.api.type_parser import CType
 from binsync.core.client import Client, SchedSpeed, Scheduler, Job
 from binsync.core.state import State
 from binsync.core.user import User
-from binsync.configuration import BinSyncBSConfig, _hashfile, ProjectData
+from binsync.configuration import BinSyncBSConfig
 
 _l = logging.getLogger(name=__name__)
 
