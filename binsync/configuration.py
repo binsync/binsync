@@ -1,11 +1,8 @@
 import pathlib
-import os
 import logging
 import itertools
-import toml
 
 from hashlib import md5
-from collections import OrderedDict
 from libbs.configuration import BSConfig
 
 l = logging.getLogger(__name__)
@@ -42,7 +39,6 @@ class ProjectData:
         return proj_data
 
 
-# TODO: Add file locking to prevent simultaneous file accesses
 class BinSyncBSConfig(BSConfig):
     __slots__ = BSConfig.__slots__ + (
         "recent_projects",
