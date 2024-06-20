@@ -338,9 +338,8 @@ class BSController:
 
     def connect(self, user, path, init_repo=False, remote_url=None, single_thread=False, **kwargs):
         binary_hash = self.deci.binary_hash
-        binary_path = self.deci.binary_path
         self.client = Client(
-            user, path, binary_hash, binary_path, init_repo=init_repo, remote_url=remote_url, **kwargs
+            user, path, binary_hash, init_repo=init_repo, remote_url=remote_url, **kwargs
         )
 
         if not single_thread:
