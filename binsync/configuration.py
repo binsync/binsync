@@ -3,6 +3,8 @@ import logging
 import itertools
 
 from hashlib import md5
+from typing import Optional, Dict
+
 from libbs.configuration import BSConfig
 
 l = logging.getLogger(__name__)
@@ -16,7 +18,12 @@ class ProjectData:
         "remote",
     )
 
-    def __init__(self, binary_name, user=None, repo_path=None, remote=None):
+    def __init__(self,
+                 binary_name: str,
+                 user: Optional[str] = None,
+                 repo_path: Optional[str] = None,
+                 remote: Optional[str] = None
+                 ):
         self.binary_name = binary_name
         self.user = user
         self.repo_path = repo_path
@@ -48,11 +55,11 @@ class BinSyncBSConfig(BSConfig):
     )
 
     def __init__(self,
-                 save_location=None,
-                 recent_projects=None,
-                 table_coloring_window=None,
-                 log_level=None,
-                 merge_level=None
+                 save_location: Optional[pathlib.Path] = None,
+                 recent_projects: Optional[Dict] = None,
+                 table_coloring_window: Optional[int] = None,
+                 log_level: Optional[str] = None,
+                 merge_level: Optional[int] = None
                  ):
         super().__init__(save_location)
 
@@ -63,7 +70,8 @@ class BinSyncBSConfig(BSConfig):
         self.recent_projects = recent_projects
 
     def save_project_data(self, binary_path, user=None, repo_path=None, remote=None):
-        project_data = {"binary_name": pathlib.Path(binary_path).name, "user": user, "repo_path": str(repo_path), "remote": remote}
+        project_data = {"binary_name": pathlib.Path(binary_path).name, "user": user, "repo_path": str(repo_path),
+                        "remote": remote}
         projectData = ProjectData.get_from_state(project_data)
         binary_hash = _hashfile(binary_path)
         self.add_recent_project_data(binary_hash, projectData)
@@ -75,7 +83,8 @@ class BinSyncBSConfig(BSConfig):
         if binary_hash not in self.recent_projects.keys():
             self.recent_projects = _dict_insert(self.recent_projects, binary_hash, [])
 
-        if {k: v for k, v in projectData.__getstate__().items() if v is not None} not in self.recent_projects[binary_hash]:
+        if {k: v for k, v in projectData.__getstate__().items() if v is not None} not in self.recent_projects[
+            binary_hash]:
             self.recent_projects[binary_hash].insert(0, projectData.__getstate__())
 
         self.recent_projects[binary_hash] = self.recent_projects[binary_hash][0:5]
@@ -87,6 +96,7 @@ def _dict_insert(dictionary, key, value):
     for k, v in dictionary.items():
         new_dict[k] = v
     return new_dict
+
 
 def _hashfile(path):
     with open(path, 'rb') as f:
