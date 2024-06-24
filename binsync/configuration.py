@@ -8,7 +8,8 @@ from typing import Optional, Dict
 from libbs.configuration import BSConfig
 
 l = logging.getLogger(__name__)
-
+max_recent_projects = 5
+max_saved_binaries = 10
 
 class ProjectData:
     __slots__ = (
@@ -87,8 +88,8 @@ class BinSyncBSConfig(BSConfig):
             binary_hash]:
             self.recent_projects[binary_hash].insert(0, projectData.__getstate__())
 
-        self.recent_projects[binary_hash] = self.recent_projects[binary_hash][0:5]
-        self.recent_projects = dict(itertools.islice(self.recent_projects.items(), 10))
+        self.recent_projects[binary_hash] = self.recent_projects[binary_hash][0:max_recent_projects]
+        self.recent_projects = dict(itertools.islice(self.recent_projects.items(), max_saved_binaries))
 
 
 def _dict_insert(dictionary, key, value):
