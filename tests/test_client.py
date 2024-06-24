@@ -18,12 +18,12 @@ class TestClient(unittest.TestCase):
 
     def test_repo_init(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            Client("user0", tmpdir, "fake_hash", tmpdir+"/fake_bin", init_repo=True)
+            Client("user0", tmpdir, "fake_hash", init_repo=True)
             assert os.path.isdir(os.path.join(tmpdir, ".git")) is True
 
     def test_dirty_master_state(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            client = Client("user0", tmpdir, "fake_hash", tmpdir+"/fake_bin", init_repo=True)
+            client = Client("user0", tmpdir, "fake_hash", init_repo=True)
             state = client.master_state
             assert state.user == "user0"
             # after first creation, state is dirty
@@ -50,7 +50,7 @@ class TestClient(unittest.TestCase):
 
     def test_commit_messages(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            client = Client("user0", tmpdir, "fake_hash", tmpdir+"/fake_bin", init_repo=True)
+            client = Client("user0", tmpdir, "fake_hash", init_repo=True)
             state = client.master_state
 
             # create changes, and verify the state recorded a message
@@ -86,7 +86,7 @@ class TestClient(unittest.TestCase):
             # First User
             #
 
-            client = Client("user0", tmpdir, "fake_hash", tmpdir+"/fake_bin", init_repo=True)
+            client = Client("user0", tmpdir, "fake_hash", init_repo=True)
             state = client.master_state
             user0_func_header = FunctionHeader("user0_func", self.FAKE_ADDR)
             state.set_function_header(user0_func_header)
@@ -98,7 +98,7 @@ class TestClient(unittest.TestCase):
             # Second User
             #
 
-            client = Client("user1", tmpdir, "fake_hash", tmpdir+"/fake_bin")
+            client = Client("user1", tmpdir, "fake_hash")
             state = client.master_state
             user1_func_header = FunctionHeader("user1_func", self.FAKE_ADDR)
             state.set_function_header(user1_func_header)
@@ -112,7 +112,7 @@ class TestClient(unittest.TestCase):
 
     def test_corrupted_toml_load(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            client = Client("user0", tmpdir, "fake_hash", tmpdir+"/fake_bin", init_repo=True)
+            client = Client("user0", tmpdir, "fake_hash", init_repo=True)
             state = client.master_state
 
             func_header = FunctionHeader("some_name", self.FAKE_ADDR)
@@ -132,7 +132,7 @@ class TestClient(unittest.TestCase):
             
             # on the creation of the client, it will load the master_state, which will result in an
             # exception because the TOML fails to load
-            self.assertRaises(toml.decoder.TomlDecodeError, lambda: Client("user0", tmpdir, "fake_hash", tmpdir+"/fake_bin"))
+            self.assertRaises(toml.decoder.TomlDecodeError, lambda: Client("user0", tmpdir, "fake_hash"))
             
 
 if __name__ == "__main__":
