@@ -1,164 +1,105 @@
 import pathlib
-import os
 import logging
+import itertools
 
-import toml
+from hashlib import md5
+from typing import Optional, Dict
 
-BS_CONFIG_POSTFIX = "bsconf"
-BS_GLOBAL_CONFIG_FILENAME = f".global.{BS_CONFIG_POSTFIX}"
+from libbs.configuration import BSConfig
 
 l = logging.getLogger(__name__)
+max_recent_projects = 5
+max_saved_binaries = 10
 
-
-class Config:
+class ProjectData:
     __slots__ = (
-        "path",
-    )
-
-    def __init__(self, path):
-        self.path = path
-
-    def save(self):
-        self.path = pathlib.Path(self.path).expanduser().absolute()
-        if not self.path.parent.exists():
-            return None
-
-        dump_dict = {}
-        for attr in self.__slots__:
-            attr_val = getattr(self, attr)
-            if isinstance(attr_val, pathlib.Path):
-                attr_val = str(attr_val)
-
-            dump_dict[attr] = attr_val
-
-        with open(self.path, "w") as fp:
-            toml.dump(dump_dict, fp)
-
-        return self.path
-
-    def load(self):
-        self.path = pathlib.Path(self.path).expanduser().absolute()
-        if not self.path.exists():
-            return None
-
-        with open(self.path, "r") as fp:
-            load_dict = toml.load(fp)
-
-        for attr in self.__slots__:
-            setattr(self, attr, load_dict.get(attr, None))
-
-        return self
-
-    @classmethod
-    def load_from_file(cls, path):
-        conf = cls(path)
-        return conf.load()
-
-    @classmethod
-    def update_or_make(cls, path, **attrs_to_update):
-        path = pathlib.Path(cls.correct_path(path)).expanduser().absolute()
-        # find or create a new config
-        conf = cls.load_from_file(path) if path.exists() \
-            else cls(path)
-
-        # update every value in the Config
-        for attr, val in attrs_to_update.items():
-            if attr in conf.__slots__:
-                setattr(conf, attr, val)
-
-        conf.save()
-        return conf
-
-    @classmethod
-    def correct_path(cls, path):
-        return path
-
-
-class ProjectConfig(Config):
-    __slots__ = Config.__slots__ + (
         "binary_name",
         "user",
         "repo_path",
         "remote",
-        "table_coloring_window",
-        "log_level",
-        "merge_level"
     )
 
     def __init__(self,
-                 binary_path,
-                 user=None,
-                 repo_path=None,
-                 remote=None,
-                 table_coloring_window=None,
-                 log_level=None,
-                 merge_level=None,
+                 binary_name: str,
+                 user: Optional[str] = None,
+                 repo_path: Optional[str] = None,
+                 remote: Optional[str] = None
                  ):
-        super(ProjectConfig, self).__init__(self.correct_path(binary_path))
-
-        self.binary_name = pathlib.Path(binary_path).name
+        self.binary_name = binary_name
         self.user = user
         self.repo_path = repo_path
         self.remote = remote
-        self.table_coloring_window = table_coloring_window
-        self.log_level = log_level
-        self.merge_level = merge_level
+
+    def __setstate__(self, data):
+        for k in self.__slots__:
+            if k in data:
+                setattr(self, k, data[k])
+
+    def __getstate__(self):
+        return dict(
+            (k, getattr(self, k)) for k in self.__slots__
+        )
 
     @classmethod
-    def correct_path(cls, binary_path):
-        # example config: /path/to/fauxware_files/.fauxware.bsconf
-        binary_path = pathlib.Path(binary_path)
-        config_name = pathlib.Path(f".{binary_path.name}.{BS_CONFIG_POSTFIX}")
-        config_dir = binary_path.parent
-        return str(config_dir.joinpath(config_name))
+    def get_from_state(cls, data):
+        proj_data = cls(data['binary_name'])
+        proj_data.__setstate__(data)
+        return proj_data
 
 
-class GlobalConfig(Config):
-    __slots__ = Config.__slots__ + (
-        "recent_bs_projects",
-        "ida_path",
-        "ghidra_path",
-        "angr_path",
-        "binja_path",
-        "gdb_path",
+class BinSyncBSConfig(BSConfig):
+    __slots__ = BSConfig.__slots__ + (
+        "recent_projects",
+        "table_coloring_window",
+        "log_level",
+        "merge_level",
     )
 
     def __init__(self,
-                 path,
-                 recent_bs_projects=None,
-                 ida_path=None,
-                 ghidra_path=None,
-                 angr_path=None,
-                 binja_path=None,
-                 gdb_path=None,
+                 save_location: Optional[pathlib.Path] = None,
+                 recent_projects: Optional[Dict] = None,
+                 table_coloring_window: Optional[int] = None,
+                 log_level: Optional[str] = None,
+                 merge_level: Optional[int] = None
                  ):
-        super(GlobalConfig, self).__init__(GlobalConfig.correct_path(path))
+        super().__init__(save_location)
 
-        self.recent_bs_projects = recent_bs_projects or []
-        self.angr_path = angr_path
-        self.ida_path = ida_path
-        self.ghidra_path = ghidra_path
-        self.binja_path = binja_path
-        self.gdb_path = gdb_path
+        self.save_location = self.save_location / f"{__class__.__name__}.toml"
+        self.table_coloring_window = table_coloring_window
+        self.log_level = log_level
+        self.merge_level = merge_level
+        self.recent_projects = recent_projects
 
-    @classmethod
-    def correct_path(cls, path):
-        if path is None:
-            path = os.getenv("HOME") or "~/"
-        path = pathlib.Path(path).expanduser().absolute()
+    def save_project_data(self, binary_path, user=None, repo_path=None, remote=None):
+        project_data = {"binary_name": pathlib.Path(binary_path).name, "user": user, "repo_path": str(repo_path),
+                        "remote": remote}
+        projectData = ProjectData.get_from_state(project_data)
+        binary_hash = _hashfile(binary_path)
+        self.add_recent_project_data(binary_hash, projectData)
 
-        if path.is_dir():
-            path = path.joinpath(BS_GLOBAL_CONFIG_FILENAME)
-        elif path.name != BS_GLOBAL_CONFIG_FILENAME:
-            l.warning("")
-            path = path.parent.joinpath(BS_GLOBAL_CONFIG_FILENAME)
+    def add_recent_project_data(self, binary_hash, projectData):
+        if self.recent_projects is None:
+            self.recent_projects = {}
 
-        return path
+        if binary_hash not in self.recent_projects.keys():
+            self.recent_projects = _dict_insert(self.recent_projects, binary_hash, [])
 
-    def add_recent_project_path(self, path, user):
-        if self.recent_bs_projects is None:
-            self.recent_bs_projects = []
+        if {k: v for k, v in projectData.__getstate__().items() if v is not None} not in self.recent_projects[
+            binary_hash]:
+            self.recent_projects[binary_hash].insert(0, projectData.__getstate__())
 
-        self.recent_bs_projects.insert(0, f"{path}:{user}")
-        # only save the last 5 projects
-        self.recent_bs_projects = self.recent_bs_projects[0:5]
+        self.recent_projects[binary_hash] = self.recent_projects[binary_hash][0:max_recent_projects]
+        self.recent_projects = dict(itertools.islice(self.recent_projects.items(), max_saved_binaries))
+
+
+def _dict_insert(dictionary, key, value):
+    new_dict = {key: value}
+    for k, v in dictionary.items():
+        new_dict[k] = v
+    return new_dict
+
+
+def _hashfile(path):
+    with open(path, 'rb') as f:
+        data = f.read()
+    return md5(data).digest().hex()

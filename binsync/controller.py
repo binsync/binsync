@@ -1,4 +1,5 @@
 import logging
+import pathlib
 import threading
 import datetime
 import time
@@ -18,7 +19,7 @@ from libbs.api.type_parser import CType
 from binsync.core.client import Client, SchedSpeed, Scheduler, Job
 from binsync.core.state import State
 from binsync.core.user import User
-from binsync.configuration import ProjectConfig
+from binsync.configuration import BinSyncBSConfig
 
 _l = logging.getLogger(name=__name__)
 
@@ -934,17 +935,18 @@ class BSController:
     #
 
     def load_saved_config(self):
-        config = ProjectConfig.load_from_file(self.deci.binary_path or "")
+        config = BinSyncBSConfig().load_from_file()
         if not config:
             return
         self.config = config
-        _l.info(f"Loaded configuration file: '{self.config.path}'")
+        _l.info(f"Loaded configuration file: '{self.config.save_location}'")
 
         self.config = config
-        self.table_coloring_window = self.config.table_coloring_window or self.table_coloring_window
-        self.merge_level = self.config.merge_level or self.merge_level
+        self.table_coloring_window = (config.table_coloring_window
+                                      or self.table_coloring_window)
+        self.merge_level = config.merge_level or self.merge_level
 
-        if self.config.log_level == "debug":
+        if config.log_level == "debug":
             logging.getLogger("binsync").setLevel("DEBUG")
             logging.getLogger("ida_binsync").setLevel("DEBUG")
 
