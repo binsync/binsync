@@ -122,9 +122,15 @@ class BSController:
         else:
             self.deci = decompiler_interface
 
+        # command locks
+        self.push_job_scheduler = Scheduler(name="PushJobScheduler")
+        self.sync_semaphore = threading.Semaphore(value=self.DEFAULT_SEMAPHORE_SIZE)
+
+        # never do callbacks while we are syncing data
+        self.deci.should_watch_artifacts = self.is_syncing_data
         # callbacks for changes to artifacts
         for typ in self.CHANGE_WATCHERS:
-            self.deci.artifact_write_callbacks[typ].append(self._commit_initiated_changes)
+            self.deci.artifact_write_callbacks[typ].append(self._commit_hook_based_changes)
         # artifact map
         self.artifact_dict_map = {
             Function: self.deci.functions,
@@ -152,10 +158,6 @@ class BSController:
         self.table_coloring_window = 60 * 30  # 30 mins
         self.merge_level: int = MergeLevel.NON_CONFLICTING
         self._auto_commit_enabled = auto_commit
-
-        # command locks
-        self.push_job_scheduler = Scheduler(name="PushJobScheduler")
-        self.sync_semaphore = threading.Semaphore(value=self.DEFAULT_SEMAPHORE_SIZE)
 
         # create a pulling thread, but start on connection
         self._run_updater_threads = False
@@ -412,7 +414,10 @@ class BSController:
 
         return artifact
 
-    def _commit_initiated_changes(self, *args, **kwargs):
+    def is_syncing_data(self):
+        return self.sync_semaphore._value != self.DEFAULT_SEMAPHORE_SIZE
+
+    def _commit_hook_based_changes(self, *args, **kwargs):
         """
         A special wrapper for callbacks to only commit artifacts when they are changed by the user, and not
         when they are being pulled in from another users (avoids infinite loops)
@@ -421,7 +426,7 @@ class BSController:
         @param kwargs:
         @return:
         """
-        if self.sync_semaphore._value == self.DEFAULT_SEMAPHORE_SIZE:
+        if not self.is_syncing_data():
             self.commit_artifact(*args, **kwargs)
 
     @init_checker
@@ -489,6 +494,9 @@ class BSController:
         merge_level=None,
         blocking=True,
         commit_msg=None,
+        members=True,
+        header=True,
+        do_type_search=True,
         **kwargs
     ):
         state: State = state if state is not None else self.get_state(user=user, priority=SchedSpeed.FAST)
@@ -514,12 +522,25 @@ class BSController:
             master_artifact, target_artifact,
             merge_level=merge_level, master_state=master_state
         )
+        if isinstance(merged_artifact, Struct):
+            if merged_artifact.name.startswith("__"):
+                _l.info(f"Skipping fill for {target_artifact} because it is a system struct")
+                return False
+
+            if not members:
+                # for header-only syncs
+                merged_artifact.members = {}
+
+            if not header:
+                do_type_search = False
 
         # alert others that we are about to change things in the decompiler
         with self.sync_semaphore:
             try:
                 # import all user defined types
-                self.discover_and_sync_user_types(merged_artifact, state=state, master_state=master_state)
+                if do_type_search:
+                    self.discover_and_sync_user_types(merged_artifact, state=state, master_state=master_state)
+
                 # set the imports into the decompiler
                 art_dict[identifier] = merged_artifact
 
@@ -551,11 +572,13 @@ class BSController:
 
         return fill_changes
 
-    def fill_functions(self, user=None, **kwargs):
+    def fill_functions(self, user=None, do_type_search=True, **kwargs):
         change = False
         master_state, state = self.get_master_and_user_state(user=user, **kwargs)
         for addr, func in state.functions.items():
-            change |= self.fill_artifact(addr, artifact_type=Function, state=state, master_state=master_state)
+            change |= self.fill_artifact(
+                addr, artifact_type=Function, state=state, master_state=master_state, do_type_search=do_type_search
+            )
 
         return change
 
@@ -571,14 +594,18 @@ class BSController:
         # only do struct headers for circular references
         master_state, state = self.get_master_and_user_state(user=user, **kwargs)
         for name, struct in state.structs.items():
-            changes |= self.fill_artifact(name, artifact_type=Struct, user=user, state=state, master_state=master_state, members=False)
+            changes |= self.fill_artifact(
+                name, artifact_type=Struct, user=user, state=state, master_state=master_state, members=False
+            )
 
         for name, struct in state.structs.items():
-            changes |= self.fill_artifact(name, artifact_type=Struct, user=user, state=state, master_state=master_state, header=False)
+            changes |= self.fill_artifact(
+                name, artifact_type=Struct, user=user, state=state, master_state=master_state, header=False
+            )
 
         return changes
 
-    def fill_enums(self, user=None, **kwargs):
+    def fill_enums(self, user=None, do_type_search=True, **kwargs):
         """
         Grab all enums and fill it locally
 
@@ -589,19 +616,25 @@ class BSController:
         changes = False
         master_state, state = self.get_master_and_user_state(user=user, **kwargs)
         for name, enum in state.enums.items():
-            changes |= self.fill_artifact(name, artifact_type=Enum, user=user, state=state, master_state=master_state)
+            changes |= self.fill_artifact(
+                name, artifact_type=Enum, user=user, state=state, master_state=master_state,
+                do_type_search=do_type_search
+            )
 
         return changes
 
-    def fill_global_vars(self, user=None, **kwargs):
+    def fill_global_vars(self, user=None, do_type_search=True, **kwargs):
         changes = False
         master_state, state = self.get_master_and_user_state(user=user, **kwargs)
         for off, gvar in state.global_vars.items():
-            changes |= self.fill_artifact(off, artifact_type=GlobalVariable, user=user, state=state, master_state=master_state)
+            changes |= self.fill_artifact(
+                off, artifact_type=GlobalVariable, user=user, state=state, master_state=master_state,
+                do_type_search=do_type_search
+            )
 
         return changes
 
-    def fill_all(self, user=None, **kwargs):
+    def sync_all(self, user=None, **kwargs):
         """
         Connected to the Sync All action:
         syncs in all the data from the targeted user
@@ -614,12 +647,14 @@ class BSController:
 
         master_state, state = self.get_master_and_user_state(user=user, **kwargs)
         fillers = [
-            self.fill_structs, self.fill_enums, self.fill_global_vars, self.fill_functions
+            self.fill_enums, self.fill_global_vars, self.fill_functions
         ]
-
         changes = False
+        # need to do structs specially
+        changes |= self.fill_structs(user=user, state=state, master_state=master_state)
+
         for filler in fillers:
-            changes |= filler(user=user, state=state, master_state=master_state)
+            changes |= filler(user=user, state=state, master_state=master_state, do_type_search=False)
 
         return changes
 
