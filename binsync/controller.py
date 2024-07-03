@@ -131,7 +131,7 @@ class BSController:
         self.deci.should_watch_artifacts = self.should_watch_artifacts
         # callbacks for changes to artifacts
         for typ in self.CHANGE_WATCHERS:
-            self.deci.artifact_write_callbacks[typ].append(self._commit_hook_based_changes)
+            self.deci.artifact_change_callbacks[typ].append(self._commit_hook_based_changes)
         # artifact map
         self.artifact_dict_map = {
             Function: self.deci.functions,
@@ -149,7 +149,7 @@ class BSController:
         self.ui_callback = None  # func(states: List[State])
         self.ctx_change_callback = None  # func()
         self._last_reload = None
-        self.last_ctx = None
+        self.last_active_func = None
         # ui worker that fires off requests for UI update
         self._ui_updater_thread = None
         self._ui_updater_worker: Scheduler = None
@@ -315,10 +315,11 @@ class BSController:
 
     def _check_and_notify_ctx(self, states):
         active_ctx = self.deci.gui_active_context()
-        if active_ctx is None or self.last_ctx == active_ctx:
+        if active_ctx is None or active_ctx.func_addr is None or active_ctx.func_addr == self.last_active_func.addr:
             return
 
-        self.last_ctx = active_ctx
+        curr_func = self.deci.fast_get_function(active_ctx.func_addr)
+        self.last_active_func = curr_func
         self.ctx_change_callback(states)
 
     def start_worker_routines(self):

@@ -27,9 +27,9 @@ class QContextStatusBar(QStatusBar):
     def contextMenuEvent(self, event):
         menu = QMenu(self)
         menu.setObjectName("binsync_context_context_menu")
-        if self.controller.last_ctx:
-            ctx_name = self.controller.last_ctx.name
-            ctx_addr = self.controller.last_ctx.addr
+        if self.controller.last_active_func:
+            ctx_name = self.controller.last_active_func.name
+            ctx_addr = self.controller.last_active_func.addr
             menu.addAction(f"Force Push {ctx_name}@{hex(ctx_addr)}", lambda : self.controller.force_push_functions([ctx_addr]))
             menu.popup(self.mapToGlobal(event.pos()))
 
@@ -63,8 +63,8 @@ class ControlPanel(QWidget):
         self.update_ready.emit(status)
 
     def ctx_callback(self, states):
-        if isinstance(self.controller.last_ctx, libbs.artifacts.Function):
-            self._ctx_table.update_table(states, new_ctx=self.controller.last_ctx.addr)
+        if isinstance(self.controller.last_active_func, libbs.artifacts.Function):
+            self._ctx_table.update_table(states, new_ctx=self.controller.last_active_func.addr)
 
         self.ctx_change.emit()
 
@@ -119,9 +119,9 @@ class ControlPanel(QWidget):
         self.setLayout(main_layout)
 
     def _reload_ctx(self):
-        ctx_name = self.controller.last_ctx.name or ""
+        ctx_name = self.controller.last_active_func.name or ""
         ctx_name = ctx_name[:12] + "..." if len(ctx_name) > 12 else ctx_name
-        self._status_bar.showMessage(f"{ctx_name}@{hex(self.controller.last_ctx.addr)}")
+        self._status_bar.showMessage(f"{ctx_name}@{hex(self.controller.last_active_func.addr)}")
         self._ctx_table.reload()
 
     def _update_table_data(self, states):
