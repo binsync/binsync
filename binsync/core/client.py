@@ -13,7 +13,7 @@ import git
 import git.exc
 
 from binsync.core.user import User
-from binsync.configuration import GlobalConfig
+from binsync.configuration import BinSyncBSConfig, ProjectData
 from binsync.core.errors import ExternalUserCommitError, MetadataNotFoundError
 from binsync.core.state import State, toml_file_to_dict
 from binsync.core.scheduler import Scheduler, Job, SchedSpeed
@@ -142,9 +142,6 @@ class Client:
         self.last_pull_attempt_time = None  # type: datetime.datetime
         self._last_commit_time = None # type: datetime.datetime
 
-        # load or update the global binsync config
-        self.global_config = self._load_or_update_config()
-
         self.active_remote = True
         # force a state update on init
         self.master_state = self.get_state(no_cache=True)
@@ -155,12 +152,6 @@ class Client:
     #
     # Initializers
     #
-
-    def _load_or_update_config(self):
-        config = GlobalConfig.load_from_file(None) or GlobalConfig(None)
-        config.add_recent_project_path(self.repo_root, self.master_user)
-        config.save()
-        return config
 
     def _get_or_init_user_branch(self):
         """

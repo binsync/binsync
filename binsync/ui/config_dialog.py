@@ -8,7 +8,7 @@ from typing import Optional
 import filelock
 
 from binsync.core.client import ConnectionWarnings, BINSYNC_ROOT_BRANCH
-from binsync.configuration import ProjectConfig
+from binsync.configuration import BinSyncBSConfig, ProjectData
 from libbs.ui.qt_objects import (
     QCheckBox,
     QDialog,
@@ -315,12 +315,18 @@ class ConfigureBSDialog(QDialog):
         self._main_layout.addLayout(buttons_layout)
 
     def _fill_table_with_configs(self):
-        self._prev_proj_table.setRowCount(1)
+        top_confs = self.load_saved_config()
+
+        if top_confs is None:
+            self._prev_proj_table.setRowCount(1)
+            self._prev_proj_table.setColumnCount(1)
+            return
+
+        self._prev_proj_table.setRowCount(len(top_confs))
         self._prev_proj_table.setColumnCount(1)
 
-        top_conf = self.load_saved_config()
-        if top_conf is not None:
-            self._prev_proj_table.setItem(0, 0, QTableWidgetItem(top_conf))
+        for i, top_conf in enumerate(top_confs):
+            self._prev_proj_table.setItem(i, 0, QTableWidgetItem(top_conf))
             self._prev_proj_table.selectRow(0)
 
     def _get_selected_config_row(self):
@@ -355,7 +361,7 @@ class ConfigureBSDialog(QDialog):
 
     def _on_cancel_clicked(self):
         self.close()
-    
+
     def _on_ok_clicked(self):
         self.use_recent_project_config()
         self.close()
@@ -455,10 +461,12 @@ class ConfigureBSDialog(QDialog):
                 lock_exists = True
 
             if lock_exists:
-                box_resp = QMessageBox(self).question(None, "Error", "WARNING: Can only have one binsync client touching a local repository at once." +
+                box_resp = QMessageBox(self).question(None, "Error",
+                                                      "WARNING: Can only have one binsync client touching a local repository at once." +
                                                       "If the previous client crashed, the lockfile at:" +
                                                       f"'{lockfile_path.resolve()}'\n" +
-                                                      "must be deleted. Would you like to delete this now?", QMessageBox.Yes | QMessageBox.No)
+                                                      "must be deleted. Would you like to delete this now?",
+                                                      QMessageBox.Yes | QMessageBox.No)
                 if box_resp == QMessageBox.Yes:
                     lockfile_path.unlink()
             else:
@@ -509,36 +517,48 @@ class ConfigureBSDialog(QDialog):
             )
 
     def load_saved_config(self):
+        binary_hash = self.controller.deci.binary_hash
         config = self.controller.load_saved_config()
         if not config:
             return None
 
-        user = config.user or ""
-        repo = config.repo_path or ""
-        remote = config.remote if config.remote and not config.repo_path else ""
-
-        if not user and not repo:
+        if binary_hash not in config.recent_projects.keys():
             return None
 
-        return f"{repo}:{user}"
+        project_data_dicts = config.recent_projects[binary_hash]
+        confs = []
+        for project_state in project_data_dicts:
+            project_data = ProjectData.get_from_state(project_state)
+            user = project_data.user or ""
+            repo = project_data.repo_path or ""
+            remote = project_data.remote if project_data.remote and not project_data.repo_path else ""
+
+            if not user and not repo:
+                confs.append(None)
+
+            confs.append(f"{repo}:{user}")
+
+        return confs
 
     def save_config(self, user, repo, remote) -> Optional[str]:
         if remote and not repo:
             repo = str(Path(self.controller.client.repo_root).absolute())
 
         if self.controller.config:
-            self.controller.config.user = user
-            self.controller.config.repo_path = repo
-            self.controller.config.remote = remote
-        else:
-            config = ProjectConfig(
-                self.controller.deci.binary_path or "",
+            self.controller.config.save_project_data(
+                self.controller.deci.binary_path,
                 user=user,
                 repo_path=repo,
                 remote=remote
             )
-            if not config:
-                return config
+        else:
+            config = BinSyncBSConfig()
+            config.save_project_data(
+                self.controller.deci.binary_path,
+                user=user,
+                repo_path=repo,
+                remote=remote
+            )
             self.controller.config = config
 
         return self.controller.config.save()

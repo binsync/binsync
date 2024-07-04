@@ -207,9 +207,9 @@ class QUtilPanel(QWidget):
         self.controller.config.table_coloring_window = self.controller.table_coloring_window
 
         if self.controller.config.save() is None:
-            l.info(f"Error saving configuration file, check that the path '{self.controller.config.path}' is valid.")
+            l.info(f"Error saving configuration file, check that the path '{self.controller.config.save_location}' is valid.")
         else:
-            l.info(f"Saved configuration file '{self.controller.config.path}'")
+            l.info(f"Saved configuration file '{self.controller.config.save_location}'")
 
     def _handle_debug_toggle(self):
         if self._debug_log_toggle.isChecked():
