@@ -128,7 +128,7 @@ class BSController:
         self.sync_semaphore = threading.Semaphore(value=self.DEFAULT_SEMAPHORE_SIZE)
 
         # never do callbacks while we are syncing data
-        self.deci.should_watch_artifacts = self.is_syncing_data
+        self.deci.should_watch_artifacts = self.is_not_syncing_data
         # callbacks for changes to artifacts
         for typ in self.CHANGE_WATCHERS:
             self.deci.artifact_write_callbacks[typ].append(self._commit_hook_based_changes)
@@ -415,8 +415,8 @@ class BSController:
 
         return artifact
 
-    def is_syncing_data(self):
-        return self.sync_semaphore._value != self.DEFAULT_SEMAPHORE_SIZE
+    def is_not_syncing_data(self):
+        return self.sync_semaphore._value == self.DEFAULT_SEMAPHORE_SIZE
 
     def _commit_hook_based_changes(self, *args, **kwargs):
         """
@@ -427,7 +427,7 @@ class BSController:
         @param kwargs:
         @return:
         """
-        if not self.is_syncing_data():
+        if self.is_not_syncing_data():
             self.commit_artifact(*args, **kwargs)
 
     @init_checker
