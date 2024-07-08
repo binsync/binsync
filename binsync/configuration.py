@@ -19,12 +19,13 @@ class ProjectData:
         "remote",
     )
 
-    def __init__(self,
-                 binary_name: str,
-                 user: Optional[str] = None,
-                 repo_path: Optional[str] = None,
-                 remote: Optional[str] = None
-                 ):
+    def __init__(
+        self,
+        binary_name: str,
+        user: Optional[str] = None,
+        repo_path: Optional[str] = None,
+        remote: Optional[str] = None
+    ):
         self.binary_name = binary_name
         self.user = user
         self.repo_path = repo_path
@@ -70,12 +71,13 @@ class BinSyncBSConfig(BSConfig):
         self.merge_level = merge_level
         self.recent_projects = recent_projects
 
-    def save_project_data(self, binary_path, user=None, repo_path=None, remote=None):
-        project_data = {"binary_name": pathlib.Path(binary_path).name, "user": user, "repo_path": str(repo_path),
-                        "remote": remote}
-        projectData = ProjectData.get_from_state(project_data)
-        binary_hash = _hashfile(binary_path)
-        self.add_recent_project_data(binary_hash, projectData)
+    def save_project_data(self, binary_path, binary_hash, user=None, repo_path=None, remote=None):
+        project_data = {
+            "binary_name": pathlib.Path(binary_path).name, "user": user, "repo_path": str(repo_path),
+            "remote": remote
+        }
+        project_data = ProjectData.get_from_state(project_data)
+        self.add_recent_project_data(binary_hash, project_data)
 
     def add_recent_project_data(self, binary_hash, projectData):
         if self.recent_projects is None:
@@ -98,8 +100,3 @@ def _dict_insert(dictionary, key, value):
         new_dict[k] = v
     return new_dict
 
-
-def _hashfile(path):
-    with open(path, 'rb') as f:
-        data = f.read()
-    return md5(data).digest().hex()
