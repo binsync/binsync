@@ -36,10 +36,11 @@ test = [
     "pytest",
 ]
 ghidra = [
-    "ghidra_bridge",
     "PySide6-Essentials>=6.4.2,!=6.7.0",
 ]
-extras = ["dailalib"]
+extras = [
+    "dailalib"
+]
 
 [project.scripts]
 binsync = "binsync.__main__:main"
