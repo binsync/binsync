@@ -9,6 +9,7 @@ from libbs.ui.qt_objects import QVBoxLayout
 from libbs.decompilers.angr.compat import GenericBSAngrManagementPlugin
 
 from angrmanagement.ui.views.view import BaseView
+from PySide6QtAds import SideBarRight, CDockWidget, CDockManager
 
 from binsync.ui.control_panel import ControlPanel
 from binsync.controller import BSController
@@ -28,7 +29,7 @@ class ControlPanelView(BaseView):
     """
 
     def __init__(self, instance, default_docking_position, controller, *args, **kwargs):
-        super().__init__('sync', instance.workspace, default_docking_position, *args, **kwargs)
+        super().__init__('sync', instance.workspace, default_docking_position)
         self.base_caption = "BinSync: Control Panel"
         self.controller: BSController = controller
         self.control_panel = ControlPanel(self.controller)
@@ -37,6 +38,13 @@ class ControlPanelView(BaseView):
 
     def reload(self):
         pass
+
+    def close(self):
+        self.hide()
+
+    def closeEvent(self, event):
+        self.hide()
+        event.ignore()
 
     def _init_widgets(self):
         main_layout = QVBoxLayout()
@@ -101,17 +109,17 @@ class BinsyncPlugin(GenericBSAngrManagementPlugin):
 
         sync_config = ConfigureBSDialog(self.controller)
         sync_config.exec_()
-
         if self.controller.check_client() and self.control_panel_view not in self.workspace.view_manager.views:
             self.workspace.add_view(self.control_panel_view)
+            dock = self.workspace.view_manager.view_to_dock[self.control_panel_view]
+            dock.setAutoHide(True, SideBarRight)
+            dock.closed.disconnect()
+            dock.setFeature(CDockWidget.DockWidgetDeleteOnClose, False)
+            # grab the dock manager by climbing up parents, probably a better way to directly grab it
+            dm = dock.parent().parent().parent()
+            assert(isinstance(dm, CDockManager))
+            dm.setAutoHideConfigFlag(CDockManager.AutoHideHasCloseButton, False)
 
     def toggle_sync_panel(self):
-        self.controller.toggle_headless()
-
-        if self.control_panel_view.isVisible():
-            self.control_panel_view.close()
-            return
-
-        self.workspace.add_view(self.control_panel_view)
-
+        self.workspace.view_manager.view_to_dock[self.control_panel_view].toggleView()
 
