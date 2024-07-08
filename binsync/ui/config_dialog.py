@@ -544,21 +544,15 @@ class ConfigureBSDialog(QDialog):
         if remote and not repo:
             repo = str(Path(self.controller.client.repo_root).absolute())
 
-        if self.controller.config:
-            self.controller.config.save_project_data(
-                self.controller.deci.binary_path,
-                user=user,
-                repo_path=repo,
-                remote=remote
-            )
-        else:
-            config = BinSyncBSConfig()
-            config.save_project_data(
-                self.controller.deci.binary_path,
-                user=user,
-                repo_path=repo,
-                remote=remote
-            )
-            self.controller.config = config
+        if not self.controller.config:
+            self.controller.config = BinSyncBSConfig()
+
+        self.controller.config.save_project_data(
+            self.controller.deci.binary_path,
+            self.controller.deci.binary_hash,
+            user=user,
+            repo_path=repo,
+            remote=remote
+        )
 
         return self.controller.config.save()
