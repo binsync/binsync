@@ -128,7 +128,7 @@ class BSController:
         self.sync_semaphore = threading.Semaphore(value=self.DEFAULT_SEMAPHORE_SIZE)
 
         # never do callbacks while we are syncing data
-        self.deci.should_watch_artifacts = self.is_not_syncing_data
+        self.deci.should_watch_artifacts = self.should_watch_artifacts
         # callbacks for changes to artifacts
         for typ in self.CHANGE_WATCHERS:
             self.deci.artifact_write_callbacks[typ].append(self._commit_hook_based_changes)
@@ -206,6 +206,9 @@ class BSController:
     #
     # Multithreading updaters, locks, and evaluators
     #
+
+    def should_watch_artifacts(self):
+        return bool(self.check_client() and self.is_not_syncing_data())
 
     def _init_ui_components(self):
         if self.headless:
