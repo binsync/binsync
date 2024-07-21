@@ -115,7 +115,8 @@ class BSController:
 
     DEFAULT_SEMAPHORE_SIZE = 100
 
-    def __init__(self, decompiler_interface: DecompilerInterface = None, headless=False, auto_commit=True, reload_time=10, **kwargs):
+    def __init__(self, decompiler_interface: DecompilerInterface = None, headless=False, auto_commit=True,
+                 reload_time=10, **kwargs):
         self.headless = headless
         self.reload_time = reload_time
         if decompiler_interface is None:
@@ -231,7 +232,7 @@ class BSController:
         if self.headless:
             return
 
-        #stop the worker, quit the thread, wait for it to exit
+        # stop the worker, quit the thread, wait for it to exit
         if self._ui_updater_worker and self._ui_updater_thread:
             self._ui_updater_worker.stop()
             self._ui_updater_thread.quit()
@@ -266,7 +267,7 @@ class BSController:
                 else:
                     break
 
-            time.sleep(BUSY_LOOP_COOLDOWN*2)
+            time.sleep(BUSY_LOOP_COOLDOWN * 2)
             wait_time = time.time() - start_time
 
     def updater_routine(self):
@@ -285,7 +286,7 @@ class BSController:
             # update every reload_time
             elif int(now.timestamp() - self.client.last_pull_attempt_time.timestamp()) >= self.reload_time:
                 self.client.commit_and_update_states()
-                
+
             if not self.headless:
                 all_states = self.client.all_states()
                 if not all_states:
@@ -315,7 +316,14 @@ class BSController:
 
     def _check_and_notify_ctx(self, states):
         active_ctx = self.deci.gui_active_context()
-        if active_ctx is None or active_ctx.func_addr is None or active_ctx.func_addr == self.last_active_func.addr:
+        if (
+            # no active context
+            active_ctx is None or
+            # no function in active context (not supported in binsync)
+            active_ctx.func_addr is None or
+            # no change in active context func
+            (self.last_active_func is not None and active_ctx.func_addr == self.last_active_func.addr)
+        ):
             return
 
         curr_func = self.deci.fast_get_function(active_ctx.func_addr)
@@ -435,7 +443,8 @@ class BSController:
             self.commit_artifact(*args, **kwargs)
 
     @init_checker
-    def commit_artifact(self, artifact: Artifact, commit_msg=None, set_last_change=True, make_func=True, from_user=None, **kwargs) -> bool:
+    def commit_artifact(self, artifact: Artifact, commit_msg=None, set_last_change=True, make_func=True, from_user=None,
+                        **kwargs) -> bool:
         """
         This function is NOT thread safe. You must call it in the order you want commits to appear.
         Additionally, the Artifact must be LIFTED before committing it!
@@ -489,20 +498,20 @@ class BSController:
     #
 
     def fill_artifact(
-        self,
-        *identifiers,
-        artifact_type=None,
-        artifact=None,
-        user=None,
-        state=None,
-        master_state=None,
-        merge_level=None,
-        blocking=True,
-        commit_msg=None,
-        members=True,
-        header=True,
-        do_type_search=True,
-        **kwargs
+            self,
+            *identifiers,
+            artifact_type=None,
+            artifact=None,
+            user=None,
+            state=None,
+            master_state=None,
+            merge_level=None,
+            blocking=True,
+            commit_msg=None,
+            members=True,
+            header=True,
+            do_type_search=True,
+            **kwargs
     ):
         state: State = state if state is not None else self.get_state(user=user, priority=SchedSpeed.FAST)
         user = user or state.user
@@ -698,7 +707,7 @@ class BSController:
 
         # TODO: make structus work in IDA
         target_artifacts = target_artifacts or {
-            #Struct: self.fill_struct,
+            # Struct: self.fill_struct,
             Comment: lambda *x, **y: None,
             Function: self.fill_artifact,
             GlobalVariable: self.fill_artifact,
@@ -708,7 +717,8 @@ class BSController:
         for artifact_type, filler_func in target_artifacts.items():
             _l.info(f"Magic Syncing artifacts of type {artifact_type.__name__} now...")
             pref_state = users_state_map[preference_user]
-            for identifier in self.changed_artifacts_of_type(artifact_type, users=all_users + [preference_user], states=users_state_map):
+            for identifier in self.changed_artifacts_of_type(artifact_type, users=all_users + [preference_user],
+                                                             states=users_state_map):
                 pref_art = self.pull_artifact(artifact_type, identifier, state=pref_state)
                 for user in all_users:
                     user_state = users_state_map[user]
@@ -726,7 +736,8 @@ class BSController:
                 _l.debug(f"Filling artifact {pref_art} now...")
                 try:
                     filler_func(
-                        identifier, artifact_type=artifact_type, artifact=pref_art, state=master_state,  commit_msg=f"Magic Synced {pref_art}",
+                        identifier, artifact_type=artifact_type, artifact=pref_art, state=master_state,
+                        commit_msg=f"Magic Synced {pref_art}",
                         merge_level=MergeLevel.NON_CONFLICTING
                     )
                 except Exception as e:
@@ -852,7 +863,8 @@ class BSController:
         if isinstance(artifact, Function):
             # header
             if artifact.header:
-                imported_types |= self.discover_and_sync_user_types(artifact.header, master_state=master_state, state=state)
+                imported_types |= self.discover_and_sync_user_types(artifact.header, master_state=master_state,
+                                                                    state=state)
 
             # stack vars
             if artifact.stack_vars:
@@ -921,16 +933,17 @@ class BSController:
                 _l.info(f"Nested undefined structs detected, pulling all structs from {state.user}")
                 break
 
-        changes = self.fill_artifact(base_type_str, artifact_type=Struct, state=state, **kwargs) if not nested_undefined_structs \
+        changes = self.fill_artifact(base_type_str, artifact_type=Struct, state=state,
+                                     **kwargs) if not nested_undefined_structs \
             else self.fill_structs(state=state, **kwargs)
         return changes
 
     def get_master_and_user_state(self, user=None, **kwargs):
         state = kwargs.get("state", None) \
-            or self.get_state(user=user, priority=SchedSpeed.FAST)
+                or self.get_state(user=user, priority=SchedSpeed.FAST)
 
         master_state = kwargs.get("master_state", None) \
-            or self.get_state(priority=SchedSpeed.FAST)
+                       or self.get_state(priority=SchedSpeed.FAST)
 
         return master_state, state
 
@@ -959,6 +972,3 @@ class BSController:
             logging.getLogger("ida_binsync").setLevel("INFO")
 
         return self.config
-
-
-
