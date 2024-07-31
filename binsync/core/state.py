@@ -4,7 +4,7 @@ import pathlib
 import datetime
 import re
 from functools import wraps
-from typing import Dict, Optional, Union, List, Any
+from typing import Dict, Optional, Union, List
 
 import git
 import toml
