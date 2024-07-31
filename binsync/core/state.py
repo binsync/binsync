@@ -219,6 +219,7 @@ class State:
         self.patches: Dict[int, Patch] = SortedDict()
         self.global_vars: Dict[int, GlobalVariable] = {}
         self.enums: Dict[str, Enum] = {}
+        self.deleted_artifacts: List[Dict[str, str]] = []
 
         # state is dirty on creation (metadata)
         self._dirty = dirty  # type: bool
@@ -274,6 +275,22 @@ class State:
         with open(out_path, "wb") as fp:
             fp.write(data)
 
+    def _delete_data(self, dst: Union[pathlib.Path, git.IndexFile], filename):
+        # Delete using Git files
+        if self.client and isinstance(dst, git.IndexFile):
+            print("Deleting with git")
+            self.client.remove_data(dst, filename)
+            return
+
+        # Delete using file system
+        if not dst:
+            print("Deleting without git")
+            dst = pathlib.Path("../core")
+
+        out_path = dst.joinpath(filename)
+        pathlib.Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+        out_path.unlink()
+
     def dump_metadata(self, dst: Union[pathlib.Path, git.IndexFile]):
         d = {
             "user": self.user,
@@ -302,6 +319,22 @@ class State:
             safe_name = sanitize_name(s_name)
             path = pathlib.Path('structs').joinpath(f"{safe_name}.toml")
             self._dump_data(dst, path, struct.dumps(fmt=ArtifactFormat.TOML).encode())
+
+        # remove all the files
+        # TODO: Delete for multiple cases if needed.
+        # for item in self.deleted_artifacts:
+        #     if item['type'] == ArtifactType.STRUCT:
+        #         old_name = item['name']
+        #         path = pathlib.Path('structs').joinpath(f"{old_name}.toml")
+        #         self._delete_data(dst, path)
+        #     elif item['type'] == ArtifactType.FUNCTION:
+        #         pass
+        #     elif item['type'] == ArtifactType.COMMENT:
+        #         pass
+        #     elif item['type'] == ArtifactType.GLOBAL_VAR:
+        #         pass
+        #     elif item['type'] == ArtifactType.ENUM:
+        #         pass
 
         # dump comments
         self._dump_data(dst, 'comments.toml', Comment.dumps_many(list(self.comments.values())).encode())
@@ -470,6 +503,12 @@ class State:
         if old_name is not None:
             try:
                 del self.structs[old_name]
+                # self.deleted_artifacts.append(
+                #     {
+                #         "type": ArtifactType.STRUCT,
+                #         "name": old_name
+                #     }
+                # )
                 #remove_data(self.client.repo.index, os.path.join('structs', f'{old_name}.toml'))
             except KeyError:
                 pass
