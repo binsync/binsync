@@ -120,7 +120,7 @@ class BSController:
         self.headless = headless
         self.reload_time = reload_time
         if decompiler_interface is None:
-            self.deci = DecompilerInterface.discover()
+            self.deci = DecompilerInterface.discover(thread_artifact_callbacks=False)
         else:
             self.deci = decompiler_interface
 
@@ -133,7 +133,7 @@ class BSController:
         # callbacks for changes to artifacts
         for typ in self.CHANGE_WATCHERS:
             self.deci.artifact_change_callbacks[typ].append(self._commit_hook_based_changes)
-        self.deci.artifact_write_callbacks[Struct].append(self._handle_artifact_deletion)
+        self.deci.artifact_change_callbacks[Struct].append(self._handle_artifact_deletion)
 
         # artifact map
         self.artifact_dict_map = {
@@ -456,7 +456,7 @@ class BSController:
 
     @init_checker
     def commit_artifact(self, artifact: Artifact, commit_msg=None, set_last_change=True, make_func=True, from_user=None,
-                        **kwargs) -> bool:
+                        deleted=False, **kwargs) -> bool:
         """
         This function is NOT thread safe. You must call it in the order you want commits to appear.
         Additionally, the Artifact must be LIFTED before committing it!
@@ -494,6 +494,10 @@ class BSController:
         # set the artifact in the target state, likely master
         _l.debug(f"Setting an artifact now into {state} as {artifact}")
         was_set = set_art_func(state, merged_artifact, set_last_change=set_last_change, from_user=from_user, **kwargs)
+
+        # if a struct is deleted remove it from the state dictionary
+        if isinstance(artifact, Struct) and deleted:
+            del state.structs[artifact.name]
 
         # TODO: make was_set reliable
         _l.debug(f"{state} committing now with {commit_msg}")

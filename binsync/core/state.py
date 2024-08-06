@@ -314,11 +314,23 @@ class State:
             path = pathlib.Path('functions').joinpath("%08x.toml" % addr)
             self._dump_data(dst, path, func.dumps(fmt=ArtifactFormat.TOML).encode())
 
+        for path in pathlib.Path('functions'):
+            file = path.stem
+            address = int(file.split(".")[0], 16)
+            if address not in self.functions.keys():
+                path.unlink()
+
         # dump structs, one file per struct in ./structs/
         for s_name, struct in self.structs.items():
             safe_name = sanitize_name(s_name)
             path = pathlib.Path('structs').joinpath(f"{safe_name}.toml")
             self._dump_data(dst, path, struct.dumps(fmt=ArtifactFormat.TOML).encode())
+
+        for path in pathlib.Path('structs'):
+            file = path.stem
+            name = file.split(".")[0]
+            if name not in self.structs.keys():
+                path.unlink()
 
         # remove all the files
         # TODO: Delete for multiple cases if needed.
