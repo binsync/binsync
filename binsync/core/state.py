@@ -275,21 +275,17 @@ class State:
         with open(out_path, "wb") as fp:
             fp.write(data)
 
-    def _delete_data(self, dst: Union[pathlib.Path, git.IndexFile], filename):
+    def _delete_data(self, dst: Union[pathlib.Path, git.IndexFile], path):
         # Delete using Git files
         if self.client and isinstance(dst, git.IndexFile):
             print("Deleting with git")
-            self.client.remove_data(dst, filename)
+            dst.remove([str(path)], working_tree=True)
             return
 
         # Delete using file system
         if not dst:
             print("Deleting without git")
-            dst = pathlib.Path("../core")
-
-        out_path = dst.joinpath(filename)
-        pathlib.Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-        out_path.unlink()
+            path.unlink()
 
     def dump_metadata(self, dst: Union[pathlib.Path, git.IndexFile]):
         d = {
@@ -314,11 +310,11 @@ class State:
             path = pathlib.Path('functions').joinpath("%08x.toml" % addr)
             self._dump_data(dst, path, func.dumps(fmt=ArtifactFormat.TOML).encode())
 
-        for path in pathlib.Path('functions'):
+        for path in pathlib.Path(self.client.repo_root + '/functions').iterdir():
             file = path.stem
             address = int(file.split(".")[0], 16)
             if address not in self.functions.keys():
-                path.unlink()
+                self._delete_data(dst, path)
 
         # dump structs, one file per struct in ./structs/
         for s_name, struct in self.structs.items():
@@ -326,11 +322,11 @@ class State:
             path = pathlib.Path('structs').joinpath(f"{safe_name}.toml")
             self._dump_data(dst, path, struct.dumps(fmt=ArtifactFormat.TOML).encode())
 
-        for path in pathlib.Path('structs'):
+        for path in pathlib.Path(self.client.repo_root + '/structs').iterdir():
             file = path.stem
             name = file.split(".")[0]
             if name not in self.structs.keys():
-                path.unlink()
+                self._delete_data(dst, path)
 
         # remove all the files
         # TODO: Delete for multiple cases if needed.
