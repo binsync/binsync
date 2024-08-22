@@ -428,16 +428,6 @@ class BSController:
 
         return artifact
 
-    # def _handle_artifact_deletion(self, artifact: Artifact, **kwargs):
-    #     deleted = kwargs['deleted']
-    #     print(f"Callback for binsync artifact deletion hit: deleted = {deleted}")
-    #     if deleted:
-    #         if isinstance(artifact, Struct):
-    #             state = self.client.master_state
-    #             dst = self.client.repo.index
-    #             path = pathlib.Path('structs').joinpath(f"{artifact.name}.toml")
-    #             state._delete_data(dst, path)
-
     def is_not_syncing_data(self):
         return self.sync_semaphore._value == self.DEFAULT_SEMAPHORE_SIZE
 
