@@ -307,11 +307,12 @@ class State:
             path = pathlib.Path('functions').joinpath("%08x.toml" % addr)
             self._dump_data(dst, path, func.dumps(fmt=ArtifactFormat.TOML).encode())
 
-        for path in pathlib.Path(self.client.repo_root + '/functions').iterdir():
-            file = path.stem
-            address = int(file.split(".")[0], 16)
-            if address not in self.functions.keys():
-                self._delete_data(dst, path)
+        if pathlib.Path(self.client.repo_root + '/functions').exists():
+            for path in pathlib.Path(self.client.repo_root + '/functions').iterdir():
+                file = path.stem
+                address = int(file.split(".")[0], 16)
+                if address not in self.functions.keys():
+                    self._delete_data(dst, path)
 
         # dump structs, one file per struct in ./structs/
         for s_name, struct in self.structs.items():
@@ -319,11 +320,12 @@ class State:
             path = pathlib.Path('structs').joinpath(f"{safe_name}.toml")
             self._dump_data(dst, path, struct.dumps(fmt=ArtifactFormat.TOML).encode())
 
-        for path in pathlib.Path(self.client.repo_root + '/structs').iterdir():
-            file = path.stem
-            name = file.split(".")[0]
-            if name not in self.structs.keys():
-                self._delete_data(dst, path)
+        if pathlib.Path(self.client.repo_root + '/structs').exists():
+            for path in pathlib.Path(self.client.repo_root + '/structs').iterdir():
+                file = path.stem
+                name = file.split(".")[0]
+                if name not in self.structs.keys():
+                    self._delete_data(dst, path)
 
         # dump comments
         self._dump_data(dst, 'comments.toml', Comment.dumps_many(list(self.comments.values())).encode())
