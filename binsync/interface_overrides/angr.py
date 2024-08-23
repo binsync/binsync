@@ -28,8 +28,8 @@ class ControlPanelView(BaseView):
     changes to functions or structs.
     """
 
-    def __init__(self, instance, default_docking_position, controller, *args, **kwargs):
-        super().__init__('sync', instance.workspace, default_docking_position)
+    def __init__(self, workspace, default_docking_position, controller, *args, **kwargs):
+        super().__init__('sync', workspace, default_docking_position)
         self.base_caption = "BinSync: Control Panel"
         self.controller: BSController = controller
         self.control_panel = ControlPanel(self.controller)
@@ -67,7 +67,7 @@ class BinsyncPlugin(GenericBSAngrManagementPlugin):
         super().__init__(workspace)
         # construct the controller and control panel
         self.controller = BSController(decompiler_interface=self.interface)
-        self.control_panel_view = ControlPanelView(workspace.main_instance, 'right', self.controller)
+        self.control_panel_view = ControlPanelView(workspace, 'right', self.controller)
         self.controller.control_panel = self.control_panel_view
 
         self.sync_menu = None
