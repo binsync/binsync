@@ -274,6 +274,16 @@ class State:
         with open(out_path, "wb") as fp:
             fp.write(data)
 
+    def _delete_data(self, dst: Union[pathlib.Path, git.IndexFile], path):
+        # Delete using Git files
+        if self.client and isinstance(dst, git.IndexFile):
+            dst.remove([str(path)], working_tree=True)
+            return
+
+        # Delete using file system
+        if not dst:
+            path.unlink()
+
     def dump_metadata(self, dst: Union[pathlib.Path, git.IndexFile]):
         d = {
             "user": self.user,
@@ -297,11 +307,25 @@ class State:
             path = pathlib.Path('functions').joinpath("%08x.toml" % addr)
             self._dump_data(dst, path, func.dumps(fmt=ArtifactFormat.TOML).encode())
 
+        if pathlib.Path(self.client.repo_root + '/functions').exists():
+            for path in pathlib.Path(self.client.repo_root + '/functions').iterdir():
+                file = path.stem
+                address = int(file.split(".")[0], 16)
+                if address not in self.functions.keys():
+                    self._delete_data(dst, path)
+
         # dump structs, one file per struct in ./structs/
         for s_name, struct in self.structs.items():
             safe_name = sanitize_name(s_name)
             path = pathlib.Path('structs').joinpath(f"{safe_name}.toml")
             self._dump_data(dst, path, struct.dumps(fmt=ArtifactFormat.TOML).encode())
+
+        if pathlib.Path(self.client.repo_root + '/structs').exists():
+            for path in pathlib.Path(self.client.repo_root + '/structs').iterdir():
+                file = path.stem
+                name = file.split(".")[0]
+                if name not in self.structs.keys():
+                    self._delete_data(dst, path)
 
         # dump comments
         self._dump_data(dst, 'comments.toml', Comment.dumps_many(list(self.comments.values())).encode())
@@ -470,7 +494,6 @@ class State:
         if old_name is not None:
             try:
                 del self.structs[old_name]
-                #remove_data(self.client.repo.index, os.path.join('structs', f'{old_name}.toml'))
             except KeyError:
                 pass
 

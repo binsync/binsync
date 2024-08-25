@@ -46,7 +46,7 @@ def start_am_gui(binpath, app):
     main = MainWindow(show=False, app=app)
     main.workspace.main_instance.project.am_obj = angr.Project(binpath, auto_load_libs=False)
     main.workspace.main_instance.project.am_event()
-    main.workspace.main_instance.join_all_jobs()
+    main.workspace.job_manager.join_all_jobs()
     main.closeEvent = closeShim
     return main
 
@@ -102,7 +102,7 @@ def rename_function(qtbot: QtBot, main, func, new_func_name):
     disasm_view._t_flow_graph_visible = True
     disasm_view.display_function(func)
     disasm_view.decompile_current_function()
-    main.workspace.main_instance.join_all_jobs()
+    main.workspace.job_manager.join_all_jobs()
 
     pseudocode_view = main.workspace._get_or_create_view("pseudocode", CodeView)
     for _, item in pseudocode_view.codegen.map_pos_to_node.items():
@@ -124,7 +124,7 @@ def rename_stack_variable(qtbot:QtBot, main, func, new_var_name, var_offset):
     disasm_view._t_flow_graph_visible = True
     disasm_view.display_function(func)
     disasm_view.decompile_current_function()
-    main.workspace.main_instance.join_all_jobs()
+    main.workspace.job_manager.join_all_jobs()
     pseudocode_view = main.workspace._get_or_create_view("pseudocode", CodeView)
     for _, item in pseudocode_view.codegen.map_pos_to_node.items():
         if isinstance(item.obj, angr.analyses.decompiler.structured_codegen.c.CVariable) and \
