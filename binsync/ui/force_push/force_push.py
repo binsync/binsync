@@ -7,6 +7,7 @@ from libbs.ui.qt_objects import (
     QTabWidget,
     QVBoxLayout,
     QWidget,
+    QCheckBox,
     Signal
 )
 
@@ -27,11 +28,23 @@ class ForcePushUI(QWidget):
         self.tabView = QTabWidget()
         self.tabView.setContentsMargins(0, 0, 0, 0)
 
-        # add panel_tabs to tabs
-        self._func_table = QFunctionTable(self.controller)
+        # add the functions tab
+        self._func_table = QFunctionTable(self.controller, use_cache=True, exclude_defaults=True)
+        self._exclude_defaults_btn = QCheckBox(
+            f'Exclude default named functions "{self.controller.deci.default_func_prefix}"'
+        )
+        self._exclude_defaults_btn.setChecked(True)
+        self._exclude_defaults_btn.stateChanged.connect(self._exclude_defaults_changed)
+        self._func_tab = QWidget()
+        self._func_tab_layout = QVBoxLayout()
+        self._func_tab_layout.addWidget(self._exclude_defaults_btn)
+        self._func_tab_layout.addWidget(self._func_table)
+        self._func_tab.setLayout(self._func_tab_layout)
+
+        # add globals tab
         self._global_table = QGlobalsTable(self.controller)
 
-        self.tabView.addTab(self._func_table, "Functions")
+        self.tabView.addTab(self._func_tab, "Functions")
         self.tabView.addTab(self._global_table, "Globals")
 
         self.tables.update({
@@ -44,6 +57,10 @@ class ForcePushUI(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
 
         self.setLayout(main_layout)
+
+    def _exclude_defaults_changed(self, state):
+        self._func_table.table.model.exclude_defaults = bool(state)
+        self._func_table.update_table()
 
     def _update_table_data(self):
         for _, table in progress_bar(self.tables.items(), gui=True, desc="Loading functions and globals..."):
