@@ -60,6 +60,7 @@ class SyncControlStatus:
     CONNECTED = 0
     CONNECTED_NO_REMOTE = 1
     DISCONNECTED = 2
+    LOADING = 3
 
 
 class MergeLevel:
@@ -152,6 +153,7 @@ class BSController:
         self.ctx_change_callback = None  # func()
         self._last_reload = None
         self.last_active_func = None
+        self._got_first_state = False
         # ui worker that fires off requests for UI update
         self._ui_updater_thread = None
         self._ui_updater_worker: Scheduler = None
@@ -294,6 +296,7 @@ class BSController:
                     _l.warning("There were no states remote or local.")
                     continue
 
+                self._got_first_state |= True
                 # update context knowledge every loop iteration
                 if self.ctx_change_callback:
                     self._ui_updater_worker.schedule_job(
@@ -368,7 +371,7 @@ class BSController:
     def status(self):
         if self.check_client():
             if self.client.has_remote and self.client.active_remote:
-                return SyncControlStatus.CONNECTED
+                return SyncControlStatus.CONNECTED if self._got_first_state else SyncControlStatus.LOADING
             return SyncControlStatus.CONNECTED_NO_REMOTE
         return SyncControlStatus.DISCONNECTED
 
@@ -378,6 +381,8 @@ class BSController:
             return f"<font color=#1eba06>{self.client.master_user}</font>"
         elif stat == SyncControlStatus.CONNECTED_NO_REMOTE:
             return f"<font color=#e7b416>{self.client.master_user}</font>"
+        elif stat == SyncControlStatus.LOADING:
+            return f"<font color=#ffa500>Loading...</font>"
         else:
             return "<font color=#cc3232>Disconnected</font>"
 
