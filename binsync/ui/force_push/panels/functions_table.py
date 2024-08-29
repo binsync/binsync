@@ -20,8 +20,14 @@ l = logging.getLogger(__name__)
 
 class FunctionTableModel(BinsyncTableModel):
     update_signal = Signal(list)
-    def __init__(self, controller: BSController, col_headers=None, filter_cols=None, time_col=None,
-                 addr_col=None, parent=None):
+
+    def __init__(
+        self, controller: BSController, col_headers=None, filter_cols=None, time_col=None, addr_col=None, parent=None,
+        use_cache=False, exclude_defaults=False
+    ):
+        self._use_cache = use_cache
+        self._func_cache = {}
+        self.exclude_defaults = exclude_defaults
         super().__init__(controller, col_headers, filter_cols, time_col, addr_col, parent)
         self.data_dict = {}
         self.checks = {}
@@ -74,7 +80,25 @@ class FunctionTableModel(BinsyncTableModel):
 
     def update_table(self) -> None:
         updated_row_keys = set()
-        for address, function in self.controller.deci.functions.items():
+        # use cache if enabled
+        if self._use_cache:
+            if not self._func_cache:
+                self._func_cache = {k: v for k, v in self.controller.deci.functions.items()}
+            func_by_addr = self._func_cache
+        else:
+            func_by_addr = {k: v for k, v in self.controller.deci.functions.items()}
+
+        for address, function in func_by_addr.items():
+            should_remove_func = (
+                self.exclude_defaults and function.name and
+                function.name.startswith(self.controller.deci.default_func_prefix)
+            )
+            if should_remove_func:
+                if address in self.data_dict:
+                    del self.data_dict[address]
+                    updated_row_keys.add(address)
+                continue
+
             self.data_dict[address] = [address, function.name]
             updated_row_keys.add(address)
             self.checks[address] = False
@@ -131,12 +155,16 @@ class FunctionTableModel(BinsyncTableModel):
 class FunctionTableView(BinsyncTableView):
     HEADER = ['Addr', 'Remote Name']
 
-    def __init__(self, controller: BSController, filteredit: BinsyncTableFilterLineEdit, stretch_col=None,
-                 col_count=None, parent=None):
+    def __init__(
+        self, controller: BSController, filteredit: BinsyncTableFilterLineEdit, stretch_col=None, col_count=None,
+        parent=None, use_cache=False, exclude_defaults=False
+    ):
         super().__init__(controller, filteredit, stretch_col, col_count, parent)
 
-        self.model = FunctionTableModel(controller, self.HEADER, filter_cols=[0, 1], addr_col=0,
-                                        parent=parent)
+        self.model = FunctionTableModel(
+            controller, self.HEADER, filter_cols=[0, 1], addr_col=0, parent=parent, use_cache=use_cache,
+            exclude_defaults=exclude_defaults
+        )
         self.proxymodel.setSourceModel(self.model)
         self.setModel(self.proxymodel)
 
@@ -185,9 +213,11 @@ class FunctionTableView(BinsyncTableView):
 class QFunctionTable(QWidget):
     """ Wrapper widget to contain the function table classes in one file (prevents bulking up control_panel.py) """
 
-    def __init__(self, controller: BSController, parent=None):
+    def __init__(self, controller: BSController, parent=None, use_cache=False, exclude_defaults=False):
         super().__init__(parent)
         self.controller = controller
+        self._exclude_defaults = exclude_defaults
+        self._use_cache = use_cache
         self._init_widgets()
 
     def toggle_select_all(self):
@@ -198,7 +228,10 @@ class QFunctionTable(QWidget):
 
     def _init_widgets(self):
         self.filteredit = BinsyncTableFilterLineEdit(parent=self)
-        self.table = FunctionTableView(self.controller, self.filteredit, stretch_col=1, col_count=2)
+        self.table = FunctionTableView(
+            self.controller, self.filteredit, stretch_col=1, col_count=2, use_cache=self._use_cache,
+            exclude_defaults=self._exclude_defaults
+        )
         layout = QVBoxLayout()
         layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)
