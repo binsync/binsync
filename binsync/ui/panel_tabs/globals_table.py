@@ -3,9 +3,8 @@ import datetime
 from collections import defaultdict
 import re
 import time
-from enum import Enum
 
-from libbs.artifacts import GlobalVariable, Struct
+from libbs.artifacts import GlobalVariable, Struct, Enum
 
 from binsync.controller import BSController
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView

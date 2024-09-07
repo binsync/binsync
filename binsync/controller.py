@@ -11,7 +11,7 @@ from libbs.artifacts import (
     Artifact,
     Function, FunctionHeader, StackVariable,
     Comment, GlobalVariable, Patch,
-    Enum, Struct, FunctionArgument, StructMember
+    Enum, Struct, FunctionArgument, StructMember, Typedef
 )
 from libbs.api import DecompilerInterface
 from libbs.api.type_parser import CType
@@ -141,6 +141,7 @@ class BSController:
             Comment: self.deci.comments,
             GlobalVariable: self.deci.global_vars,
             Enum: self.deci.enums,
+            Typedef: self.deci.typedefs,
             Struct: self.deci.structs,
             Patch: self.deci.patches
         }
