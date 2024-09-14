@@ -157,7 +157,7 @@ class FunctionTableView(BinsyncTableView):
 
     def __init__(
         self, controller: BSController, filteredit: BinsyncTableFilterLineEdit, stretch_col=None, col_count=None,
-        parent=None, use_cache=False, exclude_defaults=False
+        parent=None, use_cache=False, exclude_defaults=False, use_decompilation=False
     ):
         super().__init__(controller, filteredit, stretch_col, col_count, parent)
 
@@ -165,6 +165,7 @@ class FunctionTableView(BinsyncTableView):
             controller, self.HEADER, filter_cols=[0, 1], addr_col=0, parent=parent, use_cache=use_cache,
             exclude_defaults=exclude_defaults
         )
+        self.use_decompilation = use_decompilation
         self.proxymodel.setSourceModel(self.model)
         self.setModel(self.proxymodel)
 
@@ -191,7 +192,7 @@ class FunctionTableView(BinsyncTableView):
                 func_addr = int(self.model.data(mappedIndex), 16)
                 addrs_to_push.append(func_addr)
 
-        self.controller.force_push_functions(addrs_to_push)
+        self.controller.force_push_functions(addrs_to_push, use_decompilation=self.use_decompilation)
 
     def check_all(self):
         self.model.setAllCheckStates(True)
@@ -213,11 +214,14 @@ class FunctionTableView(BinsyncTableView):
 class QFunctionTable(QWidget):
     """ Wrapper widget to contain the function table classes in one file (prevents bulking up control_panel.py) """
 
-    def __init__(self, controller: BSController, parent=None, use_cache=False, exclude_defaults=False):
+    def __init__(
+        self, controller: BSController, parent=None, use_cache=False, exclude_defaults=False, use_decompilation=False
+    ):
         super().__init__(parent)
         self.controller = controller
         self._exclude_defaults = exclude_defaults
         self._use_cache = use_cache
+        self.use_decompilation = use_decompilation
         self._init_widgets()
 
     def toggle_select_all(self):
@@ -230,7 +234,7 @@ class QFunctionTable(QWidget):
         self.filteredit = BinsyncTableFilterLineEdit(parent=self)
         self.table = FunctionTableView(
             self.controller, self.filteredit, stretch_col=1, col_count=2, use_cache=self._use_cache,
-            exclude_defaults=self._exclude_defaults
+            exclude_defaults=self._exclude_defaults, use_decompilation=self.use_decompilation
         )
         layout = QVBoxLayout()
         layout.setSpacing(0)

@@ -29,15 +29,19 @@ class ForcePushUI(QWidget):
         self.tabView.setContentsMargins(0, 0, 0, 0)
 
         # add the functions tab
-        self._func_table = QFunctionTable(self.controller, use_cache=True, exclude_defaults=True)
+        self._func_table = QFunctionTable(self.controller, use_cache=True, exclude_defaults=True, use_decompilation=False)
         self._exclude_defaults_btn = QCheckBox(
             f'Exclude default named functions "{self.controller.deci.default_func_prefix}"'
         )
         self._exclude_defaults_btn.setChecked(True)
         self._exclude_defaults_btn.stateChanged.connect(self._exclude_defaults_changed)
+        self._use_dec_btn = QCheckBox("Use decompilation (slow)")
+        self._use_dec_btn.setChecked(False)
+        self._use_dec_btn.stateChanged.connect(self._use_decompilation_changed)
         self._func_tab = QWidget()
         self._func_tab_layout = QVBoxLayout()
         self._func_tab_layout.addWidget(self._exclude_defaults_btn)
+        self._func_tab_layout.addWidget(self._use_dec_btn)
         self._func_tab_layout.addWidget(self._func_table)
         self._func_tab.setLayout(self._func_tab_layout)
 
@@ -61,6 +65,9 @@ class ForcePushUI(QWidget):
     def _exclude_defaults_changed(self, state):
         self._func_table.table.model.exclude_defaults = bool(state)
         self._func_table.update_table()
+
+    def _use_decompilation_changed(self, state):
+        self._func_table.table.use_decompilation = bool(state)
 
     def _update_table_data(self):
         for _, table in progress_bar(self.tables.items(), gui=True, desc="Loading functions and globals..."):

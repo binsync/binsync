@@ -761,7 +761,7 @@ class BSController:
     #
 
     @init_checker
-    def force_push_functions(self, func_addrs: List[int]):
+    def force_push_functions(self, func_addrs: List[int], use_decompilation=False):
         """
         Collects the functions currently stored in the decompiler, not the BS State, and commits it to
         the master users BS Database. Function addrs should be in the lifted form.
@@ -771,8 +771,15 @@ class BSController:
         """
         master_state: State = self.client.master_state
         committed = 0
-        for func_addr in progress_bar(func_addrs, gui=not self.headless, desc="Decompiling functions to push..."):
-            f = self.deci.functions[func_addr]
+        progress_str = "Decompiling functions to push..." if use_decompilation else "Collecting functions..."
+        change_time = int(time.time())
+        for func_addr in progress_bar(func_addrs, gui=not self.headless, desc=progress_str):
+            if use_decompilation:
+                f = self.deci.functions[func_addr]
+            else:
+                f = self.deci.fast_get_function(func_addr)
+                f.last_change = change_time
+
             if not f:
                 _l.warning(f"Failed to force push function @ {func_addr:#0x}")
                 continue
