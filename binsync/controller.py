@@ -773,19 +773,27 @@ class BSController:
         committed = 0
         progress_str = "Decompiling functions to push..." if use_decompilation else "Collecting functions..."
         change_time = int(time.time())
-        for func_addr in progress_bar(func_addrs, gui=not self.headless, desc=progress_str):
-            if use_decompilation:
+
+        funcs = []
+        if use_decompilation:
+            for func_addr in progress_bar(func_addrs, gui=not self.headless, desc=progress_str):
                 f = self.deci.functions[func_addr]
-            else:
-                f = self.deci.fast_get_function(func_addr)
-                f.last_change = change_time
+                if not f:
+                    _l.warning(f"Failed to force push function @ %s", func_addr)
+                    continue
 
-            if not f:
-                _l.warning(f"Failed to force push function @ {func_addr:#0x}")
-                continue
+                funcs.append(f)
+        else:
+            # no progress bar needed!
+            _func_addrs = set(func_addrs)
+            for addr, func in self.deci.functions.items():
+                if addr in func_addrs:
+                    funcs.append(func)
 
-            master_state.functions[f.addr] = f
-            committed += 1
+        for func in funcs:
+            func.last_change = change_time
+            master_state.functions[func.addr] = func
+        committed += len(funcs)
 
         # commit the master state back!
         self.client.master_state = master_state
