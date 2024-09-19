@@ -333,6 +333,15 @@ class Client:
                 l.critical(f"Invalid state for {user}, dropping: {e}")
                 state = State(user)
 
+        # NOTE: there might be a race between get_state(no_cache=True) in
+        # Client and get_state(...) from all_states() in Controller which uses
+        # the cache. That race happens when we have a repository with a lot of
+        # artifacts to retrieve. As the cache is using a defaultdict() we will
+        # get an empty state back when querying from the cache, and we always
+        # get this empty state as we don't update the cache.
+        if no_cache or not self.cache.get_state(user):
+            self.cache.set_state(state, user=user)
+
         return state
 
     @property
@@ -355,7 +364,13 @@ class Client:
 
         for user in users:
             state = self.get_state(user=user.name)
-            states.append(state)
+
+            # NOTE: It can happen that state is None when the state is
+            # retrieved from cache and it has not been totally initialized yet
+            # because of defaultdict() used in cache. We should filter out this
+            # bogus entries
+            if state:
+                states.append(state)
 
         return states
 

@@ -769,10 +769,17 @@ class BSController:
         TODO: push the comments and custom types that are associated with each stack vars
         TODO: refactor to use internal push_function for correct commit message
         """
+
+        # NOTE: The following check allows to show a warning to a user and to
+        # avoid a ZeroDivisionError in the progress_bar declared later below
+        if not func_addrs:
+            _l.warning("Ignored force push, no function selected")
+            return
+
         master_state: State = self.client.master_state
         committed = 0
         progress_str = "Decompiling functions to push..." if use_decompilation else "Collecting functions..."
-        change_time = int(time.time())
+        change_time = datetime.datetime.now(tz=datetime.timezone.utc)
 
         funcs = []
         if use_decompilation:
@@ -787,7 +794,7 @@ class BSController:
             # no progress bar needed!
             _func_addrs = set(func_addrs)
             for addr, func in self.deci.functions.items():
-                if addr in func_addrs:
+                if addr in _func_addrs:
                     funcs.append(func)
 
         for func in funcs:
