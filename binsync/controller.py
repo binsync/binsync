@@ -772,7 +772,7 @@ class BSController:
         master_state: State = self.client.master_state
         committed = 0
         progress_str = "Decompiling functions to push..." if use_decompilation else "Collecting functions..."
-        change_time = int(time.time())
+        change_time = datetime.datetime.now(tz=datetime.timezone.utc)
 
         funcs = []
         if use_decompilation:
