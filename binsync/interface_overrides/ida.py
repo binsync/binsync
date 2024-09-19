@@ -15,7 +15,7 @@ from libbs.ui.version import set_ui_version
 set_ui_version("PyQt5")
 from libbs.decompilers.ida.compat import has_older_hexrays_version
 from libbs.decompilers.ida.interface import IDAInterface
-from libbs.decompilers.ida.compat import GenericIDAPlugin
+from libbs.decompilers.ida.compat import generate_generic_ida_plugic_cls
 
 from binsync.ui.config_dialog import ConfigureBSDialog
 from binsync.ui.control_panel import ControlPanel
@@ -98,6 +98,7 @@ class ControlPanelViewWrapper(object):
 #
 
 
+GenericIDAPlugin = generate_generic_ida_plugic_cls()
 class BinsyncPlugin(GenericIDAPlugin):
     """Plugin entry point. Does most of the skinning magic."""
 
