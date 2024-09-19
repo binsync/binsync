@@ -794,7 +794,7 @@ class BSController:
             # no progress bar needed!
             _func_addrs = set(func_addrs)
             for addr, func in self.deci.functions.items():
-                if addr in func_addrs:
+                if addr in _func_addrs:
                     funcs.append(func)
 
         for func in funcs:
