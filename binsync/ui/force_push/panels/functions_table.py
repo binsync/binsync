@@ -81,6 +81,7 @@ class FunctionTableModel(BinsyncTableModel):
     def update_table(self) -> None:
         updated_row_keys = set()
         # use cache if enabled
+        self.controller.deci.info("Collecting Functions artifacts...")
         if self._use_cache:
             if not self._func_cache:
                 self._func_cache = {k: v for k, v in self.controller.deci.functions.items()}
