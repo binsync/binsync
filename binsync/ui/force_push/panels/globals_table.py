@@ -88,6 +88,7 @@ class GlobalTableModel(BinsyncTableModel):
         self.gvar_name_to_addr_map = {gvar.name: addr for addr, gvar in decompiler_gvars.items()}
         all_artifacts = [(decompiler_structs, "Struct"), (decompiler_gvars, "Variable"), (decompiler_enums, "Enum")]
         for type_artifacts, type_ in all_artifacts:
+            self.controller.deci.info(f"Collecting {type_} artifacts...")
             for _, artifact in type_artifacts.items():
                 if type_ == "Struct" or type_ == "Enum":
                     self.data_dict[artifact.name] = [artifact.name, "", type_]
