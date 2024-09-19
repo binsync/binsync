@@ -95,3 +95,6 @@ class Scheduler:
 
         _l.debug("%s: completing scheduled job now: %s", self.name, job)
         job.execute()
+
+        if job.exception:
+            _l.exception("%s: exception in scheduled job %s: %s", self.name, job, job.exception)
