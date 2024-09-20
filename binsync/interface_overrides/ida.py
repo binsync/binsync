@@ -1,4 +1,5 @@
 import logging
+import threading
 
 from PyQt5 import sip
 from PyQt5.QtGui import QKeyEvent
@@ -20,6 +21,7 @@ from libbs.decompilers.ida.compat import generate_generic_ida_plugic_cls
 from binsync.ui.config_dialog import ConfigureBSDialog
 from binsync.ui.control_panel import ControlPanel
 from binsync.controller import BSController
+from binsync.ui.utils import no_concurrent_call
 from binsync import __version__ as VERSION
 
 _l = logging.getLogger(__name__)
@@ -114,6 +116,7 @@ class BinsyncPlugin(GenericIDAPlugin):
         super().__init__(*args, **kwargs)
         self.controller = BSController(decompiler_interface=self.interface)
 
+    @no_concurrent_call
     def open_config_dialog(self):
         dialog = ConfigureBSDialog(self.controller)
 

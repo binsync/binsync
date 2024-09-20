@@ -1,5 +1,6 @@
 import datetime
 import logging
+import threading
 
 from libbs.ui.qt_objects import (
     QFrame,
@@ -20,9 +21,7 @@ from libbs.ui.qt_objects import (
     QProgressBar,
     QPushButton,
 )
-import datetime
 from binsync.core.scheduler import Scheduler
-import logging
 
 l = logging.getLogger(__name__)
 
@@ -211,3 +210,17 @@ def friendly_datetime(time_before):
 def menu_stub(menu):
     return menu
 
+
+def no_concurrent_call(func):
+    lock = threading.Lock()
+
+    def wrapper(*args, **kwargs):
+        ret = None
+        if lock.acquire(blocking=False):
+            try:
+                ret = func(*args, **kwargs)
+            finally:
+                lock.release()
+        return ret
+
+    return wrapper
