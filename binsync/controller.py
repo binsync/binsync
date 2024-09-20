@@ -486,6 +486,8 @@ class BSController:
         identifiers = DecompilerInterface.get_identifiers(artifact)
         current_art = get_art_func(state, *identifiers)
         merged_artifact = self.merge_artifacts(current_art, artifact, merge_level=MergeLevel.OVERWRITE)
+        if not merged_artifact:
+            return False
 
         # set the artifact in the target state, likely master
         _l.debug(f"Setting an artifact now into {state} as {artifact}")
@@ -548,6 +550,14 @@ class BSController:
             master_artifact, target_artifact,
             merge_level=merge_level, master_state=master_state
         )
+
+        if merged_artifact is None:
+            _l.warning(
+                f"Failed to merge {master_artifact} with {target_artifact} "
+                f"using strategy {self.merge_level if merge_level is None else merge_level}."
+            )
+            return False
+
         if isinstance(merged_artifact, Struct):
             if merged_artifact.name.startswith("__"):
                 _l.info(f"Skipping fill for {target_artifact} because it is a system struct")
@@ -863,7 +873,7 @@ class BSController:
         else:
             raise Exception("Your BinSync Client has an unsupported Sync Level activated")
 
-        return merge_art
+        return merge_art if merge_art != art1 else None
 
     def changed_artifacts_of_type(self, type_: Artifact, users=[], states={}):
         prop_map = {
