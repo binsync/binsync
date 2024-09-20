@@ -241,7 +241,9 @@ class BSController:
             self._ui_updater_worker.stop()
             self._ui_updater_thread.quit()
             _l.debug("Waiting for QThread ui_updater_thread to exit..")
-            self._ui_updater_thread.wait()
+            # TODO: on MacOS IDA Pro 8 >, this will hang the process, so we force the timeout after 5 seconds
+            #   this still causes a bad message for IDA Pro on Mac
+            self._ui_updater_thread.wait(2000)
 
     def schedule_job(self, cmd_func, *args, blocking=False, **kwargs):
         if not self._auto_commit_enabled:
