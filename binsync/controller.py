@@ -552,7 +552,7 @@ class BSController:
         )
 
         if merged_artifact is None:
-            _l.warning(
+            self.deci.warning(
                 f"Failed to merge {master_artifact} with {target_artifact} "
                 f"using strategy {self.merge_level if merge_level is None else merge_level}."
             )
@@ -590,7 +590,7 @@ class BSController:
                 fill_changes = False
                 _l.error(f"Failed to fill artifact {merged_artifact} because of an error {e}")
 
-        _l.info(
+        self.deci.info(
             f"Successfully synced new changes from {state.user} for {merged_artifact}" if fill_changes
             else f"No new changes or failed to sync from {state.user} for {merged_artifact}"
         )
@@ -852,14 +852,20 @@ class BSController:
     # Utils
     #
 
-    def merge_artifacts(self, art1: Artifact, art2: Artifact, merge_level=None, **kwargs):
+    def merge_artifacts(self, art1: Artifact, art2: Artifact, merge_level=None, **kwargs) -> Optional[Artifact]:
         if merge_level is None:
             merge_level = self.merge_level
 
+        # error case
+        if art1 is None and art2 is None:
+            _l.warning("Attempting to merge two None artifacts, skipping...")
+            return None
+
+        # merge case does not matter if there is only the new artifact
         if art2 is None:
             return art1.copy()
-
-        if not art1 or (art1 == art2):
+        # always overwrite if the first artifact is None
+        if art1 is None or (art1 == art2):
             return art2.copy() if art2 else None
 
         if merge_level == MergeLevel.OVERWRITE or (not art1) or (art1 == art2):
@@ -873,7 +879,7 @@ class BSController:
         else:
             raise Exception("Your BinSync Client has an unsupported Sync Level activated")
 
-        return merge_art if merge_art != art1 else None
+        return merge_art
 
     def changed_artifacts_of_type(self, type_: Artifact, users=[], states={}):
         prop_map = {
