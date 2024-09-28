@@ -781,7 +781,6 @@ class BSController:
         master_state: State = self.client.master_state
         committed = 0
         progress_str = "Decompiling functions to push..." if use_decompilation else "Collecting functions..."
-        change_time = datetime.datetime.now(tz=datetime.timezone.utc)
 
         funcs = []
         if use_decompilation:
@@ -800,8 +799,7 @@ class BSController:
                     funcs.append(func)
 
         for func in funcs:
-            func.last_change = change_time
-            master_state.functions[func.addr] = func
+            master_state.set_function(func)
         committed += len(funcs)
 
         # commit the master state back!
