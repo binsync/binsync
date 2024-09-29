@@ -21,7 +21,7 @@ from libbs.artifacts import (
     GlobalVariable,
     Patch,
     StackVariable,
-    Struct,
+    Struct, Typedef,
 )
 from libbs.artifacts import TomlHexEncoder
 from binsync import __version__ as BS_VERS
@@ -39,6 +39,7 @@ class ArtifactType:
     COMMENT = "comment"
     GLOBAL_VAR = "global variable"
     ENUM = "enum"
+    TYPEDEF = "typedef"
 
 
 #
@@ -126,6 +127,11 @@ def update_last_change(f):
         elif isinstance(artifact, Enum):
             artifact_loc = artifact.name
             artifact_type = ArtifactType.ENUM
+
+        # Typedef
+        elif isinstance(artifact, Typedef):
+            artifact_loc = artifact.name
+            artifact_type = ArtifactType.TYPEDEF
 
         else:
             raise Exception("Undefined Artifact Type!")
@@ -219,6 +225,7 @@ class State:
         self.patches: Dict[int, Patch] = SortedDict()
         self.global_vars: Dict[int, GlobalVariable] = {}
         self.enums: Dict[str, Enum] = {}
+        self.typedefs: Dict[str, Typedef] = {}
 
         # state is dirty on creation (metadata)
         self._dirty = dirty  # type: bool
@@ -339,6 +346,9 @@ class State:
         # dump enums
         self._dump_data(dst, 'enums.toml', Enum.dumps_many(list(self.enums.values()), key_attr="name").encode())
 
+        # dump typedefs
+        self._dump_data(dst, 'typedefs.toml', Typedef.dumps_many(list(self.typedefs.values()), key_attr="name").encode())
+
     @classmethod
     def parse(cls, src: Union[pathlib.Path, git.Tree], client=None):
         if isinstance(src, str):
@@ -376,6 +386,10 @@ class State:
         # load enums
         enums: List[Enum] = toml_file_to_artifacts(src, "enums.toml", Enum, client=client)
         state.enums = {enum.name: enum for enum in enums}
+
+        # load typedefs
+        typedefs: List[Typedef] = toml_file_to_artifacts(src, "typedefs.toml", Typedef, client=client)
+        state.typedefs = {typedef.name: typedef for typedef in typedefs}
 
         # load structs
         struct_files = list_files_in_dir(src, "structs", client=client)
@@ -532,6 +546,20 @@ class State:
 
         return False
 
+    @update_dirty_flag
+    @update_last_change
+    def set_typedef(self, typedef: Typedef, set_last_change=True, **kwargs):
+        try:
+            old_typedef = self.typedefs[typedef.name]
+        except KeyError:
+            old_typedef = None
+
+        if old_typedef != typedef:
+            self.typedefs[typedef.name] = typedef
+            return True
+
+        return False
+
     #
     # Getters
     #
@@ -645,6 +673,17 @@ class State:
 
     def get_enums(self):
         return self.enums
+
+    def get_typedef(self, name):
+        try:
+            typedef = self.typedefs[name]
+        except KeyError:
+            typedef = None
+
+        return typedef
+
+    def get_typedefs(self):
+        return self.typedefs
 
     def get_last_push_for_artifact_type(self, artifact_type):
         last_change = -1

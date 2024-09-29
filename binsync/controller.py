@@ -93,7 +93,8 @@ class BSController:
         Comment: State.set_comment,
         GlobalVariable: State.set_global_var,
         Struct: State.set_struct,
-        Enum: State.set_enum
+        Enum: State.set_enum,
+        Typedef: State.set_typedef
     }
 
     ARTIFACT_GET_MAP = {
@@ -111,6 +112,8 @@ class BSController:
         (Struct, GET_MANY): State.get_structs,
         Enum: State.get_enum,
         (Enum, GET_MANY): State.get_enums,
+        Typedef: State.get_typedef,
+        (Typedef, GET_MANY): State.get_typedefs
     }
 
     DEFAULT_SEMAPHORE_SIZE = 100
@@ -665,6 +668,17 @@ class BSController:
         for off, gvar in state.global_vars.items():
             changes |= self.fill_artifact(
                 off, artifact_type=GlobalVariable, user=user, state=state, master_state=master_state,
+                do_type_search=do_type_search
+            )
+
+        return changes
+
+    def fill_typedefs(self, user=None, do_type_search=True, **kwargs):
+        changes = False
+        master_state, state = self.get_master_and_user_state(user=user, **kwargs)
+        for name, typedef in state.typedefs.items():
+            changes |= self.fill_artifact(
+                name, artifact_type=Typedef, user=user, state=state, master_state=master_state,
                 do_type_search=do_type_search
             )
 
