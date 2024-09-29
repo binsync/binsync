@@ -519,27 +519,23 @@ class ConfigureBSDialog(QDialog):
     def load_saved_config(self):
         binary_hash = self.controller.deci.binary_hash
         config = self.controller.load_saved_config()
-        if not config:
+        if not config or not isinstance(config, BinSyncBSConfig):
             return None
 
-        try:
-            if binary_hash not in config.recent_projects.keys():
-                return None
+        if binary_hash not in config.recent_projects.keys():
+            return None
 
-            project_data_dicts = config.recent_projects[binary_hash]
-            confs = []
-            for project_state in project_data_dicts:
-                project_data = ProjectData.get_from_state(project_state)
-                user = project_data.user or ""
-                repo = project_data.repo_path or ""
-                remote = project_data.remote if project_data.remote and not project_data.repo_path else ""
+        project_data_dicts = config.recent_projects[binary_hash]
+        confs = []
+        for project_state in project_data_dicts:
+            project_data = ProjectData.get_from_state(project_state)
+            user = project_data.user or ""
+            repo = project_data.repo_path or ""
 
-                if not user and not repo:
-                    confs.append(None)
+            if not user and not repo:
+                confs.append(None)
 
-                confs.append(f"{repo}:{user}")
-        except AttributeError:
-            confs = None
+            confs.append(f"{repo}:{user}")
 
         return confs
 

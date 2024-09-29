@@ -1001,24 +1001,19 @@ class BSController:
     # Config Utils
     #
 
-    def load_saved_config(self):
+    def load_saved_config(self) -> Optional[BinSyncBSConfig]:
         config = BinSyncBSConfig().load_from_file()
         if not config:
-            return
-        self.config = config
-        _l.info(f"Loaded configuration file: '{self.config.save_location}'")
+            return None
 
         self.config = config
-        self.table_coloring_window = (config.table_coloring_window
-                                      or self.table_coloring_window)
+        _l.info(f"Loaded configuration file: '{self.config.save_location}'")
+        self.table_coloring_window = config.table_coloring_window or self.table_coloring_window
         self.merge_level = config.merge_level or self.merge_level
 
         if config.log_level == "debug":
             logging.getLogger("binsync").setLevel("DEBUG")
-            logging.getLogger("ida_binsync").setLevel("DEBUG")
-
         else:
             logging.getLogger("binsync").setLevel("INFO")
-            logging.getLogger("ida_binsync").setLevel("INFO")
 
         return self.config
