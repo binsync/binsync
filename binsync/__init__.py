@@ -1,4 +1,4 @@
-__version__ = "4.9.1"
+__version__ = "4.10.0"
 
 
 #
@@ -16,7 +16,6 @@ del logging
 def create_plugin(*args, **kwargs):
     from libbs.api import DecompilerInterface
     from libbs.decompilers import IDA_DECOMPILER, ANGR_DECOMPILER, BINJA_DECOMPILER, GHIDRA_DECOMPILER
-    from binsync.controller import BSController
 
     # First discover the current decompiler and grab the overrides for BinSync specific UI
     current_decompiler = DecompilerInterface.find_current_decompiler()

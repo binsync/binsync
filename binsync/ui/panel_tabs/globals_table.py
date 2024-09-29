@@ -4,7 +4,7 @@ from collections import defaultdict
 import re
 import time
 
-from libbs.artifacts import GlobalVariable, Struct, Enum
+from libbs.artifacts import GlobalVariable, Struct, Enum, Typedef
 
 from binsync.controller import BSController
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView
@@ -65,8 +65,9 @@ class GlobalsTableModel(BinsyncTableModel):
             user_gvars = state.global_vars
             user_enums = state.enums
             user_name = state.user
+            user_typedefs = state.typedefs
 
-            all_artifacts = ((user_enums, "Enum"), (user_structs, "Struct"), (user_gvars, "Variable"))
+            all_artifacts = ((user_enums, "Enum"), (user_structs, "Struct"), (user_gvars, "Variable"), (user_typedefs, "Typedef"))
             for user_artifacts, global_type in all_artifacts:
                 for _, artifact in user_artifacts.items():
                     change_time = artifact.last_change
@@ -80,6 +81,8 @@ class GlobalsTableModel(BinsyncTableModel):
                     elif global_type in ("Variable",):
                         artifact_key = artifact.addr
                         artifact_name += f" ({hex(artifact.addr)})"
+                    elif global_type in ("Typedef",):
+                        artifact_key = artifact_name + f"({global_type})"
                     else:
                         l.critical("Attempted to parse an unparsable global type!")
                         return
@@ -126,6 +129,8 @@ class GlobalsTableView(BinsyncTableView):
                 global_getter = "get_global_var"
             elif global_type == "E":
                 global_getter = "get_enum"
+            elif global_type == "T":
+                global_getter = "get_typedef"
             else:
                 l.warning(f"Failed to get a valid type for global type '{global_type}'")
                 return
@@ -188,6 +193,8 @@ class GlobalsTableView(BinsyncTableView):
                 filler_func = lambda username: lambda chk=False: self.controller.fill_artifact(global_name, artifact_type=GlobalVariable, user=username)
             elif global_type == "E":
                 filler_func = lambda username: lambda chk=False: self.controller.fill_artifact(global_name, artifact_type=Enum, user=username)
+            elif global_type == "T":
+                filler_func = lambda username: lambda chk=False: self.controller.fill_artifact(global_name, artifact_type=Typedef, user=username)
             else:
                 l.warning(f"Invalid global table sync option: {global_type}")
                 return

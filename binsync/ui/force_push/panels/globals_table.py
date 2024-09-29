@@ -85,12 +85,13 @@ class GlobalTableModel(BinsyncTableModel):
         decompiler_structs = self.controller.deci.structs
         decompiler_gvars = self.controller.deci.global_vars
         decompiler_enums = self.controller.deci.enums
+        decompiler_typedefs = self.controller.deci.typedefs
         self.gvar_name_to_addr_map = {gvar.name: addr for addr, gvar in decompiler_gvars.items()}
-        all_artifacts = [(decompiler_structs, "Struct"), (decompiler_gvars, "Variable"), (decompiler_enums, "Enum")]
+        all_artifacts = [(decompiler_structs, "Struct"), (decompiler_gvars, "Variable"), (decompiler_enums, "Enum"), (decompiler_typedefs, "Typedef")]
         for type_artifacts, type_ in all_artifacts:
             self.controller.deci.info(f"Collecting {type_} artifacts...")
             for _, artifact in type_artifacts.items():
-                if type_ == "Struct" or type_ == "Enum":
+                if type_ == "Struct" or type_ == "Enum" or type_ == "Typedef":
                     self.data_dict[artifact.name] = [artifact.name, "", type_]
                     self.checks[artifact.name] = False
                     updated_row_keys.add(artifact.name)
