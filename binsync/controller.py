@@ -3,7 +3,7 @@ import threading
 import datetime
 import time
 from functools import wraps
-from typing import Dict, Iterable, Optional, Union, List
+from typing import Dict, Iterable, Optional, Union, List, Tuple
 
 from libbs.api.utils import progress_bar
 from libbs.artifacts import (
@@ -83,7 +83,7 @@ class BSController:
 
     """
     CHANGE_WATCHERS = (
-        FunctionHeader, StackVariable, Comment, GlobalVariable, Enum, Struct
+        FunctionHeader, StackVariable, Comment, GlobalVariable, Enum, Struct, Typedef
     )
 
     ARTIFACT_SET_MAP = {
@@ -957,47 +957,62 @@ class BSController:
 
         return imported_types
 
-    def type_is_user_defined(self, type_str, state=None):
+    def type_is_user_defined(self, type_str, state=None) -> Tuple[Optional[str], Optional[Union[Struct, Enum, Typedef]]]:
         if not type_str:
-            return None
+            return None, None
 
         type_: CType = self.deci.type_parser.parse_type(type_str)
         if not type_:
             # it was not parseable
-            return None
+            return None, None
 
         # type is known and parseable
         if not type_.is_unknown:
-            return None
+            return None, None
 
         base_type_str = type_.base_type.type
-        return base_type_str if base_type_str in state.structs.keys() else None
+        # this could go wrong in overlapps of type names
+        for type_name, type_list in ((Struct, state.structs.keys()), (Enum, state.enums.keys()), (Typedef, state.typedefs.keys())):
+            if base_type_str in type_list:
+                return base_type_str, type_name
+        return None, None
 
     def sync_user_type(self, type_str, **kwargs):
         state = kwargs.pop('state')
         master_state = kwargs['master_state']
-        base_type_str = self.type_is_user_defined(type_str, state=state)
-        if not base_type_str:
+        base_type_str, base_type_cls = self.type_is_user_defined(type_str, state=state)
+        if base_type_str is None:
             return False
 
-        struct: Struct = state.get_struct(base_type_str)
-        if not struct:
-            return False
+        changes = False
+        if base_type_cls is Struct:
+            struct: Struct = state.get_struct(base_type_str)
+            if not struct:
+                return False
 
-        nested_undefined_structs = False
-        for off, memb in struct.members.items():
-            user_type = self.type_is_user_defined(memb.type, state=state)
-            if user_type and user_type not in master_state.structs.keys():
-                # should we ever happen to have a struct with a nested type that is
-                # also a struct that we don't have in our master_state, then we give up
-                # and attempt to fill all structs to resolve type issues
-                nested_undefined_structs = True
-                _l.info(f"Nested undefined structs detected, pulling all structs from {state.user}")
-                break
+            nested_undefined_structs = False
+            for off, memb in struct.members.items():
+                user_type, type_cls = self.type_is_user_defined(memb.type, state=state)
+                if type_cls is Struct and user_type not in master_state.structs.keys():
+                    # should we ever happen to have a struct with a nested type that is
+                    # also a struct that we don't have in our master_state, then we give up
+                    # and attempt to fill all structs to resolve type issues
+                    nested_undefined_structs = True
+                    _l.info(f"Nested undefined structs detected, pulling all structs from {state.user}")
+                    break
 
-        changes = self.fill_artifact(base_type_str, artifact_type=Struct, state=state,
-                                     **kwargs) if not nested_undefined_structs \
-            else self.fill_structs(state=state, **kwargs)
+            changes = self.fill_artifact(
+                base_type_str, artifact_type=Struct, state=state, **kwargs
+            ) if not nested_undefined_structs else self.fill_structs(state=state, **kwargs)
+        elif base_type_cls is Enum:
+            changes = self.fill_artifact(
+                base_type_str, artifact_type=Enum, state=state, **kwargs
+            )
+        elif base_type_cls is Typedef:
+            changes = self.fill_artifact(
+                base_type_str, artifact_type=Typedef, state=state, **kwargs
+            )
+
         return changes
 
     def get_master_and_user_state(self, user=None, **kwargs):

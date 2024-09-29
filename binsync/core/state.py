@@ -237,12 +237,13 @@ class State:
                    and other.structs == self.structs \
                    and other.patches == self.patches \
                    and other.global_vars == self.global_vars \
-                   and other.enums == self.enums
+                   and other.enums == self.enums \
+                   and other.typedefs == self.typedefs
         return False
 
     def copy(self):
         state = State(self.user, version=self.version, client=self.client, last_push_time=self.last_push_time, last_commit_msg=self.last_commit_msg, dirty=self._dirty)
-        artifacts = ["functions", "comments", "structs", "patches", "global_vars", "enums"]
+        artifacts = ["functions", "comments", "structs", "patches", "global_vars", "enums", "typedefs"]
         for artifact in artifacts:
             setattr(
                 state,
@@ -256,7 +257,7 @@ class State:
         return f"<State: {self.user} " \
                f"funcs={len(self.functions)} " \
                f"cmts={len(self.comments)} " \
-               f"globals={len(self.structs) + len(self.global_vars) + len(self.enums)}" \
+               f"globals={len(self.structs) + len(self.global_vars) + len(self.enums) + len(self.typedefs)}" \
                f">"
 
     def __repr__(self):
