@@ -42,7 +42,7 @@ For full install information, please read our [quickstart docs](https://binsync.
 If you are planning on installing the package to be editable (`-e`), like in a developer install, make sure `pip>=23.0.0`.
 
 ## Supported Platforms
-- IDA Pro: **8.4 >= V >= 7.3**
+- IDA Pro: **>= 8.4** (if you have an older version, use `v4.10.1`)
 - Binary Ninja: **>= 2.4**
 - angr-management: **>= 9.0**
 - Ghidra: **>= 10.1**
