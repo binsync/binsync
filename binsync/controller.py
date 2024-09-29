@@ -1,5 +1,4 @@
 import logging
-import pathlib
 import threading
 import datetime
 import time
@@ -487,6 +486,8 @@ class BSController:
         identifiers = DecompilerInterface.get_identifiers(artifact)
         current_art = get_art_func(state, *identifiers)
         merged_artifact = self.merge_artifacts(current_art, artifact, merge_level=MergeLevel.OVERWRITE)
+        if not merged_artifact:
+            return False
 
         # set the artifact in the target state, likely master
         _l.debug(f"Setting an artifact now into {state} as {artifact}")
@@ -549,6 +550,14 @@ class BSController:
             master_artifact, target_artifact,
             merge_level=merge_level, master_state=master_state
         )
+
+        if merged_artifact is None:
+            self.deci.warning(
+                f"Failed to merge {master_artifact} with {target_artifact} "
+                f"using strategy {self.merge_level if merge_level is None else merge_level}."
+            )
+            return False
+
         if isinstance(merged_artifact, Struct):
             if merged_artifact.name.startswith("__"):
                 _l.info(f"Skipping fill for {target_artifact} because it is a system struct")
@@ -581,7 +590,7 @@ class BSController:
                 fill_changes = False
                 _l.error(f"Failed to fill artifact {merged_artifact} because of an error {e}")
 
-        _l.info(
+        self.deci.info(
             f"Successfully synced new changes from {state.user} for {merged_artifact}" if fill_changes
             else f"No new changes or failed to sync from {state.user} for {merged_artifact}"
         )
@@ -841,14 +850,20 @@ class BSController:
     # Utils
     #
 
-    def merge_artifacts(self, art1: Artifact, art2: Artifact, merge_level=None, **kwargs):
+    def merge_artifacts(self, art1: Artifact, art2: Artifact, merge_level=None, **kwargs) -> Optional[Artifact]:
         if merge_level is None:
             merge_level = self.merge_level
 
+        # error case
+        if art1 is None and art2 is None:
+            _l.warning("Attempting to merge two None artifacts, skipping...")
+            return None
+
+        # merge case does not matter if there is only the new artifact
         if art2 is None:
             return art1.copy()
-
-        if not art1 or (art1 == art2):
+        # always overwrite if the first artifact is None
+        if art1 is None or (art1 == art2):
             return art2.copy() if art2 else None
 
         if merge_level == MergeLevel.OVERWRITE or (not art1) or (art1 == art2):
@@ -984,24 +999,19 @@ class BSController:
     # Config Utils
     #
 
-    def load_saved_config(self):
+    def load_saved_config(self) -> Optional[BinSyncBSConfig]:
         config = BinSyncBSConfig().load_from_file()
         if not config:
-            return
-        self.config = config
-        _l.info(f"Loaded configuration file: '{self.config.save_location}'")
+            return None
 
         self.config = config
-        self.table_coloring_window = (config.table_coloring_window
-                                      or self.table_coloring_window)
+        _l.info(f"Loaded configuration file: '{self.config.save_location}'")
+        self.table_coloring_window = config.table_coloring_window or self.table_coloring_window
         self.merge_level = config.merge_level or self.merge_level
 
         if config.log_level == "debug":
             logging.getLogger("binsync").setLevel("DEBUG")
-            logging.getLogger("ida_binsync").setLevel("DEBUG")
-
         else:
             logging.getLogger("binsync").setLevel("INFO")
-            logging.getLogger("ida_binsync").setLevel("INFO")
 
         return self.config

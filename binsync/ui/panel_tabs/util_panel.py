@@ -16,6 +16,7 @@ from libbs.ui.qt_objects import (
 )
 from binsync.ui.magic_sync_dialog import MagicSyncDialog
 from binsync.ui.force_push import ForcePushUI
+from binsync.ui.utils import no_concurrent_call
 from binsync.controller import BSController
 from binsync.extras import EXTRAS_AVAILABLE
 
@@ -61,7 +62,7 @@ class QUtilPanel(QWidget):
         sync_level_layout.addWidget(self._merge_level_combobox)
 
         self._magic_sync_button = QPushButton("Magic Sync")
-        self._magic_sync_button.clicked.connect(self._handle_magic_sync_button)
+        self._magic_sync_button.clicked.connect(lambda: self._handle_magic_sync_button())
         self._magic_sync_button.setToolTip("Performs a best effort merge of all existing user data to your state, "
                                            "but won't affect your existing state (this uses a non-conflicting merge).")
 
@@ -233,6 +234,7 @@ class QUtilPanel(QWidget):
             return
         l.debug(f"Sync level changed to: {selected_opt}")
 
+    @no_concurrent_call
     def _handle_magic_sync_button(self):
         dialog = MagicSyncDialog(self.controller)
         dialog.exec_()

@@ -69,7 +69,7 @@ class BinSyncBSConfig(BSConfig):
         self.table_coloring_window = table_coloring_window
         self.log_level = log_level
         self.merge_level = merge_level
-        self.recent_projects = recent_projects
+        self.recent_projects = recent_projects or {}
 
     def save_project_data(self, binary_path, binary_hash, user=None, repo_path=None, remote=None):
         project_data = {
