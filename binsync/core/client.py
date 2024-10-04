@@ -459,7 +459,6 @@ class Client:
             try:
                 self._localize_remote_branches()
                 self.repo.git.checkout(BINSYNC_ROOT_BRANCH)
-                self.repo.git.fetch("--all")
                 self.repo.git.pull("--all")
                 self._last_pull_time = datetime.datetime.now(tz=datetime.timezone.utc)
                 self.active_remote = True
