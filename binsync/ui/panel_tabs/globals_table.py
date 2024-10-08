@@ -34,25 +34,28 @@ class GlobalsTableModel(BinsyncTableModel):
             return None
         col = index.column()
         row = index.row()
+        val = self.row_data[row][col]
         if role == Qt.DisplayRole:
-            if col == 0:
-                return self.row_data[row][col][0]
-            elif col == 1 or col == 2:
-                return self.row_data[row][col]
-            elif col == 3:
-                return friendly_datetime(self.row_data[row][col])
+            if col == GlobalsTableView.COL_TYPE:
+                return val[0]
+            elif col == GlobalsTableView.COL_ADDR:
+                return hex(val) if val is not None else ""
+            elif col in (GlobalsTableView.COL_NAME, GlobalsTableView.COL_USER):
+                return val
+            elif col == GlobalsTableView.COL_DATE:
+                return friendly_datetime(val)
         elif role == self.SortRole:
-            if col == self.time_col and isinstance(self.row_data[row][col], datetime.datetime):
-                return time.mktime(self.row_data[row][col].timetuple())
-            return self.row_data[row][col]
+            if col == self.time_col and isinstance(val, datetime.datetime):
+                return time.mktime(val.timetuple())
+            return val
         elif role == Qt.BackgroundRole:
             return self.data_bgcolors[row]
         elif role == self.FilterRole:
-            #print(self.row_data)
-            #print(self.row_data[row][0] + " " + self.row_data[row][1] + " " + self.row_data[row][2])
-            return self.row_data[row][0] + " " + self.row_data[row][1] + " " + self.row_data[row][2]
+            return " ".join(val for col in (
+                GlobalsTableView.COL_TYPE, GlobalsTableView.COL_ADDR, GlobalsTableView.COL_NAME,
+                GlobalsTableView.COL_USER))
         elif role == Qt.ToolTipRole:
-            #return self.data_tooltips[index.row()]
+            # return self.data_tooltips[index.row()]
             pass
         return None
 
@@ -75,14 +78,12 @@ class GlobalsTableModel(BinsyncTableModel):
                     if not change_time:
                         continue
 
-                    artifact_name = artifact.name
-                    if global_type in ("Enum", "Struct"):
-                        artifact_key = artifact_name + f"({global_type})"
+                    artifact_addr = None
+                    if global_type in ("Enum", "Struct", "Typedef"):
+                        artifact_key = artifact.name + f"({global_type})"
                     elif global_type in ("Variable",):
                         artifact_key = artifact.addr
-                        artifact_name += f" ({hex(artifact.addr)})"
-                    elif global_type in ("Typedef",):
-                        artifact_key = artifact_name + f"({global_type})"
+                        artifact_addr = artifact.addr
                     else:
                         l.critical("Attempted to parse an unparsable global type!")
                         return
@@ -94,7 +95,7 @@ class GlobalsTableModel(BinsyncTableModel):
                             (not change_time or change_time <= self.data_dict[artifact_key][self.time_col]):
                         continue
 
-                    self.data_dict[artifact_key] = [global_type[0], artifact_name, user_name, change_time]
+                    self.data_dict[artifact_key] = [global_type[0], artifact_addr, artifact.name, user_name, change_time]
                     updated_row_keys.add(artifact_key)
 
         self.context_menu_cache = cmenu_cache
@@ -103,13 +104,19 @@ class GlobalsTableModel(BinsyncTableModel):
 
 
 class GlobalsTableView(BinsyncTableView):
-    HEADER = ['T', 'Name', 'User', 'Last Push']
+    HEADER = ['T', 'Addr', 'Name', 'User', 'Last Push']
+    COL_TYPE = 0
+    COL_ADDR = 1
+    COL_NAME = 2
+    COL_USER = 3
+    COL_DATE = 4
     def __init__(self, controller: BSController, filteredit: BinsyncTableFilterLineEdit, stretch_col=None,
                  col_count=None, parent=None):
         super().__init__(controller, filteredit, stretch_col, col_count, parent)
 
-        self.model = GlobalsTableModel(controller, self.HEADER, filter_cols=[0, 1, 2], time_col=3,
-                                        parent=parent)
+        self.model = GlobalsTableModel(controller, self.HEADER, filter_cols=[self.COL_TYPE, self.COL_ADDR,
+                                                                             self.COL_NAME, self.COL_USER],
+                                       time_col=self.COL_DATE, parent=parent)
         self.proxymodel.setSourceModel(self.model)
         self.setModel(self.proxymodel)
 
@@ -178,9 +185,10 @@ class GlobalsTableView(BinsyncTableView):
             col_hide_menu.addAction(act)
 
         if valid_row:
-            global_type = self.model.row_data[idx.row()][0]
-            global_name = self.model.row_data[idx.row()][1]
-            user_name = self.model.row_data[idx.row()][2]
+            global_type = self.model.row_data[idx.row()][self.COL_TYPE]
+            global_name = self.model.row_data[idx.row()][self.COL_NAME]
+            global_addr = self.model.row_data[idx.row()][self.COL_ADDR]
+            user_name = self.model.row_data[idx.row()][self.COL_USER]
             if any(x is None for x in [global_type, global_name, user_name]):
                 menu.popup(self.mapToGlobal(event.pos()))
                 return
@@ -188,7 +196,7 @@ class GlobalsTableView(BinsyncTableView):
             if global_type == "S":
                 filler_func = lambda username: lambda chk=False: self.controller.fill_artifact(global_name, artifact_type=Struct, user=username)
             elif global_type == "V":
-                var_addr = int(re.findall(r'0x[a-f,0-9]+', global_name.split(" ")[1])[0], 16)
+                var_addr = int(global_addr, 16)
                 global_name = var_addr
                 filler_func = lambda username: lambda chk=False: self.controller.fill_artifact(global_name, artifact_type=GlobalVariable, user=username)
             elif global_type == "E":
@@ -209,6 +217,17 @@ class GlobalsTableView(BinsyncTableView):
 
         menu.popup(self.mapToGlobal(event.pos()))
 
+    def _doubleclick_handler(self):
+        """ Handler for double clicking on a row, jumps to the respective global variable or type. """
+        row_idx = self.selectionModel().selectedIndexes()[0]
+        tls_row_idx = self.proxymodel.mapToSource(row_idx)
+        row = self.model.row_data[tls_row_idx.row()]
+        global_type = row[self.COL_TYPE]
+        if global_type == 'V':
+            self.controller.deci.gui_goto(row[self.COL_ADDR])
+        else:
+            self.controller.deci.gui_show_type(row[self.COL_NAME])
+
 class QGlobalsTable(QWidget):
     """ Wrapper widget to contain the function table classes in one file (prevents bulking up control_panel.py) """
 
@@ -218,8 +237,10 @@ class QGlobalsTable(QWidget):
         self._init_widgets()
 
     def _init_widgets(self):
+        col_count = len([col for col in GlobalsTableView.__dict__ if col.startswith("COL_")])
         self.filteredit = BinsyncTableFilterLineEdit(parent=self)
-        self.table = GlobalsTableView(self.controller, self.filteredit, stretch_col=1, col_count=4)
+        self.table = GlobalsTableView(self.controller, self.filteredit, stretch_col=GlobalsTableView.COL_NAME,
+                                      col_count=col_count)
         layout = QVBoxLayout()
         layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)
