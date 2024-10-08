@@ -1,7 +1,6 @@
 import logging
 import datetime
 from collections import defaultdict
-import re
 import time
 
 from libbs.artifacts import GlobalVariable, Struct, Enum, Typedef
@@ -196,8 +195,7 @@ class GlobalsTableView(BinsyncTableView):
             if global_type == "S":
                 filler_func = lambda username: lambda chk=False: self.controller.fill_artifact(global_name, artifact_type=Struct, user=username)
             elif global_type == "V":
-                var_addr = int(global_addr, 16)
-                global_name = var_addr
+                global_name = global_addr
                 filler_func = lambda username: lambda chk=False: self.controller.fill_artifact(global_name, artifact_type=GlobalVariable, user=username)
             elif global_type == "E":
                 filler_func = lambda username: lambda chk=False: self.controller.fill_artifact(global_name, artifact_type=Enum, user=username)
