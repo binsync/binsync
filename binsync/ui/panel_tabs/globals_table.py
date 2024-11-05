@@ -36,7 +36,7 @@ class GlobalsTableModel(BinsyncTableModel):
         val = self.row_data[row][col]
         if role == Qt.DisplayRole:
             if col == GlobalsTableView.COL_TYPE:
-                return val[0]
+                return val[0]  # First letter of the type (T, E, S or V)
             elif col == GlobalsTableView.COL_ADDR:
                 return hex(val) if val is not None else ""
             elif col in (GlobalsTableView.COL_NAME, GlobalsTableView.COL_USER):
@@ -50,9 +50,12 @@ class GlobalsTableModel(BinsyncTableModel):
         elif role == Qt.BackgroundRole:
             return self.data_bgcolors[row]
         elif role == self.FilterRole:
-            return " ".join(val for col in (
-                GlobalsTableView.COL_TYPE, GlobalsTableView.COL_ADDR, GlobalsTableView.COL_NAME,
-                GlobalsTableView.COL_USER))
+            addr = self.row_data[row][GlobalsTableView.COL_ADDR]
+            hexaddr = hex(addr) if addr is not None else ""
+            return " ".join((self.row_data[row][GlobalsTableView.COL_TYPE][0],
+                             hexaddr,
+                             self.row_data[row][GlobalsTableView.COL_NAME],
+                             self.row_data[row][GlobalsTableView.COL_USER]))
         elif role == Qt.ToolTipRole:
             # return self.data_tooltips[index.row()]
             pass
