@@ -53,6 +53,7 @@ def sanitize_name(unsafe_name: str) -> str:
     """
     return re.sub(r"[^a-zA-Z0-9_]", "_", unsafe_name)
 
+
 def update_dirty_flag(f):
     @wraps(f)
     def _update_dirty_flag(self, *args, **kwargs):
@@ -136,9 +137,9 @@ def update_last_change(f):
         else:
             raise Exception("Undefined Artifact Type!")
 
-        self.last_push_artifact = artifact_loc
-        self.last_push_time = artifact.last_change
-        self.last_push_artifact_type = artifact_type
+        #self.last_push_artifact = artifact_loc
+        #self.last_push_time = artifact.last_change
+        #self.last_push_artifact_type = artifact_type
 
         return f(self, *args, **kwargs)
 
@@ -296,10 +297,10 @@ class State:
         d = {
             "user": self.user,
             "version": self.version,
-            "last_push_time": self.last_push_time,
-            "last_push_artifact": self.last_push_artifact,
-            "last_push_artifact_type": self.last_push_artifact_type,
-            "last_commit_msg": self.last_commit_msg,
+            #"last_push_time": self.last_push_time,
+            #"last_push_artifact": self.last_push_artifact,
+            #"last_push_artifact_type": self.last_push_artifact_type,
+            #"last_commit_msg": self.last_commit_msg,
         }
         self._dump_data(dst, 'metadata.toml', toml.dumps(d, encoder=TomlHexEncoder()).encode())
 

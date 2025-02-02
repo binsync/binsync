@@ -374,8 +374,9 @@ class Client:
 
         return states
 
-    def commit_master_state(self, commit_msg=None):
+    def commit_master_state(self, commit_msg=None) -> int:
         # attempt to commit dirty files in a update phase
+        total_commits = 0
         for i in range(self._commit_batch_size):
             if self.cache.queued_master_state_changes.empty():
                 break
@@ -386,24 +387,33 @@ class Client:
                 msg=commit_msg or state.last_commit_msg,
                 no_checkout=i > 0
             )
+            total_commits += 1
 
         self.cache._master_state._dirty = False
+        return total_commits
 
     def commit_and_update_states(self, commit_msg=None):
         """
         Update both the local and remote repo knowledge of files through pushes/pulls and commits
         in the case of dirty files.
         """
-        self.commit_master_state(commit_msg=commit_msg)
+        l.debug("Commit and update states")
+        commit_num = self.commit_master_state(commit_msg=commit_msg)
+        did_pull = False
+        did_push = False
 
         # do a pull if there is a remote repo connected
         self.last_pull_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
         if self.has_remote and self.pull_on_update:
+            did_pull = True
             self._pull()
 
         self.last_push_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
         if self.has_remote and self.push_on_update:
+            did_push = True
             self._push()
+
+        l.debug(f"Commit {commit_num} times, pull: {did_pull}, push: {did_push}")
 
     #
     # Git Backend

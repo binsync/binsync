@@ -2,6 +2,7 @@ import logging
 import threading
 import datetime
 import time
+from collections import defaultdict
 from functools import wraps
 from typing import Dict, Iterable, Optional, Union, List, Tuple
 
@@ -127,6 +128,8 @@ class BSController:
         else:
             self.deci = decompiler_interface
 
+        self._register_context_menus()
+
         # command locks
         self.push_job_scheduler = Scheduler(name="PushJobScheduler")
         self.sync_semaphore = threading.Semaphore(value=self.DEFAULT_SEMAPHORE_SIZE)
@@ -171,6 +174,9 @@ class BSController:
         self._run_updater_threads = False
         self.user_states_update_thread = threading.Thread(target=self.updater_routine)
 
+        # other properties
+        self.progress_view_open = False
+
         if self.headless:
             self._init_headless_components()
 
@@ -180,6 +186,13 @@ class BSController:
     def shutdown(self):
         self.stop_worker_routines()
         self.deci.shutdown()
+
+    def _register_context_menus(self):
+        context_menus = {}
+        # add the menu for viewing progress
+        context_menus["BinSync/view_prog"] = ("View Progress...", self.show_progress_window)
+        self.deci.gui_register_ctx_menu_many(context_menus)
+
 
     #
     # Git Properties
@@ -289,6 +302,7 @@ class BSController:
 
             # do git pull/push operations if a remote exist for the client
             if self.client.last_pull_attempt_time is None:
+                _l.debug("Attempting to update states now")
                 self.client.commit_and_update_states(commit_msg="User created")
 
             # update every reload_time
@@ -1044,3 +1058,62 @@ class BSController:
             logging.getLogger("binsync").setLevel("INFO")
 
         return self.config
+
+    #
+    # View Utils
+    #
+
+    def compute_changes_per_function(self, exclude_master=False):
+        """
+        Computes the number of changes per artifact type.
+        TODO: support more than just functions
+        TODO: make this not such a poormans coutner. We should be using commits not this hack
+        """
+        # gather all the states
+        all_states = self.client.all_states()
+        if exclude_master:
+            all_states = [s for s in all_states if s.user != self.client.master_user]
+
+        func_addrs = list(self.deci.functions.keys())
+        function_counts = {addr: defaultdict(int) for addr in func_addrs}
+        for state in all_states:
+            for func_addr, func in state.functions.items():
+                func: Function
+                changes = 0
+                # check the parameters
+                header: FunctionHeader = func.header
+                if header:
+                    if header.name:
+                        changes += 1
+                    for arg in header.args.values():
+                        arg: FunctionArgument
+                        if arg.name:
+                            changes += 1
+                        if arg.type:
+                            changes += 1
+                    if header.type:
+                        changes += 1
+                # check the stack vars
+                for sv in func.stack_vars.values():
+                    sv: StackVariable
+                    if sv.name:
+                        changes += 1
+                    if sv.type:
+                        changes += 1
+
+                function_counts[func_addr][state.user] = changes
+
+        return function_counts
+
+    def show_progress_window(self, *args, **kwargs):
+        from binsync.ui.progress_graph.progress_window import ProgressGraphWidget
+
+        if self.progress_view_open:
+            self.deci.info("Progress view already open")
+            return
+
+        graph = self.deci.get_callgraph()
+        self.deci.gui_attach_qt_window(
+            ProgressGraphWidget, "Progress View", graph=graph, completion=10, controller=self
+        )
+        self.progress_view_open = True

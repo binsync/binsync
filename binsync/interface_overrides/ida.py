@@ -1,5 +1,4 @@
 import logging
-import threading
 
 from PyQt5 import sip
 from PyQt5.QtGui import QKeyEvent
@@ -14,9 +13,9 @@ import idautils
 
 from libbs.ui.version import set_ui_version
 set_ui_version("PyQt5")
-from libbs.decompilers.ida.compat import has_older_hexrays_version
+from libbs.decompilers.ida.compat import has_older_hexrays_version, generate_generic_ida_plugic_cls
+from libbs.decompilers.ida.ida_ui import IDAWindowWrapper
 from libbs.decompilers.ida.interface import IDAInterface
-from libbs.decompilers.ida.compat import generate_generic_ida_plugic_cls
 
 from binsync.ui.config_dialog import ConfigureBSDialog
 from binsync.ui.control_panel import ControlPanel
@@ -139,7 +138,7 @@ class BinsyncPlugin(GenericIDAPlugin):
         """
         Open the control panel view and attach it to IDA View-A or Pseudocode-A.
         """
-        wrapper = ControlPanelViewWrapper(self.controller)
+        wrapper = IDAWindowWrapper(ControlPanel, "BinSync", self.controller)
         if not wrapper.twidget:
             _l.info("BinSync is unable to find a widget to attach to. You are likely running headlessly")
             return None

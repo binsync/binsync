@@ -1,6 +1,8 @@
 import logging
+import typing
 
 import networkx as nx
+import numpy as np
 
 from libbs.ui.qt_objects import (
     # QtWidgets
@@ -13,36 +15,24 @@ from libbs.ui.qt_objects import (
     QLabel,
     QHBoxLayout,
     QVBoxLayout,
-    QDialog,
+    QWidget,
     # QtGui
     QPen, QBrush, QColor, QPainter, QFont, QFontMetrics,
     # QtCore
     Qt, QLineF
 )
 
+if typing.TYPE_CHECKING:
+    from binsync.controller import BSController
+
 _l = logging.getLogger(__name__)
 
 try:
     from networkx.drawing.nx_agraph import graphviz_layout
     HAS_PYGRAPHVIZ = True
-except ImportError:
+except Exception:
     HAS_PYGRAPHVIZ = False
     _l.warning("pygraphviz not installed, progress view may be ugly.")
-
-
-
-def color_from_hotness(hotness: float) -> QColor:
-    """
-    If hotness <= 0.0, node is white (255,255,255).
-    Otherwise, map [0..1] from light pink -> red.
-    """
-    if hotness <= 0.0:
-        return QColor(255, 255, 255)  # white
-    h = min(1.0, hotness)
-    r = 255
-    g = int(200 * (1 - h))
-    b = int(200 * (1 - h))
-    return QColor(r, g, b)
 
 
 class NodeItem(QGraphicsEllipseItem):
@@ -57,13 +47,18 @@ class NodeItem(QGraphicsEllipseItem):
     """
     currently_selected_node = None
 
-    def __init__(self, label_text, x, y,
-                 hotness=0.0, size=5,  # size in [1..10]
-                 parent=None,
-                 view=None,
-                 controller=None,
-                 ):
-        self.controller = controller
+    def __init__(
+        self,
+        label_text,
+        x,
+        y,
+        hotness=0.0,
+        size=5,  # size in [1..10]
+        parent=None,
+        view=None,
+        controller=None,
+    ):
+        self._controller = controller
         # Step 1: measure text to find the base diameter for size=1
         font = QFont("Arial", 10)
         fm = QFontMetrics(font)
@@ -88,7 +83,7 @@ class NodeItem(QGraphicsEllipseItem):
         self.setPen(self.default_pen)
 
         # Fill color
-        fill_color = color_from_hotness(hotness)
+        fill_color = self.color_from_hotness(hotness)
         self.setBrush(QBrush(fill_color))
 
         # Create text item
@@ -134,9 +129,23 @@ class NodeItem(QGraphicsEllipseItem):
 
         if func_addr is not None:
             normalized_addr = func_addr - 0x400000
-            self.controller.deci.gui_goto(normalized_addr)
+            self._controller.deci.gui_goto(normalized_addr)
 
         super().mouseDoubleClickEvent(event)
+
+    @staticmethod
+    def color_from_hotness(hotness: float) -> QColor:
+        """
+        If hotness <= 0.0, node is white (255,255,255).
+        Otherwise, map [0..1] from light pink -> red.
+        """
+        if hotness <= 0.0:
+            return QColor(255, 255, 255)  # white
+        h = min(1.0, hotness)
+        r = 255
+        g = int(200 * (1 - h))
+        b = int(200 * (1 - h))
+        return QColor(r, g, b)
 
 
 class EdgeItem(QGraphicsLineItem):
@@ -190,21 +199,27 @@ class GraphView(QGraphicsView):
             self.scale(1 / zoom_factor, 1 / zoom_factor)
 
 
-class GraphWindow(QDialog):
+class ProgressGraphWidget(QWidget):
     """
     A QWidget that displays a NetworkX graph.
     """
-    def __init__(self, G=None, completion=33, parent=None, controller=None):
+    def __init__(self, graph: nx.DiGraph = None, completion: int = 0, controller: "BSController" = None, parent=None):
         super().__init__(parent)
+        self._graph = graph
+        self._completion = completion
+        self._controller = controller
+        self.analyzed_graph = self._analyze_graph()
+        self._refresh_widgets()
+
+    def _refresh_widgets(self):
         self.setWindowTitle("Graph Viewer")
-        self.controller = controller
 
         main_layout = QVBoxLayout(self)
         top_layout = QHBoxLayout()
 
         # Label left
-        self.completion_label = QLabel(f"Completion: {completion}%")
-        self.completion_label.setStyleSheet("color: white; font-size: 16px;")
+        self.completion_label = QLabel(f"Completion: {self._completion}%")
+        self.completion_label.setStyleSheet("color: green; font-size: 16px;")
 
         # Label right
         self.hotness_label = QLabel("Hotness: changes")
@@ -220,89 +235,40 @@ class GraphWindow(QDialog):
 
         # If no graph was provided, create a small sample
         # Each node has 'hotness' in [0..1], and 'size' in [1..10] (default=5).
-        g = nx.Graph()
-        # node => (hotness, size)
-        # If size is omitted, that node will default to 5
-        node_attributes = {
-            "sub_42f4e1": {"size": 2, "hotness": 0.1},
-            "sub_42f494": {"size": 3},
-            "sub_42e67a": {"size": 7, "hotness": 0.5},
-            "sub_42e37f": {"size": 3, "hotness": 0.1},
-            "sub_42f430": {"size": 4, "hotness": 0.3},
-            "sub_42f21a": {"size": 2, "hotness": 0.1}
-
-        }
-        # Default attributes
-        default_attributes = {"size": 2, "hotness": 0.0}
-        # Add nodes with attributes
-        for node, attributes in node_attributes.items():
-            # Combine default attributes with specific ones
-            combined_attributes = {**default_attributes, **attributes}
-            g.add_node(node, **combined_attributes)
-        # Add edges
-        edges = [
-            ("start", "sub_42f4e1"),
-            ("sub_42f4e1", "sub_42f494"),
-            ("sub_42e67a", "sub_42f4e1"),
-            ("sub_42e67a", "sub_42f430"),
-            ("sub_42e67a", "sub_42e37f"),
-            ("sub_42e67a", "sub_42e284"),
-            ("sub_42e67a", "sub_468ffb"),
-            ("sub_42e67a", "sub_468fd0"),
-            ("sub_42e67a", "sub_42e4d3"),
-            ("sub_42e67a", "sub_42f5af"),
-            ("sub_42e67a", "sub_42e43f"),
-            ("sub_42e67a", "sub_42e99c"),
-            ("sub_42e67a", "sub_46744b"),
-            ("sub_42e67a", "sub_42e4f0"),
-            ("sub_42e67a", "sub_42f226"),
-            ("sub_42f21a", "sub_42e67a"), # this should be indirect
-            ("sub_42e37f", "sub_42ecb5"),
-            ("sub_42e37f", "sub_433b7e"),
-            ("sub_42e37f", "sub_468b77"),
-            ("sub_42e37f", "sub_433bb0"),
-        ]
-        g.add_edges_from(edges)
-
-        G = g
-        # Ensure a "start" node if not present
-        if "start" not in G:
-            G.add_node("start", size=5, hotness=0.0)
+        if self.analyzed_graph is None:
+            self._controller.deci.error("No graph provided to ProgressGraphWidget")
+            return
 
         # Layout: graphviz "dot" if possible, else spring
         if HAS_PYGRAPHVIZ:
-            pos = graphviz_layout(G, prog="dot")
+            pos = graphviz_layout(self.analyzed_graph, prog="dot")
         else:
-            pos = nx.spring_layout(G, k=1.2, iterations=50)
+            pos = nx.spring_layout(self.analyzed_graph)
 
         # Create a QGraphicsView
         view = GraphView(scene, self)
 
         # Build node items
         node_items = {}
-        for node_name, data in G.nodes(data=True):
+        for func_node, data in self.analyzed_graph.nodes(data=True):
             hotness = data.get("hotness", 0.0)
-            size_val = 1 #data.get("size", 1)  # default to 5 if missing
-            x, y = pos[node_name]
+            size_val = data.get("size", 5)
+            x, y = pos[func_node]
             item = NodeItem(
-                label_text=node_name,
+                label_text=func_node.name,
                 x=x,
                 y=y,
                 hotness=hotness,
                 size=size_val,  # <--- scaled node
                 view=view,
-                controller=controller
+                controller=self._controller
             )
             scene.addItem(item)
-            node_items[node_name] = item
+            node_items[func_node] = item
 
         # Build edges
-        for u, v, edata in G.edges(data=True):
-            print(u)
-            if str(u) == "sub_42f21a" or str(v) == "sub_42f21a":
-                indirect = True
-            else:
-                indirect = edata.get("indirect", False)
+        for u, v, edata in self.analyzed_graph.edges(data=True):
+            indirect = edata.get("indirect", False)
             edge_item = EdgeItem(node_items[u], node_items[v], indirect)
             scene.addItem(edge_item)
             node_items[u].add_edge(edge_item)
@@ -312,13 +278,69 @@ class GraphWindow(QDialog):
         self.setStyleSheet("background-color: #222222;")
         self.resize(1000, 800)
 
+    def _analyze_graph(self, max_changes_heat=10) -> nx.DiGraph:
+        # collect function changes
+        func_changes_by_users = self._controller.compute_changes_per_function()
+        func_changes = {}
+        for func_addr, user_changes in func_changes_by_users.items():
+            func_changes[func_addr] = sum(user_changes.values())
+            _l.info(f"Function {hex(func_addr)} has {func_changes[func_addr]} changes")
 
-def open_progress_window(controller):
-    print("Opening progress window...")
-    window = GraphWindow(completion=33, controller=controller)
-    print("Progress window created. Shwoing now...")
-    window.show()
-    print("Progress window shown.")
-    print("Window execing...")
-    window.exec_()
-    print("Window execed.")
+        func_heats = {}
+        # changed_funcs = set(func_addr for func_addr, changes in func_changes.items() if changes > 0)
+        for func_addr, changes in func_changes.items():
+            if changes > 0:
+                func_heats[func_addr] = min(changes, max_changes_heat) / max_changes_heat
+
+        # find the changed function nodes in the graph
+        changed_func_nodes = set()
+        for node in self._graph.nodes:
+            if node.addr in func_heats:
+                changed_func_nodes.add(node)
+
+        func_nodes_in_graph = changed_func_nodes.copy()
+        # find every node that is connected, dist of 1, from changed funcs
+        for node in changed_func_nodes:
+            for neighbor in self._graph.successors(node):
+                func_nodes_in_graph.add(neighbor)
+            for neighbor in self._graph.predecessors(node):
+                func_nodes_in_graph.add(neighbor)
+
+        # TODO: do indirect edges
+
+        # make a subgraph of the graph with only the changed functions
+        analyzed_graph = nx.DiGraph(self._graph.subgraph(func_nodes_in_graph))
+
+        node_sizes = []
+        for node in analyzed_graph.nodes:
+            node_sizes.append(node.size)
+        size_variances = self.compute_size_outlier_scores(node_sizes)
+
+        # set heat & size attributes on the nodes
+        for node in analyzed_graph.nodes:
+            node_data = analyzed_graph.nodes[node]
+            node_data["hotness"] = func_heats.get(node.addr, 0.0)
+            node_data["size"] = int(size_variances[node.size])
+
+        return analyzed_graph
+
+    def compute_size_outlier_scores(self, node_sizes: list[int], max_size=10) -> dict:
+        """
+        Compute the outlier scores for the sizes of the nodes in the graph.
+        """
+        variances = {}
+        mean = np.mean(node_sizes)
+        std = np.std(node_sizes)
+
+        if std == 0:
+            return {n: 0.5 * max_size for n in node_sizes}
+
+        for size in node_sizes:
+            # Compute Z-score
+            z_score = abs(size - mean) / std
+
+            # Apply a sigmoid function to map to (0,1), with strong suppression of outliers
+            score = np.exp(-z_score)  # Exponentially decay based on distance
+            variances[size] = (1 - score) * max_size
+
+        return variances
