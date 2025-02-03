@@ -16,11 +16,20 @@ from libbs.ui.qt_objects import (
     QHBoxLayout,
     QVBoxLayout,
     QWidget,
+    QComboBox,
+    QDialog,
+    QPushButton,
+    QCheckBox,
+    QFileDialog,
     # QtGui
     QPen, QBrush, QColor, QPainter, QFont, QFontMetrics,
     # QtCore
     Qt, QLineF
 )
+from libbs.artifacts import Function
+from binsync.extras import EXTRAS_AVAILABLE
+
+from .summarize import summarize_changes
 
 if typing.TYPE_CHECKING:
     from binsync.controller import BSController
@@ -49,29 +58,30 @@ class NodeItem(QGraphicsEllipseItem):
 
     def __init__(
         self,
-        label_text,
+        func: Function,
         x,
         y,
         hotness=0.0,
-        size=5,  # size in [1..10]
+        size=1,  # size in [1..10]
         parent=None,
         view=None,
         controller=None,
     ):
+        self._func = func
         self._controller = controller
+        label_text = func.name
+
         # Step 1: measure text to find the base diameter for size=1
         font = QFont("Arial", 10)
         fm = QFontMetrics(font)
         text_width = fm.horizontalAdvance(label_text)
         text_height = fm.height()
-        base_diameter = max(text_width + 20, text_height + 20)
+        base_diameter = 32
 
         # Step 2: scale the diameter by 'size'
-        # If size=1 => diameter=base_diameter (just big enough to fit text)
-        # If size=10 => diameter=10x base_diameter
         diameter = base_diameter * size
 
-        super().__init__(-diameter/2, -diameter/2, diameter, diameter, parent)
+        super().__init__(-diameter / 2, -diameter / 2, diameter, diameter, parent)
         self.radius = diameter / 2
         self.view = view
         self._edges = []
@@ -86,13 +96,17 @@ class NodeItem(QGraphicsEllipseItem):
         fill_color = self.color_from_hotness(hotness)
         self.setBrush(QBrush(fill_color))
 
-        # Create text item
-        self.text_item = QGraphicsTextItem(label_text, self)
+        # Create text item outside the node
+        self.text_item = QGraphicsTextItem(label_text, self.scene())
         self.text_item.setFont(font)
-        self.text_item.setDefaultTextColor(Qt.black)
+        self.text_item.setDefaultTextColor(Qt.white)
         text_bounds = self.text_item.boundingRect()
-        # Center text
-        self.text_item.setPos(-text_bounds.width()/2, -text_bounds.height()/2)
+
+        # Position the text above the node
+        text_x = self.x() - text_bounds.width() / 2
+        text_y = self.y() - self.radius - text_bounds.height() - 5  # Offset above the node
+
+        self.text_item.setPos(text_x, text_y)
 
         # Movable, selectable
         self.setFlags(
@@ -105,15 +119,19 @@ class NodeItem(QGraphicsEllipseItem):
         self._edges.append(edge)
 
     def itemChange(self, change, value):
-        # Update edges if the node moves
+        # Update edges and reposition label if the node moves
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
             for edge in self._edges:
                 edge.update_positions()
+            # Update text position
+            text_bounds = self.text_item.boundingRect()
+            self.text_item.setPos(
+                self.x() - text_bounds.width() / 2,
+                self.y() - self.radius - text_bounds.height() - 5
+            )
         return super().itemChange(change, value)
 
     def mouseDoubleClickEvent(self, event):
-        label_text = self.text_item.toPlainText()
-        print(f"Node {label_text} clicked")
         # Bold black outline for only one selected node
         if NodeItem.currently_selected_node and NodeItem.currently_selected_node is not self:
             NodeItem.currently_selected_node.setPen(NodeItem.currently_selected_node.default_pen)
@@ -121,16 +139,7 @@ class NodeItem(QGraphicsEllipseItem):
         self.setPen(self.highlight_pen)
         NodeItem.currently_selected_node = self
 
-        func_addr = label_text.split("_")[1]
-        try:
-            func_addr = int(func_addr, 16)
-        except:
-            func_addr = None
-
-        if func_addr is not None:
-            normalized_addr = func_addr - 0x400000
-            self._controller.deci.gui_goto(normalized_addr)
-
+        self._controller.deci.gui_goto(self._func.addr)
         super().mouseDoubleClickEvent(event)
 
     @staticmethod
@@ -199,98 +208,203 @@ class GraphView(QGraphicsView):
             self.scale(1 / zoom_factor, 1 / zoom_factor)
 
 
-class ProgressGraphWidget(QWidget):
+class ProgressGraphWidget(QDialog):
     """
     A QWidget that displays a NetworkX graph.
     """
-    def __init__(self, graph: nx.DiGraph = None, completion: int = 0, controller: "BSController" = None, parent=None):
+    def __init__(self, graph: nx.DiGraph = None, controller: "BSController" = None, tag=None, parent=None):
         super().__init__(parent)
         self._graph = graph
-        self._completion = completion
+        self._completion = 0
         self._controller = controller
-        self.analyzed_graph = self._analyze_graph()
-        self._refresh_widgets()
+        self._git_client = controller.client.copy(copy_files=True)
+        self._tags = [""] + [tag.name for tag in self._git_client.repo.tags]
+        self._tag_selection = tag or ""
 
-    def _refresh_widgets(self):
-        self.setWindowTitle("Graph Viewer")
+        self._show_only_changed = False
+        self._layouts = ["dot", "fdp", "neato", "twopi", "circo"]
 
-        main_layout = QVBoxLayout(self)
-        top_layout = QHBoxLayout()
+        self.displayed_graph = None
+        self._graph_view = None
+        _l.info(f"ProgressGraphWidget created with tag {self._tag_selection}")
 
-        # Label left
-        self.completion_label = QLabel(f"Completion: {self._completion}%")
-        self.completion_label.setStyleSheet("color: green; font-size: 16px;")
+        self._init_widgets()
 
-        # Label right
-        self.hotness_label = QLabel("Hotness: changes")
-        self.hotness_label.setStyleSheet("color: red; font-size: 16px;")
+    def _update_progress_widgets(self):
+        # rebuild the graph
+        self.displayed_graph = self._analyze_graph()
 
-        top_layout.addWidget(self.completion_label, alignment=Qt.AlignLeft)
-        top_layout.addWidget(self.hotness_label, alignment=Qt.AlignRight)
-        main_layout.addLayout(top_layout)
+        # first, update the completion label with the correct label
+        self.completion_label.setText(f"Completion: <span style='color: green;'>{self._completion}%</span>")
+        # no need to update hotness, it is static for now...
 
+        if self._graph_view is not None:
+            self.main_layout.removeWidget(self._graph_view)
+
+        # update the actual graph view
+        self._build_graph_view()
+        self.main_layout.addWidget(self._graph_view)
+
+    def _build_graph_view(self):
         # Create scene
         scene = QGraphicsScene(self)
         scene.setBackgroundBrush(QBrush(QColor("#333333")))
 
         # If no graph was provided, create a small sample
         # Each node has 'hotness' in [0..1], and 'size' in [1..10] (default=5).
-        if self.analyzed_graph is None:
+        if self.displayed_graph is None:
             self._controller.deci.error("No graph provided to ProgressGraphWidget")
             return
 
         # Layout: graphviz "dot" if possible, else spring
         if HAS_PYGRAPHVIZ:
-            pos = graphviz_layout(self.analyzed_graph, prog="dot")
+            pos = graphviz_layout(self.displayed_graph, prog=self._layouts[0])
         else:
-            pos = nx.spring_layout(self.analyzed_graph)
+            pos = nx.spring_layout(self.displayed_graph)
 
         # Create a QGraphicsView
-        view = GraphView(scene, self)
+        self._graph_view = GraphView(scene, self)
 
         # Build node items
         node_items = {}
-        for func_node, data in self.analyzed_graph.nodes(data=True):
+        for func_node, data in self.displayed_graph.nodes(data=True):
             hotness = data.get("hotness", 0.0)
             size_val = data.get("size", 5)
             x, y = pos[func_node]
             item = NodeItem(
-                label_text=func_node.name,
+                func_node,
                 x=x,
                 y=y,
                 hotness=hotness,
                 size=size_val,  # <--- scaled node
-                view=view,
+                view=self._graph_view,
                 controller=self._controller
             )
             scene.addItem(item)
+            scene.addItem(item.text_item)
             node_items[func_node] = item
 
         # Build edges
-        for u, v, edata in self.analyzed_graph.edges(data=True):
+        for u, v, edata in self.displayed_graph.edges(data=True):
             indirect = edata.get("indirect", False)
             edge_item = EdgeItem(node_items[u], node_items[v], indirect)
             scene.addItem(edge_item)
             node_items[u].add_edge(edge_item)
             node_items[v].add_edge(edge_item)
 
-        main_layout.addWidget(view)
+    def _init_widgets(self):
+        # start adding things
+        self.setWindowTitle("Graph Viewer")
+
+        self.main_layout = QVBoxLayout()
+        top_layout = QHBoxLayout()
+
+        # make a widget for all the left items
+        left_widget = QWidget()
+        left_layout = QHBoxLayout(left_widget)
+        left_layout.setSpacing(15)
+
+        # make a widget for all the right items
+        right_widget = QWidget()
+        right_layout = QHBoxLayout(right_widget)
+        right_layout.setSpacing(15)
+
+        # Label left (only `change%` is green)
+        self.completion_label = QLabel(f"Completion: <span style='color: green;'>Loading...</span>")
+        self.completion_label.setStyleSheet("font-size: 16px;")
+        left_layout.addWidget(self.completion_label)
+
+        # Label left, tag selection
+        self.tag_label = QLabel("Tag: ")
+        self.tag_label.setStyleSheet("font-size: 16px;")
+        self.tag_dropdown = QComboBox()
+        self.tag_dropdown.addItems(self._tags)
+        self.tag_dropdown.currentTextChanged.connect(self.on_tag_selected)
+        # Create a container widget to hold label and dropdown
+        tag_widget = QWidget()
+        tag_layout = QHBoxLayout(tag_widget)
+        tag_layout.addWidget(self.tag_label)
+        tag_layout.addWidget(self.tag_dropdown)
+        tag_layout.setSpacing(1)  # Adjust spacing between label and dropdown
+        tag_layout.setContentsMargins(0, 0, 0, 0)  # Remove extra margins
+        tag_widget.setLayout(tag_layout)
+        left_layout.addWidget(tag_widget)
+
+        # Label left, graph layout selection
+        self.layout_label = QLabel("Layout: ")
+        self.layout_label.setStyleSheet("font-size: 16px;")
+        self.layout_dropdown = QComboBox()
+        self.layout_dropdown.addItems(["dot", "fdp", "neato", "twopi", "circo"])
+        self.layout_dropdown.currentTextChanged.connect(self._graph_layout_changed)
+        # Create a container widget to hold label and dropdown
+        layout_widget = QWidget()
+        layout_layout = QHBoxLayout(layout_widget)
+        layout_layout.addWidget(self.layout_label)
+        layout_layout.addWidget(self.layout_dropdown)
+        layout_layout.setSpacing(1)  # Adjust spacing between label and dropdown
+        layout_layout.setContentsMargins(0, 0, 0, 0)  # Remove extra margins
+        layout_widget.setLayout(layout_layout)
+        left_layout.addWidget(layout_widget)
+
+        # Only changed checkbox
+        self.only_changed_checkbox = QCheckBox("Only Changed")
+        self.only_changed_checkbox.stateChanged.connect(self._only_changed_clicked)
+        right_layout.addWidget(self.only_changed_checkbox)
+
+        # Summarize button
+        self.summarize_button = QPushButton("Summarize")
+        self.summarize_button.clicked.connect(self.summarize)
+        right_layout.addWidget(self.summarize_button)
+
+        # Label right (only `changes` is pink)
+        self.hotness_label = QLabel("Hotness: <span style='color: pink;'>changes</span>")
+        self.hotness_label.setStyleSheet("font-size: 16px;")
+        right_layout.addWidget(self.hotness_label)
+
+        # refresh button
+        #self.refresh_button = QPushButton("Refresh")
+        #self.refresh_button.clicked.connect(self._print_refresh)
+        #left_layout.addWidget(self.refresh_button)
+
+        top_layout.addWidget(left_widget, alignment=Qt.AlignLeft)
+        top_layout.addWidget(right_widget, alignment=Qt.AlignRight)
+        self.main_layout.addLayout(top_layout)
+
+        # adds the graph view
+        self._update_progress_widgets()
+
+        self.setLayout(self.main_layout)
         self.setStyleSheet("background-color: #222222;")
         self.resize(1000, 800)
 
     def _analyze_graph(self, max_changes_heat=10) -> nx.DiGraph:
+        # check if there is a valid selected tag
+        commit_hash = None
+        if self._tag_selection:
+            tag_ref = self._git_client.repo.tag(self._tag_selection)
+            try:
+                commit_hash = tag_ref.commit.hexsha
+            except Exception as e:
+                _l.error(f"Failed to get commit hash for tag {self._tag_selection}: {e}")
+
         # collect function changes
-        func_changes_by_users = self._controller.compute_changes_per_function()
+        func_changes_by_users = self._controller.compute_changes_per_function(
+            exclude_master=True, client=self._git_client, commit_hash=commit_hash
+        )
         func_changes = {}
         for func_addr, user_changes in func_changes_by_users.items():
             func_changes[func_addr] = sum(user_changes.values())
-            _l.info(f"Function {hex(func_addr)} has {func_changes[func_addr]} changes")
+            #_l.info(f"Function {hex(func_addr)} has {func_changes[func_addr]} changes")
 
         func_heats = {}
+        total_completed_funcs = 0
         # changed_funcs = set(func_addr for func_addr, changes in func_changes.items() if changes > 0)
         for func_addr, changes in func_changes.items():
             if changes > 0:
                 func_heats[func_addr] = min(changes, max_changes_heat) / max_changes_heat
+                total_completed_funcs += 1
+        complete_percent = int((total_completed_funcs / len(func_changes)) * 100)
+        self._completion = complete_percent
 
         # find the changed function nodes in the graph
         changed_func_nodes = set()
@@ -300,14 +414,14 @@ class ProgressGraphWidget(QWidget):
 
         func_nodes_in_graph = changed_func_nodes.copy()
         # find every node that is connected, dist of 1, from changed funcs
-        for node in changed_func_nodes:
-            for neighbor in self._graph.successors(node):
-                func_nodes_in_graph.add(neighbor)
-            for neighbor in self._graph.predecessors(node):
-                func_nodes_in_graph.add(neighbor)
+        if not self._show_only_changed:
+            for node in changed_func_nodes:
+                for neighbor in self._graph.successors(node):
+                    func_nodes_in_graph.add(neighbor)
+                for neighbor in self._graph.predecessors(node):
+                    func_nodes_in_graph.add(neighbor)
 
         # TODO: do indirect edges
-
         # make a subgraph of the graph with only the changed functions
         analyzed_graph = nx.DiGraph(self._graph.subgraph(func_nodes_in_graph))
 
@@ -319,12 +433,41 @@ class ProgressGraphWidget(QWidget):
         # set heat & size attributes on the nodes
         for node in analyzed_graph.nodes:
             node_data = analyzed_graph.nodes[node]
-            node_data["hotness"] = func_heats.get(node.addr, 0.0)
-            node_data["size"] = int(size_variances[node.size])
+            node_data["hotness"] = func_heats.get(node.addr, 0)
+            node_data["size"] = size_variances[node.size]
 
         return analyzed_graph
 
-    def compute_size_outlier_scores(self, node_sizes: list[int], max_size=10) -> dict:
+    #
+    # Callbacks
+    #
+
+    def _only_changed_clicked(self, state):
+        show_only_changed = state == Qt.Checked
+        self._show_only_changed = show_only_changed
+        self._update_progress_widgets()
+
+    def _graph_layout_changed(self, layout):
+        self._layouts.remove(layout)
+        self._layouts.insert(0, layout)
+        self._update_progress_widgets()
+
+    def on_tag_selected(self, tag, *args, **kwargs):
+        _l.info(f"Selected tag: {tag}")
+        self._tag_selection = tag
+        self._update_progress_widgets()
+
+    def summarize(self, *args, **kwargs):
+        if not EXTRAS_AVAILABLE:
+            _l.error("Summarization requires extras, which are not available.")
+            return
+
+        file_location, _ = QFileDialog.getSaveFileName(None, "Save File", "", "All Files (*);;Text Files (*.txt)")
+        _l.info("Summarizing changes...")
+        summarize_changes(self._controller, self.displayed_graph, file_location)
+
+    @staticmethod
+    def compute_size_outlier_scores(node_sizes: list[int], max_size=3, min_size=1) -> dict:
         """
         Compute the outlier scores for the sizes of the nodes in the graph.
         """
@@ -341,6 +484,10 @@ class ProgressGraphWidget(QWidget):
 
             # Apply a sigmoid function to map to (0,1), with strong suppression of outliers
             score = np.exp(-z_score)  # Exponentially decay based on distance
-            variances[size] = (1 - score) * max_size
+            variances[size] = max(int((1 - score) * max_size), min_size)
 
         return variances
+
+    def closeEvent(self, event):
+        self._controller.progress_view_open = False
+

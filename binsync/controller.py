@@ -128,8 +128,6 @@ class BSController:
         else:
             self.deci = decompiler_interface
 
-        self._register_context_menus()
-
         # command locks
         self.push_job_scheduler = Scheduler(name="PushJobScheduler")
         self.sync_semaphore = threading.Semaphore(value=self.DEFAULT_SEMAPHORE_SIZE)
@@ -186,13 +184,6 @@ class BSController:
     def shutdown(self):
         self.stop_worker_routines()
         self.deci.shutdown()
-
-    def _register_context_menus(self):
-        context_menus = {}
-        # add the menu for viewing progress
-        context_menus["BinSync/view_prog"] = ("View Progress...", self.show_progress_window)
-        self.deci.gui_register_ctx_menu_many(context_menus)
-
 
     #
     # Git Properties
@@ -757,8 +748,9 @@ class BSController:
 
         # TODO: make structus work in IDA
         target_artifacts = target_artifacts or {
-            # Struct: self.fill_struct,
-            Comment: lambda *x, **y: None,
+            Struct: self.fill_artifact,
+            #Comment: lambda *x, **y: None,
+            Comment: self.fill_artifact,
             Function: self.fill_artifact,
             GlobalVariable: self.fill_artifact,
             Enum: self.fill_artifact
@@ -788,7 +780,8 @@ class BSController:
                     filler_func(
                         identifier, artifact_type=artifact_type, artifact=pref_art, state=master_state,
                         commit_msg=f"Magic Synced {pref_art}",
-                        merge_level=MergeLevel.NON_CONFLICTING
+                        merge_level=MergeLevel.NON_CONFLICTING,
+                        do_type_search=False
                     )
                 except Exception as e:
                     _l.info(f"Banishing exception: {e}")
@@ -1063,16 +1056,29 @@ class BSController:
     # View Utils
     #
 
-    def compute_changes_per_function(self, exclude_master=False):
+    def compute_changes_per_function(self, exclude_master=False, client=None, commit_hash=None):
         """
         Computes the number of changes per artifact type.
         TODO: support more than just functions
-        TODO: make this not such a poormans coutner. We should be using commits not this hack
+        TODO: make this not such a poormans counter. We should be using commits not this hack
         """
+        if client is None:
+            client = self.client
+        before_ts = None
+        if commit_hash is not None:
+            try:
+                commit_ref = client.repo.commit(commit_hash)
+            except Exception as e:
+                _l.error(f"Failed to get commit {commit_hash} because of {e}")
+                commit_ref = None
+
+            if commit_ref is not None:
+                before_ts = commit_ref.committed_date
+
         # gather all the states
-        all_states = self.client.all_states()
+        all_states = client.all_states(before_ts=before_ts)
         if exclude_master:
-            all_states = [s for s in all_states if s.user != self.client.master_user]
+            all_states = [s for s in all_states if s.user != client.master_user]
 
         func_addrs = list(self.deci.functions.keys())
         function_counts = {addr: defaultdict(int) for addr in func_addrs}
@@ -1101,19 +1107,30 @@ class BSController:
                     if sv.type:
                         changes += 1
 
+                if func_addr not in function_counts:
+                    self.deci.warning(f"Function {func_addr} not found in the decompiler")
+                    function_counts[func_addr] = defaultdict(int)
+
                 function_counts[func_addr][state.user] = changes
 
         return function_counts
 
-    def show_progress_window(self, *args, **kwargs):
+    def show_progress_window(self, *args, tag=None, **kwargs):
+        """
+        TODO: re-enable this later when you figure out how fix the apparent thread/proccess issue in IDA Pro
+        """
+
         from binsync.ui.progress_graph.progress_window import ProgressGraphWidget
 
-        if self.progress_view_open:
-            self.deci.info("Progress view already open")
-            return
+        # TODO: XXX: re-enable this later
+        #if self.progress_view_open:
+        #    self.deci.info("Progress view already open")
+        #    return
 
+        self.deci.info("Collecting data to make progress view now...")
         graph = self.deci.get_callgraph()
-        self.deci.gui_attach_qt_window(
-            ProgressGraphWidget, "Progress View", graph=graph, completion=10, controller=self
-        )
+        if tag == "master":
+            tag = None
+
+        self.deci.gui_attach_qt_window(ProgressGraphWidget, "Progress View", graph=graph, controller=self, tag=tag)
         self.progress_view_open = True

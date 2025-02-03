@@ -2,11 +2,13 @@ import logging
 import pathlib
 import os
 import re
+import shutil
 import subprocess
 import datetime
 from functools import wraps
 from typing import Iterable, Optional
 from pathlib import Path
+import tempfile
 
 import filelock
 import git
@@ -86,6 +88,7 @@ class Client:
         push_on_update=True,
         pull_on_update=True,
         commit_on_update=True,
+        temp_directory=None,
         **kwargs,
     ):
         """
@@ -112,6 +115,7 @@ class Client:
         self.pull_on_update = pull_on_update
         self.push_on_update = push_on_update
         self.commit_on_update = commit_on_update
+        self._temp_directory: tempfile.TemporaryDirectory | None = temp_directory
 
         # validate this username can exist
         if not master_user or master_user.endswith('/') or '__root__' in master_user:
@@ -146,7 +150,37 @@ class Client:
         # force a state update on init
         self.master_state = self.get_state(no_cache=True)
 
+    def copy(self, copy_files=False):
+        temp_dir = None
+        repo_root = self.repo_root
+        if copy_files:
+            # go to the repo root and copy the entire tree
+            temp_dir = tempfile.TemporaryDirectory()
+            abs_path_str = str(Path(temp_dir.name).absolute())
+            shutil.copytree(self.repo_root, abs_path_str, dirs_exist_ok=True)
+            repo_root = abs_path_str
+
+        return Client(
+            master_user=self.master_user,
+            repo_root=repo_root,
+            binary_hash=self.binary_hash,
+            remote=self.remote,
+            commit_interval=self._commit_interval,
+            commit_batch_size=self._commit_batch_size,
+            init_repo=False,
+            remote_url=None,
+            ssh_agent_pid=self.ssh_agent_pid,
+            ssh_auth_sock=self.ssh_auth_sock,
+            push_on_update=self.push_on_update,
+            pull_on_update=self.pull_on_update,
+            commit_on_update=self.commit_on_update,
+            temp_directory=temp_dir,
+        )
+
     def __del__(self):
+        if self._temp_directory is not None:
+            self._temp_directory.cleanup()
+
         self.shutdown()
 
     #
@@ -310,28 +344,39 @@ class Client:
 
         return users
 
-    @atomic_git_action
-    def get_state(self, user=None, priority=None, no_cache=False):
-        if user is None:
-            user = self.master_user
+    @staticmethod
+    def parse_state_from_commit(repo: git.Repo, user=None, commit_hash=None, is_master=False, client=None) -> State:
+        if user is None and commit_hash is None:
+            raise ValueError("Must specify either a user or a commit hash")
 
-        repo = self.repo
         state = State(None)
         try:
             state = State.parse(
-                self._get_tree(user, repo),
-                client=self
+                Client._get_tree(user, repo, commit_hash=commit_hash),
+                client=client
             )
         except MetadataNotFoundError:
-            if user == self.master_user:
+            if is_master:
                 # create of the first state ever
-                state = State(self.master_user, client=self)
+                state = State(user, client=client)
         except Exception as e:
-            if user == self.master_user:
+            if is_master:
                 raise
             else:
                 l.critical(f"Invalid state for {user}, dropping: {e}")
                 state = State(user)
+
+        return state
+
+
+    @atomic_git_action
+    def get_state(self, user=None, priority=None, no_cache=False, commit_hash=None) -> State:
+        if user is None:
+            user = self.master_user
+
+        state = self.parse_state_from_commit(
+            self.repo, user=user, commit_hash=commit_hash, is_master=user == self.master_user, client=self
+        )
 
         # NOTE: there might be a race between get_state(no_cache=True) in
         # Client and get_state(...) from all_states() in Controller which uses
@@ -354,7 +399,7 @@ class Client:
         """
         return self.remote and any(r.name == self.remote for r in self.repo.remotes)
 
-    def all_states(self):
+    def all_states(self, before_ts: int = None) -> Iterable[State]:
         states = list()
         # promises users in the event of inability to get new users
         users = self.users(no_cache=True) or self.users()
@@ -362,8 +407,16 @@ class Client:
             l.critical("Failed to get users from current project. Report me if possible.")
             return {}
 
-        for user in users:
-            state = self.get_state(user=user.name)
+        usernames = [u.name for u in users]
+        username_to_commit = {}
+        if before_ts:
+            username_to_commit = self.find_commits_before_ts(self.repo, before_ts, usernames)
+
+        for username in usernames:
+            commit_hash = username_to_commit.get(username, None)
+            state = self.get_state(
+                user=username, priority=SchedSpeed.FAST, commit_hash=commit_hash, no_cache=(commit_hash is not None)
+            )
 
             # NOTE: It can happen that state is None when the state is
             # retrieved from cache and it has not been totally initialized yet
@@ -373,6 +426,22 @@ class Client:
                 states.append(state)
 
         return states
+
+    def find_commits_before_ts(self, repo: git.Repo, ts: int, users: list[str]):
+        ref_dict = self._get_best_refs(repo, force_local=True)
+        best_commits = {}
+        for user_name, ref in ref_dict.items():
+            if user_name not in users:
+                continue
+
+            commits = list(repo.iter_commits(ref))
+            reverse_sorted_commits = sorted(commits, key=lambda x: x.committed_date, reverse=True)
+            for commit in reverse_sorted_commits:
+                if commit.committed_date <= ts:
+                    best_commits[user_name] = commit.hexsha
+                    break
+
+        return best_commits
 
     def commit_master_state(self, commit_msg=None) -> int:
         # attempt to commit dirty files in a update phase
@@ -655,7 +724,6 @@ class Client:
             if self._repo_lock_path.exists():
                 self._repo_lock_path.unlink(missing_ok=True)
 
-
     def _get_best_refs(self, repo, force_local=False):
         candidates = {}
         for ref in repo.refs:  # type: git.Reference
@@ -679,7 +747,8 @@ class Client:
         branch = [ref for ref in self.repo.refs if ref.name.endswith(BINSYNC_ROOT_BRANCH)][0]
         return branch.commit.tree["binary_hash"].data_stream.read().decode().strip("\n")
 
-    def list_files_in_tree(self, base_tree: git.Tree):
+    @staticmethod
+    def list_files_in_tree(base_tree: git.Tree):
         """
         Lists all the files in a repo at a given tree
 
@@ -697,7 +766,8 @@ class Client:
 
         return file_list
 
-    def add_data(self, index: git.IndexFile, path: str, data: bytes):
+    @staticmethod
+    def add_data(index: git.IndexFile, path: str, data: bytes):
         """
         Adds physical files to the database.
 
@@ -716,25 +786,31 @@ class Client:
             fp.write(data)
         index.add([fullpath])
 
-    def remove_data(self, index: git.IndexFile, path: str):
+    @staticmethod
+    def remove_data(index: git.IndexFile, path: str):
         fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
         pathlib.Path(fullpath).parent.mkdir(parents=True, exist_ok=True)
         index.remove([fullpath], working_tree=True)
 
-    def load_file_from_tree(self, tree: git.Tree, filename):
+    @staticmethod
+    def load_file_from_tree(tree: git.Tree, filename):
         try:
             return tree[filename].data_stream.read().decode()
         except KeyError:
             return None
 
-    def _get_tree(self, user, repo: git.Repo):
-        options = [ref for ref in repo.refs if ref.name.endswith(f"{BINSYNC_BRANCH_PREFIX}/{user}")]
-        if not options:
-            raise ValueError(f'No such user "{user}" found in repository')
+    @staticmethod
+    def _get_tree(user, repo: git.Repo, commit_hash=None):
+        if commit_hash is None:
+            options = [ref for ref in repo.refs if ref.name.endswith(f"{BINSYNC_BRANCH_PREFIX}/{user}")]
+            if not options:
+                raise ValueError(f'No such user "{user}" found in repository')
 
-        # find the latest commit for the specified user!
-        best = max(options, key=lambda ref: ref.commit.authored_date)
-        bct = best.commit.tree
+            # find the latest commit for the specified user!
+            best = max(options, key=lambda ref: ref.commit.authored_date)
+            bct = best.commit.tree
+        else:
+            bct = repo.commit(commit_hash).tree
 
         return bct
 

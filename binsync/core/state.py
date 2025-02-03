@@ -147,8 +147,10 @@ def update_last_change(f):
 
 
 def list_files_in_dir(src: Union[pathlib.Path, git.Tree], dir_name, client=None) -> List[str]:
-    if client and isinstance(src, git.Tree):
-        files = client.list_files_in_tree(src)
+    from .client import Client
+
+    if isinstance(src, git.Tree):
+        files = Client.list_files_in_tree(src)
         return [name for name in files if name.startswith(dir_name)]
 
     # load from filesystem
@@ -166,8 +168,10 @@ def list_files_in_dir(src: Union[pathlib.Path, git.Tree], dir_name, client=None)
 
 
 def file_to_str(src: Union[pathlib.Path, git.Tree], filename, client=None) -> Optional[str]:
-    if client and isinstance(src, git.Tree):
-        file_data = client.load_file_from_tree(src, filename)
+    from .client import Client
+
+    if isinstance(src, git.Tree):
+        file_data = Client.load_file_from_tree(src, filename)
     else:
         if not src:
             src = pathlib.Path("")
@@ -330,10 +334,12 @@ class State:
             self._dump_data(dst, path, struct.dumps(fmt=ArtifactFormat.TOML).encode())
 
         if pathlib.Path(self.client.repo_root + '/structs').exists():
+            sanitized_struct_names = set([sanitize_name(s_name) for s_name in self.structs.keys()])
             for path in pathlib.Path(self.client.repo_root + '/structs').iterdir():
                 file = path.stem
                 name = file.split(".")[0]
-                if name not in self.structs.keys():
+
+                if name not in sanitized_struct_names:
                     self._delete_data(dst, path)
 
         # dump comments
