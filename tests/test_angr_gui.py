@@ -201,6 +201,7 @@ class TestBinsyncGUI(object):
 
             print("Blocking waiting for table updates..")
             control_panel = binsync_plugin.control_panel_view.control_panel
+            time.sleep(1)
             for i in range(40):
                 qWait(BINSYNC_RELOAD_TIME // 10, main.app)
                 print(f"\tAttempt number {i + 1}/40..")
