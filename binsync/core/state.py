@@ -73,8 +73,8 @@ def update_last_change(f):
         artifact = args[0]
 
         # make a function if one does not exist
-        if isinstance(artifact, (FunctionHeader, StackVariable)):
-            func = self.get_or_make_function(artifact.addr)
+        func: Function | None = self.get_or_make_function(artifact.addr) \
+            if isinstance(artifact, (FunctionHeader, StackVariable)) else None
 
         if not should_set:
             from_user_msg = f" from {from_user}" if from_user else ""
@@ -83,63 +83,19 @@ def update_last_change(f):
 
         self.last_commit_msg = f"Updated {artifact}"
         artifact.last_change = datetime.datetime.now(tz=datetime.timezone.utc)
-
         # Comment
         if isinstance(artifact, Comment):
-            artifact_loc = artifact.addr
-            artifact_type = ArtifactType.COMMENT
-            # update function its in, if it's in a function
             func = self.find_func_for_addr(artifact.addr)
             if func:
                 func.last_change = artifact.last_change
 
         # Stack Var
         elif isinstance(artifact, StackVariable):
-            artifact_loc = artifact.addr
-            artifact_type = ArtifactType.FUNCTION
             func.last_change = artifact.last_change
-
-        elif isinstance(artifact, Function):
-            artifact_loc = artifact.addr
-            artifact_type = ArtifactType.FUNCTION
 
         # Function Header
         elif isinstance(artifact, FunctionHeader):
-            artifact_loc = artifact.addr
-            artifact_type = ArtifactType.FUNCTION
             func.last_change = artifact.last_change
-
-        # Patch
-        elif isinstance(artifact, Patch):
-            artifact_loc = artifact.offset
-            artifact_type = ArtifactType.PATCH
-
-        # Struct
-        elif isinstance(artifact, Struct):
-            artifact_loc = artifact.name
-            artifact_type = ArtifactType.STRUCT
-
-        # Global Var
-        elif isinstance(artifact, GlobalVariable):
-            artifact_loc = artifact.addr
-            artifact_type = ArtifactType.GLOBAL_VAR
-
-        # Enum
-        elif isinstance(artifact, Enum):
-            artifact_loc = artifact.name
-            artifact_type = ArtifactType.ENUM
-
-        # Typedef
-        elif isinstance(artifact, Typedef):
-            artifact_loc = artifact.name
-            artifact_type = ArtifactType.TYPEDEF
-
-        else:
-            raise Exception("Undefined Artifact Type!")
-
-        #self.last_push_artifact = artifact_loc
-        #self.last_push_time = artifact.last_change
-        #self.last_push_artifact_type = artifact_type
 
         return f(self, *args, **kwargs)
 

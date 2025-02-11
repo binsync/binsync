@@ -77,10 +77,6 @@ class TestState(unittest.TestCase):
         self.assertNotEqual(state.functions[0x400080].last_change, None)
         self.assertNotEqual(state.structs["some_struct"].last_change, None)
 
-        self.assertNotEqual(state.last_push_time, None)
-        self.assertEqual(state.last_push_artifact, "some_struct")
-        self.assertEqual(state.last_push_artifact_type, ArtifactType.STRUCT)
-
 
 if __name__ == "__main__":
     unittest.main(argv=sys.argv)
