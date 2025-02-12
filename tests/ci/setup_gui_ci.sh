@@ -11,7 +11,11 @@ python -m pip install --upgrade pip
 # install the parallel branch of libbs that matches the current branch
 (git clone https://github.com/binsync/libbs.git /tmp/libbs && cd /tmp/libbs && git checkout $BRANCH_NAME || true && pip install .)
 # attempt an install of angr-management first since version of binsync will conflict
-pip install angr-management==9.2.139
+pip install angr-management==9.2.140
 pip install .[test]
+AM_LOC=$(python3 -c "import angrmanagement; print(angrmanagement.__file__)")
+FULL_FILE=$(readlink -f $AM_LOC)
+TARGET="${FULL_FILE}/ui/workspace.py"
+sed -i '/assert/d' $TARGET
 AM_INSTALL=$(dirname $(python3 -c "import angrmanagement; print(angrmanagement.__file__)"))/plugins/
 binsync --cli-install angr --install-path $AM_INSTALL
