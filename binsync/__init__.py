@@ -1,4 +1,4 @@
-__version__ = "5.2.0"
+__version__ = "5.3.0"
 
 import os
 import platform
@@ -15,8 +15,8 @@ del Loggers
 del logging
 
 # Add /opt/local/bin to PATH for MacOS (gets lost in App launch on most decs)
-#if platform.system() == "Darwin":
-#    os.environ["PATH"] += os.environ["PATH"] + ":/opt/local/bin/"
+if platform.system() == "Darwin":
+    os.environ["PATH"] += os.environ["PATH"] + ":/opt/local/bin/"
 
 
 def create_plugin(*args, **kwargs):
