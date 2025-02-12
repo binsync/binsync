@@ -89,8 +89,6 @@ class Client:
         pull_on_update=True,
         commit_on_update=True,
         temp_directory=None,
-        ignore_lock=False,
-        init_user_branch=True,
         **kwargs,
     ):
         """
@@ -108,7 +106,6 @@ class Client:
         :param ssh_agent_pid:       SSH Agent PID
         :param ssh_auth_sock:       SSH Auth Socket
         """
-        self._ignore_lock = ignore_lock
         self.master_user = master_user
         self.repo_root = repo_root
         self.binary_hash = binary_hash
@@ -138,8 +135,7 @@ class Client:
         # create, init, and checkout Git repo
         self.repo = self._get_or_init_binsync_repo(remote_url, init_repo)
         self.scheduler.start_worker_thread()
-        if init_user_branch:
-            self._get_or_init_user_branch()
+        self._get_or_init_user_branch()
 
         # timestamps
         self._commit_interval = commit_interval
@@ -179,8 +175,6 @@ class Client:
             pull_on_update=self.pull_on_update,
             commit_on_update=self.commit_on_update,
             temp_directory=temp_dir,
-            ignore_lock=self._ignore_lock or copy_files,
-            init_user_branch=not copy_files,
         )
 
     def __del__(self):
@@ -266,21 +260,12 @@ class Client:
         assert not self.repo.bare, "it should not be a bare repo"
 
         self.repo_lock = filelock.FileLock(str(self._repo_lock_path))
-        should_delete_lock = False
         try:
             self.repo_lock.acquire(timeout=0)
         except filelock.Timeout as e:
-            if not self._ignore_lock:
-                raise Exception("Can only have one binsync client touching a local repository at once.\n"
+            raise Exception("Can only have one binsync client touching a local repository at once.\n"
                             "If the previous client crashed, you need to delete " + self.repo_root +
                             "/.git/binsync.lock") from e
-            should_delete_lock = True
-
-        if should_delete_lock:
-            if self._repo_lock_path.exists():
-                self._repo_lock_path.unlink(missing_ok=True)
-            self.repo_lock = filelock.FileLock(str(self._repo_lock_path))
-            self.repo_lock.acquire(timeout=0)
 
         return self.repo
 

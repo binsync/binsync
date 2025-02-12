@@ -755,14 +755,12 @@ class BSController:
             GlobalVariable: self.fill_artifact,
             Enum: self.fill_artifact
         }
-        total_synced = defaultdict(int)
 
         for artifact_type, filler_func in target_artifacts.items():
             _l.info(f"Magic Syncing artifacts of type {artifact_type.__name__} now...")
             pref_state = users_state_map[preference_user]
             for identifier in self.changed_artifacts_of_type(artifact_type, users=all_users + [preference_user],
                                                              states=users_state_map):
-                total_synced[artifact_type] += 1
                 pref_art = self.pull_artifact(artifact_type, identifier, state=pref_state)
                 for user in all_users:
                     user_state = users_state_map[user]
@@ -789,9 +787,6 @@ class BSController:
                     _l.info(f"Banishing exception: {e}")
 
         _l.info("Magic Syncing Completed!")
-        # summarize total synchage!
-        _l.info(f"In total: {total_synced[Struct]} Structs, {total_synced[Function]} Functions, "
-                f"{total_synced[GlobalVariable]} Global Variables, and {total_synced[Enum]} Enums were synced.")
 
     #
     # Force Push
