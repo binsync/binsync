@@ -455,7 +455,7 @@ class BSController:
         @param kwargs:
         @return:
         """
-        if self.is_not_syncing_data():
+        if self.should_watch_artifacts():
             self.commit_artifact(*args, **kwargs)
 
     @init_checker
