@@ -14,7 +14,7 @@ loggers = Loggers()
 del Loggers
 del logging
 
-# Add /opt/local/bin to PATH for MacOS (gets lost in App launch)
+# Add /opt/local/bin to PATH for MacOS (gets lost in App launch on most decs)
 #if platform.system() == "Darwin":
 #    os.environ["PATH"] += os.environ["PATH"] + ":/opt/local/bin/"
 
