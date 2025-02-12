@@ -171,16 +171,17 @@ class QUtilPanel(QWidget):
         # AI Extras
         #
 
-        ai_button = QPushButton("Add AI User...")
-        ai_button.clicked.connect(self._handle_add_ai_user)
-        extras_layout.addWidget(ai_button)
+        progress_view_btn = QPushButton("Open Progress View...")
+        progress_view_btn.clicked.connect(self._handle_progress_view)
+        extras_layout.addWidget(progress_view_btn)
 
         extras_group.setLayout(extras_layout)
         return extras_group
 
-    def _handle_add_ai_user(self):
-        from dailalib.binsync_plugin.ai_user_config_ui import AIUserConfigDialog
-        dialog = AIUserConfigDialog(self.controller)
+    def _handle_progress_view(self):
+        from ..progress_graph.progress_window import ProgressGraphWidget
+        dialog = ProgressGraphWidget(graph=self.controller.deci.get_callgraph(), controller=self.controller, parent=self)
+        dialog.show()
         dialog.exec_()
 
     #

@@ -2,6 +2,7 @@ import logging
 import threading
 import datetime
 import time
+from collections import defaultdict
 from functools import wraps
 from typing import Dict, Iterable, Optional, Union, List, Tuple
 
@@ -171,6 +172,9 @@ class BSController:
         self._run_updater_threads = False
         self.user_states_update_thread = threading.Thread(target=self.updater_routine)
 
+        # other properties
+        self.progress_view_open = False
+
         if self.headless:
             self._init_headless_components()
 
@@ -289,6 +293,7 @@ class BSController:
 
             # do git pull/push operations if a remote exist for the client
             if self.client.last_pull_attempt_time is None:
+                _l.debug("Attempting to update states now")
                 self.client.commit_and_update_states(commit_msg="User created")
 
             # update every reload_time
@@ -743,18 +748,21 @@ class BSController:
 
         # TODO: make structus work in IDA
         target_artifacts = target_artifacts or {
-            # Struct: self.fill_struct,
-            Comment: lambda *x, **y: None,
+            Struct: self.fill_artifact,
+            #Comment: lambda *x, **y: None,
+            Comment: self.fill_artifact,
             Function: self.fill_artifact,
             GlobalVariable: self.fill_artifact,
             Enum: self.fill_artifact
         }
+        total_synced = defaultdict(int)
 
         for artifact_type, filler_func in target_artifacts.items():
             _l.info(f"Magic Syncing artifacts of type {artifact_type.__name__} now...")
             pref_state = users_state_map[preference_user]
             for identifier in self.changed_artifacts_of_type(artifact_type, users=all_users + [preference_user],
                                                              states=users_state_map):
+                total_synced[artifact_type] += 1
                 pref_art = self.pull_artifact(artifact_type, identifier, state=pref_state)
                 for user in all_users:
                     user_state = users_state_map[user]
@@ -774,12 +782,16 @@ class BSController:
                     filler_func(
                         identifier, artifact_type=artifact_type, artifact=pref_art, state=master_state,
                         commit_msg=f"Magic Synced {pref_art}",
-                        merge_level=MergeLevel.NON_CONFLICTING
+                        merge_level=MergeLevel.NON_CONFLICTING,
+                        do_type_search=False
                     )
                 except Exception as e:
                     _l.info(f"Banishing exception: {e}")
 
         _l.info("Magic Syncing Completed!")
+        # summarize total synchage!
+        _l.info(f"In total: {total_synced[Struct]} Structs, {total_synced[Function]} Functions, "
+                f"{total_synced[GlobalVariable]} Global Variables, and {total_synced[Enum]} Enums were synced.")
 
     #
     # Force Push
@@ -1044,3 +1056,86 @@ class BSController:
             logging.getLogger("binsync").setLevel("INFO")
 
         return self.config
+
+    #
+    # View Utils
+    #
+
+    def compute_changes_per_function(self, exclude_master=False, client=None, commit_hash=None):
+        """
+        Computes the number of changes per artifact type.
+        TODO: support more than just functions
+        TODO: make this not such a poormans counter. We should be using commits not this hack
+        """
+        if client is None:
+            client = self.client
+        before_ts = None
+        if commit_hash is not None:
+            try:
+                commit_ref = client.repo.commit(commit_hash)
+            except Exception as e:
+                _l.error(f"Failed to get commit {commit_hash} because of {e}")
+                commit_ref = None
+
+            if commit_ref is not None:
+                before_ts = commit_ref.committed_date
+
+        # gather all the states
+        all_states = client.all_states(before_ts=before_ts)
+        if exclude_master:
+            all_states = [s for s in all_states if s.user != client.master_user]
+
+        func_addrs = list(self.deci.functions.keys())
+        function_counts = {addr: defaultdict(int) for addr in func_addrs}
+        for state in all_states:
+            for func_addr, func in state.functions.items():
+                func: Function
+                changes = 0
+                # check the parameters
+                header: FunctionHeader = func.header
+                if header:
+                    if header.name:
+                        changes += 1
+                    for arg in header.args.values():
+                        arg: FunctionArgument
+                        if arg.name:
+                            changes += 1
+                        if arg.type:
+                            changes += 1
+                    if header.type:
+                        changes += 1
+                # check the stack vars
+                for sv in func.stack_vars.values():
+                    sv: StackVariable
+                    if sv.name:
+                        changes += 1
+                    if sv.type:
+                        changes += 1
+
+                if func_addr not in function_counts:
+                    self.deci.warning(f"Function {func_addr} not found in the decompiler")
+                    function_counts[func_addr] = defaultdict(int)
+
+                function_counts[func_addr][state.user] = changes
+
+        return function_counts
+
+    def show_progress_window(self, *args, tag=None, **kwargs):
+        """
+        TODO: re-enable this later when you figure out how fix the apparent thread/proccess issue in IDA Pro
+        """
+
+        from binsync.ui.progress_graph.progress_window import ProgressGraphWidget
+
+        # TODO: XXX: re-enable this later
+        #if self.progress_view_open:
+        #    self.deci.info("Progress view already open")
+        #    return
+
+        self.deci.info("Collecting data to make progress view now...")
+        graph = self.deci.get_callgraph()
+        if tag == "master":
+            tag = None
+
+        self.deci.gui_attach_qt_window(ProgressGraphWidget, "Progress View", graph=graph, controller=self, tag=tag)
+        self.progress_view_open = True

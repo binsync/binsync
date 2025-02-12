@@ -53,6 +53,7 @@ def sanitize_name(unsafe_name: str) -> str:
     """
     return re.sub(r"[^a-zA-Z0-9_]", "_", unsafe_name)
 
+
 def update_dirty_flag(f):
     @wraps(f)
     def _update_dirty_flag(self, *args, **kwargs):
@@ -72,8 +73,8 @@ def update_last_change(f):
         artifact = args[0]
 
         # make a function if one does not exist
-        if isinstance(artifact, (FunctionHeader, StackVariable)):
-            func = self.get_or_make_function(artifact.addr)
+        func: Function | None = self.get_or_make_function(artifact.addr) \
+            if isinstance(artifact, (FunctionHeader, StackVariable)) else None
 
         if not should_set:
             from_user_msg = f" from {from_user}" if from_user else ""
@@ -82,63 +83,19 @@ def update_last_change(f):
 
         self.last_commit_msg = f"Updated {artifact}"
         artifact.last_change = datetime.datetime.now(tz=datetime.timezone.utc)
-
         # Comment
         if isinstance(artifact, Comment):
-            artifact_loc = artifact.addr
-            artifact_type = ArtifactType.COMMENT
-            # update function its in, if it's in a function
             func = self.find_func_for_addr(artifact.addr)
             if func:
                 func.last_change = artifact.last_change
 
         # Stack Var
         elif isinstance(artifact, StackVariable):
-            artifact_loc = artifact.addr
-            artifact_type = ArtifactType.FUNCTION
             func.last_change = artifact.last_change
-
-        elif isinstance(artifact, Function):
-            artifact_loc = artifact.addr
-            artifact_type = ArtifactType.FUNCTION
 
         # Function Header
         elif isinstance(artifact, FunctionHeader):
-            artifact_loc = artifact.addr
-            artifact_type = ArtifactType.FUNCTION
             func.last_change = artifact.last_change
-
-        # Patch
-        elif isinstance(artifact, Patch):
-            artifact_loc = artifact.offset
-            artifact_type = ArtifactType.PATCH
-
-        # Struct
-        elif isinstance(artifact, Struct):
-            artifact_loc = artifact.name
-            artifact_type = ArtifactType.STRUCT
-
-        # Global Var
-        elif isinstance(artifact, GlobalVariable):
-            artifact_loc = artifact.addr
-            artifact_type = ArtifactType.GLOBAL_VAR
-
-        # Enum
-        elif isinstance(artifact, Enum):
-            artifact_loc = artifact.name
-            artifact_type = ArtifactType.ENUM
-
-        # Typedef
-        elif isinstance(artifact, Typedef):
-            artifact_loc = artifact.name
-            artifact_type = ArtifactType.TYPEDEF
-
-        else:
-            raise Exception("Undefined Artifact Type!")
-
-        self.last_push_artifact = artifact_loc
-        self.last_push_time = artifact.last_change
-        self.last_push_artifact_type = artifact_type
 
         return f(self, *args, **kwargs)
 
@@ -146,8 +103,10 @@ def update_last_change(f):
 
 
 def list_files_in_dir(src: Union[pathlib.Path, git.Tree], dir_name, client=None) -> List[str]:
-    if client and isinstance(src, git.Tree):
-        files = client.list_files_in_tree(src)
+    from .client import Client
+
+    if isinstance(src, git.Tree):
+        files = Client.list_files_in_tree(src)
         return [name for name in files if name.startswith(dir_name)]
 
     # load from filesystem
@@ -165,8 +124,10 @@ def list_files_in_dir(src: Union[pathlib.Path, git.Tree], dir_name, client=None)
 
 
 def file_to_str(src: Union[pathlib.Path, git.Tree], filename, client=None) -> Optional[str]:
-    if client and isinstance(src, git.Tree):
-        file_data = client.load_file_from_tree(src, filename)
+    from .client import Client
+
+    if isinstance(src, git.Tree):
+        file_data = Client.load_file_from_tree(src, filename)
     else:
         if not src:
             src = pathlib.Path("")
@@ -296,10 +257,10 @@ class State:
         d = {
             "user": self.user,
             "version": self.version,
-            "last_push_time": self.last_push_time,
-            "last_push_artifact": self.last_push_artifact,
-            "last_push_artifact_type": self.last_push_artifact_type,
-            "last_commit_msg": self.last_commit_msg,
+            #"last_push_time": self.last_push_time,
+            #"last_push_artifact": self.last_push_artifact,
+            #"last_push_artifact_type": self.last_push_artifact_type,
+            #"last_commit_msg": self.last_commit_msg,
         }
         self._dump_data(dst, 'metadata.toml', toml.dumps(d, encoder=TomlHexEncoder()).encode())
 
@@ -329,10 +290,12 @@ class State:
             self._dump_data(dst, path, struct.dumps(fmt=ArtifactFormat.TOML).encode())
 
         if pathlib.Path(self.client.repo_root + '/structs').exists():
+            sanitized_struct_names = set([sanitize_name(s_name) for s_name in self.structs.keys()])
             for path in pathlib.Path(self.client.repo_root + '/structs').iterdir():
                 file = path.stem
                 name = file.split(".")[0]
-                if name not in self.structs.keys():
+
+                if name not in sanitized_struct_names:
                     self._delete_data(dst, path)
 
         # dump comments

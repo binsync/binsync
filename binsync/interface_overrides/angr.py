@@ -96,7 +96,7 @@ class BinsyncPlugin(GenericBSAngrManagementPlugin):
 
         mapping = {
             self.MENU_CONFIG_ID: self.open_sync_config_dialog,
-            self.MENU_TOGGLE_PANEL_ID: self.toggle_sync_panel
+            self.MENU_TOGGLE_PANEL_ID: self.toggle_sync_panel,
         }
 
         # call option mapped to each menu pos
