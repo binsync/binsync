@@ -118,8 +118,11 @@ one of the many BinSync projects.
 
 <p align="center">
     <img src="./assets/images/sponsors/nsf.png" alt="NSF" style="height: 80px; display: inline-block; vertical-align: middle; margin-right: 40px;">
+    <br>
     <img src="./assets/images/sponsors/darpa.png" alt="DARPA" style="height: 60px; display: inline-block; vertical-align: middle; margin-right: 40px;">
+    <br>
     <img src="./assets/images/sponsors/arpah.svg" alt="ARPA-H" style="height: 50px; display: inline-block; vertical-align: middle; margin-right: 40px;">
+    <br>
     <img src="./assets/images/sponsors/reveng_ai.svg" alt="RevEng AI" style="height: 50px; display: inline-block; vertical-align: middle;">
 </p>
 
