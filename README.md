@@ -116,19 +116,10 @@ BinSync and it's associated projects would not be possible without sponsorship.
 In no particular order, we'd like to thank all the organizations that have previously or are currently sponsoring
 one of the many BinSync projects.
 
-<div style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px;">
-    <div style="width: 75px; height: 50px; display: flex; justify-content: center; align-items: center;">
-        <img src="./assets/images/sponsors/darpa.png" alt="DARPA" style="max-width: 100%; max-height: 100%;">
-    </div>
-    <div style="width: 75px; height: 50px; display: flex; justify-content: center; align-items: center;">
-        <img src="./assets/images/sponsors/arpah.svg" alt="ARPA-H" style="max-width: 100%; max-height: 100%;">
-    </div>
-    <div style="width: 75px; height: 50px; display: flex; justify-content: center; align-items: center;">
-        <img src="./assets/images/sponsors/nsf.png" alt="NSF" style="max-width: 100%; max-height: 100%;">
-    </div>
-    <div style="width: 75px; height: 50px; display: flex; justify-content: center; align-items: center;">
-        <img src="./assets/images/sponsors/reveng_ai.svg" alt="RevEng AI" style="max-width: 100%; max-height: 100%;">
-    </div>
+<div style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 15px;">
+    <img src="./assets/images/sponsors/darpa.png" alt="DARPA" style="width: 75px; height: auto;">
+    <img src="./assets/images/sponsors/arpah.svg" alt="ARPA-H" style="width: 75px; height: auto;">
+    <img src="./assets/images/sponsors/nsf.png" alt="NSF" style="width: 75px; height: auto;">
+    <img src="./assets/images/sponsors/reveng_ai.svg" alt="RevEng AI" style="width: 75px; height: auto;">
 </div>
-
 
