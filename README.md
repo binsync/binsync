@@ -117,12 +117,12 @@ In no particular order, we'd like to thank all the organizations that have previ
 one of the many BinSync projects.
 
 <p align="center">
-    <img src="./assets/images/sponsors/nsf.png" alt="NSF" style="height: 100px; display: inline-block; vertical-align: middle; margin-right: 40px;">
+    <img src="https://github.com/binsync/binsync/blob/main/assets/images/sponsors/nsf.png?raw=true" alt="NSF" style="height: 100px; display: inline-block; vertical-align: middle; margin-right: 40px;">
     <br>
-    <img src="./assets/images/sponsors/darpa.png" alt="DARPA" style="height: 70px; display: inline-block; vertical-align: middle; margin-right: 40px;">
+    <img src="https://github.com/binsync/binsync/blob/main/assets/images/sponsors/darpa.png?raw=true" alt="DARPA" style="height: 70px; display: inline-block; vertical-align: middle; margin-right: 40px;">
     <br>
-    <img src="./assets/images/sponsors/arpah.svg" alt="ARPA-H" style="height: 50px; display: inline-block; vertical-align: middle; margin-right: 40px;">
+    <img src="https://github.com/binsync/binsync/blob/main/assets/images/sponsors/arpah.svg?raw=true" alt="ARPA-H" style="height: 50px; display: inline-block; vertical-align: middle; margin-right: 40px;">
     <br>
-    <img src="./assets/images/sponsors/reveng_ai.svg" alt="RevEng AI" style="height: 50px; display: inline-block; vertical-align: middle;">
+    <img src="https://github.com/binsync/binsync/blob/main/assets/images/sponsors/reveng_ai.svg?raw=true" alt="RevEng AI" style="height: 50px; display: inline-block; vertical-align: middle;">
 </p>
 
