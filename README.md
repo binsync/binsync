@@ -116,7 +116,7 @@ BinSync and it's associated projects would not be possible without sponsorship.
 In no particular order, we'd like to thank all the organizations that have previously or are currently sponsoring
 one of the many BinSync projects.
 
-<img src="./assets/images/sponsors/nsf.png" alt="NSF" style="width: 90px; height: auto; vertical-align: middle;">
-<img src="./assets/images/sponsors/darpa.png" alt="DARPA" style="width: 90px; height: auto; vertical-align: middle;">
-<img src="./assets/images/sponsors/arpah.svg" alt="ARPA-H" style="width: 90px; height: auto; vertical-align: middle;">
-<img src="./assets/images/sponsors/reveng_ai.svg" alt="RevEng AI" style="width: 90px; height: auto; vertical-align: middle;">
+<img src="./assets/images/sponsors/nsf.png" alt="NSF" style="width: 90px; height: auto;">
+<img src="./assets/images/sponsors/darpa.png" alt="DARPA" style="width: 90px; height: auto;">
+<img src="./assets/images/sponsors/arpah.svg" alt="ARPA-H" style="width: 90px; height: auto;">
+<img src="./assets/images/sponsors/reveng_ai.svg" alt="RevEng AI" style="width: 90px; height: auto;">
