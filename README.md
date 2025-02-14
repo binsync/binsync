@@ -110,3 +110,15 @@ To understand the difference between artifact support, pull, push, and auto push
 
 ## Scripting
 For scripting please see [Lib BinSync](https://github.com/binsync/libbs), which allows you to do all lifting and data manipulation in Python.
+
+## Sponsors 
+BinSync and it's associated projects would not be possible without sponsorship. 
+In no particular order, we'd like to thank all the organizations that have previously or are currently sponsoring
+one of the many BinSync projects.
+
+<div style="display: flex; flex-wrap: wrap; justify-content: left; gap: 20px;">
+    <img src="./assets/images/sponsors/darpa.png" alt="DARPA" style="max-width: 150px; height: auto;">
+    <img src="./assets/images/sponsors/arpah.svg" alt="ARPA-H" style="max-width: 150px; height: auto;">
+    <img src="./assets/images/sponsors/nsf.png" alt="NSF" style="max-width: 150px; height: auto;">
+    <img src="./assets/images/sponsors/reveng_ai.svg" alt="RevEng AI" style="max-width: 150px; height: auto;">
+</div>
