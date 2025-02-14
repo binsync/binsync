@@ -117,9 +117,9 @@ In no particular order, we'd like to thank all the organizations that have previ
 one of the many BinSync projects.
 
 <p align="center">
-    <img src="./assets/images/sponsors/nsf.png" alt="NSF" style="width: 90px; height: auto; display: inline-block; vertical-align: middle; margin-right: 10px;">
-    <img src="./assets/images/sponsors/darpa.png" alt="DARPA" style="width: 90px; height: auto; display: inline-block; vertical-align: middle; margin-right: 10px;">
-    <img src="./assets/images/sponsors/arpah.svg" alt="ARPA-H" style="width: 120px; height: auto; display: inline-block; vertical-align: middle; margin-right: 10px;">
-    <img src="./assets/images/sponsors/reveng_ai.svg" alt="RevEng AI" style="width: 175px; height: auto; display: inline-block; vertical-align: middle;">
+    <img src="./assets/images/sponsors/nsf.png" alt="NSF" style="height: 60px; display: inline-block; vertical-align: middle; margin-right: 10px;">
+    <img src="./assets/images/sponsors/darpa.png" alt="DARPA" style="height: 60px; display: inline-block; vertical-align: middle; margin-right: 10px;">
+    <img src="./assets/images/sponsors/arpah.svg" alt="ARPA-H" style="height: 60px; display: inline-block; vertical-align: middle; margin-right: 10px;">
+    <img src="./assets/images/sponsors/reveng_ai.svg" alt="RevEng AI" style="height: 60px; display: inline-block; vertical-align: middle;">
 </p>
 
