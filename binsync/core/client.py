@@ -91,6 +91,8 @@ class Client:
         temp_directory=None,
         ignore_lock=False,
         init_user_branch=True,
+        git_server_mode: str = "object",
+        git_server_url: Optional[str] = None,
         **kwargs,
     ):
         """
@@ -150,6 +152,18 @@ class Client:
         self.last_pull_attempt_time = None  # type: datetime.datetime
         self._last_commit_time = None # type: datetime.datetime
 
+        # Setup GitServer integration.
+        self.git_server_mode = git_server_mode
+        if self.git_server_mode == "server":
+            if git_server_url:
+                # In server mode, connect via PyRPC.
+                import xmlrpc.client
+                self.git_server = xmlrpc.client.ServerProxy(git_server_url)
+        else:
+            # Object mode: instantiate GitServer in the same process.
+            from git_server import GitServer
+            self.git_server = GitServer(repo_path=self.repo_root)
+
         self.active_remote = True
         # force a state update on init
         self.master_state = self.get_state(no_cache=True)
@@ -164,24 +178,24 @@ class Client:
             shutil.copytree(self.repo_root, abs_path_str, dirs_exist_ok=True)
             repo_root = abs_path_str
 
-        return Client(
-            master_user=self.master_user,
-            repo_root=repo_root,
-            binary_hash=self.binary_hash,
-            remote=self.remote,
-            commit_interval=self._commit_interval,
-            commit_batch_size=self._commit_batch_size,
-            init_repo=False,
-            remote_url=None,
-            ssh_agent_pid=self.ssh_agent_pid,
-            ssh_auth_sock=self.ssh_auth_sock,
-            push_on_update=self.push_on_update,
-            pull_on_update=self.pull_on_update,
-            commit_on_update=self.commit_on_update,
-            temp_directory=temp_dir,
-            ignore_lock=self._ignore_lock or copy_files,
-            init_user_branch=not copy_files,
-        )
+            return Client(
+                master_user=self.master_user,
+                repo_root=repo_root,
+                binary_hash=self.binary_hash,
+                remote=self.remote,
+                commit_interval=self._commit_interval,
+                commit_batch_size=self._commit_batch_size,
+                init_repo=False,
+                remote_url=None,
+                ssh_agent_pid=self.ssh_agent_pid,
+                ssh_auth_sock=self.ssh_auth_sock,
+                push_on_update=self.push_on_update,
+                pull_on_update=self.pull_on_update,
+                commit_on_update=self.commit_on_update,
+                temp_directory=temp_dir,
+                ignore_lock=self._ignore_lock or copy_files,
+                init_user_branch=not copy_files,
+            )
 
     def __del__(self):
         if self._temp_directory is not None:
@@ -505,10 +519,16 @@ class Client:
 
     @atomic_git_action
     def _commit_state(self, state, msg=None, priority=None, no_checkout=False):
+        if self.git_server_mode == "server" and self.git_server:
+            try:
+                # so far we only use
+                return self.git_server.commit_state(state, msg, priority, no_checkout)
+            except Exception as e:
+                logging.error(f"GitServer commit_state failed: {e}")
+                return
         msg = msg or self.DEFAULT_COMMIT_MSG
         if self.master_user != state.user:
             raise ExternalUserCommitError(f"User {self.master_user} is not allowed to commit to user {state.user}")
-
         if not no_checkout:
             self._checkout_to_master_user()
 
@@ -542,6 +562,13 @@ class Client:
 
         :return:    None
         """
+        if self.git_server_mode == "server" and self.git_server:
+            try:
+                return self.git_server.push()
+            except Exception as e:
+                logging.error(f"GitServer push failed: {e}")
+                return
+
         self.last_pull_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
         try:
             env = self.ssh_agent_env()
@@ -584,6 +611,12 @@ class Client:
 
         :return:    None
         """
+        if self.git_server_mode == "server" and self.git_server:
+            try:
+                return self.git_server.push()
+            except Exception as e:
+                logging.error(f"GitServer push failed: {e}")
+                return
         self.last_push_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
         self._checkout_to_master_user()
         try:
