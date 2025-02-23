@@ -400,6 +400,14 @@ class Client:
 
     @atomic_git_action
     def get_state(self, user=None, priority=None, no_cache=False, commit_hash=None) -> State:
+        if self.git_server_mode == "server" and self.git_server:
+            try:
+                # so far we only use server mode instead of object mode
+                return self.git_server.get_state(user,priority,no_cache,commit_hash, master_user=self.user_branch_name)
+            except Exception as e:
+                logging.error(f"GitServer commit_state failed: {e}")
+                return
+
         if user is None:
             user = self.master_user
 
@@ -521,8 +529,8 @@ class Client:
     def _commit_state(self, state, msg=None, priority=None, no_checkout=False):
         if self.git_server_mode == "server" and self.git_server:
             try:
-                # so far we only use
-                return self.git_server.commit_state(state, msg, priority, no_checkout)
+                # so far we only use server mode instead of object mode
+                return self.git_server.commit_state(state, msg, priority, no_checkout, master_user=self.user_branch_name)
             except Exception as e:
                 logging.error(f"GitServer commit_state failed: {e}")
                 return
@@ -613,7 +621,11 @@ class Client:
         """
         if self.git_server_mode == "server" and self.git_server:
             try:
-                return self.git_server.push()
+                # So the push function sets stuff like last_push_time and stuff like this.
+                # Currently, server isn't setting up these values. Should probably return something like
+                # A `ServerPushResponse` or just straight up `ServerResponse` that has the values that the client
+                # needs to set.
+                return self.git_server.push(remote=self.remote, master_user=self.user_branch_name)
             except Exception as e:
                 logging.error(f"GitServer push failed: {e}")
                 return
@@ -918,5 +930,3 @@ class Client:
         #l.debug(f"Updating branches on Users Cache...")
         branch_set = set(cache_keys)
         self.cache.clear_user_branch_cache(branch_set)
-
-
