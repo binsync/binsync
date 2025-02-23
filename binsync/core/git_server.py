@@ -142,7 +142,7 @@ class GitServer:
                 from binsync.core import ExternalUserCommitError
                 raise ExternalUserCommitError(f"User {master_user} is not allowed to commit to user {state.user}")
             if not no_checkout:
-                self._checkout_to_master_user()
+                self._checkout_to_master_user(master_user)
 
             # Idk why repo.branches says it's a () -> IterableList[Head] but it's actually just an iterableList
             master_user_branch = next(o for o in self.repo.branches if o.name == master_user)
