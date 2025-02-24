@@ -136,13 +136,12 @@ class GitServer:
 
     def get_state(self, user=None, priority=None, no_cache=False, commit_hash=None, master_user=None) -> State:
         # Pass for now until we figure out how to handle the cache in the server
-        pass
-        
+
         if user is None:
             user = master_user
 
         state = self.parse_state_from_commit(
-            self.repo, user=user, commit_hash=commit_hash, is_master=user == self.master_user, client=self
+            self.repo, user=user, commit_hash=commit_hash, is_master=user == master_user, client=self
         )
 
         # NOTE: there might be a race between get_state(no_cache=True) in
@@ -151,8 +150,9 @@ class GitServer:
         # artifacts to retrieve. As the cache is using a defaultdict() we will
         # get an empty state back when querying from the cache, and we always
         # get this empty state as we don't update the cache.
-        if no_cache or not self.cache.get_state(user):
-            self.cache.set_state(state, user=user)
+        # TODO: Figure out how to handle the cache in the server
+        # if no_cache or not self.cache.get_state(user):
+        #     self.cache.set_state(state, user=user)
 
         return state
 
@@ -215,7 +215,6 @@ class GitServer:
         """
         Pull changes from the remote repository.
         :param remote: Remote name.
-        :param branch: Branch name.
         :param priority: (Optional) Priority (not used).
         :return: A status message.
         """
@@ -230,7 +229,7 @@ class GitServer:
             with self.repo.git.custom_environment(**env):
                 # dangerous remote operations happen here
                 try:
-                    self._localize_remote_branches()
+                    self._localize_remote_branches(remote)
                     self.repo.git.checkout(BINSYNC_ROOT_BRANCH)
                     self.repo.git.pull("--all")
                     # Server prob doesn't care about last pull time.
@@ -285,7 +284,7 @@ class GitServer:
                 l.debug(f"Failed to push b/c {ex}")
 
 
-    def _localize_remote_branches(self):
+    def _localize_remote_branches(self, target_remote):
         """
         Looks up all the remote refrences on the server and attempts to make them a tracked local
         branch.
@@ -309,7 +308,7 @@ class GitServer:
 
             # attempt to localize the remote name
             try:
-                local_name = re.findall(f"({self.remote}/)(.*)", branch.name)[0][1]
+                local_name = re.findall(f"({target_remote}/)(.*)", branch.name)[0][1]
             except IndexError:
                 print("INDEX ERROR")
                 continue
@@ -323,15 +322,6 @@ class GitServer:
             except git.GitCommandError as e:
                 continue
 
-    def _checkout_to_master_user(self, user_branch_name):
-        """
-        Ensure the repository is checked out to the master user's branch.
-        In your full implementation, this would switch branches if needed.
-        """
-        try:
-            self.repo.git.checkout(user_branch_name)
-        except Exception as e:
-            raise RuntimeError(f"Failed to checkout to {user_branch_name}: {e}")
 
     def ssh_agent_env(self):
         if self.ssh_agent_pid is not None and self.ssh_auth_sock is not None:
@@ -342,6 +332,16 @@ class GitServer:
         else:
             env = {}
         return env
+
+    def _checkout_to_master_user(self, user_branch_name):
+        """
+        Ensure the repository is checked out to the master user's branch.
+        In your full implementation, this would switch branches if needed.
+        """
+        try:
+            self.repo.git.checkout(user_branch_name)
+        except Exception as e:
+            raise RuntimeError(f"Failed to checkout to {user_branch_name}: {e}")
 
     @staticmethod
     def _get_tree(user, repo: git.Repo, commit_hash=None):

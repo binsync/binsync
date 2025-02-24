@@ -403,7 +403,7 @@ class Client:
         if self.git_server_mode == "server" and self.git_server:
             try:
                 # so far we only use server mode instead of object mode
-                return self.git_server.get_state(user,priority,no_cache,commit_hash, master_user=self.user_branch_name)
+                return self.git_server.get_state(user, priority, no_cache, commit_hash, master_user=self.user_branch_name)
             except Exception as e:
                 logging.error(f"GitServer commit_state failed: {e}")
                 return
@@ -580,7 +580,7 @@ class Client:
         """
         if self.git_server_mode == "server" and self.git_server:
             try:
-                return self.git_server.push()
+                return self.git_server.push(self.remote )
             except Exception as e:
                 logging.error(f"GitServer push failed: {e}")
                 return
