@@ -1,6 +1,7 @@
 import datetime
 import os
 import threading
+import re
 import git
 import logging
 from typing import Iterable, Optional
@@ -8,7 +9,10 @@ from xmlrpc.server import SimpleXMLRPCServer
 from xmlrpc.server import SimpleXMLRPCRequestHandler
 
 from binsync.core import MetadataNotFoundError
+from binsync.core.scheduler import SchedSpeed
 from binsync.core.state import State, toml_file_to_dict
+from binsync.core.user import User
+
 
 l = logging.getLogger(__name__)
 BINSYNC_BRANCH_PREFIX = 'binsync'
@@ -101,6 +105,34 @@ class GitServer:
                 state = State(user)
 
         return state
+    def users(self, priority=None, no_cache=False) -> Iterable[User]:
+        repo = self.repo
+        attempt_again = True
+        attempted_fix = False
+        users = list()
+        force_local_users = False
+
+        while attempt_again:
+            attempt_again = False
+            users = list()
+            for ref in self._get_best_refs(repo, force_local=force_local_users).values():
+                #l.debug(f"{ref} NAME: {ref.name}")
+                try:
+                    metadata = toml_file_to_dict(ref.commit.tree, "metadata.toml", client=self)
+                    user = User.from_metadata(metadata)
+                    users.append(user)
+                except Exception as e:
+                    #l.debug(f"Unable to load user {e}")
+                    continue
+
+            if not attempted_fix and not users:
+                # attempt a fix once
+                force_local_users = True
+                attempt_again = True
+                attempted_fix = True
+
+        return users
+
 
     def get_state(self, user=None, priority=None, no_cache=False, commit_hash=None, master_user=None) -> State:
         # Pass for now until we figure out how to handle the cache in the server
@@ -124,6 +156,15 @@ class GitServer:
 
         return state
 
+    @property
+    def has_remote(self, target_remote):
+        """
+        If there is a remote configured for our local repo.
+
+        :return:    True if there is a remote, False otherwise.
+        """
+        return target_remote and any(r.name == target_remote for r in self.repo.remotes)
+
     def commit_state(self, state, msg, priority=None, no_checkout=False, master_user=None):
         """
         Commit the provided state to the Git repo.
@@ -144,7 +185,6 @@ class GitServer:
             if not no_checkout:
                 self._checkout_to_master_user(master_user)
 
-            # Idk why repo.branches says it's a () -> IterableList[Head] but it's actually just an iterableList
             master_user_branch = next(o for o in self.repo.branches if o.name == master_user)
             index = self.repo.index
 
@@ -171,13 +211,60 @@ class GitServer:
             # TODO: Normal client doesn't return the last commit time, but it might want to know,
             return last_commit_time
 
-    def push(self, remote="origin", branch="main", print_error=False, priority=None, master_user=None):
+    def pull(self, remote="origin", branch="main", priority=None):
+        """
+        Pull changes from the remote repository.
+        :param remote: Remote name.
+        :param branch: Branch name.
+        :param priority: (Optional) Priority (not used).
+        :return: A status message.
+        """
+        with self.lock:
+            # The server isn't doing something with this yet, but client wants it, mb return it
+            last_pull_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
+            try:
+                env = self.ssh_agent_env()
+            except Exception:
+                return
+
+            with self.repo.git.custom_environment(**env):
+                # dangerous remote operations happen here
+                try:
+                    self._localize_remote_branches()
+                    self.repo.git.checkout(BINSYNC_ROOT_BRANCH)
+                    self.repo.git.pull("--all")
+                    # Server prob doesn't care about last pull time.
+                    # _last_pull_time = datetime.datetime.now(tz=datetime.timezone.utc)
+                    self.active_remote = True
+                except Exception as e:
+                    #l.debug(f"Pull exception {e}")
+                    self.active_remote = False
+
+            if not self.active_remote:
+                return
+
+            # preform a merge on each branch
+            for branch in self.repo.branches:
+                if "HEAD" in branch.name:
+                    continue
+
+                self.repo.git.checkout(branch)
+                try:
+                    self.repo.git.merge()
+                except Exception as e:
+                    #l.debug(f"Failed to merge on {branch} with {e}")
+                    pass
+
+            # TODO: Figure out how we want to handle the cache in the server
+            # self._update_cache()
+
+    def push(self, remote="origin", print_error=False, priority=None, master_user=None):
         """
         Push local changes to the remote repository.
         :param remote: Remote name.
-        :param branch: Branch name.
         :param print_error: (Optional) Whether to print errors.
         :param priority: (Optional) Priority (not used).
+        :param master_user: The user who is pushing the changes.
         :return: A status message.
         """
         with self.lock:
@@ -197,22 +284,44 @@ class GitServer:
                 self.active_remote = False
                 l.debug(f"Failed to push b/c {ex}")
 
-    def pull(self, remote="origin", branch="main", priority=None):
+
+    def _localize_remote_branches(self):
         """
-        Pull changes from the remote repository.
-        :param remote: Remote name.
-        :param branch: Branch name.
-        :param priority: (Optional) Priority (not used).
-        :return: A status message.
+        Looks up all the remote refrences on the server and attempts to make them a tracked local
+        branch.
+
+        @return:
         """
-        with self.lock:
+
+
+        # get all remote branches
+        try:
+            remote_branches = self.repo.remote().refs
+        except ValueError:
+            return
+
+        # track any remote we are not already tracking
+        local_branches = set(b.name for b in self.repo.branches)
+        for branch in remote_branches:
+            # exclude head commit
+            if "HEAD" in branch.name:
+                continue
+
+            # attempt to localize the remote name
             try:
-                # Checkout to a stable branch before pulling.
-                self.repo.git.checkout(branch)
-                self.repo.git.pull(remote, branch)  # TODO: Copy over the behavior of the client over here, too lazy rn
-                return {"status": "success", "message": f"Pulled from {remote}/{branch}"}
-            except Exception as e:
-                return {"status": "error", "message": f"Pull failed: {e}"}
+                local_name = re.findall(f"({self.remote}/)(.*)", branch.name)[0][1]
+            except IndexError:
+                print("INDEX ERROR")
+                continue
+
+            # never try to track things already tracked
+            if local_name in local_branches:
+                continue
+
+            try:
+                self.repo.git.checkout('--track', branch.name)
+            except git.GitCommandError as e:
+                continue
 
     def _checkout_to_master_user(self, user_branch_name):
         """

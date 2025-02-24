@@ -434,6 +434,14 @@ class Client:
 
         :return:    True if there is a remote, False otherwise.
         """
+        if self.git_server_mode == "server" and self.git_server:
+            try:
+                # so far we only use server mode instead of object mode
+                return self.git_server.has_remote(remote=self.remote)
+            except Exception as e:
+                logging.error(f"GitServer has_remote failed: {e}")
+                return
+
         return self.remote and any(r.name == self.remote for r in self.repo.remotes)
 
     def all_states(self, before_ts: int = None) -> Iterable[State]:
