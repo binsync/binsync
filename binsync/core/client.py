@@ -14,7 +14,7 @@ import filelock
 # import git
 # import git.exc
 import pygit2 as git
-from pygit2 import Repository
+from pygit2 import Repository, Branch
 
 from binsync.core.user import User
 from binsync.configuration import BinSyncBSConfig, ProjectData
@@ -202,14 +202,26 @@ class Client:
 
         @return:
         """
-        try:
-            branch = next(o for o in self.repo.branches if o.name.endswith(self.user_branch_name))
-        except StopIteration:
-            branch = self.repo.create_head(self.user_branch_name, BINSYNC_ROOT_BRANCH)
-        else:
-            if branch.is_remote():
-                branch = self.repo.create_head(self.user_branch_name)
-        branch.checkout()
+        # Try to get a local branch.
+        branch = self.repo.lookup_branch(self.user_branch_name, git.GIT_BRANCH_LOCAL)
+        if branch is None:
+            # Not found locally: try remote.
+            branch = self.repo.lookup_branch(self.user_branch_name, git.GIT_BRANCH_REMOTE)
+            if branch is not None:
+                # Found as remote; create a local branch from its target commit.
+                branch = self.repo.create_branch(self.user_branch_name, branch.peel())
+            else:
+                # No branch exists, use local BINSYNC_ROOT_BRANCH as the base for a new branch.
+                root_branch = self.repo.lookup_branch(BINSYNC_ROOT_BRANCH, git.GIT_BRANCH_LOCAL)
+                if root_branch is None:
+                    # Try remote lookup if not local.
+                    root_branch = self.repo.lookup_branch(BINSYNC_ROOT_BRANCH, git.GIT_BRANCH_REMOTE)
+                if root_branch is None:
+                    # How tf did we get here?
+                    raise Exception(f"Cannot find root branch '{BINSYNC_ROOT_BRANCH}'")
+                branch = self.repo.create_branch(self.user_branch_name, root_branch.peel())
+        # Checkout the branch (this updates HEAD and the worktree).
+        self.repo.checkout(branch)
 
     def _get_or_init_binsync_repo(self, remote_url, init_repo):
         """
