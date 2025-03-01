@@ -11,8 +11,10 @@ from pathlib import Path
 import tempfile
 
 import filelock
-import git
-import git.exc
+# import git
+# import git.exc
+import pygit2 as git
+from pygit2 import Repository
 
 from binsync.core.user import User
 from binsync.configuration import BinSyncBSConfig, ProjectData
@@ -136,7 +138,7 @@ class Client:
         self.scheduler = Scheduler(name="GitScheduler")
 
         # create, init, and checkout Git repo
-        self.repo = self._get_or_init_binsync_repo(remote_url, init_repo)
+        self.repo = self._get_or_init_binsync_repo(remote_url, init_repo) # type: Repository
         self.scheduler.start_worker_thread()
         if init_user_branch:
             self._get_or_init_user_branch()
@@ -233,7 +235,7 @@ class Client:
             if not self.repo_root:
                 self.repo_root = re.findall(r"/(.*)\.git", remote_url)[0]
 
-            self.repo: git.Repo = self.clone(remote_url, no_head_check=init_repo)
+            self.repo: git.Repository = self.clone(remote_url, no_head_check=init_repo)
 
             if init_repo:
                 if any(b.name == BINSYNC_ROOT_BRANCH for b in self.repo.branches):
