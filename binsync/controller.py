@@ -748,12 +748,12 @@ class BSController:
 
         # TODO: make structus work in IDA
         target_artifacts = target_artifacts or {
-            Struct: self.fill_artifact,
+            #Struct: self.fill_artifact,
             #Comment: lambda *x, **y: None,
             Comment: self.fill_artifact,
             Function: self.fill_artifact,
-            GlobalVariable: self.fill_artifact,
-            Enum: self.fill_artifact
+            #GlobalVariable: self.fill_artifact,
+            #Enum: self.fill_artifact
         }
         total_synced = defaultdict(int)
 

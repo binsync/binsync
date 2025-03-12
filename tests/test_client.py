@@ -4,6 +4,7 @@ import pathlib
 import sys
 import tempfile
 import toml
+import pygit2
 
 import unittest
 
@@ -74,7 +75,16 @@ class TestClient(unittest.TestCase):
 
             # now check those changes really made it into the git repo
             client.commit_master_state()
-            commits = list(client.repo.iter_commits())
+            head = client.repo.head
+            commits = []
+            commit = client.repo[head.target]
+            while commit:
+                commits.append(commit)
+                if len(commit.parents) > 0:
+                    commit = commit.parents[0]
+                else:
+                    break
+            assert len(commits) > 0
             assert commits[0].message == f"Merged in {fh_1} from user1"
             assert commits[1].message == f"Updated {sv_0}"
             assert commits[2].message == f"Updated {fh_0}"
@@ -126,9 +136,13 @@ class TestClient(unittest.TestCase):
                 file.truncate(5)
 
             # force a real git commit for later loading in the client
-            repo = git.Repo(tmpdir)
-            repo.git.add(all=True)
-            repo.index.commit("corrupt")
+            repo = pygit2.Repository(tmpdir)
+            index = repo.index
+            index.add_all()
+            index.write()
+            tree = index.write_tree()
+            author = pygit2.Signature('test', 'test@test.com')
+            repo.create_commit('HEAD', author, author, "corrupt", tree, [repo.head.target])
             
             # on the creation of the client, it will load the master_state, which will result in an
             # exception because the TOML fails to load

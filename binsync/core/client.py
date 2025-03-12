@@ -11,8 +11,8 @@ from pathlib import Path
 import tempfile
 
 import filelock
-import git
-import git.exc
+import pygit2
+import toml
 
 from binsync.core.user import User
 from binsync.configuration import BinSyncBSConfig, ProjectData
@@ -201,13 +201,19 @@ class Client:
         @return:
         """
         try:
-            branch = next(o for o in self.repo.branches if o.name.endswith(self.user_branch_name))
-        except StopIteration:
-            branch = self.repo.create_head(self.user_branch_name, BINSYNC_ROOT_BRANCH)
-        else:
-            if branch.is_remote():
-                branch = self.repo.create_head(self.user_branch_name)
-        branch.checkout()
+            branch = self.repo.lookup_branch(self.user_branch_name)
+            if not branch:
+                raise KeyError
+        except KeyError:
+            # Create new branch from root
+            root_ref = self.repo.lookup_reference(f'refs/heads/{BINSYNC_ROOT_BRANCH}')
+            if not root_ref:
+                raise Exception(f"Cannot find {BINSYNC_ROOT_BRANCH} branch")
+            self.repo.create_branch(self.user_branch_name, self.repo[root_ref.target])
+
+        # Checkout the branch with force to handle any conflicts
+        ref = self.repo.lookup_reference(f'refs/heads/{self.user_branch_name}')
+        self.repo.checkout(ref, strategy=pygit2.GIT_CHECKOUT_FORCE)
 
     def _get_or_init_binsync_repo(self, remote_url, init_repo):
         """
@@ -233,28 +239,28 @@ class Client:
             if not self.repo_root:
                 self.repo_root = re.findall(r"/(.*)\.git", remote_url)[0]
 
-            self.repo: git.Repo = self.clone(remote_url, no_head_check=init_repo)
+            callbacks = self._get_remote_callbacks()
+            self.repo = pygit2.clone_repository(remote_url, self.repo_root, callbacks=callbacks)
 
             if init_repo:
-                if any(b.name == BINSYNC_ROOT_BRANCH for b in self.repo.branches):
+                if self.repo.lookup_branch(BINSYNC_ROOT_BRANCH):
                     raise Exception("Can't init this remote repo since a BinSync root already exists")
-
                 self._setup_repo()
         else:
             try:
-                self.repo = git.Repo(self.repo_root)
+                self.repo = pygit2.Repository(self.repo_root)
 
                 # update view of remote branches (which may be new)
                 self._localize_remote_branches()
 
                 if init_repo:
                     raise Exception("Could not initialize repository - it already exists!")
-                if not any(b.name == BINSYNC_ROOT_BRANCH for b in self.repo.branches):
+                if not self.repo.lookup_branch(BINSYNC_ROOT_BRANCH):
                     raise Exception(f"This is not a BinSync repo - it must have a {BINSYNC_ROOT_BRANCH} branch.")
-            except (git.NoSuchPathError, git.InvalidGitRepositoryError):
+            except (KeyError, pygit2.GitError):
                 if init_repo:
                     # case 3
-                    self.repo = git.Repo.init(self.repo_root)
+                    self.repo = pygit2.init_repository(self.repo_root)
                     self._setup_repo()
                 else:
                     raise Exception("Failed to connect or create a BinSync repo")
@@ -263,7 +269,7 @@ class Client:
         if stored != self.binary_hash:
             self.connection_warnings.append(ConnectionWarnings.HASH_MISMATCH)
 
-        assert not self.repo.bare, "it should not be a bare repo"
+        assert not self.repo.is_bare, "it should not be a bare repo"
 
         self.repo_lock = filelock.FileLock(str(self._repo_lock_path))
         should_delete_lock = False
@@ -290,13 +296,22 @@ class Client:
 
         @return:
         """
+        # Create initial files
         with open(os.path.join(self.repo_root, ".gitignore"), "w") as f:
             f.write(".git/*\n")
         with open(os.path.join(self.repo_root, "binary_hash"), "w") as f:
             f.write(self.binary_hash)
-        self.repo.index.add([".gitignore", "binary_hash"])
-        self.repo.index.commit("Root commit")
-        self.repo.create_head(BINSYNC_ROOT_BRANCH)
+
+        # Stage and commit
+        index = self.repo.index
+        index.add(".gitignore")
+        index.add("binary_hash")
+        tree = index.write_tree()
+        author = pygit2.Signature('BinSync', 'binsync@auto.com')
+        commit_id = self.repo.create_commit('HEAD', author, author, "Root commit", tree, [])
+
+        # Create root branch pointing to our new commit
+        self.repo.create_branch(BINSYNC_ROOT_BRANCH, self.repo[commit_id])
 
     #
     # Public Properties
@@ -332,35 +347,31 @@ class Client:
 
     @atomic_git_action
     def users(self, priority=None, no_cache=False) -> Iterable[User]:
-        repo = self.repo
-        attempt_again = True
-        attempted_fix = False
-        users = list()
-        force_local_users = False
+        if not no_cache:
+            cached = self.cache.users()
+            if cached:
+                return cached
 
-        while attempt_again:
-            attempt_again = False
-            users = list()
-            for ref in self._get_best_refs(repo, force_local=force_local_users).values():
-                #l.debug(f"{ref} NAME: {ref.name}")
-                try:
-                    metadata = toml_file_to_dict(ref.commit.tree, "metadata.toml", client=self)
+        users = []
+        for branch in self.repo.branches:
+            if not branch.startswith(BINSYNC_BRANCH_PREFIX) or branch == BINSYNC_ROOT_BRANCH:
+                continue
+            try:
+                ref = self.repo.lookup_reference(f'refs/heads/{branch}')
+                tree = self.repo[ref.target].tree
+                metadata = self._load_toml_from_tree(tree, "metadata.toml")
+                if metadata:
                     user = User.from_metadata(metadata)
                     users.append(user)
-                except Exception as e:
-                    #l.debug(f"Unable to load user {e}")
-                    continue
+            except (KeyError, ValueError):
+                continue
 
-            if not attempted_fix and not users:
-                # attempt a fix once
-                force_local_users = True
-                attempt_again = True
-                attempted_fix = True
-
+        if users:
+            self.cache.set_users(users)
         return users
 
     @staticmethod
-    def parse_state_from_commit(repo: git.Repo, user=None, commit_hash=None, is_master=False, client=None) -> State:
+    def parse_state_from_commit(repo: pygit2.Repository, user=None, commit_hash=None, is_master=False, client=None) -> State:
         if user is None and commit_hash is None:
             raise ValueError("Must specify either a user or a commit hash")
 
@@ -412,7 +423,7 @@ class Client:
 
         :return:    True if there is a remote, False otherwise.
         """
-        return self.remote and any(r.name == self.remote for r in self.repo.remotes)
+        return self.remote and self.remote in self.repo.remotes and bool(self.repo.remotes[self.remote])
 
     def all_states(self, before_ts: int = None) -> Iterable[State]:
         states = list()
@@ -442,18 +453,18 @@ class Client:
 
         return states
 
-    def find_commits_before_ts(self, repo: git.Repo, ts: int, users: list[str]):
+    def find_commits_before_ts(self, repo: pygit2.Repository, ts: int, users: list[str]):
         ref_dict = self._get_best_refs(repo, force_local=True)
         best_commits = {}
         for user_name, ref in ref_dict.items():
             if user_name not in users:
                 continue
 
-            commits = list(repo.iter_commits(ref))
-            reverse_sorted_commits = sorted(commits, key=lambda x: x.committed_date, reverse=True)
+            commits = list(repo.walk(ref))
+            reverse_sorted_commits = sorted(commits, key=lambda x: x.commit.commit_time, reverse=True)
             for commit in reverse_sorted_commits:
-                if commit.committed_date <= ts:
-                    best_commits[user_name] = commit.hexsha
+                if commit.commit_time <= ts:
+                    best_commits[user_name] = commit.hex
                     break
 
         return best_commits
@@ -512,27 +523,26 @@ class Client:
         if not no_checkout:
             self._checkout_to_master_user()
 
-        master_user_branch = next(o for o in self.repo.branches if o.name == self.user_branch_name)
+        # Dump state to index
         index = self.repo.index
-
-        # dump the state
         state.dump(index)
 
-        # commit changes
-        self.repo.index.add([os.path.join(state.user, "*")])
-        self.repo.git.add(update=True)
+        # Stage changes
+        index.add_all()
+        index.write()
 
-        if not self.repo.index.diff("HEAD"):
-            return
-
-        # commit if there is any difference
+        # Create commit if there are changes
         try:
-            commit = index.commit(msg)
-        except Exception as e:
-            l.warning(f"Internal Git Commit Error: {e}")
-            return
+            head = self.repo.head
+            parent = [head.target]
+        except pygit2.GitError:
+            # This can happen on first commit
+            parent = []
+
+        tree = index.write_tree()
+        author = pygit2.Signature(state.user, f'{state.user}@binsync.auto.com')
+        self.repo.create_commit('HEAD', author, author, msg, tree, parent)
         self._last_commit_time = datetime.datetime.now(tz=datetime.timezone.utc)
-        master_user_branch.commit = commit
         state._dirty = False
 
     @atomic_git_action
@@ -544,36 +554,41 @@ class Client:
         """
         self.last_pull_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
         try:
-            env = self.ssh_agent_env()
-        except Exception:
-            return
+            callbacks = self._get_remote_callbacks()
+            remote = self.repo.remotes[self.remote]
+            remote.fetch(callbacks=callbacks)
+            self._last_pull_time = datetime.datetime.now(tz=datetime.timezone.utc)
+            self.active_remote = True
 
-        with self.repo.git.custom_environment(**env):
-            # dangerous remote operations happen here
-            try:
-                self._localize_remote_branches()
-                self.repo.git.checkout(BINSYNC_ROOT_BRANCH)
-                self.repo.git.pull("--all")
-                self._last_pull_time = datetime.datetime.now(tz=datetime.timezone.utc)
-                self.active_remote = True
-            except Exception as e:
-                #l.debug(f"Pull exception {e}")
-                self.active_remote = False
+            # Merge changes
+            for branch in self.repo.branches:
+                if "HEAD" in branch:
+                    continue
+                try:
+                    ref = self.repo.lookup_reference(f'refs/heads/{branch}')
+                    remote_ref = self.repo.lookup_reference(f'refs/remotes/{self.remote}/{branch}')
+                    if not ref or not remote_ref:
+                        continue
+                        
+                    self.repo.checkout(ref, strategy=pygit2.GIT_CHECKOUT_FORCE)
+                    self.repo.merge(remote_ref.target)
+                    if self.repo.index.conflicts:
+                        self.repo.state_cleanup()
+                        continue
+                    tree = self.repo.index.write_tree()
+                    author = pygit2.Signature('BinSync', 'binsync@auto.com')
+                    try:
+                        head = self.repo.head
+                        parents = [head.target, remote_ref.target]
+                    except pygit2.GitError:
+                        parents = [remote_ref.target]
+                    self.repo.create_commit('HEAD', author, author, f"Merge {branch}", tree, parents)
+                except (KeyError, ValueError, pygit2.GitError):
+                    continue
 
-        if not self.active_remote:
-            return
-
-        # preform a merge on each branch
-        for branch in self.repo.branches:
-            if "HEAD" in branch.name:
-                continue
-
-            self.repo.git.checkout(branch)
-            try:
-                self.repo.git.merge()
-            except Exception as e:
-                #l.debug(f"Failed to merge on {branch} with {e}")
-                pass
+        except Exception as e:
+            l.debug(f"Pull failed: {e}")
+            self.active_remote = False
 
         self._update_cache()
 
@@ -587,16 +602,16 @@ class Client:
         self.last_push_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
         self._checkout_to_master_user()
         try:
-            env = self.ssh_agent_env()
-            with self.repo.git.custom_environment(**env):
-                self.repo.remotes[self.remote].push(BINSYNC_ROOT_BRANCH)
-                self.repo.remotes[self.remote].push(self.user_branch_name)
+            callbacks = self._get_remote_callbacks()
+            remote = self.repo.remotes[self.remote]
+            remote.push([f'refs/heads/{BINSYNC_ROOT_BRANCH}', f'refs/heads/{self.user_branch_name}'],
+                       callbacks=callbacks)
             self._last_push_time = datetime.datetime.now(tz=datetime.timezone.utc)
             #l.debug("Push completed successfully at %s", self._last_push_ts)
             self.active_remote = True
-        except git.exc.GitCommandError as ex:
+        except Exception as e:
+            l.debug(f"Push failed: {e}")
             self.active_remote = False
-            #l.debug(f"Failed to push b/c {ex}")
 
     #
     # Git Updates
@@ -609,12 +624,12 @@ class Client:
 
         @return:
         """
-
-
         # get all remote branches
         try:
-            remote_branches = self.repo.remote().refs
-        except ValueError:
+            if self.remote not in self.repo.remotes:
+                return
+            remote_branches = self.repo.remotes[self.remote].refs
+        except (ValueError, KeyError):
             return
 
         # track any remote we are not already tracking
@@ -628,7 +643,6 @@ class Client:
             try:
                 local_name = re.findall(f"({self.remote}/)(.*)", branch.name)[0][1]
             except IndexError:
-                print("INDEX ERROR")
                 continue
 
             # never try to track things already tracked
@@ -636,42 +650,20 @@ class Client:
                 continue
 
             try:
-                self.repo.git.checkout('--track', branch.name)
-            except git.GitCommandError as e:
+                self.repo.create_branch(local_name, self.repo[branch.target])
+            except pygit2.GitError:
                 continue
 
-
-
-    def ssh_agent_env(self):
-        if self.ssh_agent_pid is not None and self.ssh_auth_sock is not None:
-            env = {
-                'SSH_AGENT_PID': str(self.ssh_agent_pid),
-                'SSH_AUTH_SOCK': str(self.ssh_auth_sock),
-            }
-        else:
-            env = { }
-        return env
-
-    def clone(self, remote_url, no_head_check=False):
-        """
-        Checkout from a remote_url to a local path specified by self.local_root.
-
-        :param str remote_url:  The URL of the Git remote.
-        :return:                None
-        """
-
-        env = self.ssh_agent_env()
-        repo = git.Repo.clone_from(remote_url, self.repo_root, env=env)
-
-        if no_head_check:
-            return repo
-
-        try:
-            repo.create_head(BINSYNC_ROOT_BRANCH, f'{self.remote}/{BINSYNC_ROOT_BRANCH}')
-        except git.BadName:
-            raise Exception(f"This is not a binsync repo - it must have a {BINSYNC_ROOT_BRANCH} branch")
-
-        return repo
+    def _get_remote_callbacks(self):
+        """Get SSH callbacks for remote operations"""
+        if self.ssh_agent_pid and self.ssh_auth_sock:
+            callbacks = pygit2.RemoteCallbacks(
+                credentials=pygit2.KeypairFromAgent("git"),
+            )
+            os.environ['SSH_AGENT_PID'] = str(self.ssh_agent_pid)
+            os.environ['SSH_AUTH_SOCK'] = str(self.ssh_auth_sock)
+            return callbacks
+        return None
 
     def _checkout_to_master_user(self):
         """
@@ -679,56 +671,11 @@ class Client:
 
         :return: bool
         """
-        self.repo.git.checkout(self.user_branch_name)
-
-    @staticmethod
-    def discover_ssh_agent(ssh_agent_cmd):
-        proc = subprocess.Popen(ssh_agent_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout, stderr = proc.communicate()
-
-        stdout = stdout.decode("utf-8")
-        stderr = stderr.decode("utf-8")
-
-        if proc.returncode != 0 or stderr:
-            raise RuntimeError("Failed to discover SSH agent by running command %s.\n"
-                               "Return code: %d.\n"
-                               "stderr: %s" % (
-                ssh_agent_cmd,
-                proc.returncode,
-                stderr,
-            ))
-
-        # parse output
-        m = re.search(r"Found ssh-agent at (\d+)", stdout)
-        if m is None:
-            print("Failed to find 'Found ssh-agent at'")
-            m = re.search(r"SSH_AGENT_PID=(\d+);", stdout)
-            if m is None:
-                print("Failed to find SSH_AGENT_PID")
-                return None, None
-            print("Found SSH_AGENT_PID")
-            ssh_agent_pid = int(m.group(1))
-            m = re.search("SSH_AUTH_SOCK=(.*?);", stdout)
-            if m is None:
-                print("Failed to find SSH_AUTH_SOCK")
-                return None, None
-            print("Found SSH_AGENT_SOCK")
-            ssh_agent_sock = m.group(1)
-        else :
-            print("Found ssh-agent at")
-            ssh_agent_pid = int(m.group(1))
-            m = re.search(r"Found ssh-agent socket at ([^\s]+)", stdout)
-            if m is None:
-                print("Failed to find 'Found ssh-agent socket at'")
-                return None, None
-            print("Found ssh-agent socket at")
-            ssh_agent_sock = m.group(1)
-
-        return ssh_agent_pid, ssh_agent_sock
+        ref = self.repo.lookup_reference(f'refs/heads/{self.user_branch_name}')
+        self.repo.checkout(ref, strategy=pygit2.GIT_CHECKOUT_FORCE)
 
     def shutdown(self):
         if hasattr(self, "repo"):
-            self.repo.close()
             del self.repo
 
         self.scheduler.stop_worker_thread()
@@ -741,48 +688,53 @@ class Client:
 
     def _get_best_refs(self, repo, force_local=False):
         candidates = {}
-        for ref in repo.refs:  # type: git.Reference
-            if f'{BINSYNC_BRANCH_PREFIX}/' not in ref.name:
+        for name in repo.references:  # type: str
+            if f'{BINSYNC_BRANCH_PREFIX}/' not in name:
                 continue
-
-            branch_name = ref.name.split("/")[-1]
+            ref = repo.references[name]
             if force_local:
-                if ref.is_remote():
+                if ref.is_remote:
                     continue
             else:
-                if branch_name in candidates:
+                if name in candidates:
                     # if the candidate exists, and the new one is not remote, don't replace it
-                    if not ref.is_remote() or ref.remote_name != self.remote:
+                    if not ref.is_remote or ref.remote_name != self.remote:
                         continue
 
-            candidates[branch_name] = ref
+            candidates[name] = ref
         return candidates
 
     def _get_stored_hash(self):
-        branch = [ref for ref in self.repo.refs if ref.name.endswith(BINSYNC_ROOT_BRANCH)][0]
-        return branch.commit.tree["binary_hash"].data_stream.read().decode().strip("\n")
+        ref = self.repo.lookup_reference(f'refs/heads/{BINSYNC_ROOT_BRANCH}')
+        tree = self.repo[ref.target].tree
+        try:
+            blob = self.repo[tree["binary_hash"].id]
+            return blob.data.decode().strip()
+        except KeyError:
+            return None
 
     @staticmethod
-    def list_files_in_tree(base_tree: git.Tree):
+    def list_files_in_tree(tree):
         """
         Lists all the files in a repo at a given tree
 
-        :param commit: A gitpython Tree object
+        :param tree: A pygit2 Tree object
         """
         file_list = []
-        stack = [base_tree]
+        stack = [(tree, '')]  # Each item is (tree, prefix)
         while len(stack) > 0:
-            tree = stack.pop()
-            # enumerate blobs (files) at this level
-            for b in tree.blobs:
-                file_list.append(b.path)
-            for subtree in tree.trees:
-                stack.append(subtree)
-
+            tree, prefix = stack.pop()
+            # enumerate entries at this level
+            for entry in tree:
+                path = os.path.join(prefix, entry.name)
+                if entry.type_str == 'tree':
+                    stack.append((tree[entry.name], path))
+                elif entry.type_str == 'blob':
+                    file_list.append(path)
         return file_list
 
     @staticmethod
-    def add_data(index: git.IndexFile, path: str, data: bytes):
+    def add_data(index: pygit2.Index, repo: pygit2.Repository, path: str, data: bytes):
         """
         Adds physical files to the database.
 
@@ -790,50 +742,71 @@ class Client:
         condition to modify a file while it is also being pushed. ONLY CALL THIS FUNCTION INSIDE
         A COMMIT_LOCK.
 
-        @param index:
-        @param path:
-        @param data:
+        @param index: The index to add the file to
+        @param repo: The repository object
+        @param path: The path to write to
+        @param data: The data to write
         @return:
         """
-        fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
-        pathlib.Path(fullpath).parent.mkdir(parents=True, exist_ok=True)
-        with open(fullpath, 'wb') as fp:
-            fp.write(data)
-        index.add([fullpath])
+        repo_path = repo.workdir
+        fullpath = os.path.join(repo_path, path)
+        os.makedirs(os.path.dirname(fullpath), exist_ok=True)
+        with open(fullpath, "wb") as f:
+            f.write(data)
+        index.add(path)
 
     @staticmethod
-    def remove_data(index: git.IndexFile, path: str):
-        fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
-        pathlib.Path(fullpath).parent.mkdir(parents=True, exist_ok=True)
-        index.remove([fullpath], working_tree=True)
+    def remove_data(index: pygit2.Index, repo: pygit2.Repository, path: str):
+        """
+        Removes physical files from the database.
 
-    @staticmethod
-    def load_file_from_tree(tree: git.Tree, filename):
+        WARNING: this function touches physical files in the Git Repo which can result in a race
+        condition to modify a file while it is also being pushed. ONLY CALL THIS FUNCTION INSIDE
+        A COMMIT_LOCK.
+
+        @param index: The index to remove the file from
+        @param repo: The repository object
+        @param path: The path to remove
+        @return:
+        """
+        repo_path = repo.workdir
+        fullpath = os.path.join(repo_path, path)
+        if os.path.exists(fullpath):
+            os.remove(fullpath)
         try:
-            return tree[filename].data_stream.read().decode()
+            # check if the file exists in the index before trying to remove it
+            index[path]
+            index.remove(path)
+        except (KeyError, IOError):
+            # file doesn't exist in index, which is fine
+            pass
+
+    @staticmethod
+    def load_file_from_tree(tree, filename):
+        try:
+            blob = tree[filename]
+            return blob.data.decode()
         except KeyError:
             return None
 
     @staticmethod
-    def _get_tree(user, repo: git.Repo, commit_hash=None):
+    def _get_tree(user, repo: pygit2.Repository, commit_hash=None):
         if commit_hash is None:
-            options = [ref for ref in repo.refs if ref.name.endswith(f"{BINSYNC_BRANCH_PREFIX}/{user}")]
+            options = [name for name in repo.references if name.endswith(f"{BINSYNC_BRANCH_PREFIX}/{user}")]
             if not options:
                 raise ValueError(f'No such user "{user}" found in repository')
-
-            # find the latest commit for the specified user!
-            best = max(options, key=lambda ref: ref.commit.authored_date)
-            bct = best.commit.tree
+            ref = repo.references[options[0]]
+            commit_hash = ref.target
+            bct = repo[commit_hash].tree
         else:
-            bct = repo.commit(commit_hash).tree
-
+            bct = repo[commit_hash].tree
         return bct
 
     #
     # Caching Functions
     #
 
-    def _get_commits_for_users(self, repo: git.Repo):
+    def _get_commits_for_users(self, repo: pygit2.Repository):
         ref_dict = self._get_best_refs(repo)
 
         # ignore the _root_ branch
@@ -841,7 +814,7 @@ class Client:
             del ref_dict[BINSYNC_ROOT_BRANCH]
 
         commit_dict = {
-            branch_name: ref.commit.hexsha for branch_name, ref in ref_dict.items()
+            branch_name: ref.commit.hex for branch_name, ref in ref_dict.items()
         }
         return commit_dict
 
@@ -878,12 +851,20 @@ class Client:
 
     def _update_cache(self):
         #l.debug(f"Updating cache commits for State Cache...")
-        cache_dict = self._get_commits_for_users(git.Repo(self.repo_root))
+        cache_dict = self._get_commits_for_users(self.repo)
         self.cache.clear_state_cache(cache_dict)
 
         cache_keys = [key for key in cache_dict.keys()]
         #l.debug(f"Updating branches on Users Cache...")
         branch_set = set(cache_keys)
         self.cache.clear_user_branch_cache(branch_set)
+
+    def _load_toml_from_tree(self, tree, filename):
+        """Load and parse TOML file from Git tree"""
+        try:
+            blob = self.repo[tree[filename].id]
+            return toml.loads(blob.data.decode())
+        except (KeyError, ValueError):
+            return None
 
 

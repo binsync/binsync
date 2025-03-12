@@ -6,7 +6,7 @@ import re
 from functools import wraps
 from typing import Dict, Optional, Union, List
 
-import git
+import pygit2
 import toml
 from sortedcontainers import SortedDict
 
@@ -102,10 +102,10 @@ def update_last_change(f):
     return _update_last_change
 
 
-def list_files_in_dir(src: Union[pathlib.Path, git.Tree], dir_name, client=None) -> List[str]:
+def list_files_in_dir(src: Union[pathlib.Path, pygit2.Tree], dir_name, client=None) -> List[str]:
     from .client import Client
 
-    if isinstance(src, git.Tree):
+    if isinstance(src, pygit2.Tree):
         files = Client.list_files_in_tree(src)
         return [name for name in files if name.startswith(dir_name)]
 
@@ -123,10 +123,10 @@ def list_files_in_dir(src: Union[pathlib.Path, git.Tree], dir_name, client=None)
     ]
 
 
-def file_to_str(src: Union[pathlib.Path, git.Tree], filename, client=None) -> Optional[str]:
+def file_to_str(src: Union[pathlib.Path, pygit2.Tree], filename, client=None) -> Optional[str]:
     from .client import Client
 
-    if isinstance(src, git.Tree):
+    if isinstance(src, pygit2.Tree):
         file_data = Client.load_file_from_tree(src, filename)
     else:
         if not src:
@@ -142,17 +142,17 @@ def file_to_str(src: Union[pathlib.Path, git.Tree], filename, client=None) -> Op
     return file_data
 
 
-def toml_file_to_dict(src: Union[pathlib.Path, git.Tree], filename, client=None):
+def toml_file_to_dict(src: Union[pathlib.Path, pygit2.Tree], filename, client=None):
     file_data = file_to_str(src, filename, client=client)
     return toml.loads(file_data) if file_data is not None else file_data
 
 
-def toml_file_to_artifact(src: Union[pathlib.Path, git.Tree], filename, artifact_cls, client=None) -> Optional[Artifact]:
+def toml_file_to_artifact(src: Union[pathlib.Path, pygit2.Tree], filename, artifact_cls, client=None) -> Optional[Artifact]:
     file_data = file_to_str(src, filename, client=client)
     return artifact_cls.loads(file_data, fmt=ArtifactFormat.TOML) if file_data is not None else None
 
 
-def toml_file_to_artifacts(src: Union[pathlib.Path, git.Tree], filename, artifact_cls, client=None) -> List[Artifact]:
+def toml_file_to_artifacts(src: Union[pathlib.Path, pygit2.Tree], filename, artifact_cls, client=None) -> List[Artifact]:
     file_data = file_to_str(src, filename, client=client)
     return artifact_cls.loads_many(file_data, fmt=ArtifactFormat.TOML) if file_data is not None else []
 
@@ -228,32 +228,28 @@ class State:
     def dirty(self):
         return self._dirty
 
-    def _dump_data(self, dst: Union[pathlib.Path, git.IndexFile], filename, data):
-        # dump using Git files
-        if self.client and isinstance(dst, git.IndexFile):
-            self.client.add_data(dst, filename, data)
-            return
+    def _dump_data(self, dst: pygit2.Index, filename: str, data: bytes):
+        """
+        Dumps data to a file in the database.
 
-        # dump using filesystem
-        if not dst:
-            dst = pathlib.Path("")
+        @param dst: The index to dump to
+        @param filename: The filename to dump to
+        @param data: The data to dump
+        @return:
+        """
+        self.client.add_data(dst, self.client.repo, filename, data)
 
-        out_path = dst.joinpath(filename)
-        pathlib.Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-        with open(out_path, "wb") as fp:
-            fp.write(data)
+    def _remove_data(self, dst: pygit2.Index, path: str):
+        """
+        Removes data from the database.
 
-    def _delete_data(self, dst: Union[pathlib.Path, git.IndexFile], path):
-        # Delete using Git files
-        if self.client and isinstance(dst, git.IndexFile):
-            dst.remove([str(path)], working_tree=True)
-            return
+        @param dst: The index to remove from
+        @param path: The path to remove
+        @return:
+        """
+        self.client.remove_data(dst, self.client.repo, path)
 
-        # Delete using file system
-        if not dst:
-            path.unlink()
-
-    def dump_metadata(self, dst: Union[pathlib.Path, git.IndexFile]):
+    def dump_metadata(self, dst: Union[pathlib.Path, pygit2.Index]):
         d = {
             "user": self.user,
             "version": self.version,
@@ -264,7 +260,7 @@ class State:
         }
         self._dump_data(dst, 'metadata.toml', toml.dumps(d, encoder=TomlHexEncoder()).encode())
 
-    def dump(self, dst: Union[pathlib.Path, git.IndexFile]):
+    def dump(self, dst: Union[pathlib.Path, pygit2.Index]):
         if isinstance(dst, str):
             dst = pathlib.Path(dst)
 
@@ -281,7 +277,7 @@ class State:
                 file = path.stem
                 address = int(file.split(".")[0], 16)
                 if address not in self.functions.keys():
-                    self._delete_data(dst, path)
+                    self._remove_data(dst, str(path))
 
         # dump structs, one file per struct in ./structs/
         for s_name, struct in self.structs.items():
@@ -296,7 +292,7 @@ class State:
                 name = file.split(".")[0]
 
                 if name not in sanitized_struct_names:
-                    self._delete_data(dst, path)
+                    self._remove_data(dst, str(path))
 
         # dump comments
         self._dump_data(dst, 'comments.toml', Comment.dumps_many(list(self.comments.values())).encode())
@@ -314,7 +310,7 @@ class State:
         self._dump_data(dst, 'typedefs.toml', Typedef.dumps_many(list(self.typedefs.values()), key_attr="name").encode())
 
     @classmethod
-    def parse(cls, src: Union[pathlib.Path, git.Tree], client=None):
+    def parse(cls, src: Union[pathlib.Path, pygit2.Tree], client=None):
         if isinstance(src, str):
             src = pathlib.Path(src)
 
