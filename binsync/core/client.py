@@ -239,12 +239,12 @@ class Client:
             if not self.repo_root:
                 self.repo_root = re.findall(r"/(.*)\.git", remote_url)[0]
 
-            callbacks = self._get_remote_callbacks()
-            self.repo = pygit2.clone_repository(remote_url, self.repo_root, callbacks=callbacks)
+            self.repo = pygit2.clone_repository(remote_url, self.repo_root)
 
             if init_repo:
                 if self.repo.lookup_branch(BINSYNC_ROOT_BRANCH):
-                    raise Exception("Can't init this remote repo since a BinSync root already exists")
+                    raise ValueError("Can't init this remote repo since a BinSync root already exists")
+                
                 self._setup_repo()
         else:
             try:
@@ -416,14 +416,14 @@ class Client:
         return state
 
     @property
-    @atomic_git_action
-    def has_remote(self, priority=SchedSpeed.FAST):
+    def has_remote(self):
         """
         If there is a remote configured for our local repo.
 
         :return:    True if there is a remote, False otherwise.
         """
-        return self.remote and self.remote in self.repo.remotes and bool(self.repo.remotes[self.remote])
+        return self.remote and self.remote in self.repo.remotes.names() and bool(self.repo.remotes[self.remote])
+
 
     def all_states(self, before_ts: int = None) -> Iterable[State]:
         states = list()
@@ -454,7 +454,7 @@ class Client:
         return states
 
     def find_commits_before_ts(self, repo: pygit2.Repository, ts: int, users: list[str]):
-        ref_dict = self._get_best_refs(repo, force_local=True)
+        ref_dict = self._get_best_branch_references(repo, force_local=True)
         best_commits = {}
         for user_name, ref in ref_dict.items():
             if user_name not in users:
@@ -554,9 +554,8 @@ class Client:
         """
         self.last_pull_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
         try:
-            callbacks = self._get_remote_callbacks()
             remote = self.repo.remotes[self.remote]
-            remote.fetch(callbacks=callbacks)
+            remote.fetch()
             self._last_pull_time = datetime.datetime.now(tz=datetime.timezone.utc)
             self.active_remote = True
 
@@ -602,10 +601,8 @@ class Client:
         self.last_push_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
         self._checkout_to_master_user()
         try:
-            callbacks = self._get_remote_callbacks()
             remote = self.repo.remotes[self.remote]
-            remote.push([f'refs/heads/{BINSYNC_ROOT_BRANCH}', f'refs/heads/{self.user_branch_name}'],
-                       callbacks=callbacks)
+            remote.push([f'refs/heads/{BINSYNC_ROOT_BRANCH}', f'refs/heads/{self.user_branch_name}'])
             self._last_push_time = datetime.datetime.now(tz=datetime.timezone.utc)
             #l.debug("Push completed successfully at %s", self._last_push_ts)
             self.active_remote = True
@@ -654,17 +651,6 @@ class Client:
             except pygit2.GitError:
                 continue
 
-    def _get_remote_callbacks(self):
-        """Get SSH callbacks for remote operations"""
-        if self.ssh_agent_pid and self.ssh_auth_sock:
-            callbacks = pygit2.RemoteCallbacks(
-                credentials=pygit2.KeypairFromAgent("git"),
-            )
-            os.environ['SSH_AGENT_PID'] = str(self.ssh_agent_pid)
-            os.environ['SSH_AUTH_SOCK'] = str(self.ssh_auth_sock)
-            return callbacks
-        return None
-
     def _checkout_to_master_user(self):
         """
         Ensure the repo is in the proper branch for current user.
@@ -686,22 +672,24 @@ class Client:
             if self._repo_lock_path.exists():
                 self._repo_lock_path.unlink(missing_ok=True)
 
-    def _get_best_refs(self, repo, force_local=False):
+    def _get_best_branch_references(self, repo, force_local=False):
         candidates = {}
-        for name in repo.references:  # type: str
-            if f'{BINSYNC_BRANCH_PREFIX}/' not in name:
+        for ref_name in repo.references:  # type: str
+            if f'{BINSYNC_BRANCH_PREFIX}/' not in ref_name:
                 continue
-            ref = repo.references[name]
-            if force_local:
-                if ref.is_remote:
-                    continue
-            else:
-                if name in candidates:
-                    # if the candidate exists, and the new one is not remote, don't replace it
-                    if not ref.is_remote or ref.remote_name != self.remote:
-                        continue
 
-            candidates[name] = ref
+            user_name = ref_name.split('/')[-1]
+            branch_name = f"{BINSYNC_BRANCH_PREFIX}/{user_name}"
+            ref = repo.references[ref_name]
+            if force_local:
+                if self._is_remote_ref(ref):
+                    continue
+            elif branch_name in candidates:
+                # if the candidate exists, and the new one is not remote, don't replace it
+                if not self._is_remote_ref(ref):
+                    continue
+
+            candidates[branch_name] = ref
         return candidates
 
     def _get_stored_hash(self):
@@ -712,6 +700,10 @@ class Client:
             return blob.data.decode().strip()
         except KeyError:
             return None
+
+    @staticmethod
+    def _is_remote_ref(ref):
+        return ref.name.startswith("refs/remotes/")
 
     @staticmethod
     def list_files_in_tree(tree):
@@ -807,7 +799,7 @@ class Client:
     #
 
     def _get_commits_for_users(self, repo: pygit2.Repository):
-        ref_dict = self._get_best_refs(repo)
+        ref_dict = self._get_best_branch_references(repo)
 
         # ignore the _root_ branch
         if BINSYNC_ROOT_BRANCH in ref_dict:
