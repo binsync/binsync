@@ -635,16 +635,14 @@ class BSController:
         @return:
         """
         changes = False
-        # only do struct headers for circular references
         master_state, state = self.get_master_and_user_state(user=user, **kwargs)
+        art_dict = self.artifact_dict_map[Struct]
         for name, struct in state.structs.items():
+            # if we already synced a struct that was nested in a parent struct, skip it
+            if name in art_dict.keys() and art_dict[name] == struct:
+                continue
             changes |= self.fill_artifact(
-                name, artifact_type=Struct, user=user, state=state, master_state=master_state, members=False
-            )
-
-        for name, struct in state.structs.items():
-            changes |= self.fill_artifact(
-                name, artifact_type=Struct, user=user, state=state, master_state=master_state, header=False
+                name, artifact_type=Struct, user=user
             )
 
         return changes
