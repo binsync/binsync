@@ -71,9 +71,15 @@ class QUtilPanel(QWidget):
         self._force_push_button.setToolTip("Manually select function and globals you would like to be force committed "
                                            "and pushed to your user branch on Git.")
 
+        self._auto_fast_sync = QCheckBox("Auto Fast Sync")
+        self._auto_fast_sync.setToolTip("For any function you have not renamed, it auto grabs one from some user.")
+        self._auto_fast_sync.setChecked(self.controller.do_safe_sync_all)
+        self._auto_fast_sync.stateChanged.connect(self._handle_auto_fast_sync_toggle)
+
         sync_options_layout.addLayout(sync_level_layout)
         sync_options_group.layout().addWidget(self._magic_sync_button)
         sync_options_group.layout().addWidget(self._force_push_button)
+        sync_options_group.layout().addWidget(self._auto_fast_sync)
 
         #
         # Developer Options Group
@@ -187,6 +193,14 @@ class QUtilPanel(QWidget):
     #
     # Event Handlers
     #
+
+    def _handle_auto_fast_sync_toggle(self, state):
+        if state == Qt.Checked:
+            l.info("Enabling auto fast sync!")
+            self.controller.do_safe_sync_all = True
+        else:
+            l.info("Disabling auto fast sync!")
+            self.controller.do_safe_sync_all = False
 
     def _handle_table_coloring_change(self):
         try:
