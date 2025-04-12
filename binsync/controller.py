@@ -5,6 +5,8 @@ import time
 from collections import defaultdict
 from functools import wraps
 from typing import Dict, Iterable, Optional, Union, List, Tuple
+import math
+import re
 
 from libbs.api.utils import progress_bar
 from libbs.artifacts import (
@@ -21,8 +23,9 @@ from binsync.core.state import State
 from binsync.core.user import User
 from binsync.configuration import BinSyncBSConfig
 
-_l = logging.getLogger(name=__name__)
+from wordfreq import word_frequency
 
+_l = logging.getLogger(name=__name__)
 
 #
 # State Checking Decorators
@@ -119,8 +122,10 @@ class BSController:
 
     DEFAULT_SEMAPHORE_SIZE = 100
 
-    def __init__(self, decompiler_interface: DecompilerInterface = None, headless=False, auto_commit=True,
-                 reload_time=10, **kwargs):
+    def __init__(
+        self, decompiler_interface: DecompilerInterface = None, headless=False, auto_commit=True, reload_time=10,
+        do_safe_sync_all=False, **kwargs
+    ):
         self.headless = headless
         self.reload_time = reload_time
         if decompiler_interface is None:
@@ -174,6 +179,8 @@ class BSController:
 
         # other properties
         self.progress_view_open = False
+        self.do_safe_sync_all = do_safe_sync_all
+        self.safe_synced_users = {}
 
         if self.headless:
             self._init_headless_components()
@@ -321,6 +328,11 @@ class BSController:
                     self._ui_updater_worker.schedule_job(
                         Job(self._update_ui, all_states)
                     )
+
+                    # attempt to fast-sync anything that is easy to sync
+                    if self.do_safe_sync_all:
+                        self.safe_sync_all(all_states)
+
 
     def _update_ui(self, states):
         if not self.ui_callback:
@@ -533,6 +545,8 @@ class BSController:
             members=True,
             header=True,
             do_type_search=True,
+            do_merge=True,
+            fast_only=False,
             **kwargs
     ):
         state: State = state if state is not None else self.get_state(user=user, priority=SchedSpeed.FAST)
@@ -554,10 +568,13 @@ class BSController:
             # specify to BinSync that this is not user-changed, but merged from someone else
             target_artifact.reset_last_change()
 
-        merged_artifact = self.merge_artifacts(
-            master_artifact, target_artifact,
-            merge_level=merge_level, master_state=master_state
-        )
+        if do_merge:
+            merged_artifact = self.merge_artifacts(
+                master_artifact, target_artifact,
+                merge_level=merge_level, master_state=master_state
+            )
+        else:
+            merged_artifact = target_artifact
 
         if merged_artifact is None:
             self.deci.warning(
@@ -584,6 +601,13 @@ class BSController:
                 # import all user defined types
                 if do_type_search:
                     self.discover_and_sync_user_types(merged_artifact, state=state, master_state=master_state)
+
+                # in fast only, we disable writes that happen in the decompiler
+                if fast_only and isinstance(merged_artifact, Function):
+                    merged_artifact.stack_vars = {}
+                    if merged_artifact.header is not None:
+                        merged_artifact.header.args = {}
+                        merged_artifact.header.type = None
 
                 # set the imports into the decompiler
                 art_dict[identifier] = merged_artifact
@@ -790,6 +814,139 @@ class BSController:
         # summarize total synchage!
         _l.info(f"In total: {total_synced[Struct]} Structs, {total_synced[Function]} Functions, "
                 f"{total_synced[GlobalVariable]} Global Variables, and {total_synced[Enum]} Enums were synced.")
+
+    def safe_sync_all(self, all_states: list[State]):
+        """
+        This function attempts to do the following:
+        - grab all the states for all users
+        - iterate all functions changed for all users, grab two things:
+            1. function name
+            2. function comments
+        - with all function names candidates, remove candidates for ones the master user already has a func name
+        """
+        addr_to_new_names_and_user = defaultdict(list)
+        master_state = next(state for state in all_states if state.user == self.client.master_user)
+        changes_per_func = self.compute_changes_per_function(states=all_states)
+        for state in all_states:
+            if state is master_state:
+                continue
+
+            for addr, light_func in state.functions.items():
+                name = light_func.name
+                if not name:
+                    continue
+
+                if self.is_default_name(name):
+                    continue
+
+                changes = changes_per_func.get(addr, {}).get(state.user, 0)
+                addr_to_new_names_and_user[addr].append((name, state.user, changes))
+
+        # now we have a list of functions that have new names, we want to rank the best one for each func addr
+        best_names_and_ids = {}
+        for addr, new_names in addr_to_new_names_and_user.items():
+            scored_candidates = [(name, user, BSController.readability_score(name), changes) for name, user, changes in new_names]
+            # max it by highest changes and then highest readability
+            best_candidate = max(scored_candidates, key=lambda x: (x[3], x[2]))
+            # name, user, changes num
+            best_names_and_ids[addr] = (best_candidate[0], best_candidate[1], best_candidate[2])
+
+        # now we have single name for each function, we for any we don't currently have
+        total_change = 0
+        for addr, (name, user, changes) in best_names_and_ids.items():
+            if user == self.client.master_user:
+                continue
+
+            fast_func = self.deci.fast_get_function(addr)
+            # the function must exist in the decompiler, and have a default name
+            if fast_func is None:
+                continue
+
+            update_cmt = ""
+            if addr in self.safe_synced_users:
+                old_name, old_user, old_change = self.safe_synced_users[addr]
+                if old_user == user and changes > old_change:
+                    update_cmt = f"[binsync]: {old_user} has {changes - old_change} new changes.\n"
+
+            needs_new_name = self.is_default_name(fast_func.name) and fast_func.name != name
+            if not needs_new_name and not update_cmt:
+                continue
+
+            # fill the function with the new name
+            succeed = False
+            if needs_new_name:
+                fast_func.name = name
+                succeed = self.fill_artifact(
+                    fast_func.addr, artifact_type=Function, artifact=fast_func, user=user, do_merge=False, fast_only=True
+                )
+            if update_cmt:
+                try:
+                    old_cmt: Comment = self.deci.comments[fast_func.addr]
+                except KeyError:
+                    old_cmt = Comment(addr=fast_func.addr, comment="")
+
+                if old_cmt and old_cmt.comment and "[binsync]" in old_cmt.comment:
+                    # remove the first line with the old comment
+                    old_cmt.comment = "\n".join(old_cmt.comment.split("\n")[1:])
+                    old_cmt.comment = update_cmt + old_cmt.comment
+                else:
+                    old_cmt.comment = update_cmt + old_cmt.comment
+
+                self.fill_artifact(
+                    fast_func.addr, artifact_type=Comment, artifact=old_cmt, user=user, do_merge=False, fast_only=True
+                )
+
+            self.safe_synced_users[addr] = (name, user, changes)
+            if succeed:
+                total_change += 1
+
+        if total_change:
+            _l.info(f"Safe Syncing completed with {total_change} changes.")
+
+    @staticmethod
+    def tokenize_varname(name):
+        """
+        Tokenizes a variable name by splitting on underscores and identifying camelCase boundaries.
+        Returns a list of lowercase tokens.
+        """
+        # Split on underscores
+        tokens = name.split('_')
+        camel_tokens = []
+        # Further split tokens with camelCase using a regex pattern.
+        for token in tokens:
+            parts = re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?![a-z])', token)
+            if parts:
+                camel_tokens.extend(parts)
+            else:
+                camel_tokens.append(token)
+        return [tok.lower() for tok in camel_tokens if tok]
+
+    @staticmethod
+    def readability_score(var_name):
+        """
+        Calculates a readability score for the variable name based on word frequency.
+        Uses the logarithm of the word frequency probabilities (words not found get a small fallback value).
+        A higher score means the name looks more natural.
+        """
+        tokens = BSController.tokenize_varname(var_name)
+        score = 0.0
+        # For each token, look up the word frequency in English.
+        for token in tokens:
+            freq = word_frequency(token, 'en')
+            # Avoid log(0); if the token frequency is 0, assign a small fallback frequency.
+            if freq == 0:
+                freq = 1e-9
+            score += math.log(freq)
+        return score
+
+    @staticmethod
+    def is_default_name(name: str):
+        BAD_STARTS = ("sub_", "FUNC_")
+        for starter in BAD_STARTS:
+            if name.startswith(starter):
+                return True
+
+        return False
 
     #
     # Force Push
@@ -1059,7 +1216,7 @@ class BSController:
     # View Utils
     #
 
-    def compute_changes_per_function(self, exclude_master=False, client=None, commit_hash=None):
+    def compute_changes_per_function(self, exclude_master=False, client=None, commit_hash=None, states=None):
         """
         Computes the number of changes per artifact type.
         TODO: support more than just functions
@@ -1079,7 +1236,11 @@ class BSController:
                 before_ts = commit_ref.committed_date
 
         # gather all the states
-        all_states = client.all_states(before_ts=before_ts)
+        if states:
+            all_states = states
+        else:
+            all_states = client.all_states(before_ts=before_ts)
+
         if exclude_master:
             all_states = [s for s in all_states if s.user != client.master_user]
 
