@@ -16,7 +16,7 @@ requires-python = ">= 3.10"
 dependencies = [
     "sortedcontainers",
     "toml",
-    "GitPython",
+    "pygit2",
     "filelock",
     "pycparser",
     "prompt_toolkit",
