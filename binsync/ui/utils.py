@@ -154,21 +154,24 @@ class QNumericItem(QTableWidgetItem):
         return self.data(Qt.UserRole) < other.data(Qt.UserRole)
 
 
-class BSUIScheduler(QObject, Scheduler):
+class BSUIScheduler(QObject):
     """
     Just like the normal Schedule, but follows the PyQT (and PySide) for Objects running
     in another thread. Only useful for scheduling UI jobs.
     """
-    def __init__(self, sleep_interval=0.05):
-        QObject.__init__(self)
-        Scheduler.__init__(self, sleep_interval=sleep_interval, name="UIScheduler")
-        self._work = True
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._scheduler = Scheduler(sleep_interval=0.05, name="UIScheduler")
+        self._scheduler._work = True
 
     def stop(self):
-        self._work = False
+        self._scheduler._work = False
 
     def run(self):
-        self._worker_thread()
+        self._scheduler._worker_thread()
+
+    def schedule_job(self, *args, **kwargs):
+        return self._scheduler.schedule_job(*args, **kwargs)
 
 def plural(value, unit):
     return f"{value} {unit}{'' if value == 1 else 's'}"
