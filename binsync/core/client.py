@@ -557,7 +557,7 @@ class Client:
                 self._last_pull_time = datetime.datetime.now(tz=datetime.timezone.utc)
                 self.active_remote = True
             except Exception as e:
-                #l.debug(f"Pull exception {e}")
+                l.error(f"Pull exception {e}")
                 self.active_remote = False
 
         if not self.active_remote:
@@ -596,7 +596,7 @@ class Client:
             self.active_remote = True
         except git.exc.GitCommandError as ex:
             self.active_remote = False
-            #l.debug(f"Failed to push b/c {ex}")
+            l.error(f"Failed to push b/c {ex}")
 
     #
     # Git Updates
