@@ -9,6 +9,9 @@ import platform
 #
 
 import logging
+
+from binsync.interface_overrides.ghidra import start_ghidra_ui
+
 logging.getLogger("binsync").addHandler(logging.NullHandler())
 from binsync.loggercfg import Loggers
 loggers = Loggers()
@@ -38,6 +41,8 @@ def create_plugin(*args, **kwargs):
         deci_cls = None
     elif current_decompiler == GHIDRA_DECOMPILER:
         pass
+        print("Starting Ghidra UI")
+        start_ghidra_ui()
         deci_cls = None
     else:
         raise ValueError(f"Unknown decompiler {current_decompiler}")
