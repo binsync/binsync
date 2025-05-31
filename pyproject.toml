@@ -20,9 +20,10 @@ dependencies = [
     "GitPython",
     "filelock",
     "pycparser",
+    "ply",
     "prompt_toolkit",
     "tqdm",
-    "libbs>=2.14.1",
+    "libbs>=2.15.1",
     "wordfreq",
 ]
 dynamic = ["version"]
