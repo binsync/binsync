@@ -225,6 +225,12 @@ class OpenBSProjectDialog(BSProjectDialog):
         self._grid_layout.addWidget(self._repo_edit, self.row, 1)
         self._grid_layout.addWidget(repo_button, self.row, 2)
         self.row += 1
+        
+        self._remote_edit = QLineEdit(self)
+        self._grid_layout.addWidget(QLabel("Remote URL", parent=self), self.row, 0)
+        self._grid_layout.addWidget(self._remote_edit, self.row, 1)
+        self._grid_layout.addWidget(QLabel("(optional)", parent=self), self.row, 2)
+        self.row += 1
 
     def _on_repo_clicked(self):
         flags = QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
@@ -239,6 +245,7 @@ class OpenBSProjectDialog(BSProjectDialog):
 
     def _on_ok_clicked(self):
         self.project_path = self._repo_edit.text()
+        self.remote_url = self._remote_edit.text()
         super()._on_ok_clicked()
 
 
@@ -393,8 +400,7 @@ class ConfigureBSDialog(QDialog):
         initialize = create
         project_path = Path(dialog.project_path) if dialog.project_path is not None else None
         username = dialog.username
-        if create:
-            remote_url = dialog.remote_url if dialog.remote_url else None
+        remote_url = dialog.remote_url if dialog.remote_url else None
 
         valid_config = True
         if not username or username.lower() == BINSYNC_ROOT_BRANCH:
@@ -406,21 +412,22 @@ class ConfigureBSDialog(QDialog):
             valid_config = False
 
         if not create:
-            if not project_path.exists():
-                QMessageBox(self).critical(
-                    None,
-                    "Project does not exist",
-                    "The specified BS project does not exist. "
-                )
-                valid_config = False
+            if not remote_url:
+                if not project_path.exists():
+                    QMessageBox(self).critical(
+                        None,
+                        "Project does not exist",
+                        "The specified BS project does not exist. "
+                    )
+                    valid_config = False
 
-            if not self.is_git_repo(project_path):
-                QMessageBox(self).critical(
-                    None,
-                    "Directory contains no .git",
-                    "The specified directory is not a BS project (it has no .git) "
-                )
-                valid_config = False
+                if not self.is_git_repo(project_path):
+                    QMessageBox(self).critical(
+                        None,
+                        "Directory contains no .git",
+                        "The specified directory is not a BS project (it has no .git) "
+                    )
+                    valid_config = False
 
         if create and Path(project_path).exists():
             QMessageBox(self).critical(
