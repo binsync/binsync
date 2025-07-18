@@ -11,8 +11,10 @@ from pathlib import Path
 import tempfile
 
 import filelock
-import git
-import git.exc
+# import git
+# import git.exc
+import pygit2 as git
+from pygit2 import Repository, Branch
 
 from binsync.core.user import User
 from binsync.configuration import BinSyncBSConfig, ProjectData
@@ -136,7 +138,7 @@ class Client:
         self.scheduler = Scheduler(name="GitScheduler")
 
         # create, init, and checkout Git repo
-        self.repo = self._get_or_init_binsync_repo(remote_url, init_repo)
+        self.repo = self._get_or_init_binsync_repo(remote_url, init_repo) # type: Repository
         self.scheduler.start_worker_thread()
         if init_user_branch:
             self._get_or_init_user_branch()
@@ -200,14 +202,26 @@ class Client:
 
         @return:
         """
-        try:
-            branch = next(o for o in self.repo.branches if o.name.endswith(self.user_branch_name))
-        except StopIteration:
-            branch = self.repo.create_head(self.user_branch_name, BINSYNC_ROOT_BRANCH)
-        else:
-            if branch.is_remote():
-                branch = self.repo.create_head(self.user_branch_name)
-        branch.checkout()
+        # Try to get a local branch.
+        branch = self.repo.lookup_branch(self.user_branch_name, git.GIT_BRANCH_LOCAL)
+        if branch is None:
+            # Not found locally: try remote.
+            branch = self.repo.lookup_branch(self.user_branch_name, git.GIT_BRANCH_REMOTE)
+            if branch is not None:
+                # Found as remote; create a local branch from its target commit.
+                branch = self.repo.create_branch(self.user_branch_name, branch.peel())
+            else:
+                # No branch exists, use local BINSYNC_ROOT_BRANCH as the base for a new branch.
+                root_branch = self.repo.lookup_branch(BINSYNC_ROOT_BRANCH, git.GIT_BRANCH_LOCAL)
+                if root_branch is None:
+                    # Try remote lookup if not local.
+                    root_branch = self.repo.lookup_branch(BINSYNC_ROOT_BRANCH, git.GIT_BRANCH_REMOTE)
+                if root_branch is None:
+                    # How tf did we get here?
+                    raise Exception(f"Cannot find root branch '{BINSYNC_ROOT_BRANCH}'")
+                branch = self.repo.create_branch(self.user_branch_name, root_branch.peel())
+        # Checkout the branch (this updates HEAD and the worktree).
+        self.repo.checkout(branch)
 
     def _get_or_init_binsync_repo(self, remote_url, init_repo):
         """
@@ -233,7 +247,7 @@ class Client:
             if not self.repo_root:
                 self.repo_root = re.findall(r"/(.*)\.git", remote_url)[0]
 
-            self.repo: git.Repo = self.clone(remote_url, no_head_check=init_repo)
+            self.repo: git.Repository = self.clone(remote_url, no_head_check=init_repo)
 
             if init_repo:
                 if any(b.name == BINSYNC_ROOT_BRANCH for b in self.repo.branches):
