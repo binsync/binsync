@@ -428,6 +428,14 @@ class ConfigureBSDialog(QDialog):
                         "The specified directory is not a BS project (it has no .git) "
                     )
                     valid_config = False
+            else:
+                 if project_path.exists() and any(project_path.iterdir()):
+                    QMessageBox(self).critical(
+                        None,
+                        "Directory Exists",
+                        "The specified directory exists and is not empty, this should not be for remote cloning! "
+                    )
+                    valid_config = False
 
         if create and Path(project_path).exists():
             QMessageBox(self).critical(
