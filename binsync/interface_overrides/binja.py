@@ -84,7 +84,7 @@ class BinjaBSInterface(BinjaInterface):
         bs_controller = self.controllers[bv]
 
         # exit early if we already configured
-        if (bs_controller.deci.bv is not None and bs_controller.check_client()) or bv is None:
+        if (bs_controller.check_client() and bs_controller.deci.bv is not None) or bv is None:
             return
 
         # configure
