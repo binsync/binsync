@@ -80,7 +80,7 @@ class BinjaBSInterface(BinjaInterface):
             Sidebar.addSidebarWidgetType(self.sidebar_widget_type)
 
     def _launch_bs_config(self, bn_context):
-        bv = bn_context.binaryView
+        bv = bn_context.context.getCurrentView().getData()
         bs_controller = self.controllers[bv]
 
         # exit early if we already configured
