@@ -1298,3 +1298,56 @@ class BSController:
 
         self.deci.gui_attach_qt_window(ProgressGraphWidget, "Progress View", graph=graph, controller=self, tag=tag)
         self.progress_view_open = True
+
+
+    def preview_function_changes(self, func_addr=None, user=None, **kwargs):
+        """
+        Get a preview of the function differences between two functions about to be synced.
+
+        This was written for the pop-up window that appears when hover over a sync or sync from in the 
+        function and context panel. Note that this only applies to functions and their comments. (Not for 
+        artifacts like structs etc). 
+
+        The approach to this is getting the two artifacts in question and creating a dictionary with information 
+        on name, type, args, and comments for master and target functions which can then be parsed to see 
+        how they differ. 
+        """
+        state = self.get_state(user=user, priority=SchedSpeed.FAST)
+        user = user or state.user
+        master_state = self.client.master_state
+        master_func = master_state.get_function(func_addr)
+        target_func = state.get_function(func_addr)
+        
+        # A lot of repetition so this is just a helper to get the relevant attributes 
+        def get_header_attr(func, attr):
+            return getattr(func.header, attr, None) if func and func.header else None
+        
+        # Get the comments where each comment is a dictionary 
+        get_comments = lambda state_obj: {addr: cmt.comment for addr, cmt in state_obj.get_func_comments(func_addr).items()}
+        # Need to handle the case that sometimes there is no master function in these cases 
+        master_comments = get_comments(master_state) if master_func else {}
+        target_comments = get_comments(state)
+        
+        diffs = {
+            'name': {
+                # can change this to use helper func since func and func.header should have same name 
+                'master': master_func.name if master_func else None,
+                'target': target_func.name if target_func else None
+            },
+            'args': {
+                'master': get_header_attr(master_func, 'args') or {},
+                'target': get_header_attr(target_func, 'args') or {}
+            },
+            'type': {
+                'master': get_header_attr(master_func, 'type'),
+                'target': get_header_attr(target_func, 'type')
+            },
+            'comments': {
+                'master': master_comments,
+                'target': target_comments
+            }
+        }
+
+        return diffs
+            
+

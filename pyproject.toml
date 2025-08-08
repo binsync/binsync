@@ -23,7 +23,7 @@ dependencies = [
     "ply",
     "prompt_toolkit",
     "tqdm",
-    "libbs>=2.15.4",
+    "libbs>=2.15.6",
     "wordfreq",
 ]
 dynamic = ["version"]

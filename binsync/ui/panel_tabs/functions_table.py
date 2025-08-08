@@ -11,7 +11,7 @@ from libbs.ui.qt_objects import (
     QAction,
     QWidget,
     QVBoxLayout,
-    Qt
+    Qt,
 )
 from binsync.ui.utils import friendly_datetime
 from binsync.core.scheduler import SchedSpeed
@@ -151,13 +151,19 @@ class FunctionTableView(BinsyncTableView):
 
             menu.addSeparator()
             if isinstance(func_addr, int) and func_addr > 0:
-                menu.addAction("Sync", lambda: self.controller.fill_artifact(func_addr, artifact_type=Function, user=user_name))
+                sync_action = QAction("Sync", parent=menu)
+                sync_action.triggered.connect( lambda: self.controller.fill_artifact(func_addr, artifact_type=Function, user=user_name))
+                menu.addAction(sync_action)
+                sync_action.hovered.connect(lambda: self.show_tooltip(func_addr, user_name))
+
             from_menu = menu.addMenu("Sync from...")
             users = self._get_valid_users_for_func(func_addr)
             for username in users:
                 action = from_menu.addAction(username)
                 action.triggered.connect(
                     lambda checked=False, name=username: self.controller.fill_artifact(func_addr, artifact_type=Function, user=name))
+                action.hovered.connect(
+                    lambda name=username: self.show_tooltip(func_addr, name))
         menu.popup(self.mapToGlobal(event.pos()))
 
 
