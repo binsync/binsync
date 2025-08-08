@@ -422,7 +422,11 @@ class Client:
             l.critical("Failed to get users from current project. Report me if possible.")
             return {}
 
-        usernames = [u.name for u in users]
+        usernames = []
+        for u in users:
+            # TODO: don't know why this is how it is... fix this later?
+            usernames.append(u if isinstance(u, str) else u.name)
+
         username_to_commit = {}
         if before_ts:
             username_to_commit = self.find_commits_before_ts(self.repo, before_ts, usernames)
