@@ -12,9 +12,6 @@ from libbs.ui.qt_objects import (
     QWidget,
     QVBoxLayout,
     Qt,
-    QToolTip,
-    QCursor,
-    QRect
 )
 from binsync.ui.utils import friendly_datetime
 from binsync.core.scheduler import SchedSpeed
@@ -157,7 +154,6 @@ class FunctionTableView(BinsyncTableView):
                 sync_action = QAction("Sync", parent=menu)
                 sync_action.triggered.connect( lambda: self.controller.fill_artifact(func_addr, artifact_type=Function, user=user_name))
                 menu.addAction(sync_action)
-                # menu.addAction("Sync", lambda: self.controller.fill_artifact(func_addr, artifact_type=Function, user=user_name))
                 sync_action.hovered.connect(lambda: self.show_tooltip(func_addr, user_name))
 
             from_menu = menu.addMenu("Sync from...")
@@ -169,81 +165,7 @@ class FunctionTableView(BinsyncTableView):
                 action.hovered.connect(
                     lambda name=username: self.show_tooltip(func_addr, name))
         menu.popup(self.mapToGlobal(event.pos()))
-        
-    def show_tooltip(self, func_addr, user_name):
-        """
-        Have a popup box that shows the differences between the master and target function when hovering a sync option.
 
-        Call preview_function_changes and parse the dictionary for any differences. Note this just applies to functions 
-        and their comments. 
-        """
-
-        self.setStyleSheet("""
-        QToolTip {
-            background-color: #fff;
-            color: black;
-            border: 1px solid gray;
-            padding: 2px;
-            max-width: 600px;
-            font-family: monospace;
-        }
-        """)
-        
-        differences = self.controller.preview_function_changes(func_addr=func_addr, user=user_name)
-        # print(f"Differences: {differences}")
-        
-        # This will hold all the HTML stuff that will go into the tooltip
-        diff_sections = []
-        
-        # For every field kind of doing the same thing so helper function to keep it succint 
-        # Takes in the field it is comparing (name, type, ...) and the two values for that field to compare
-        def create_simple_diff(field_name, master_val, target_val):
-            if master_val == target_val:
-                return ""
-            # At this point there is a difference so need to craft the HTML that summarizes the difference 
-            html = f"<b>{field_name}:</b><br>"
-            # Need to handle that if it relates to master function it should be in red and target in green 
-            if master_val:
-                html += f"<span style='color:red; background-color:#ffecec;'>- {master_val}</span><br>"
-            return html + f"<span style='color:green; background-color:#eaffea;'>+ {target_val}</span><hr>"
-        
-        diff_sections.extend(filter(None, [
-            create_simple_diff("Name", differences['name']['master'], differences['name']['target']),
-            create_simple_diff("Type", differences['type']['master'], differences['type']['target'])
-        ]))
-        
-        # Args are a bit more tedious, first just go through master and targer and put together lists of relevant arg details 
-        if differences['args']['master'] != differences['args']['target']:
-            master_args = [f"{k} {arg.type} {arg.name}" if arg.type else f"{k} {arg.name}" 
-                        for k, arg in differences['args']['master'].items()]
-            target_args = [f"{k} {arg.type} {arg.name}" if arg.type else f"{k} {arg.name}" 
-                        for k, arg in differences['args']['target'].items()]
-            
-            # Only show the args that differ between master and target 
-            unique_args = set(master_args) ^ set(target_args)
-            if unique_args:
-                args_html = "<b>Args:</b>"
-                for arg in unique_args:
-                    # Just another approach for handling the different color appearances for master and target 
-                    highlight = "eaffea" if arg in target_args else "ffecec"
-                    color = "red" if arg in master_args else "green"
-                    symbol = "-" if arg in master_args else "+"
-                    args_html += f"<br><span style='color:{color}; background-color:#{highlight};'>{symbol} {arg}</span>"
-                diff_sections.append(args_html + "<hr>")
-        
-        # For comments, just show comments in target that are not also in master (this differs from what args are shown)
-        target_comments = differences['comments']['target'].items()
-        master_comments = differences['comments']['master'].items()
-        if not set(target_comments).issubset(set(master_comments)):
-            comments_html = "<b>Comments:</b>"
-            for key, value in target_comments:
-                if key not in differences['comments']['master'] or differences['comments']['master'][key] != value:
-                    comments_html += f"<br><span style='color:green; background-color:#eaffea;'>+ @{key}: {value}</span>"
-            diff_sections.append(comments_html + "<hr>")
-        
-        diff_html = "".join(diff_sections) if diff_sections else "<span style='color:red; background-color:#ffecec;'>No changes</span>"
-        
-        QToolTip.showText(QCursor.pos(), diff_html, self, QRect(), 3000)
 
 class QFunctionTable(QWidget):
     """ Wrapper widget to contain the function table classes in one file (prevents bulking up control_panel.py) """
