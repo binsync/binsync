@@ -188,7 +188,7 @@ class BinsyncTableModel(QAbstractTableModel):
         if artifact_update_time is not None:
             duration = int(datetime.datetime.now(tz=datetime.timezone.utc).timestamp() - artifact_update_time.timestamp())
         else:
-            duration = 0
+            duration = -1
 
         if 0 <= duration <= self.controller.table_coloring_window:
             opacity = (self.controller.table_coloring_window - duration) / self.controller.table_coloring_window
