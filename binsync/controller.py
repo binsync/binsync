@@ -13,7 +13,7 @@ from libbs.artifacts import (
     Artifact,
     Function, FunctionHeader, StackVariable,
     Comment, GlobalVariable, Patch,
-    Enum, Struct, FunctionArgument, StructMember, Typedef
+    Enum, Struct, FunctionArgument, StructMember, Typedef, Segment
 )
 from libbs.api import DecompilerInterface
 from libbs.api.type_parser import CType
@@ -40,13 +40,6 @@ def init_checker(f):
 
     return _init_check
 
-
-def fill_event(f):
-    @wraps(f)
-    def _fill_event(self: "BSController", *args, **kwargs):
-        return self.fill_event_handler(f, *args, **kwargs)
-
-    return _fill_event
 
 #
 # Description Constants
@@ -87,7 +80,7 @@ class BSController:
 
     """
     CHANGE_WATCHERS = (
-        FunctionHeader, StackVariable, Comment, GlobalVariable, Enum, Struct, Typedef
+        FunctionHeader, StackVariable, Comment, GlobalVariable, Enum, Struct, Typedef, Segment
     )
 
     ARTIFACT_SET_MAP = {
@@ -98,7 +91,8 @@ class BSController:
         GlobalVariable: State.set_global_var,
         Struct: State.set_struct,
         Enum: State.set_enum,
-        Typedef: State.set_typedef
+        Typedef: State.set_typedef,
+        Segment: State.set_segment
     }
 
     ARTIFACT_GET_MAP = {
@@ -117,7 +111,9 @@ class BSController:
         Enum: State.get_enum,
         (Enum, GET_MANY): State.get_enums,
         Typedef: State.get_typedef,
-        (Typedef, GET_MANY): State.get_typedefs
+        (Typedef, GET_MANY): State.get_typedefs,
+        Segment: State.get_segment,
+        (Segment, GET_MANY): State.get_segments
     }
 
     DEFAULT_SEMAPHORE_SIZE = 100
@@ -151,7 +147,8 @@ class BSController:
             Enum: self.deci.enums,
             Typedef: self.deci.typedefs,
             Struct: self.deci.structs,
-            Patch: self.deci.patches
+            Patch: self.deci.patches,
+            Segment: self.deci.segments
         }
 
         # client created on connection
@@ -711,6 +708,27 @@ class BSController:
 
         return changes
 
+    @init_checker
+    def fill_segment(self, name, user=None, do_type_search=True, **kwargs):
+        """Fill a single segment from another user."""
+        master_state, state = self.get_master_and_user_state(user=user, **kwargs)
+        return self.fill_artifact(
+            name, artifact_type=Segment, user=user, state=state, master_state=master_state,
+            do_type_search=do_type_search
+        )
+
+    @init_checker
+    def fill_segments(self, user=None, do_type_search=True, **kwargs):
+        changes = False
+        master_state, state = self.get_master_and_user_state(user=user, **kwargs)
+        for name, segment in state.segments.items():
+            changes |= self.fill_artifact(
+                name, artifact_type=Segment, user=user, state=state, master_state=master_state,
+                do_type_search=do_type_search
+            )
+
+        return changes
+
     def sync_all(self, user=None, **kwargs):
         """
         Connected to the Sync All action:
@@ -724,7 +742,7 @@ class BSController:
 
         master_state, state = self.get_master_and_user_state(user=user, **kwargs)
         fillers = [
-            self.fill_enums, self.fill_global_vars, self.fill_functions
+            self.fill_enums, self.fill_global_vars, self.fill_functions, self.fill_segments
         ]
         changes = False
         # need to do structs specially
@@ -1026,6 +1044,36 @@ class BSController:
 
         self.client.master_state = master_state
         self.deci.info(f"Globals force push successful: committed {committed} artifacts.")
+
+    @init_checker
+    def force_push_segments(self, segment_names: List[int]):
+        """
+        Collects the segments currently stored in the decompiler, not the BS State,
+        and commits them to the master users BS Database.
+
+        @param segment_names: List of segment names to push
+        @return: Success of committing the Segments
+        """
+        if not segment_names:
+            _l.warning("Ignored segments force push, no segments selected")
+            return
+
+        master_state: State = self.client.master_state
+        committed = 0
+        
+        for segment_name in segment_names:
+            try:
+                segment = self.deci.segments[segment_name]
+                if segment:
+                    master_state.set_segment(segment)
+                    committed += 1
+                else:
+                    _l.warning(f"Failed to force push segment @ {segment_name}")
+            except KeyError:
+                _l.warning(f"Segment at {segment_name} not found in decompiler")
+
+        self.client.master_state = master_state
+        self.deci.info(f"Segments force push successful: committed {committed} segments.")
 
     #
     # Utils
