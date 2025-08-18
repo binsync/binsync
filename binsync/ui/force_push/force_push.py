@@ -2,6 +2,7 @@ import logging
 
 from binsync.ui.force_push.panels.functions_table import QFunctionTable
 from binsync.ui.force_push.panels.globals_table import QGlobalsTable
+from binsync.ui.force_push.panels.segments_table import QSegmentTable
 from libbs.api.utils import progress_bar
 from libbs.ui.qt_objects import (
     QTabWidget,
@@ -48,12 +49,17 @@ class ForcePushUI(QWidget):
         # add globals tab
         self._global_table = QGlobalsTable(self.controller)
 
+        # add segments tab
+        self._segment_table = QSegmentTable(self.controller)
+
         self.tabView.addTab(self._func_tab, "Functions")
         self.tabView.addTab(self._global_table, "Globals")
+        self.tabView.addTab(self._segment_table, "Segments")
 
         self.tables.update({
             "functions": self._func_table,
-            "globals": self._global_table
+            "globals": self._global_table,
+            "segments": self._segment_table
         })
 
         main_layout = QVBoxLayout()
@@ -70,5 +76,5 @@ class ForcePushUI(QWidget):
         self._func_table.table.use_decompilation = bool(state)
 
     def _update_table_data(self):
-        for _, table in progress_bar(self.tables.items(), gui=True, desc="Loading functions and globals..."):
+        for _, table in progress_bar(self.tables.items(), gui=True, desc="Loading functions, globals, and segments..."):
             table.update_table()

@@ -21,7 +21,7 @@ from libbs.artifacts import (
     GlobalVariable,
     Patch,
     StackVariable,
-    Struct, Typedef,
+    Struct, Typedef, Segment,
 )
 from libbs.artifacts import TomlHexEncoder
 from binsync import __version__ as BS_VERS
@@ -187,6 +187,7 @@ class State:
         self.global_vars: Dict[int, GlobalVariable] = {}
         self.enums: Dict[str, Enum] = {}
         self.typedefs: Dict[str, Typedef] = {}
+        self.segments: Dict[str, Segment] = {}
 
         # state is dirty on creation (metadata)
         self._dirty = dirty  # type: bool
@@ -199,12 +200,13 @@ class State:
                    and other.patches == self.patches \
                    and other.global_vars == self.global_vars \
                    and other.enums == self.enums \
-                   and other.typedefs == self.typedefs
+                   and other.typedefs == self.typedefs \
+                   and other.segments == self.segments
         return False
 
     def copy(self):
         state = State(self.user, version=self.version, client=self.client, last_push_time=self.last_push_time, last_commit_msg=self.last_commit_msg, dirty=self._dirty)
-        artifacts = ["functions", "comments", "structs", "patches", "global_vars", "enums", "typedefs"]
+        artifacts = ["functions", "comments", "structs", "patches", "global_vars", "enums", "typedefs", "segments"]
         for artifact in artifacts:
             setattr(
                 state,
@@ -218,7 +220,8 @@ class State:
         return f"<State: {self.user} " \
                f"funcs={len(self.functions)} " \
                f"cmts={len(self.comments)} " \
-               f"globals={len(self.structs) + len(self.global_vars) + len(self.enums) + len(self.typedefs)}" \
+               f"globals={len(self.structs) + len(self.global_vars) + len(self.enums) + len(self.typedefs)} " \
+               f"segments={len(self.segments)}" \
                f">"
 
     def __repr__(self):
@@ -313,6 +316,9 @@ class State:
         # dump typedefs
         self._dump_data(dst, 'typedefs.toml', Typedef.dumps_many(list(self.typedefs.values()), key_attr="name").encode())
 
+        # dump segments
+        self._dump_data(dst, 'segments.toml', Segment.dumps_many(list(self.segments.values()), key_attr="name").encode())
+
     @classmethod
     def parse(cls, src: Union[pathlib.Path, git.Tree], client=None):
         if isinstance(src, str):
@@ -354,6 +360,10 @@ class State:
         # load typedefs
         typedefs: List[Typedef] = toml_file_to_artifacts(src, "typedefs.toml", Typedef, client=client)
         state.typedefs = {typedef.name: typedef for typedef in typedefs}
+
+        # load segments
+        segments: List[Segment] = toml_file_to_artifacts(src, "segments.toml", Segment, client=client)
+        state.segments = {segment.name: segment for segment in segments}
 
         # load structs
         struct_files = list_files_in_dir(src, "structs", client=client)
@@ -524,6 +534,18 @@ class State:
 
         return False
 
+    def set_segment(self, segment: Segment, set_last_change=True, **kwargs):
+        try:
+            old_segment = self.segments[segment.name]
+        except KeyError:
+            old_segment = None
+
+        if old_segment != segment:
+            self.segments[segment.name] = segment
+            return True
+
+        return False
+
     #
     # Getters
     #
@@ -648,6 +670,17 @@ class State:
 
     def get_typedefs(self):
         return self.typedefs
+
+    def get_segment(self, name):
+        try:
+            segment = self.segments[name]
+        except KeyError:
+            segment = None
+
+        return segment
+
+    def get_segments(self):
+        return self.segments
 
     def get_last_push_for_artifact_type(self, artifact_type):
         last_change = -1

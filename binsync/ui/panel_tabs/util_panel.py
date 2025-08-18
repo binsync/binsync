@@ -71,6 +71,10 @@ class QUtilPanel(QWidget):
         self._force_push_button.setToolTip("Manually select function and globals you would like to be force committed "
                                            "and pushed to your user branch on Git.")
 
+        self._pull_segments_button = QPushButton("Pull Segments...")
+        self._pull_segments_button.clicked.connect(self._handle_pull_segments_button)
+        self._pull_segments_button.setToolTip("Manually select segments from other users to pull into your state.")
+
         self._auto_fast_sync = QCheckBox("Auto Fast Sync")
         self._auto_fast_sync.setToolTip("For any function you have not renamed, it auto grabs one from some user.")
         self._auto_fast_sync.setChecked(self.controller.do_safe_sync_all)
@@ -79,6 +83,7 @@ class QUtilPanel(QWidget):
         sync_options_layout.addLayout(sync_level_layout)
         sync_options_group.layout().addWidget(self._magic_sync_button)
         sync_options_group.layout().addWidget(self._force_push_button)
+        sync_options_group.layout().addWidget(self._pull_segments_button)
         sync_options_group.layout().addWidget(self._auto_fast_sync)
 
         #
@@ -262,6 +267,11 @@ class QUtilPanel(QWidget):
     def _handle_force_push_button(self):
         self.popup = ForcePushUI(self.controller)
         self.popup.show()
+
+    def _handle_pull_segments_button(self):
+        from ..pull_segments_dialog import PullSegmentsDialog
+        dialog = PullSegmentsDialog(self.controller)
+        dialog.exec_()
 
     def _handle_auto_commit_toggle(self, state):
         if state == Qt.Checked:
