@@ -172,7 +172,7 @@ class BSController:
 
         # create a pulling thread, but start on connection
         self._run_updater_threads = False
-        self.user_states_update_thread = threading.Thread(target=self.updater_routine)
+        self.user_states_update_thread = threading.Thread(target=self.updater_routine, daemon=True)
 
         # other properties
         self.progress_view_open = False
@@ -355,7 +355,6 @@ class BSController:
 
     def start_worker_routines(self):
         self._run_updater_threads = True
-        self.user_states_update_thread.daemon = True
         self.user_states_update_thread.start()
 
         self.push_job_scheduler.start_worker_thread()
