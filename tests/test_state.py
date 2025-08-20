@@ -23,8 +23,8 @@ class TestState(unittest.TestCase):
             client = Client("user0", tmpdir, "fake_hash", init_repo=True)
             state = State("user0", client=client)
 
-            # dump to the current repo, current branch
-            state.dump(client.repo.index)
+            # dump to the filesystem
+            state.dump(tmpdir)
             metadata_path = os.path.join(tmpdir, "metadata.toml")
             assert os.path.isfile(metadata_path) is True
 
@@ -48,12 +48,12 @@ class TestState(unittest.TestCase):
             )
             state.set_struct(my_struct)
 
-            # dump and commit state to tree
+            # dump state to filesystem and commit
+            state.dump(tmpdir)
             client._commit_state(state)
 
-            # load the state
-            state_tree = client._get_tree(state.user, client.repo)
-            new_state = State.parse(state_tree, client=client)
+            # load the state from filesystem
+            new_state = State.parse(tmpdir, client=client)
 
             assert new_state.user == "user0"
             assert new_state.version == 1

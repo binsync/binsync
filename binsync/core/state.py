@@ -102,11 +102,13 @@ def update_last_change(f):
     return _update_last_change
 
 
-def list_files_in_dir(src: pathlib.Path, dir_name, client=None) -> List[str]:
-    """List files in a directory. Now only works with filesystem paths since we use pygit2."""
+def list_files_in_dir(src, dir_name, client=None) -> List[str]:
+    """List files in a directory. Works with filesystem paths only."""
     # load from filesystem
     if not src:
         src = pathlib.Path("")
+    elif isinstance(src, str):
+        src = pathlib.Path(src)
 
     if not src.joinpath(pathlib.Path(dir_name)).exists():
         return []
@@ -118,10 +120,13 @@ def list_files_in_dir(src: pathlib.Path, dir_name, client=None) -> List[str]:
     ]
 
 
-def file_to_str(src: pathlib.Path, filename, client=None) -> Optional[str]:
-    """Read file content as string. Now only works with filesystem paths since we use pygit2."""
+def file_to_str(src, filename, client=None) -> Optional[str]:
+    """Read file content as string. Works with filesystem paths only."""
+    # Handle filesystem paths
     if not src:
         src = pathlib.Path("")
+    elif isinstance(src, str):
+        src = pathlib.Path(src)
 
     src = src.joinpath(filename)
     if not src.exists():
@@ -133,20 +138,20 @@ def file_to_str(src: pathlib.Path, filename, client=None) -> Optional[str]:
     return file_data
 
 
-def toml_file_to_dict(src: pathlib.Path, filename, client=None):
-    """Load TOML file to dictionary. Now only works with filesystem paths since we use pygit2."""
+def toml_file_to_dict(src, filename, client=None):
+    """Load TOML file to dictionary. Works with filesystem paths only."""
     file_data = file_to_str(src, filename, client=client)
     return toml.loads(file_data) if file_data is not None else file_data
 
 
-def toml_file_to_artifact(src: pathlib.Path, filename, artifact_cls, client=None) -> Optional[Artifact]:
-    """Load TOML file to artifact. Now only works with filesystem paths since we use pygit2."""
+def toml_file_to_artifact(src, filename, artifact_cls, client=None) -> Optional[Artifact]:
+    """Load TOML file to artifact. Works with filesystem paths only."""
     file_data = file_to_str(src, filename, client=client)
     return artifact_cls.loads(file_data, fmt=ArtifactFormat.TOML) if file_data is not None else None
 
 
-def toml_file_to_artifacts(src: pathlib.Path, filename, artifact_cls, client=None) -> List[Artifact]:
-    """Load TOML file to list of artifacts. Now only works with filesystem paths since we use pygit2."""
+def toml_file_to_artifacts(src, filename, artifact_cls, client=None) -> List[Artifact]:
+    """Load TOML file to list of artifacts. Works with filesystem paths only."""
     file_data = file_to_str(src, filename, client=client)
     return artifact_cls.loads_many(file_data, fmt=ArtifactFormat.TOML) if file_data is not None else []
 
@@ -225,11 +230,13 @@ class State:
     def dirty(self):
         return self._dirty
 
-    def _dump_data(self, dst: pathlib.Path, filename, data):
-        """Dump data to filesystem. Now only works with filesystem paths since we use pygit2."""
-        # dump using filesystem
+    def _dump_data(self, dst, filename, data):
+        """Dump data to filesystem."""
+        # dump using filesystem path
         if not dst:
             dst = pathlib.Path("")
+        elif isinstance(dst, str):
+            dst = pathlib.Path(dst)
 
         out_path = dst.joinpath(filename)
         pathlib.Path(out_path).parent.mkdir(parents=True, exist_ok=True)
@@ -247,7 +254,7 @@ class State:
             if full_path.exists():
                 full_path.unlink()
 
-    def dump_metadata(self, dst: pathlib.Path):
+    def dump_metadata(self, dst):
         d = {
             "user": self.user,
             "version": self.version,
@@ -258,7 +265,8 @@ class State:
         }
         self._dump_data(dst, 'metadata.toml', toml.dumps(d, encoder=TomlHexEncoder()).encode())
 
-    def dump(self, dst: pathlib.Path):
+    def dump(self, dst):
+        # dst can be pathlib.Path or str
         if isinstance(dst, str):
             dst = pathlib.Path(dst)
 
@@ -317,7 +325,8 @@ class State:
         self._dump_data(dst, 'segments.toml', Segment.dumps_many(list(self.segments.values()), key_attr="name").encode())
 
     @classmethod
-    def parse(cls, src: pathlib.Path, client=None):
+    def parse(cls, src, client=None):
+        # src can be pathlib.Path or str
         if isinstance(src, str):
             src = pathlib.Path(src)
 

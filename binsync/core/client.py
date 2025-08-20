@@ -528,3 +528,4 @@ class Client:
         cache_keys = [key for key in cache_dict.keys()]
         branch_set = set(cache_keys)
         self.cache.clear_user_branch_cache(branch_set)
+
