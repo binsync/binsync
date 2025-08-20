@@ -752,6 +752,135 @@ class BSController:
 
         return changes
 
+    def sync_all_async(self, user=None, parent_widget=None, **kwargs):
+        """
+        Async version of sync_all that runs in background with progress dialog.
+        This prevents UI freezing during large sync operations.
+        
+        For IDA Pro compatibility, falls back to synchronous operation if async fails.
+        
+        @param user: User to sync from
+        @param parent_widget: Parent widget for dialog
+        @return: AsyncSyncDialog instance or sync result
+        """
+        _l.info(f"Starting async sync for user {user}...")
+        
+        # Check environment safety BEFORE trying to create any Qt dialogs
+        if not self._is_async_safe():
+            _l.warning("Async sync not safe in current environment, using synchronous fallback")
+            # Skip dialog creation entirely and go straight to sync
+            try:
+                self._show_sync_message(f"Syncing from {user}...", parent_widget)
+                result = self.sync_all(user=user, **kwargs)
+                self._show_sync_message(f"Sync completed! Changes: {result}", parent_widget, is_final=True)
+                return result
+            except Exception as sync_error:
+                _l.error(f"Synchronous sync failed: {sync_error}")
+                self._show_sync_message(f"Sync failed: {sync_error}", parent_widget, is_error=True)
+                raise
+        
+        # Try async approach only if environment is safe
+        try:
+            from binsync.ui.async_sync_dialog import AsyncSyncDialog
+            
+            dialog = AsyncSyncDialog(
+                controller=self,
+                sync_function=self.sync_all,
+                sync_args={'user': user, **kwargs},
+                title=f"Syncing from {user}",
+                parent=parent_widget
+            )
+            return dialog
+                
+        except Exception as e:
+            _l.warning(f"Async dialog creation failed ({e}), falling back to synchronous sync_all")
+            
+            # Fallback to original synchronous sync_all
+            try:
+                # Show a simple message dialog if possible
+                self._show_sync_message(f"Syncing from {user}...", parent_widget)
+                result = self.sync_all(user=user, **kwargs)
+                self._show_sync_message(f"Sync completed! Changes: {result}", parent_widget, is_final=True)
+                return result
+            except Exception as sync_error:
+                _l.error(f"Both async and sync failed: {sync_error}")
+                self._show_sync_message(f"Sync failed: {sync_error}", parent_widget, is_error=True)
+                raise
+    
+    def _is_async_safe(self):
+        """Check if async operations are safe in current environment"""
+        try:
+            # Check if we're in IDA Pro which has threading restrictions
+            import sys
+            
+            # Look for IDA-specific modules
+            ida_modules = [mod for mod in sys.modules.keys() if mod.startswith(('ida', 'idc'))]
+            if ida_modules:
+                _l.debug(f"IDA Pro detected ({len(ida_modules)} modules), async not safe")
+                return False
+            
+            # Check for other decompilers that might have Qt issues
+            ghidra_modules = [mod for mod in sys.modules.keys() if 'ghidra' in mod.lower()]
+            if ghidra_modules:
+                _l.debug("Ghidra detected, async may not be safe")
+                return False
+            
+            # Check if Qt is properly initialized for threading
+            try:
+                from libbs.ui.qt_objects import QApplication
+                app = QApplication.instance()
+                if app is None:
+                    _l.debug("No QApplication instance, async not safe")
+                    return False
+                
+                # Additional Qt thread safety check
+                from libbs.ui.qt_objects import QThread
+                if not hasattr(QThread, 'currentThread'):
+                    _l.debug("Qt threading not properly available")
+                    return False
+                    
+            except Exception as qt_error:
+                _l.debug(f"Qt check failed: {qt_error}, async not safe")
+                return False
+            
+            # Check if we're in a testing environment (may not have proper Qt)
+            if 'pytest' in sys.modules or 'unittest' in sys.modules:
+                _l.debug("Testing environment detected, async may not be safe")
+                return False
+            
+            _l.debug("Environment appears safe for async operations")
+            return True
+            
+        except Exception as e:
+            _l.debug(f"Async safety check failed: {e}, defaulting to not safe")
+            return False
+    
+    def _show_sync_message(self, message, parent_widget=None, is_final=False, is_error=False):
+        """Show sync status message - safe fallback UI"""
+        try:
+            if is_error:
+                _l.error(message)
+            elif is_final:
+                _l.info(message)
+            else:
+                _l.info(message)
+            
+            # Try to show a simple message box if Qt is available
+            try:
+                from libbs.ui.qt_objects import QMessageBox
+                if is_error:
+                    QMessageBox.critical(parent_widget, "Sync Error", message)
+                elif is_final:
+                    QMessageBox.information(parent_widget, "Sync Complete", message)
+                # Don't show message box for start message to avoid blocking
+                    
+            except Exception:
+                # Qt not available or failed, just use logging
+                pass
+                
+        except Exception as e:
+            _l.error(f"Failed to show sync message: {e}")
+
     @init_checker
     def magic_fill(self, preference_user=None, target_artifacts=None):
         """

@@ -1,18 +1,11 @@
 import logging
 import pathlib
 import os
-import re
-import shutil
-import subprocess
 import datetime
-from functools import wraps
+import shutil
 from typing import Iterable, Optional
 from pathlib import Path
 import tempfile
-
-import filelock
-import git
-import git.exc
 
 from binsync.core.user import User
 from binsync.configuration import BinSyncBSConfig, ProjectData
@@ -20,54 +13,15 @@ from binsync.core.errors import ExternalUserCommitError, MetadataNotFoundError
 from binsync.core.state import State, toml_file_to_dict
 from binsync.core.scheduler import Scheduler, Job, SchedSpeed
 from binsync.core.cache import Cache
-
+from binsync.core.git_backend import GitBackend
 
 l = logging.getLogger(__name__)
 BINSYNC_BRANCH_PREFIX = 'binsync'
 BINSYNC_ROOT_BRANCH = f'{BINSYNC_BRANCH_PREFIX}/__root__'
 
-logging.getLogger("git").setLevel(logging.ERROR)
-
 
 class ConnectionWarnings:
     HASH_MISMATCH = 0
-
-
-def atomic_git_action(f):
-    """
-    Assures that any function called with this decorator will execute in-order, atomically, on a single thread.
-    This all assumes that the function you are passing is a member of the Client class, which will also have
-    a scheduler. This also means that this can only be called after the scheduler is started. This also requires a
-    Cache. Generally, just never call functions with this decorator until the Client is done initing.
-
-    This function will also attempt to check the cache for requested data on the same thread the original call
-    was made from. If not found, the atomic scheduling is done.
-
-    @param f:   A Client object function
-    @return:
-    """
-    @wraps(f)
-    def _atomic_git_action(self: "Client", *args, **kwargs):
-        no_cache = kwargs.get("no_cache", False)
-        if not no_cache:
-            # cache check
-            cache_item = self.check_cache_(f, **kwargs)
-            if cache_item is not None:
-                return cache_item
-
-        # non cache available, queue it up!
-        priority = kwargs.get("priority", None) or SchedSpeed.SLOW
-        ret_val = self.scheduler.schedule_and_wait_job(
-            Job(f, self, *args, **kwargs),
-            priority=priority
-        )
-
-        if ret_val:
-            self._set_cache(f, ret_val, **kwargs)
-
-        return ret_val if ret_val is not None else {}
-
-    return _atomic_git_action
 
 
 class Client:
@@ -95,8 +49,7 @@ class Client:
     ):
         """
         The Client class is responsible for making the low-level Git operations for the BinSync environment.
-        Things like committing, pulling, and pushing all happen on the client level. It also starts a thread
-        for continuous pushing.
+        Things like committing, pulling, and pushing all happen on the client level.
 
         :param master_user:         Username of the user that is initing the client (the master user)
         :param repo_root:           Path to the BinSync repo where the project will be stored
@@ -108,49 +61,56 @@ class Client:
         :param ssh_agent_pid:       SSH Agent PID
         :param ssh_auth_sock:       SSH Auth Socket
         """
-        self._ignore_lock = ignore_lock
-        self.master_user = master_user
-        self.repo_root = repo_root
-        self.binary_hash = binary_hash
-        self.remote = remote
-        self.repo = None
-        self.repo_lock = None
         self.pull_on_update = pull_on_update
         self.push_on_update = push_on_update
         self.commit_on_update = commit_on_update
         self._temp_directory: tempfile.TemporaryDirectory | None = temp_directory
-
-        # validate this username can exist
-        if not master_user or master_user.endswith('/') or '__root__' in master_user:
-            raise Exception(f"Bad username: {master_user}")
-
-        # ssh-agent info
-        self.ssh_agent_pid = ssh_agent_pid  # type: int
-        self.ssh_auth_sock = ssh_auth_sock  # type: str
-        self.connection_warnings = []
-
-        self._repo_lock_path = Path(self.repo_root + "/.git/binsync.lock")
-
-        # job scheduler
-        self.cache = Cache(master_user=master_user)
-        self.scheduler = Scheduler(name="GitScheduler")
-
-        # create, init, and checkout Git repo
-        self.repo = self._get_or_init_binsync_repo(remote_url, init_repo)
-        self.scheduler.start_worker_thread()
-        if init_user_branch:
-            self._get_or_init_user_branch()
-
+        
         # timestamps
         self._commit_interval = commit_interval
         self._commit_batch_size = commit_batch_size
-        self._last_push_time = None  # type: datetime.datetime
         self.last_push_attempt_time = None  # type: datetime.datetime
-        self._last_pull_time = None  # type: datetime.datetime
         self.last_pull_attempt_time = None  # type: datetime.datetime
         self._last_commit_time = None # type: datetime.datetime
-
-        self.active_remote = True
+        
+        # Initialize Git backend
+        try:
+            self.git_backend = GitBackend(
+                master_user=master_user,
+                repo_root=repo_root,
+                binary_hash=binary_hash,
+                remote=remote,
+                remote_url=remote_url,
+                ssh_agent_pid=ssh_agent_pid,
+                ssh_auth_sock=ssh_auth_sock,
+                init_repo=init_repo,
+                ignore_lock=ignore_lock,
+            )
+        except Exception as e:
+            # Provide helpful error messages for common issues
+            error_msg = str(e).lower()
+            if "authentication" in error_msg:
+                l.error("Git authentication failed. Run 'python binsync_auth_check.py' to diagnose the issue.")
+            elif "connection refused" in error_msg:
+                l.error("Network connection failed. Check your internet connection.")
+            elif "repository not found" in error_msg:
+                l.error("Repository not found. Check the repository URL and your access permissions.")
+            raise
+        
+        # Legacy compatibility properties
+        self.master_user = self.git_backend.master_user
+        self.repo_root = self.git_backend.repo_root
+        self.binary_hash = self.git_backend.binary_hash
+        self.remote = self.git_backend.remote
+        self.repo = self.git_backend.repo
+        self.connection_warnings = []
+        self.active_remote = self.git_backend.active_remote
+        
+        # job scheduler and cache
+        self.cache = Cache(master_user=master_user)
+        self.scheduler = Scheduler(name="GitScheduler")
+        self.scheduler.start_worker_thread()
+        
         # force a state update on init
         self.master_state = self.get_state(no_cache=True)
 
@@ -173,13 +133,13 @@ class Client:
             commit_batch_size=self._commit_batch_size,
             init_repo=False,
             remote_url=None,
-            ssh_agent_pid=self.ssh_agent_pid,
-            ssh_auth_sock=self.ssh_auth_sock,
-            push_on_update=self.push_on_update,
+            ssh_agent_pid=self.git_backend.ssh_agent_pid,
+            ssh_auth_sock=self.git_backend.ssh_auth_sock,
+            push_on_update=self.pull_on_update,
             pull_on_update=self.pull_on_update,
             commit_on_update=self.commit_on_update,
             temp_directory=temp_dir,
-            ignore_lock=self._ignore_lock or copy_files,
+            ignore_lock=self.git_backend._ignore_lock or copy_files,
             init_user_branch=not copy_files,
         )
 
@@ -189,114 +149,7 @@ class Client:
 
         self.shutdown()
 
-    #
-    # Initializers
-    #
-
-    def _get_or_init_user_branch(self):
-        """
-        Creates a user branch if the user is new, otherwise it gets the branch of the same
-        name as the user
-
-        @return:
-        """
-        try:
-            branch = next(o for o in self.repo.branches if o.name.endswith(self.user_branch_name))
-        except StopIteration:
-            branch = self.repo.create_head(self.user_branch_name, BINSYNC_ROOT_BRANCH)
-        else:
-            if branch.is_remote():
-                branch = self.repo.create_head(self.user_branch_name)
-        branch.checkout()
-
-    def _get_or_init_binsync_repo(self, remote_url, init_repo):
-        """
-        Gets the BinSync repo from either a local or remote git location and then sets up the repo as well
-        as checks that the repo is the right repo for the current binary.
-
-        When getting the repo there are four scenarios:
-        1. The user fills out the remote_url and does not try to init it. In this case we should clone down
-           the repo and assure that the head is remote/binsync/__root__
-        2. The user fills out the remote_url and want to init it. In this case, we should clone it down to the repo
-           root specified in the path. If there is no path, just place it locally then try to set it up with a hash
-        3. The user fills out only the path of the git repo (no remote), then we just need to get that local git
-           repo and assure it is a BinSync repo
-        4. Last case is what happens if a user wants to init a local folder that is not a Git folder. In this case,
-           they will be offline but will have a local git repo.
-
-        @param remote_url:
-        @param init_repo:
-        @return:
-        """
-        if remote_url:
-            # given a remove URL and no local folder, make it based on the URL name
-            if not self.repo_root:
-                self.repo_root = re.findall(r"/(.*)\.git", remote_url)[0]
-
-            self.repo: git.Repo = self.clone(remote_url, no_head_check=init_repo)
-
-            if init_repo:
-                if any(b.name == BINSYNC_ROOT_BRANCH for b in self.repo.branches):
-                    raise Exception("Can't init this remote repo since a BinSync root already exists")
-
-                self._setup_repo()
-        else:
-            try:
-                self.repo = git.Repo(self.repo_root)
-
-                # update view of remote branches (which may be new)
-                self._localize_remote_branches()
-
-                if init_repo:
-                    raise Exception("Could not initialize repository - it already exists!")
-                if not any(b.name == BINSYNC_ROOT_BRANCH for b in self.repo.branches):
-                    raise Exception(f"This is not a BinSync repo - it must have a {BINSYNC_ROOT_BRANCH} branch.")
-            except (git.NoSuchPathError, git.InvalidGitRepositoryError):
-                if init_repo:
-                    # case 3
-                    self.repo = git.Repo.init(self.repo_root)
-                    self._setup_repo()
-                else:
-                    raise Exception("Failed to connect or create a BinSync repo")
-
-        stored = self._get_stored_hash()
-        if stored != self.binary_hash:
-            self.connection_warnings.append(ConnectionWarnings.HASH_MISMATCH)
-
-        assert not self.repo.bare, "it should not be a bare repo"
-
-        self.repo_lock = filelock.FileLock(str(self._repo_lock_path))
-        should_delete_lock = False
-        try:
-            self.repo_lock.acquire(timeout=0)
-        except filelock.Timeout as e:
-            if not self._ignore_lock:
-                raise Exception("Can only have one binsync client touching a local repository at once.\n"
-                            "If the previous client crashed, you need to delete " + self.repo_root +
-                            "/.git/binsync.lock") from e
-            should_delete_lock = True
-
-        if should_delete_lock:
-            if self._repo_lock_path.exists():
-                self._repo_lock_path.unlink(missing_ok=True)
-            self.repo_lock = filelock.FileLock(str(self._repo_lock_path))
-            self.repo_lock.acquire(timeout=0)
-
-        return self.repo
-
-    def _setup_repo(self):
-        """
-        For use in initializing folder that is not yet a Git repo.
-
-        @return:
-        """
-        with open(os.path.join(self.repo_root, ".gitignore"), "w") as f:
-            f.write(".git/*\n")
-        with open(os.path.join(self.repo_root, "binary_hash"), "w") as f:
-            f.write(self.binary_hash)
-        self.repo.index.add([".gitignore", "binary_hash"])
-        self.repo.index.commit("Root commit")
-        self.repo.create_head(BINSYNC_ROOT_BRANCH)
+    # Legacy initialization methods now handled by GitBackend
 
     #
     # Public Properties
@@ -312,111 +165,101 @@ class Client:
 
     @property
     def last_push_ts(self):
-        return self._last_push_time
+        return self.git_backend.last_push_ts
 
     @property
     def last_pull_ts(self):
-        return self._last_pull_time
+        return self.git_backend.last_pull_ts
 
     @property
     def last_commit_ts(self):
-        return self._last_commit_time
+        return self.git_backend.last_commit_ts
 
     @property
     def user_branch_name(self):
-        return f"{BINSYNC_BRANCH_PREFIX}/{self.master_user}"
+        return self.git_backend.user_branch_name
 
     #
-    # Atomic Public API
+    # Simplified Public API (no more atomic actions)
     #
 
-    @atomic_git_action
     def users(self, priority=None, no_cache=False) -> Iterable[User]:
-        repo = self.repo
-        attempt_again = True
-        attempted_fix = False
-        users = list()
-        force_local_users = False
-
-        while attempt_again:
-            attempt_again = False
-            users = list()
-            for ref in self._get_best_refs(repo, force_local=force_local_users).values():
-                #l.debug(f"{ref} NAME: {ref.name}")
-                try:
-                    metadata = toml_file_to_dict(ref.commit.tree, "metadata.toml", client=self)
-                    user = User.from_metadata(metadata)
-                    users.append(user)
-                except Exception as e:
-                    #l.debug(f"Unable to load user {e}")
-                    continue
-
-            if not attempted_fix and not users:
-                # attempt a fix once
-                force_local_users = True
-                attempt_again = True
-                attempted_fix = True
-
+        """Get list of all users, with caching support"""
+        if not no_cache:
+            # Check cache first
+            cached_users = self.cache.users()
+            if cached_users:
+                return cached_users
+        
+        # Get users from Git backend
+        users = self.git_backend.users()
+        
+        # Update cache
+        self.cache.set_users(users)
         return users
+        
+    def refresh_remote_users(self):
+        """Force refresh of remote users by fetching and localizing remote branches"""
+        return self.git_backend.refresh_remote_users()
+    
+    def detect_repo_corruption(self):
+        """Detect repository corruption"""
+        return self.git_backend.detect_repo_corruption()
 
     @staticmethod
-    def parse_state_from_commit(repo: git.Repo, user=None, commit_hash=None, is_master=False, client=None) -> State:
-        if user is None and commit_hash is None:
-            raise ValueError("Must specify either a user or a commit hash")
+    def parse_state_from_commit(repo, user=None, commit_hash=None, is_master=False, client=None) -> State:
+        """Static method for parsing state from commit - delegated to GitBackend"""
+        if hasattr(client, 'git_backend'):
+            return client.git_backend._parse_state_from_commit(user=user, commit_hash=commit_hash, is_master=is_master)
+        else:
+            # Fallback for compatibility
+            if user is None and commit_hash is None:
+                raise ValueError("Must specify either a user or a commit hash")
+            state = State(None)
+            try:
+                state = State.parse(
+                    Client._get_tree(user, repo, commit_hash=commit_hash),
+                    client=client
+                )
+            except MetadataNotFoundError:
+                if is_master:
+                    state = State(user, client=client)
+            except Exception as e:
+                if is_master:
+                    raise
+                else:
+                    l.critical(f"Invalid state for {user}, dropping: {e}")
+                    state = State(user)
+            return state
 
-        state = State(None)
-        try:
-            state = State.parse(
-                Client._get_tree(user, repo, commit_hash=commit_hash),
-                client=client
-            )
-        except MetadataNotFoundError:
-            if is_master:
-                # create of the first state ever
-                state = State(user, client=client)
-        except Exception as e:
-            if is_master:
-                raise
-            else:
-                l.critical(f"Invalid state for {user}, dropping: {e}")
-                state = State(user)
-
-        return state
-
-
-    @atomic_git_action
     def get_state(self, user=None, priority=None, no_cache=False, commit_hash=None) -> State:
+        """Get state for a user, with caching support"""
         if user is None:
             user = self.master_user
 
-        state = self.parse_state_from_commit(
-            self.repo, user=user, commit_hash=commit_hash, is_master=user == self.master_user, client=self
-        )
+        # Check cache first if not no_cache
+        if not no_cache:
+            cached_state = self.cache.get_state(user=user)
+            if cached_state and not commit_hash:  # Don't use cache for specific commits
+                return cached_state
 
-        # NOTE: there might be a race between get_state(no_cache=True) in
-        # Client and get_state(...) from all_states() in Controller which uses
-        # the cache. That race happens when we have a repository with a lot of
-        # artifacts to retrieve. As the cache is using a defaultdict() we will
-        # get an empty state back when querying from the cache, and we always
-        # get this empty state as we don't update the cache.
-        if no_cache or not self.cache.get_state(user):
+        # Get state from Git backend
+        state = self.git_backend.get_state(user=user, commit_hash=commit_hash)
+
+        # Update cache
+        if not commit_hash:  # Only cache current states, not historical ones
             self.cache.set_state(state, user=user)
 
         return state
 
     @property
-    @atomic_git_action
     def has_remote(self, priority=SchedSpeed.FAST):
-        """
-        If there is a remote configured for our local repo.
-
-        :return:    True if there is a remote, False otherwise.
-        """
-        return self.remote and any(r.name == self.remote for r in self.repo.remotes)
+        """Check if there is a remote configured for our local repo."""
+        return self.git_backend.has_remote
 
     def all_states(self, before_ts: int = None) -> Iterable[State]:
+        """Get all states for all users"""
         states = list()
-        # promises users in the event of inability to get new users
         users = self.users(no_cache=True) or self.users()
         if not users:
             l.critical("Failed to get users from current project. Report me if possible.")
@@ -424,12 +267,11 @@ class Client:
 
         usernames = []
         for u in users:
-            # TODO: don't know why this is how it is... fix this later?
             usernames.append(u if isinstance(u, str) else u.name)
 
         username_to_commit = {}
         if before_ts:
-            username_to_commit = self.find_commits_before_ts(self.repo, before_ts, usernames)
+            username_to_commit = self.git_backend.find_commits_before_ts(before_ts, usernames)
 
         for username in usernames:
             commit_hash = username_to_commit.get(username, None)
@@ -437,54 +279,31 @@ class Client:
                 user=username, priority=SchedSpeed.FAST, commit_hash=commit_hash, no_cache=(commit_hash is not None)
             )
 
-            # NOTE: It can happen that state is None when the state is
-            # retrieved from cache and it has not been totally initialized yet
-            # because of defaultdict() used in cache. We should filter out this
-            # bogus entries
             if state:
                 states.append(state)
 
         return states
 
-    def find_commits_before_ts(self, repo: git.Repo, ts: int, users: list[str]):
-        ref_dict = self._get_best_refs(repo, force_local=True)
-        best_commits = {}
-        for user_name, ref in ref_dict.items():
-            if user_name not in users:
-                continue
-
-            commits = list(repo.iter_commits(ref))
-            reverse_sorted_commits = sorted(commits, key=lambda x: x.committed_date, reverse=True)
-            for commit in reverse_sorted_commits:
-                if commit.committed_date <= ts:
-                    best_commits[user_name] = commit.hexsha
-                    break
-
-        return best_commits
+    def find_commits_before_ts(self, repo, ts: int, users: list[str]):
+        """Find commits before timestamp - delegated to GitBackend"""
+        return self.git_backend.find_commits_before_ts(ts, users)
 
     def commit_master_state(self, commit_msg=None) -> int:
-        # attempt to commit dirty files in a update phase
+        """Commit master state changes"""
         total_commits = 0
         for i in range(self._commit_batch_size):
             if self.cache.queued_master_state_changes.empty():
                 break
 
             state = self.cache.queued_master_state_changes.get()
-            self._commit_state(
-                state,
-                msg=commit_msg or state.last_commit_msg,
-                no_checkout=i > 0
-            )
-            total_commits += 1
+            if self.git_backend.commit_state(state, commit_msg or state.last_commit_msg):
+                total_commits += 1
 
         self.cache._master_state._dirty = False
         return total_commits
 
     def commit_and_update_states(self, commit_msg=None):
-        """
-        Update both the local and remote repo knowledge of files through pushes/pulls and commits
-        in the case of dirty files.
-        """
+        """Update both local and remote repo knowledge through commits/pulls/pushes"""
         l.debug("Commit and update states")
         commit_num = self.commit_master_state(commit_msg=commit_msg)
         did_pull = False
@@ -493,200 +312,55 @@ class Client:
         # do a pull if there is a remote repo connected
         self.last_pull_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
         if self.has_remote and self.pull_on_update:
-            did_pull = True
-            self._pull()
+            did_pull = self.git_backend.pull()
 
         self.last_push_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
         if self.has_remote and self.push_on_update:
-            did_push = True
-            self._push()
+            did_push = self.git_backend.push()
 
         l.debug(f"Commit {commit_num} times, pull: {did_pull}, push: {did_push}")
 
     #
-    # Git Backend
+    # Git Backend Delegated Methods
     #
 
-    @atomic_git_action
     def _commit_state(self, state, msg=None, priority=None, no_checkout=False):
-        msg = msg or self.DEFAULT_COMMIT_MSG
-        if self.master_user != state.user:
-            raise ExternalUserCommitError(f"User {self.master_user} is not allowed to commit to user {state.user}")
+        """Commit state - simplified version delegated to GitBackend"""
+        return self.git_backend.commit_state(state, msg)
 
-        if not no_checkout:
-            self._checkout_to_master_user()
-
-        master_user_branch = next(o for o in self.repo.branches if o.name == self.user_branch_name)
-        index = self.repo.index
-
-        # dump the state
-        state.dump(index)
-
-        # commit changes
-        self.repo.index.add([os.path.join(state.user, "*")])
-        self.repo.git.add(update=True)
-
-        if not self.repo.index.diff("HEAD"):
-            return
-
-        # commit if there is any difference
-        try:
-            commit = index.commit(msg)
-        except Exception as e:
-            l.warning(f"Internal Git Commit Error: {e}")
-            return
-        self._last_commit_time = datetime.datetime.now(tz=datetime.timezone.utc)
-        master_user_branch.commit = commit
-        state._dirty = False
-
-    @atomic_git_action
     def _pull(self, priority=SchedSpeed.AVERAGE):
-        """
-        Pull changes from the remote side.
+        """Pull changes from remote - delegated to GitBackend"""
+        return self.git_backend.pull()
 
-        :return:    None
-        """
-        self.last_pull_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
-        try:
-            env = self.ssh_agent_env()
-        except Exception:
-            return
-
-        with self.repo.git.custom_environment(**env):
-            # dangerous remote operations happen here
-            try:
-                self._localize_remote_branches()
-                self.repo.git.checkout(BINSYNC_ROOT_BRANCH)
-                self.repo.git.pull("--all")
-                self._last_pull_time = datetime.datetime.now(tz=datetime.timezone.utc)
-                self.active_remote = True
-            except Exception as e:
-                l.error(f"Pull exception {e}")
-                self.active_remote = False
-
-        if not self.active_remote:
-            return
-
-        # preform a merge on each branch
-        for branch in self.repo.branches:
-            if "HEAD" in branch.name:
-                continue
-
-            self.repo.git.checkout(branch)
-            try:
-                self.repo.git.merge()
-            except Exception as e:
-                #l.debug(f"Failed to merge on {branch} with {e}")
-                pass
-
-        self._update_cache()
-
-    @atomic_git_action
     def _push(self, print_error=False, priority=SchedSpeed.AVERAGE):
-        """
-        Push local changes to the remote side.
-
-        :return:    None
-        """
-        self.last_push_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
-        self._checkout_to_master_user()
-        try:
-            env = self.ssh_agent_env()
-            with self.repo.git.custom_environment(**env):
-                self.repo.remotes[self.remote].push(BINSYNC_ROOT_BRANCH)
-                self.repo.remotes[self.remote].push(self.user_branch_name)
-            self._last_push_time = datetime.datetime.now(tz=datetime.timezone.utc)
-            #l.debug("Push completed successfully at %s", self._last_push_ts)
-            self.active_remote = True
-        except git.exc.GitCommandError as ex:
-            self.active_remote = False
-            l.error(f"Failed to push b/c {ex}")
-
-    #
-    # Git Updates
-    #
-
-    def _localize_remote_branches(self):
-        """
-        Looks up all the remote refrences on the server and attempts to make them a tracked local
-        branch.
-
-        @return:
-        """
-
-
-        # get all remote branches
-        try:
-            remote_branches = self.repo.remote().refs
-        except ValueError:
-            return
-
-        # track any remote we are not already tracking
-        local_branches = set(b.name for b in self.repo.branches)
-        for branch in remote_branches:
-            # exclude head commit
-            if "HEAD" in branch.name:
-                continue
-
-            # attempt to localize the remote name
-            try:
-                local_name = re.findall(f"({self.remote}/)(.*)", branch.name)[0][1]
-            except IndexError:
-                print("INDEX ERROR")
-                continue
-
-            # never try to track things already tracked
-            if local_name in local_branches:
-                continue
-
-            try:
-                self.repo.git.checkout('--track', branch.name)
-            except git.GitCommandError as e:
-                continue
-
-
+        """Push changes to remote - delegated to GitBackend"""
+        return self.git_backend.push()
 
     def ssh_agent_env(self):
-        if self.ssh_agent_pid is not None and self.ssh_auth_sock is not None:
+        """Get SSH agent environment variables"""
+        if self.git_backend.ssh_agent_pid is not None and self.git_backend.ssh_auth_sock is not None:
             env = {
-                'SSH_AGENT_PID': str(self.ssh_agent_pid),
-                'SSH_AUTH_SOCK': str(self.ssh_auth_sock),
+                'SSH_AGENT_PID': str(self.git_backend.ssh_agent_pid),
+                'SSH_AUTH_SOCK': str(self.git_backend.ssh_auth_sock),
             }
         else:
-            env = { }
+            env = {}
         return env
 
     def clone(self, remote_url, no_head_check=False):
-        """
-        Checkout from a remote_url to a local path specified by self.local_root.
-
-        :param str remote_url:  The URL of the Git remote.
-        :return:                None
-        """
-
-        env = self.ssh_agent_env()
-        repo = git.Repo.clone_from(remote_url, self.repo_root, env=env)
-
-        if no_head_check:
-            return repo
-
-        try:
-            repo.create_head(BINSYNC_ROOT_BRANCH, f'{self.remote}/{BINSYNC_ROOT_BRANCH}')
-        except git.BadName:
-            raise Exception(f"This is not a binsync repo - it must have a {BINSYNC_ROOT_BRANCH} branch")
-
-        return repo
+        """Clone repository - delegated to GitBackend"""
+        return self.git_backend._clone_repository(remote_url, no_head_check)
 
     def _checkout_to_master_user(self):
-        """
-        Ensure the repo is in the proper branch for current user.
-
-        :return: bool
-        """
-        self.repo.git.checkout(self.user_branch_name)
+        """Checkout to master user branch - delegated to GitBackend"""
+        return self.git_backend._checkout_to_master_user()
 
     @staticmethod
     def discover_ssh_agent(ssh_agent_cmd):
+        """Discover SSH agent (unchanged from original)"""
+        import subprocess
+        import re
+        
         proc = subprocess.Popen(ssh_agent_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = proc.communicate()
 
@@ -731,21 +405,17 @@ class Client:
         return ssh_agent_pid, ssh_agent_sock
 
     def shutdown(self):
-        if hasattr(self, "repo"):
-            self.repo.close()
-            del self.repo
+        """Clean up resources"""
+        if hasattr(self, "git_backend"):
+            self.git_backend.shutdown()
 
-        self.scheduler.stop_worker_thread()
-
-        if self.repo_lock is not None:
-            self.repo_lock.release()
-            # force delete it!
-            if self._repo_lock_path.exists():
-                self._repo_lock_path.unlink(missing_ok=True)
+        if hasattr(self, "scheduler"):
+            self.scheduler.stop_worker_thread()
 
     def _get_best_refs(self, repo, force_local=False):
+        """Get best refs - delegated to existing logic for compatibility"""
         candidates = {}
-        for ref in repo.refs:  # type: git.Reference
+        for ref in repo.refs:
             if f'{BINSYNC_BRANCH_PREFIX}/' not in ref.name:
                 continue
 
@@ -755,7 +425,6 @@ class Client:
                     continue
             else:
                 if branch_name in candidates:
-                    # if the candidate exists, and the new one is not remote, don't replace it
                     if not ref.is_remote() or ref.remote_name != self.remote:
                         continue
 
@@ -763,16 +432,12 @@ class Client:
         return candidates
 
     def _get_stored_hash(self):
-        branch = [ref for ref in self.repo.refs if ref.name.endswith(BINSYNC_ROOT_BRANCH)][0]
-        return branch.commit.tree["binary_hash"].data_stream.read().decode().strip("\n")
+        """Get stored hash - delegated to GitBackend"""
+        return self.git_backend._get_stored_hash(self.git_backend.repo)
 
     @staticmethod
-    def list_files_in_tree(base_tree: git.Tree):
-        """
-        Lists all the files in a repo at a given tree
-
-        :param commit: A gitpython Tree object
-        """
+    def list_files_in_tree(base_tree):
+        """List files in tree - unchanged from original (GitPython compatibility)"""
         file_list = []
         stack = [base_tree]
         while len(stack) > 0:
@@ -786,40 +451,23 @@ class Client:
         return file_list
 
     @staticmethod
-    def add_data(index: git.IndexFile, path: str, data: bytes):
-        """
-        Adds physical files to the database.
-
-        WARNING: this function touches physical files in the Git Repo which can result in a race
-        condition to modify a file while it is also being pushed. ONLY CALL THIS FUNCTION INSIDE
-        A COMMIT_LOCK.
-
-        @param index:
-        @param path:
-        @param data:
-        @return:
-        """
-        fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
-        pathlib.Path(fullpath).parent.mkdir(parents=True, exist_ok=True)
-        with open(fullpath, 'wb') as fp:
-            fp.write(data)
-        index.add([fullpath])
+    def add_data(index, path: str, data: bytes):
+        """Add data to index - delegated to GitBackend"""
+        GitBackend.add_data(index, path, data)
 
     @staticmethod
-    def remove_data(index: git.IndexFile, path: str):
-        fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
-        pathlib.Path(fullpath).parent.mkdir(parents=True, exist_ok=True)
-        index.remove([fullpath], working_tree=True)
+    def remove_data(index, path: str):
+        """Remove data from index - delegated to GitBackend"""
+        GitBackend.remove_data(index, path)
 
     @staticmethod
-    def load_file_from_tree(tree: git.Tree, filename):
-        try:
-            return tree[filename].data_stream.read().decode()
-        except KeyError:
-            return None
+    def load_file_from_tree(tree, filename):
+        """Load file from tree - delegated to GitBackend"""
+        return GitBackend.load_file_from_tree(tree, filename)
 
     @staticmethod
-    def _get_tree(user, repo: git.Repo, commit_hash=None):
+    def _get_tree(user, repo, commit_hash=None):
+        """Get tree from user/commit - unchanged compatibility method"""
         if commit_hash is None:
             options = [ref for ref in repo.refs if ref.name.endswith(f"{BINSYNC_BRANCH_PREFIX}/{user}")]
             if not options:
@@ -834,10 +482,11 @@ class Client:
         return bct
 
     #
-    # Caching Functions
+    # Caching Functions (simplified)
     #
 
-    def _get_commits_for_users(self, repo: git.Repo):
+    def _get_commits_for_users(self, repo):
+        """Get commits for users - simplified version"""
         ref_dict = self._get_best_refs(repo)
 
         # ignore the _root_ branch
@@ -850,44 +499,32 @@ class Client:
         return commit_dict
 
     def check_cache_(self, f, **kwargs):
-        if f.__qualname__ == self.get_state.__qualname__:
-            cache_func = self.cache.get_state
+        """Check cache - simplified version"""
+        if f.__name__ == 'get_state':
             args = []
             if kwargs.get("user", None) is None:
                 kwargs["user"] = self.master_user
-
-        elif f.__qualname__ == self.users.__qualname__:
-            cache_func = self.cache.users
-            args = []
+            return self.cache.get_state(*args, **kwargs)
+        elif f.__name__ == 'users':
+            return self.cache.users()
         else:
             return None
-
-        item = cache_func(*args, **kwargs)
-
-        return item
 
     def _set_cache(self, f, ret_value, **kwargs):
-        if f.__qualname__ == self.get_state.__qualname__:
-            set_func = self.cache.set_state
+        """Set cache - simplified version"""
+        if f.__name__ == 'get_state':
             args = []
             if kwargs.get("user", None) is None:
                 kwargs["user"] = self.master_user
-        elif f.__qualname__ == self.users.__qualname__:
-            set_func = self.cache.set_users
-            args = []
-        else:
-            return None
-
-        set_func(ret_value, *args, **kwargs)
+            self.cache.set_state(ret_value, *args, **kwargs)
+        elif f.__name__ == 'users':
+            self.cache.set_users(ret_value)
 
     def _update_cache(self):
-        #l.debug(f"Updating cache commits for State Cache...")
-        cache_dict = self._get_commits_for_users(git.Repo(self.repo_root))
+        """Update cache - simplified version"""
+        cache_dict = self._get_commits_for_users(self.repo)
         self.cache.clear_state_cache(cache_dict)
 
         cache_keys = [key for key in cache_dict.keys()]
-        #l.debug(f"Updating branches on Users Cache...")
         branch_set = set(cache_keys)
         self.cache.clear_user_branch_cache(branch_set)
-
-

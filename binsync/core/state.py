@@ -6,7 +6,7 @@ import re
 from functools import wraps
 from typing import Dict, Optional, Union, List
 
-import git
+# Removed git import - now using pygit2 backend exclusively
 import toml
 from sortedcontainers import SortedDict
 
@@ -102,13 +102,8 @@ def update_last_change(f):
     return _update_last_change
 
 
-def list_files_in_dir(src: Union[pathlib.Path, git.Tree], dir_name, client=None) -> List[str]:
-    from .client import Client
-
-    if isinstance(src, git.Tree):
-        files = Client.list_files_in_tree(src)
-        return [name for name in files if name.startswith(dir_name)]
-
+def list_files_in_dir(src: pathlib.Path, dir_name, client=None) -> List[str]:
+    """List files in a directory. Now only works with filesystem paths since we use pygit2."""
     # load from filesystem
     if not src:
         src = pathlib.Path("")
@@ -123,36 +118,35 @@ def list_files_in_dir(src: Union[pathlib.Path, git.Tree], dir_name, client=None)
     ]
 
 
-def file_to_str(src: Union[pathlib.Path, git.Tree], filename, client=None) -> Optional[str]:
-    from .client import Client
+def file_to_str(src: pathlib.Path, filename, client=None) -> Optional[str]:
+    """Read file content as string. Now only works with filesystem paths since we use pygit2."""
+    if not src:
+        src = pathlib.Path("")
 
-    if isinstance(src, git.Tree):
-        file_data = Client.load_file_from_tree(src, filename)
+    src = src.joinpath(filename)
+    if not src.exists():
+        file_data = None
     else:
-        if not src:
-            src = pathlib.Path("")
-
-        src = src.joinpath(filename)
-        if not src.exists():
-            file_data = None
-        else:
-            with open(src, "r") as fp:
-                file_data = fp.read()
+        with open(src, "r") as fp:
+            file_data = fp.read()
 
     return file_data
 
 
-def toml_file_to_dict(src: Union[pathlib.Path, git.Tree], filename, client=None):
+def toml_file_to_dict(src: pathlib.Path, filename, client=None):
+    """Load TOML file to dictionary. Now only works with filesystem paths since we use pygit2."""
     file_data = file_to_str(src, filename, client=client)
     return toml.loads(file_data) if file_data is not None else file_data
 
 
-def toml_file_to_artifact(src: Union[pathlib.Path, git.Tree], filename, artifact_cls, client=None) -> Optional[Artifact]:
+def toml_file_to_artifact(src: pathlib.Path, filename, artifact_cls, client=None) -> Optional[Artifact]:
+    """Load TOML file to artifact. Now only works with filesystem paths since we use pygit2."""
     file_data = file_to_str(src, filename, client=client)
     return artifact_cls.loads(file_data, fmt=ArtifactFormat.TOML) if file_data is not None else None
 
 
-def toml_file_to_artifacts(src: Union[pathlib.Path, git.Tree], filename, artifact_cls, client=None) -> List[Artifact]:
+def toml_file_to_artifacts(src: pathlib.Path, filename, artifact_cls, client=None) -> List[Artifact]:
+    """Load TOML file to list of artifacts. Now only works with filesystem paths since we use pygit2."""
     file_data = file_to_str(src, filename, client=client)
     return artifact_cls.loads_many(file_data, fmt=ArtifactFormat.TOML) if file_data is not None else []
 
@@ -231,12 +225,8 @@ class State:
     def dirty(self):
         return self._dirty
 
-    def _dump_data(self, dst: Union[pathlib.Path, git.IndexFile], filename, data):
-        # dump using Git files
-        if self.client and isinstance(dst, git.IndexFile):
-            self.client.add_data(dst, filename, data)
-            return
-
+    def _dump_data(self, dst: pathlib.Path, filename, data):
+        """Dump data to filesystem. Now only works with filesystem paths since we use pygit2."""
         # dump using filesystem
         if not dst:
             dst = pathlib.Path("")
@@ -246,17 +236,18 @@ class State:
         with open(out_path, "wb") as fp:
             fp.write(data)
 
-    def _delete_data(self, dst: Union[pathlib.Path, git.IndexFile], path):
-        # Delete using Git files
-        if self.client and isinstance(dst, git.IndexFile):
-            dst.remove([str(path)], working_tree=True)
-            return
-
+    def _delete_data(self, dst: pathlib.Path, path):
+        """Delete data from filesystem. Now only works with filesystem paths since we use pygit2."""
         # Delete using file system
         if not dst:
             path.unlink()
+        else:
+            # Delete relative to dst
+            full_path = dst / path
+            if full_path.exists():
+                full_path.unlink()
 
-    def dump_metadata(self, dst: Union[pathlib.Path, git.IndexFile]):
+    def dump_metadata(self, dst: pathlib.Path):
         d = {
             "user": self.user,
             "version": self.version,
@@ -267,7 +258,7 @@ class State:
         }
         self._dump_data(dst, 'metadata.toml', toml.dumps(d, encoder=TomlHexEncoder()).encode())
 
-    def dump(self, dst: Union[pathlib.Path, git.IndexFile]):
+    def dump(self, dst: pathlib.Path):
         if isinstance(dst, str):
             dst = pathlib.Path(dst)
 
@@ -279,12 +270,15 @@ class State:
             path = pathlib.Path('functions').joinpath("%08x.toml" % addr)
             self._dump_data(dst, path, func.dumps(fmt=ArtifactFormat.TOML).encode())
 
-        if pathlib.Path(self.client.repo_root + '/functions').exists():
-            for path in pathlib.Path(self.client.repo_root + '/functions').iterdir():
-                file = path.stem
-                address = int(file.split(".")[0], 16)
-                if address not in self.functions.keys():
-                    self._delete_data(dst, path)
+        # Clean up deleted functions (only if we have a client with repo_root)
+        if self.client and hasattr(self.client, 'repo_root'):
+            functions_dir = pathlib.Path(self.client.repo_root) / 'functions'
+            if functions_dir.exists():
+                for path in functions_dir.iterdir():
+                    file = path.stem
+                    address = int(file.split(".")[0], 16)
+                    if address not in self.functions.keys():
+                        self._delete_data(dst, pathlib.Path('functions') / path.name)
 
         # dump structs, one file per struct in ./structs/
         for s_name, struct in self.structs.items():
@@ -292,14 +286,17 @@ class State:
             path = pathlib.Path('structs').joinpath(f"{safe_name}.toml")
             self._dump_data(dst, path, struct.dumps(fmt=ArtifactFormat.TOML).encode())
 
-        if pathlib.Path(self.client.repo_root + '/structs').exists():
-            sanitized_struct_names = set([sanitize_name(s_name) for s_name in self.structs.keys()])
-            for path in pathlib.Path(self.client.repo_root + '/structs').iterdir():
-                file = path.stem
-                name = file.split(".")[0]
-
-                if name not in sanitized_struct_names:
-                    self._delete_data(dst, path)
+        # Clean up deleted structs (only if we have a client with repo_root)
+        if self.client and hasattr(self.client, 'repo_root'):
+            structs_dir = pathlib.Path(self.client.repo_root) / 'structs'
+            if structs_dir.exists():
+                sanitized_struct_names = set([sanitize_name(s_name) for s_name in self.structs.keys()])
+                for path in structs_dir.iterdir():
+                    file = path.stem
+                    name = file.split(".")[0]
+    
+                    if name not in sanitized_struct_names:
+                        self._delete_data(dst, pathlib.Path('structs') / path.name)
 
         # dump comments
         self._dump_data(dst, 'comments.toml', Comment.dumps_many(list(self.comments.values())).encode())
@@ -320,7 +317,7 @@ class State:
         self._dump_data(dst, 'segments.toml', Segment.dumps_many(list(self.segments.values()), key_attr="name").encode())
 
     @classmethod
-    def parse(cls, src: Union[pathlib.Path, git.Tree], client=None):
+    def parse(cls, src: pathlib.Path, client=None):
         if isinstance(src, str):
             src = pathlib.Path(src)
 
