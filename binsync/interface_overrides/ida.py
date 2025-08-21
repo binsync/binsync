@@ -18,8 +18,8 @@ from libbs.decompilers.ida.ida_ui import IDAWidgetWrapper
 from libbs.decompilers.ida.interface import IDAInterface
 
 from binsync.ui.config_dialog import ConfigureBSDialog
-from binsync.ui.control_panel import ControlPanel
-from binsync.controller import BSController
+from binsync.ui.simple_control_panel import SimpleControlPanel
+from binsync.controller import Controller
 from binsync.ui.utils import no_concurrent_call
 from binsync import __version__ as VERSION
 
@@ -88,7 +88,7 @@ class ControlPanelViewWrapper(object):
         self._init_widgets()
 
     def _init_widgets(self):
-        self._w = ControlPanel(self._controller)
+        self._w = SimpleControlPanel(self._controller)
         layout = QVBoxLayout()
         layout.addWidget(self._w)
         layout.setContentsMargins(2,2,2,2)
@@ -113,7 +113,7 @@ class BinsyncPlugin(GenericIDAPlugin):
     def __init__(self, *args, **kwargs):
         print(f"[BinSync] {VERSION} loaded!")
         super().__init__(*args, **kwargs)
-        self.controller = BSController(decompiler_interface=self.interface)
+        self.controller = Controller(decompiler_interface=self.interface)
 
     @no_concurrent_call
     def open_config_dialog(self):
@@ -138,7 +138,7 @@ class BinsyncPlugin(GenericIDAPlugin):
         """
         Open the control panel view and attach it to IDA View-A or Pseudocode-A.
         """
-        wrapper = IDAWidgetWrapper(ControlPanel, "BinSync", self.controller)
+        wrapper = IDAWidgetWrapper(SimpleControlPanel, "BinSync", self.controller)
         if not wrapper.twidget:
             _l.info("BinSync is unable to find a widget to attach to. You are likely running headlessly")
             return None

@@ -7,7 +7,7 @@ from typing import Optional
 
 import filelock
 
-from binsync.core.client import ConnectionWarnings, BINSYNC_ROOT_BRANCH
+from binsync.core.client import MAIN_BRANCH
 from binsync.configuration import BinSyncBSConfig, ProjectData
 from libbs.ui.qt_objects import (
     QCheckBox,
@@ -403,11 +403,11 @@ class ConfigureBSDialog(QDialog):
         remote_url = dialog.remote_url if dialog.remote_url else None
 
         valid_config = True
-        if not username or username.lower() == BINSYNC_ROOT_BRANCH:
+        if not username or username.lower() == "main":
             QMessageBox(self).critical(
                 None,
                 "Invalid username",
-                f"Username cannot be empty or be {BINSYNC_ROOT_BRANCH}"
+                f"Username cannot be empty or be 'main'"
             )
             valid_config = False
 
@@ -499,7 +499,6 @@ class ConfigureBSDialog(QDialog):
         self.controller.auto_commit_enabled = commit_on_update
         self.controller.auto_pull_enabled = pull_on_update
         self.controller.auto_push_enabled = push_on_update
-        self._parse_and_display_connection_warnings(connection_warnings)
         l.info(f"Client has connected to sync repo with user: {username}.")
 
         # create and save config if possible
@@ -513,23 +512,6 @@ class ConfigureBSDialog(QDialog):
     def is_git_repo(path: Path):
         return (path / ".git").exists()
 
-    @staticmethod
-    def _parse_and_display_connection_warnings(warnings):
-        warning_text = ""
-
-        for warning in warnings:
-            if warning == ConnectionWarnings.HASH_MISMATCH:
-                warning_text += "Warning: the hash stored for this BinSync project does not match " \
-                                "the hash of the binary you are attempting to analyze. It's possible " \
-                                "you are working on a different binary.\n"
-
-        if len(warning_text) > 0:
-            QMessageBox.warning(
-                None,
-                "BinSync: Connection Warnings",
-                warning_text,
-                QMessageBox.Ok,
-            )
 
     def load_saved_config(self):
         binary_hash = self.controller.deci.binary_hash

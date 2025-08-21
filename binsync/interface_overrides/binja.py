@@ -17,8 +17,8 @@ from binaryninjaui import (
 from libbs.plugin_installer import PluginInstaller
 from libbs.decompilers.binja.interface import BinjaInterface
 
-from binsync.controller import BSController
-from binsync.ui.control_panel import ControlPanel
+from binsync.controller import Controller
+from binsync.ui.simple_control_panel import SimpleControlPanel
 from binsync.ui.config_dialog import ConfigureBSDialog
 
 
@@ -27,7 +27,7 @@ class BinSyncSidebarWidget(SidebarWidget):
         super().__init__(name)
         self._controller = bs_interface.controllers[bv]
         self._controller.bv = bv
-        self._widget = ControlPanel(self._controller)
+        self._widget = SimpleControlPanel(self._controller)
 
         layout = QVBoxLayout()
         layout.addWidget(self._widget)
@@ -61,7 +61,7 @@ class BinjaBSInterface(BinjaInterface):
     """
 
     def __init__(self, *args, **kwargs):
-        self.controllers = defaultdict(BSController)
+        self.controllers = defaultdict(Controller)
         self.sidebar_widget_type = None
         super().__init__(*args, **kwargs)
 

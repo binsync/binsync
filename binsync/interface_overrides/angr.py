@@ -11,8 +11,8 @@ from libbs.decompilers.angr.compat import GenericBSAngrManagementPlugin
 from angrmanagement.ui.views.view import BaseView
 from PySide6QtAds import SideBarRight, CDockWidget, CDockManager
 
-from binsync.ui.control_panel import ControlPanel
-from binsync.controller import BSController
+from binsync.ui.simple_control_panel import SimpleControlPanel
+from binsync.controller import Controller
 from binsync.ui.config_dialog import ConfigureBSDialog
 
 if typing.TYPE_CHECKING:
@@ -31,8 +31,8 @@ class ControlPanelView(BaseView):
     def __init__(self, workspace, default_docking_position, controller, *args, **kwargs):
         super().__init__('sync', workspace, default_docking_position)
         self.base_caption = "BinSync: Control Panel"
-        self.controller: BSController = controller
-        self.control_panel = ControlPanel(self.controller)
+        self.controller: Controller = controller
+        self.control_panel = SimpleControlPanel(self.controller)
         self._init_widgets()
         self.width_hint = 300
 
@@ -66,7 +66,7 @@ class BinsyncPlugin(GenericBSAngrManagementPlugin):
         """
         super().__init__(workspace)
         # construct the controller and control panel
-        self.controller = BSController(decompiler_interface=self.interface)
+        self.controller = Controller(decompiler_interface=self.interface)
         self.control_panel_view = ControlPanelView(workspace, 'right', self.controller)
         self.controller.control_panel = self.control_panel_view
 

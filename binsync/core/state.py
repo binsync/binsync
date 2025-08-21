@@ -108,6 +108,18 @@ def list_files_in_dir(src: Union[pathlib.Path, git.Tree], dir_name, client=None)
     if isinstance(src, git.Tree):
         files = Client.list_files_in_tree(src)
         return [name for name in files if name.startswith(dir_name)]
+    elif hasattr(src, '__iter__'):  # pygit2.Tree object
+        files = []
+        try:
+            if dir_name in src:
+                dir_entry = src[dir_name]
+                if client and hasattr(client, 'repo'):
+                    dir_tree = client.repo.get(dir_entry.id)
+                    for entry in dir_tree:
+                        files.append(f"{dir_name}/{entry.name}")
+        except (KeyError, TypeError):
+            pass
+        return files
 
     # load from filesystem
     if not src:
@@ -128,6 +140,18 @@ def file_to_str(src: Union[pathlib.Path, git.Tree], filename, client=None) -> Op
 
     if isinstance(src, git.Tree):
         file_data = Client.load_file_from_tree(src, filename)
+    elif hasattr(src, '__getitem__'):  # pygit2.Tree object
+        try:
+            entry = src[filename]
+            if hasattr(entry, 'data'):
+                file_data = entry.data.decode('utf-8')
+            elif hasattr(entry, 'id') and client and hasattr(client, 'repo'):
+                blob = client.repo.get(entry.id)
+                file_data = blob.data.decode('utf-8')
+            else:
+                file_data = None
+        except (KeyError, UnicodeDecodeError):
+            file_data = None
     else:
         if not src:
             src = pathlib.Path("")

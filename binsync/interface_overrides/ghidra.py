@@ -7,9 +7,9 @@ from libbs.ui.qt_objects import QMainWindow, QApplication
 from libbs.api import DecompilerInterface
 from libbs.decompilers import GHIDRA_DECOMPILER
 
-from binsync.ui.control_panel import ControlPanel
+from binsync.ui.simple_control_panel import SimpleControlPanel
 from binsync.ui.config_dialog import ConfigureBSDialog
-from binsync.controller import BSController
+from binsync.controller import Controller
 
 l = logging.getLogger(__name__)
 
@@ -26,8 +26,8 @@ class ControlPanelWindow(QMainWindow):
         self.width_hint = 300
 
         self._interface = DecompilerInterface.discover(force_decompiler=GHIDRA_DECOMPILER)
-        self.controller = BSController(decompiler_interface=self._interface)
-        self.control_panel = ControlPanel(self.controller)
+        self.controller = Controller(decompiler_interface=self._interface)
+        self.control_panel = SimpleControlPanel(self.controller)
         self._init_widgets()
 
     def _init_widgets(self):
