@@ -52,6 +52,7 @@ class GitBackend:
         self.repo_root = str(Path(repo_root).resolve())
         self.binary_hash = binary_hash
         self.remote = remote
+        self.remote_url = remote_url
         self.ssh_agent_pid = ssh_agent_pid
         self.ssh_auth_sock = ssh_auth_sock
         self._ignore_lock = ignore_lock
@@ -124,6 +125,13 @@ class GitBackend:
                 self.repo_root = re.findall(r"/(.*)\.git", remote_url)[0]
                 
             repo = self._clone_repository(remote_url, no_head_check=init_repo)
+            # Store remote URL from actual remote after cloning
+            if not self.remote_url and repo.remotes:
+                try:
+                    remote = repo.remotes[self.remote]
+                    self.remote_url = remote.url
+                except:
+                    pass
             
             if init_repo:
                 if self._has_binsync_root_branch(repo):
@@ -139,6 +147,14 @@ class GitBackend:
                 if not self._has_binsync_root_branch(repo):
                     raise Exception(f"This is not a BinSync repo - it must have a {BINSYNC_ROOT_BRANCH} branch.")
                     
+                # Store remote URL from existing repo
+                if not self.remote_url and repo.remotes:
+                    try:
+                        remote = repo.remotes[self.remote]
+                        self.remote_url = remote.url
+                    except:
+                        pass
+                        
                 # Localize remote branches after verifying it's a valid BinSync repo
                 self._localize_remote_branches(repo)
             except (pygit2.GitError, FileNotFoundError) as e:
@@ -166,8 +182,8 @@ class GitBackend:
     def _has_binsync_root_branch(self, repo: pygit2.Repository) -> bool:
         """Check if repository has the BinSync root branch"""
         try:
-            repo.lookup_branch(BINSYNC_ROOT_BRANCH)
-            return True
+            branch = repo.lookup_branch(BINSYNC_ROOT_BRANCH)
+            return branch is not None
         except KeyError:
             return False
             
@@ -298,6 +314,117 @@ class GitBackend:
                 
         return repo
         
+    def _can_use_system_git_auth(self) -> bool:
+        """Check if system git can handle authentication for remote operations"""
+        try:
+            # Try a simple ls-remote operation to test authentication
+            if hasattr(self, 'remote_url') and self.remote_url:
+                result = subprocess.run(
+                    ["git", "ls-remote", "--heads", self.remote_url],
+                    cwd=self.repo_root,
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if result.returncode == 0:
+                    l.debug("System git authentication working, will use subprocess fallback")
+                    return True
+                else:
+                    l.debug(f"System git auth failed: {result.stderr}")
+                    return False
+        except Exception as e:
+            l.debug(f"Cannot test system git auth: {e}")
+            return False
+        
+        return False
+
+    def _subprocess_git_pull(self) -> bool:
+        """Use system git command for pull operation when pygit2 auth fails"""
+        try:
+            l.debug("Attempting pull using system git command")
+            
+            # First fetch all references
+            result = subprocess.run(
+                ["git", "fetch", self.remote],
+                cwd=self.repo_root,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                l.error(f"Git fetch failed: {result.stderr}")
+                return False
+                
+            l.debug("Git fetch succeeded via subprocess")
+            
+            # Update our pygit2 repo object to reflect the fetched changes
+            self.repo = pygit2.Repository(self.repo_root)
+            
+            # Now update branches using pygit2 (no auth needed for local operations)
+            try:
+                # Update root branch if it exists remotely
+                root_branch = self.repo.lookup_branch(BINSYNC_ROOT_BRANCH)
+                remote_root = self.repo.lookup_branch(f"{self.remote}/{BINSYNC_ROOT_BRANCH}", pygit2.GIT_BRANCH_REMOTE)
+                
+                if root_branch and remote_root and remote_root.target:
+                    root_branch.set_target(remote_root.target)
+                    l.debug(f"Updated root branch from remote via subprocess")
+                elif remote_root and remote_root.target:
+                    # Create local root branch from remote
+                    remote_commit = self.repo[remote_root.target]
+                    self.repo.create_branch(BINSYNC_ROOT_BRANCH, remote_commit)
+                    l.info(f"Created local root branch from remote via subprocess")
+                    
+                # Localize other remote branches
+                self._localize_remote_branches(self.repo)
+                
+            except Exception as e:
+                l.debug(f"Error updating branches after subprocess fetch: {e}")
+                
+            self.last_pull_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
+            self._last_pull_time = self.last_pull_attempt_time
+            self.active_remote = True
+            
+            return True
+            
+        except Exception as e:
+            l.error(f"Subprocess git pull failed: {e}")
+            return False
+    
+    def _subprocess_git_push(self) -> bool:
+        """Use system git command for push operation when pygit2 auth fails"""
+        try:
+            l.debug("Attempting push using system git command")
+            
+            # Get current branch name
+            current_branch = self.repo.head.shorthand
+            
+            # Push current branch
+            result = subprocess.run(
+                ["git", "push", self.remote, current_branch],
+                cwd=self.repo_root,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                l.error(f"Git push failed: {result.stderr}")
+                return False
+                
+            l.debug("Git push succeeded via subprocess")
+            
+            self.last_push_attempt_time = datetime.datetime.now(tz=datetime.timezone.utc)
+            self._last_push_time = self.last_push_attempt_time
+            self.active_remote = True
+            
+            return True
+            
+        except Exception as e:
+            l.error(f"Subprocess git push failed: {e}")
+            return False
+
     def _create_credentials_callback(self):
         """Create a comprehensive credentials callback for different auth methods"""
         def credentials_callback(url, username_from_url, allowed_types):
@@ -329,9 +456,19 @@ class GitBackend:
             if allowed_types & pygit2.GIT_CREDENTIAL_SSH_KEY:
                 try:
                     l.debug("Trying SSH agent authentication")
+                    # Check if SSH agent is actually running
+                    ssh_agent_pid = os.environ.get("SSH_AGENT_PID")
+                    ssh_auth_sock = os.environ.get("SSH_AUTH_SOCK")
+                    if not ssh_agent_pid or not ssh_auth_sock:
+                        l.debug(f"SSH agent environment not set (PID: {ssh_agent_pid}, SOCK: {ssh_auth_sock})")
+                        raise Exception("SSH agent environment variables not set")
                     return pygit2.KeypairFromAgent(username_from_url or "git")
                 except Exception as e:
                     l.debug(f"SSH agent authentication failed: {e}")
+                    # If SSH agent fails, suggest workarounds
+                    if "SSH agent environment variables not set" in str(e):
+                        l.warning("SSH agent not available in this environment (common in GUI applications)")
+                        l.warning("Consider launching from terminal or using HTTPS instead")
             
             # Try username/password for HTTPS
             if allowed_types & pygit2.GIT_CREDENTIAL_USERPASS_PLAINTEXT:
@@ -428,7 +565,35 @@ class GitBackend:
         """Handle authentication errors with helpful user guidance"""
         error_msg = str(error).lower()
         
-        if "authentication required" in error_msg or "no callback set" in error_msg:
+        if "failed to start ssh session" in error_msg or "failed getting banner" in error_msg:
+            l.error(f"SSH connection failed for {operation} operation: {error}")
+            l.error("")
+            l.error("This usually happens when SSH keys aren't loaded in Binary Ninja/GUI environments.")
+            l.error("")
+            l.error("To fix SSH issues in Binary Ninja:")
+            l.error("  1. Start your SSH agent: eval \"$(ssh-agent -s)\"")
+            l.error("  2. Add your SSH key: ssh-add ~/.ssh/id_rsa  (or your key file)")
+            l.error("  3. Verify connection: ssh -T git@github.com")
+            l.error("  4. Launch Binary Ninja from the same terminal")
+            l.error("")
+            l.error("Alternative solutions:")
+            l.error("  - Use HTTPS instead of SSH (change remote URL)")
+            l.error("  - Add SSH key loading to your shell profile (~/.bashrc or ~/.zshrc)")
+            l.error("  - Run BinSync authentication check: python binsync_auth_check.py")
+            l.error("")
+            l.error("SSH keys found on system:")
+            ssh_keys_found = False
+            for private_key, public_key in self._get_ssh_key_paths():
+                if private_key.exists():
+                    ssh_keys_found = True
+                    pub_status = "✓" if public_key.exists() else "⚠️ (no .pub file)"
+                    l.error(f"  ✓ {private_key} {pub_status}")
+            if not ssh_keys_found:
+                l.error("  ❌ No SSH keys found - generate one: ssh-keygen -t ed25519")
+            l.error("")
+            l.error("Run 'python binsync_auth_check.py' for detailed diagnosis")
+                
+        elif "authentication required" in error_msg or "no callback set" in error_msg:
             l.error(f"Authentication failed for {operation} operation")
             l.error("")
             l.error("To fix authentication issues:")
@@ -1055,6 +1220,19 @@ class GitBackend:
             return True
             
         except Exception as e:
+            # Check if this is an SSH authentication error and try subprocess fallback
+            error_msg = str(e).lower()
+            if ("failed to start ssh session" in error_msg or 
+                "failed getting banner" in error_msg or
+                "authentication" in error_msg):
+                
+                l.info("Pygit2 authentication failed, trying subprocess git fallback...")
+                if self._subprocess_git_pull():
+                    l.info("Successfully pulled using system git command")
+                    return True
+                else:
+                    l.error("Both pygit2 and subprocess git pull failed")
+            
             self._handle_auth_error(e, "pull")
             self.active_remote = False
             return False
@@ -1111,6 +1289,19 @@ class GitBackend:
             return True
             
         except Exception as e:
+            # Check if this is an SSH authentication error and try subprocess fallback
+            error_msg = str(e).lower()
+            if ("failed to start ssh session" in error_msg or 
+                "failed getting banner" in error_msg or
+                "authentication" in error_msg):
+                
+                l.info("Pygit2 authentication failed, trying subprocess git fallback...")
+                if self._subprocess_git_push():
+                    l.info("Successfully pushed using system git command")
+                    return True
+                else:
+                    l.error("Both pygit2 and subprocess git push failed")
+            
             self._handle_auth_error(e, "push")
             self.active_remote = False
             return False
