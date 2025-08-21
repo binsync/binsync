@@ -1,4 +1,3 @@
-import git
 import os
 import pathlib
 import sys
@@ -74,7 +73,9 @@ class TestClient(unittest.TestCase):
 
             # now check those changes really made it into the git repo
             client.commit_master_state()
-            commits = list(client.repo.iter_commits())
+            # Use pygit2 walker to iterate commits
+            walker = client.git_backend.repo.walk(client.git_backend.repo.head.target)
+            commits = [commit for commit in walker]
             assert commits[0].message == f"Merged in {fh_1} from user1"
             assert commits[1].message == f"Updated {sv_0}"
             assert commits[2].message == f"Updated {fh_0}"
@@ -126,9 +127,14 @@ class TestClient(unittest.TestCase):
                 file.truncate(5)
 
             # force a real git commit for later loading in the client
-            repo = git.Repo(tmpdir)
-            repo.git.add(all=True)
-            repo.index.commit("corrupt")
+            import pygit2
+            repo = pygit2.Repository(tmpdir)
+            repo.index.add_all()
+            repo.index.write()
+            tree_id = repo.index.write_tree()
+            parent_commit = repo.head.target
+            signature = pygit2.Signature("Test User", "test@example.com")
+            repo.create_commit("HEAD", signature, signature, "corrupt", tree_id, [parent_commit])
             
             # on the creation of the client, it will load the master_state, which will result in an
             # exception because the TOML fails to load

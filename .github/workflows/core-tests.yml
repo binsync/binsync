@@ -31,4 +31,4 @@ jobs:
 
     - name: Pytest
       run: |
-        pytest ./tests/test_client.py ./tests/test_state.py
+        pytest ./tests/ --ignore=tests/test_angr_gui.py
