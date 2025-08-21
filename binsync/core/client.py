@@ -473,7 +473,6 @@ class Client:
             self._commit_state(
                 state,
                 msg=commit_msg or state.last_commit_msg,
-                no_checkout=i > 0
             )
             total_commits += 1
 
@@ -508,13 +507,12 @@ class Client:
     #
 
     @atomic_git_action
-    def _commit_state(self, state, msg=None, priority=None, no_checkout=False):
+    def _commit_state(self, state, msg=None, priority=None):
         msg = msg or self.DEFAULT_COMMIT_MSG
         if self.master_user != state.user:
             raise ExternalUserCommitError(f"User {self.master_user} is not allowed to commit to user {state.user}")
 
-        if not no_checkout:
-            self._checkout_to_master_user()
+        self._checkout_to_master_user()
 
         master_user_branch = next(o for o in self.repo.branches if o.name == self.user_branch_name)
         index = self.repo.index
