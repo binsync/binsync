@@ -306,6 +306,10 @@ class Client:
         Ensures Git user identity is configured. If not configured, sets it up with 
         the master user name and a default email.
         """
+        # Check if we've already configured identity for this session
+        if hasattr(self, '_git_identity_configured'):
+            return
+            
         user_name = None
         user_email = None
         
@@ -315,6 +319,7 @@ class Client:
             user_email = self.repo.config_reader().get_value('user', 'email', fallback=None)
             
             if user_name and user_email:
+                self._git_identity_configured = True
                 return  # Already configured
                 
         except Exception:
@@ -329,6 +334,7 @@ class Client:
                 git_config.set_value('user', 'email', f'{self.master_user}@binsync.local')
         
         l.info(f"Configured Git identity: {self.master_user} <{self.master_user}@binsync.local>")
+        self._git_identity_configured = True
 
     #
     # Public Properties
@@ -549,8 +555,6 @@ class Client:
         if self.master_user != state.user:
             raise ExternalUserCommitError(f"User {self.master_user} is not allowed to commit to user {state.user}")
 
-        # Ensure git identity is configured before making commits
-        self._ensure_git_identity()
         
         self._checkout_to_master_user()
         state.dump(str(self.repo_root))
@@ -592,8 +596,9 @@ class Client:
             # dangerous remote operations happen here
             try:
                 self._localize_remote_branches()
-                self.repo.git.checkout(BINSYNC_ROOT_BRANCH)
-                self.repo.git.pull("--all")
+                # Pull from remote without checking out to __root__ branch
+                # Use git fetch instead of pull to avoid tracking branch issues
+                self.repo.git.fetch("--all")
                 self._last_pull_time = datetime.datetime.now(tz=datetime.timezone.utc)
                 self.active_remote = True
             except Exception as e:
