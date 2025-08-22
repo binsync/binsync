@@ -110,7 +110,7 @@ class PullSegmentsDialog(QDialog):
                 if state and hasattr(state, 'segments') and state.segments:
                     users_with_segments.append(user)
             except Exception as e:
-                l.debug(f"Error checking segments for user {user}: {e}")
+                l.debug("Error checking segments for user %s: %s", user, e)
                 continue
         
         self.user_combo.addItems(users_with_segments)
@@ -180,7 +180,7 @@ class PullSegmentsDialog(QDialog):
                 self.segments_table.setItem(row, 2, name_item)
                 
         except Exception as e:
-            l.error(f"Error updating segments table for user {current_user}: {e}")
+            l.error("Error updating segments table for user %s: %s", current_user, e)
             self.segments_table.setRowCount(0)
 
     def _on_user_changed(self):
@@ -227,9 +227,9 @@ class PullSegmentsDialog(QDialog):
         try:
             for segment_name in selected_names:
                 self.controller.fill_segment(segment_name, user=current_user)
-            l.info(f"Successfully pulled {len(selected_names)} segments from {current_user}")
+            l.info("Successfully pulled %d segments from %s", len(selected_names), current_user)
         except Exception as e:
-            l.error(f"Error pulling segments: {e}")
+            l.error("Error pulling segments: %s", e)
             
         self.close()
 

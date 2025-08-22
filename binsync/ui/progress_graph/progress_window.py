@@ -226,7 +226,7 @@ class ProgressGraphWidget(QDialog):
 
         self.displayed_graph = None
         self._graph_view = None
-        _l.info(f"ProgressGraphWidget created with tag {self._tag_selection}")
+        _l.info("ProgressGraphWidget created with tag %s", self._tag_selection)
 
         self._init_widgets()
 
@@ -385,7 +385,7 @@ class ProgressGraphWidget(QDialog):
             try:
                 commit_hash = tag_ref.commit.hexsha
             except Exception as e:
-                _l.error(f"Failed to get commit hash for tag {self._tag_selection}: {e}")
+                _l.error("Failed to get commit hash for tag %s: %s", self._tag_selection, e)
 
         # collect function changes
         func_changes_by_users = self._controller.compute_changes_per_function(
@@ -453,7 +453,7 @@ class ProgressGraphWidget(QDialog):
         self._update_progress_widgets()
 
     def on_tag_selected(self, tag, *args, **kwargs):
-        _l.info(f"Selected tag: {tag}")
+        _l.info("Selected tag: %s", tag)
         self._tag_selection = tag
         self._update_progress_widgets()
 
