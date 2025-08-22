@@ -228,9 +228,9 @@ class QUtilPanel(QWidget):
         self.controller.config.table_coloring_window = self.controller.table_coloring_window
 
         if self.controller.config.save() is None:
-            l.info(f"Error saving configuration file, check that the path '{self.controller.config.save_location}' is valid.")
+            l.info("Error saving configuration file, check that the path '%s' is valid.", self.controller.config.save_location)
         else:
-            l.info(f"Saved configuration file '{self.controller.config.save_location}'")
+            l.info("Saved configuration file '%s'", self.controller.config.save_location)
 
     def _handle_debug_toggle(self):
         if self._debug_log_toggle.isChecked():
@@ -252,7 +252,7 @@ class QUtilPanel(QWidget):
             self.controller.merge_level = MergeLevel.MERGE
         else:
             return
-        l.debug(f"Sync level changed to: {selected_opt}")
+        l.debug("Sync level changed to: %s", selected_opt)
 
     @no_concurrent_call
     def _handle_magic_sync_button(self):

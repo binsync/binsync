@@ -437,7 +437,7 @@ class BSController:
         try:
             get_artifact_func = self.ARTIFACT_GET_MAP[type_] if not many else self.ARTIFACT_GET_MAP[(type_, GET_MANY)]
         except KeyError:
-            _l.info(f"Attempting to pull an unsupported Artifact of type {type_} with {identifiers}")
+            _l.info("Attempting to pull an unsupported Artifact of type %s with %s", type_, identifiers)
             return None
 
         # assure a state exists
@@ -475,14 +475,14 @@ class BSController:
         """
         _l.debug(f"Attempting to push %s...", artifact)
         if not artifact:
-            _l.warning(f"Attempting to push a None artifact, skipping...")
+            _l.warning("Attempting to push a None artifact, skipping...")
             return False
 
         try:
             set_art_func = self.ARTIFACT_SET_MAP[artifact.__class__]
             get_art_func = self.ARTIFACT_GET_MAP[artifact.__class__]
         except KeyError:
-            _l.info(f"Attempting to push an unsupported Artifact of type {artifact}")
+            _l.info("Attempting to push an unsupported Artifact of type %s", artifact)
             return False
 
         state: State = self.client.master_state
@@ -506,7 +506,7 @@ class BSController:
             return False
 
         # set the artifact in the target state, likely master
-        _l.debug(f"Setting an artifact now into {state} as {artifact}")
+        _l.debug("Setting an artifact now into %s as %s", state, artifact)
         was_set = set_art_func(state, merged_artifact, set_last_change=set_last_change, from_user=from_user, **kwargs)
 
         # if a struct is deleted remove it from the state dictionary
@@ -514,7 +514,7 @@ class BSController:
             del state.structs[artifact.name]
 
         # TODO: make was_set reliable
-        _l.debug(f"{state} committing now with {commit_msg}")
+        _l.debug("%s committing now with %s", state, commit_msg)
         self.client.master_state = state
         return was_set
 
@@ -581,7 +581,7 @@ class BSController:
 
         if isinstance(merged_artifact, Struct):
             if merged_artifact.name.startswith("__"):
-                _l.info(f"Skipping fill for {target_artifact} because it is a system struct")
+                _l.info("Skipping fill for %s because it is a system struct", target_artifact)
                 return False
 
             if not members:
@@ -616,7 +616,7 @@ class BSController:
                 fill_changes = True
             except Exception as e:
                 fill_changes = False
-                _l.error(f"Failed to fill artifact {merged_artifact} because of an error {e}")
+                _l.error("Failed to fill artifact %s because of an error %s", merged_artifact, e)
 
         self.deci.info(
             f"Successfully synced new changes from {state.user} for {merged_artifact}" if fill_changes
@@ -737,7 +737,7 @@ class BSController:
         @param state:
         @return:
         """
-        _l.info(f"Filling all data from user {user}...")
+        _l.info("Filling all data from user %s...", user)
 
         master_state, state = self.get_master_and_user_state(user=user, **kwargs)
         fillers = [
@@ -769,7 +769,7 @@ class BSController:
         @param target_artifacts:
         @return:
         """
-        _l.info(f"Staring a Magic Sync with a preference for {preference_user}")
+        _l.info("Starting a Magic Sync with a preference for %s", preference_user)
         self.save_native_decompiler_database()
 
         if self.merge_level == MergeLevel.OVERWRITE:
@@ -797,7 +797,7 @@ class BSController:
         total_synced = defaultdict(int)
 
         for artifact_type, filler_func in target_artifacts.items():
-            _l.info(f"Magic Syncing artifacts of type {artifact_type.__name__} now...")
+            _l.info("Magic Syncing artifacts of type %s now...", artifact_type.__name__)
             pref_state = users_state_map[preference_user]
             for identifier in self.changed_artifacts_of_type(artifact_type, users=all_users + [preference_user],
                                                              states=users_state_map):
@@ -816,7 +816,7 @@ class BSController:
                     pref_art = pref_art.nonconflict_merge(user_art)
                     pref_art.last_change = None
 
-                _l.debug(f"Filling artifact {pref_art} now...")
+                _l.debug("Filling artifact %s now...", pref_art)
                 try:
                     filler_func(
                         identifier, artifact_type=artifact_type, artifact=pref_art, state=master_state,
@@ -825,11 +825,11 @@ class BSController:
                         do_type_search=False
                     )
                 except Exception as e:
-                    _l.info(f"Banishing exception: {e}")
+                    _l.info("Banishing exception: %s", e)
 
         _l.info("Magic Syncing Completed!")
         # summarize total synchage!
-        _l.info(f"In total: {total_synced[Struct]} Structs, {total_synced[Function]} Functions, "
+        _l.info("In total: %d Structs, %d Functions, ", total_synced[Struct], total_synced[Function])
                 f"{total_synced[GlobalVariable]} Global Variables, and {total_synced[Enum]} Enums were synced.")
 
     def safe_sync_all(self, all_states: list[State]):
@@ -918,7 +918,7 @@ class BSController:
                 total_change += 1
 
         if total_change:
-            _l.info(f"Safe Syncing completed with {total_change} changes.")
+            _l.info("Safe Syncing completed with %d changes.", total_change)
 
     @staticmethod
     def tokenize_varname(name):
@@ -1069,9 +1069,9 @@ class BSController:
                     master_state.set_segment(segment)
                     committed += 1
                 else:
-                    _l.warning(f"Failed to force push segment @ {segment_name}")
+                    _l.warning("Failed to force push segment @ %s", segment_name)
             except KeyError:
-                _l.warning(f"Segment at {segment_name} not found in decompiler")
+                _l.warning("Segment at %s not found in decompiler", segment_name)
 
         master_state.last_commit_msg = f"Force pushed {committed} segments"
         self.client.master_state = master_state
@@ -1122,7 +1122,7 @@ class BSController:
         try:
             prop_name = prop_map[type_]
         except KeyError:
-            _l.warning(f"Attempted to get changed artifacts of type {type_} which is unsupported")
+            _l.warning("Attempted to get changed artifacts of type %s which is unsupported", type_)
             return set()
 
         known_arts = set()
@@ -1215,7 +1215,7 @@ class BSController:
                     # also a struct that we don't have in our master_state, then we give up
                     # and attempt to fill all structs to resolve type issues
                     nested_undefined_structs = True
-                    _l.info(f"Nested undefined structs detected, pulling all structs from {state.user}")
+                    _l.info("Nested undefined structs detected, pulling all structs from %s", state.user)
                     break
 
             changes = self.fill_artifact(
@@ -1251,7 +1251,7 @@ class BSController:
             return None
 
         self.config = config
-        _l.info(f"Loaded configuration file: '{self.config.save_location}'")
+        _l.info("Loaded configuration file: '%s'", self.config.save_location)
         self.table_coloring_window = config.table_coloring_window or self.table_coloring_window
         self.merge_level = config.merge_level or self.merge_level
 
@@ -1279,7 +1279,7 @@ class BSController:
             try:
                 commit_ref = client.repo.commit(commit_hash)
             except Exception as e:
-                _l.error(f"Failed to get commit {commit_hash} because of {e}")
+                _l.error("Failed to get commit %s because of %s", commit_hash, e)
                 commit_ref = None
 
             if commit_ref is not None:

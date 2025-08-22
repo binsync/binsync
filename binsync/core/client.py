@@ -333,7 +333,7 @@ class Client:
             if not user_email:
                 git_config.set_value('user', 'email', f'{self.master_user}@binsync.local')
         
-        l.info(f"Configured Git identity: {self.master_user} <{self.master_user}@binsync.local>")
+        l.info("Configured Git identity: %s <%s@binsync.local>", self.master_user, self.master_user)
         self._git_identity_configured = True
 
     #
@@ -427,7 +427,7 @@ class Client:
             if is_master:
                 raise
             else:
-                l.critical(f"Invalid state for {user}, dropping: {e}")
+                l.critical("Invalid state for %s, dropping: %s", user, e)
                 state = State(user)
 
         return state
@@ -554,7 +554,7 @@ class Client:
             did_push = True
             self._push()
 
-        l.debug(f"Commit {commit_num} times, pull: {did_pull}, push: {did_push}")
+        l.debug("Commit %d times, pull: %s, push: %s", commit_num, did_pull, did_push)
 
     #
     # Git Backend
@@ -584,7 +584,7 @@ class Client:
             # Get the latest commit
             commit = self.repo.head.commit
         except Exception as e:
-            l.warning(f"Internal Git Commit Error: {e}")
+            l.warning("Internal Git Commit Error: %s", e)
             return
 
         self._last_commit_time = datetime.datetime.now(tz=datetime.timezone.utc)
@@ -613,7 +613,7 @@ class Client:
                 self._last_pull_time = datetime.datetime.now(tz=datetime.timezone.utc)
                 self.active_remote = True
             except Exception as e:
-                l.error(f"Pull exception {e}")
+                l.error("Pull exception %s", e)
                 self.active_remote = False
 
         if not self.active_remote:
@@ -652,7 +652,7 @@ class Client:
             self.active_remote = True
         except git.exc.GitCommandError as ex:
             self.active_remote = False
-            l.error(f"Failed to push b/c {ex}")
+            l.error("Failed to push b/c %s", ex)
 
     #
     # Git Updates

@@ -179,8 +179,8 @@ class CreateBSProjectDialog(BSProjectDialog):
                 filename = Path(self.controller.deci.binary_path).name
             except Exception as e:
                 filename = str(int(time.time()))
-                l.warning(f"Failed to grab binary name because {e}. Maybe the decompiler is not ready for API use? "
-                          f"Using the timestamp instead: {filename}.bsproj")
+                l.warning("Failed to grab binary name because %s. Maybe the decompiler is not ready for API use? "
+                          "Using the timestamp instead: %s.bsproj", e, filename)
 
             filename += ".bsproj"
             path = path.absolute().joinpath(filename)
@@ -492,7 +492,7 @@ class ConfigureBSDialog(QDialog):
                 push_on_update=push_on_update, pull_on_update=pull_on_update, commit_on_update=commit_on_update
             )
         except Exception as e:
-            l.critical(f"Error connecting to specified repository: {e}!")
+            l.critical("Error connecting to specified repository: %s!", e)
             QMessageBox(self).critical(None, "Error connecting to repository", str(e))
             return False
 
@@ -500,12 +500,12 @@ class ConfigureBSDialog(QDialog):
         self.controller.auto_pull_enabled = pull_on_update
         self.controller.auto_push_enabled = push_on_update
         self._parse_and_display_connection_warnings(connection_warnings)
-        l.info(f"Client has connected to sync repo with user: {username}.")
+        l.info("Client has connected to sync repo with user: %s.", username)
 
         # create and save config if possible
         saved_config = self.save_config(username, proj_path, remote_url)
         if saved_config:
-            l.debug(f"Configuration file was saved to {saved_config}.")
+            l.debug("Configuration file was saved to %s.", saved_config)
 
         return True
 

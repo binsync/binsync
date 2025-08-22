@@ -141,7 +141,7 @@ class GlobalsTableView(BinsyncTableView):
             elif global_type == "T":
                 global_getter = "get_typedef"
             else:
-                l.warning(f"Failed to get a valid type for global type '{global_type}'")
+                l.warning("Failed to get a valid type for global type '%s'", global_type)
                 return
 
             for user in self.controller.client.check_cache_(self.controller.client.users,
@@ -205,7 +205,7 @@ class GlobalsTableView(BinsyncTableView):
             elif global_type == "T":
                 filler_func = lambda username: lambda chk=False: self.controller.fill_artifact(global_name, artifact_type=Typedef, user=username)
             else:
-                l.warning(f"Invalid global table sync option: {global_type}")
+                l.warning("Invalid global table sync option: %s", global_type)
                 return
 
             menu.addSeparator()
