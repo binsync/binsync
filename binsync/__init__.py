@@ -1,4 +1,4 @@
-__version__ = "5.7.5"
+__version__ = "5.7.6"
 # don't forget to bump binsync/stub_files/plugin.json
 
 import os

@@ -1,6 +1,11 @@
 import logging
 
-from PyQt5 import sip
+try:
+    # new location for sip
+    # https://www.riverbankcomputing.com/static/Docs/PyQt5/incompatibilities.html#pyqt-v5-11
+    from PyQt5 import sip
+except ImportError:
+    import sip
 from PyQt5.QtGui import QKeyEvent
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
