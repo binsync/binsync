@@ -75,9 +75,9 @@ class TestClient(unittest.TestCase):
             # now check those changes really made it into the git repo
             client.commit_master_state()
             commits = list(client.repo.iter_commits())
-            assert commits[0].message == f"Merged in {fh_1} from user1"
-            assert commits[1].message == f"Updated {sv_0}"
-            assert commits[2].message == f"Updated {fh_0}"
+            assert commits[0].message == f"Merged in {fh_1} from user1\n"
+            assert commits[1].message == f"Updated {sv_0}\n"
+            assert commits[2].message == f"Updated {fh_0}\n"
 
     def test_multi_user_branch_loading(self):
         with tempfile.TemporaryDirectory() as tmpdir:
