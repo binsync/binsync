@@ -290,6 +290,9 @@ class Client:
 
         @return:
         """
+        # Ensure git identity is configured before making any commits
+        self._ensure_git_identity()
+        
         with open(os.path.join(self.repo_root, ".gitignore"), "w") as f:
             f.write(".git/*\n")
         with open(os.path.join(self.repo_root, "binary_hash"), "w") as f:
@@ -297,6 +300,32 @@ class Client:
         self.repo.index.add([".gitignore", "binary_hash"])
         self.repo.index.commit("Root commit")
         self.repo.create_head(BINSYNC_ROOT_BRANCH)
+
+    def _ensure_git_identity(self):
+        """
+        Ensures Git user identity is configured. If not configured, sets it up with 
+        the master user name and a default email.
+        """
+        try:
+            # Check if user.name and user.email are configured
+            user_name = self.repo.config_reader().get_value('user', 'name', fallback=None)
+            user_email = self.repo.config_reader().get_value('user', 'email', fallback=None)
+            
+            if user_name and user_email:
+                return  # Already configured
+                
+        except Exception:
+            # Config doesn't exist or can't be read
+            pass
+        
+        # Configure Git identity using the master user name
+        with self.repo.config_writer() as git_config:
+            if not user_name:
+                git_config.set_value('user', 'name', self.master_user)
+            if not user_email:
+                git_config.set_value('user', 'email', f'{self.master_user}@binsync.local')
+        
+        l.info(f"Configured Git identity: {self.master_user} <{self.master_user}@binsync.local>")
 
     #
     # Public Properties
@@ -517,6 +546,9 @@ class Client:
         if self.master_user != state.user:
             raise ExternalUserCommitError(f"User {self.master_user} is not allowed to commit to user {state.user}")
 
+        # Ensure git identity is configured before making commits
+        self._ensure_git_identity()
+        
         self._checkout_to_master_user()
         state.dump(str(self.repo_root))
 
