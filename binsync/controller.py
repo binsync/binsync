@@ -829,8 +829,10 @@ class BSController:
 
         _l.info("Magic Syncing Completed!")
         # summarize total synchage!
-        _l.info("In total: %d Structs, %d Functions, ", total_synced[Struct], total_synced[Function])
-                f"{total_synced[GlobalVariable]} Global Variables, and {total_synced[Enum]} Enums were synced.")
+        _l.info(
+            "In total: %d Structs, %d Function %d Global Variables, and %d Enums were synced.",
+            total_synced[Struct], total_synced[Function], total_synced[GlobalVariable], total_synced[Enum]
+        )
 
     def safe_sync_all(self, all_states: list[State]):
         """
