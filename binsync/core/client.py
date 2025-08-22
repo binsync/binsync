@@ -419,7 +419,6 @@ class Client:
                 Path(repo.working_tree_dir),
                 client=client
             )
-            print(state)
         except MetadataNotFoundError:
             if is_master:
                 # create of the first state ever
@@ -685,7 +684,6 @@ class Client:
             try:
                 local_name = re.findall(f"({self.remote}/)(.*)", branch.name)[0][1]
             except IndexError:
-                print("INDEX ERROR")
                 continue
 
             # never try to track things already tracked
