@@ -364,10 +364,18 @@ class Client:
         if user is None and commit_hash is None:
             raise ValueError("Must specify either a user or a commit hash")
 
+        if user is not None and commit_hash is not None:
+            raise ValueError("Cannot specify both user and commit_hash")
+
+        # Checkout to user branch or commit_hash
+        checkout_ref = commit_hash or client.user_branch_name
+        repo.git.checkout(checkout_ref)
+
+        # Parse State object from repo path
         state = State(None)
         try:
             state = State.parse(
-                Client._get_tree(user, repo, commit_hash=commit_hash),
+                Path(repo.working_tree_dir),
                 client=client
             )
         except MetadataNotFoundError:
