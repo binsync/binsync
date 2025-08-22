@@ -7,7 +7,6 @@ from functools import wraps
 from typing import Dict, Iterable, Optional, Union, List, Tuple
 import math
 import re
-GOING = False
 
 from libbs.api.utils import progress_bar
 from libbs.artifacts import (
