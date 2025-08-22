@@ -463,20 +463,25 @@ class Client:
         return best_commits
 
     def commit_master_state(self, commit_msg=None) -> int:
-        # attempt to commit dirty files in a update phase
+        # Attempt to commit dirty files in a update phase.
+        # Similar to other parts of the code base, an empty state can make it in here in the very first iteration
+        # of the client. We just ignore that state.
         total_commits = 0
         for i in range(self._commit_batch_size):
             if self.cache.queued_master_state_changes.empty():
                 break
 
             state = self.cache.queued_master_state_changes.get()
-            self._commit_state(
-                state,
-                msg=commit_msg or state.last_commit_msg,
-            )
-            total_commits += 1
+            if state:
+                self._commit_state(
+                    state,
+                    msg=commit_msg or state.last_commit_msg,
+                )
+                total_commits += 1
 
-        self.cache._master_state._dirty = False
+        if self.cache._master_state:
+            self.cache._master_state._dirty = False
+
         return total_commits
 
     def commit_and_update_states(self, commit_msg=None):
