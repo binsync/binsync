@@ -1010,6 +1010,7 @@ class BSController:
         committed += len(funcs)
 
         # commit the master state back!
+        master_state.last_commit_msg = f"Force pushed {committed} functions"
         self.client.master_state = master_state
         self.deci.info(f"Function force push successful: committed {committed} functions.")
 
@@ -1041,6 +1042,7 @@ class BSController:
                     master_state.enums[lookup_key] = self.deci.enums[lookup_key]
             committed += 1
 
+        master_state.last_commit_msg = f"Force pushed {committed} global artifacts"
         self.client.master_state = master_state
         self.deci.info(f"Globals force push successful: committed {committed} artifacts.")
 
@@ -1071,6 +1073,7 @@ class BSController:
             except KeyError:
                 _l.warning(f"Segment at {segment_name} not found in decompiler")
 
+        master_state.last_commit_msg = f"Force pushed {committed} segments"
         self.client.master_state = master_state
         self.deci.info(f"Segments force push successful: committed {committed} segments.")
 

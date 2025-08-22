@@ -1,5 +1,6 @@
 import logging
 
+from binsync.core.scheduler import SchedSpeed
 from libbs.ui.qt_objects import (
     QDialog,
     QDialogButtonBox,
@@ -98,7 +99,14 @@ class PullSegmentsDialog(QDialog):
         
         for user in self.controller.usernames(priority=1):
             try:
-                state = self.controller.get_state(user=user, priority=1)
+                cache_item = self.controller.client.check_cache_(
+                    self.controller.client.get_state, user=user.name, priority=SchedSpeed.FAST
+                )
+                if cache_item is not None:
+                    state = cache_item
+                else:
+                    continue
+
                 if state and hasattr(state, 'segments') and state.segments:
                     users_with_segments.append(user)
             except Exception as e:
@@ -125,13 +133,20 @@ class PullSegmentsDialog(QDialog):
             return
             
         try:
-            state = self.controller.get_state(user=current_user, priority=1)
+            cache_item = self.controller.client.check_cache_(
+                self.controller.client.get_state, user=current_user, priority=SchedSpeed.FAST
+            )
+            if cache_item is not None:
+                state = cache_item
+            else:
+                l.error(f"Could not retrieve state for user %s", current_user)
+                return
+
             if not state or not hasattr(state, 'segments'):
                 self.segments_table.setRowCount(0)
                 return
                 
             segments = state.segments
-            
             # Filter segments if ignore present is checked
             if self.ignore_present_checkbox.isChecked():
                 # Get current user's segment names
@@ -139,7 +154,7 @@ class PullSegmentsDialog(QDialog):
                 try:
                     current_segment_names = set(self.controller.deci.segments.keys())
                 except Exception as e:
-                    l.debug(f"Error getting current user's segments: {e}")
+                    l.debug(f"Error getting current user's segments: %s", e)
                 
                 # Filter out segments that user already has
                 filtered_segments = {

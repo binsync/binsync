@@ -290,6 +290,9 @@ class Client:
 
         @return:
         """
+        # Ensure git identity is configured before making any commits
+        self._ensure_git_identity()
+        
         with open(os.path.join(self.repo_root, ".gitignore"), "w") as f:
             f.write(".git/*\n")
         with open(os.path.join(self.repo_root, "binary_hash"), "w") as f:
@@ -297,6 +300,41 @@ class Client:
         self.repo.index.add([".gitignore", "binary_hash"])
         self.repo.index.commit("Root commit")
         self.repo.create_head(BINSYNC_ROOT_BRANCH)
+
+    def _ensure_git_identity(self):
+        """
+        Ensures Git user identity is configured. If not configured, sets it up with 
+        the master user name and a default email.
+        """
+        # Check if we've already configured identity for this session
+        if hasattr(self, '_git_identity_configured'):
+            return
+            
+        user_name = None
+        user_email = None
+        
+        try:
+            # Check if user.name and user.email are configured
+            user_name = self.repo.config_reader().get_value('user', 'name', fallback=None)
+            user_email = self.repo.config_reader().get_value('user', 'email', fallback=None)
+            
+            if user_name and user_email:
+                self._git_identity_configured = True
+                return  # Already configured
+                
+        except Exception:
+            # Config doesn't exist or can't be read
+            pass
+        
+        # Configure Git identity using the master user name
+        with self.repo.config_writer() as git_config:
+            if not user_name:
+                git_config.set_value('user', 'name', self.master_user)
+            if not user_email:
+                git_config.set_value('user', 'email', f'{self.master_user}@binsync.local')
+        
+        l.info(f"Configured Git identity: {self.master_user} <{self.master_user}@binsync.local>")
+        self._git_identity_configured = True
 
     #
     # Public Properties
@@ -529,29 +567,28 @@ class Client:
         if self.master_user != state.user:
             raise ExternalUserCommitError(f"User {self.master_user} is not allowed to commit to user {state.user}")
 
+        
         self._checkout_to_master_user()
+        state.dump(str(self.repo_root))
 
-        master_user_branch = next(o for o in self.repo.branches if o.name == self.user_branch_name)
-        index = self.repo.index
-
-        # dump the state
-        state.dump(index)
-
-        # commit changes
-        self.repo.index.add([os.path.join(state.user, "*")])
+        # Add files using git commands
+        self.repo.git.add('.')
         self.repo.git.add(update=True)
 
-        if not self.repo.index.diff("HEAD"):
+        # Check if there are changes to commit
+        if not self.repo.git.diff("HEAD", name_only=True):
             return
 
-        # commit if there is any difference
+        # Commit using git command directly
         try:
-            commit = index.commit(msg)
+            self.repo.git.commit(m=msg)
+            # Get the latest commit
+            commit = self.repo.head.commit
         except Exception as e:
             l.warning(f"Internal Git Commit Error: {e}")
             return
+
         self._last_commit_time = datetime.datetime.now(tz=datetime.timezone.utc)
-        master_user_branch.commit = commit
         state._dirty = False
 
     @atomic_git_action
@@ -571,8 +608,9 @@ class Client:
             # dangerous remote operations happen here
             try:
                 self._localize_remote_branches()
-                self.repo.git.checkout(BINSYNC_ROOT_BRANCH)
-                self.repo.git.pull("--all")
+                # Pull from remote without checking out to __root__ branch
+                # Use git fetch instead of pull to avoid tracking branch issues
+                self.repo.git.fetch("--all")
                 self._last_pull_time = datetime.datetime.now(tz=datetime.timezone.utc)
                 self.active_remote = True
             except Exception as e:
