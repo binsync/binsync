@@ -367,8 +367,11 @@ class Client:
         if user is not None and commit_hash is not None:
             raise ValueError("Cannot specify both user and commit_hash")
 
+        #import remote_pdb;
+        #remote_pdb.RemotePdb("localhost", 4444).set_trace()
+
         # Checkout to user branch or commit_hash
-        checkout_ref = commit_hash or client.user_branch_name
+        checkout_ref = commit_hash or f"binsync/{user}"
         repo.git.checkout(checkout_ref)
 
         # Parse State object from repo path
@@ -378,6 +381,7 @@ class Client:
                 Path(repo.working_tree_dir),
                 client=client
             )
+            print(state)
         except MetadataNotFoundError:
             if is_master:
                 # create of the first state ever
