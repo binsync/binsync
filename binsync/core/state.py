@@ -273,14 +273,16 @@ class State:
 
         # dump metadata
         self.dump_metadata(dst)
+        dump_root = dst if isinstance(dst, pathlib.Path) else pathlib.Path(self.client.repo_root)
 
         # dump functions, one file per function in ./functions/
         for addr, func in self.functions.items():
             path = pathlib.Path('functions').joinpath("%08x.toml" % addr)
             self._dump_data(dst, path, func.dumps(fmt=ArtifactFormat.TOML).encode())
 
-        if pathlib.Path(self.client.repo_root + '/functions').exists():
-            for path in pathlib.Path(self.client.repo_root + '/functions').iterdir():
+        func_folder = (dump_root / "functions")
+        if func_folder.exists():
+            for path in func_folder.iterdir():
                 file = path.stem
                 address = int(file.split(".")[0], 16)
                 if address not in self.functions.keys():
@@ -292,9 +294,10 @@ class State:
             path = pathlib.Path('structs').joinpath(f"{safe_name}.toml")
             self._dump_data(dst, path, struct.dumps(fmt=ArtifactFormat.TOML).encode())
 
-        if pathlib.Path(self.client.repo_root + '/structs').exists():
+        structs_folder = (dump_root / "structs")
+        if structs_folder.exists():
             sanitized_struct_names = set([sanitize_name(s_name) for s_name in self.structs.keys()])
-            for path in pathlib.Path(self.client.repo_root + '/structs').iterdir():
+            for path in structs_folder.iterdir():
                 file = path.stem
                 name = file.split(".")[0]
 

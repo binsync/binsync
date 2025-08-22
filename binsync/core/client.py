@@ -518,28 +518,26 @@ class Client:
             raise ExternalUserCommitError(f"User {self.master_user} is not allowed to commit to user {state.user}")
 
         self._checkout_to_master_user()
+        state.dump(str(self.repo_root))
 
-        master_user_branch = next(o for o in self.repo.branches if o.name == self.user_branch_name)
-        index = self.repo.index
-
-        # dump the state
-        state.dump(index)
-
-        # commit changes
-        self.repo.index.add([os.path.join(state.user, "*")])
+        # Add files using git commands
+        self.repo.git.add('.')
         self.repo.git.add(update=True)
 
-        if not self.repo.index.diff("HEAD"):
+        # Check if there are changes to commit
+        if not self.repo.git.diff("HEAD", name_only=True):
             return
 
-        # commit if there is any difference
+        # Commit using git command directly
         try:
-            commit = index.commit(msg)
+            self.repo.git.commit(m=msg)
+            # Get the latest commit
+            commit = self.repo.head.commit
         except Exception as e:
             l.warning(f"Internal Git Commit Error: {e}")
             return
+
         self._last_commit_time = datetime.datetime.now(tz=datetime.timezone.utc)
-        master_user_branch.commit = commit
         state._dirty = False
 
     @atomic_git_action
