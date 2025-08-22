@@ -306,6 +306,9 @@ class Client:
         Ensures Git user identity is configured. If not configured, sets it up with 
         the master user name and a default email.
         """
+        user_name = None
+        user_email = None
+        
         try:
             # Check if user.name and user.email are configured
             user_name = self.repo.config_reader().get_value('user', 'name', fallback=None)
