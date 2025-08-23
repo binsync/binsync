@@ -13,7 +13,7 @@ from libbs.artifacts import (
     Artifact,
     Function, FunctionHeader, StackVariable,
     Comment, GlobalVariable, Patch,
-    Enum, Struct, FunctionArgument, StructMember, Typedef, Segment
+    Enum, Struct, FunctionArgument, StructMember, Typedef, Segment, Context
 )
 from libbs.api import DecompilerInterface
 from libbs.api.type_parser import CType
@@ -24,6 +24,8 @@ from binsync.core.user import User
 from binsync.configuration import BinSyncBSConfig
 
 from wordfreq import word_frequency
+
+from libbs.decompilers import IDA_DECOMPILER
 
 _l = logging.getLogger(name=__name__)
 
@@ -138,6 +140,13 @@ class BSController:
         # callbacks for changes to artifacts
         for typ in self.CHANGE_WATCHERS:
             self.deci.artifact_change_callbacks[typ].append(self._commit_hook_based_changes)
+
+        # record movements (in IDA) and use that for discovering auto-created objects
+        self.recorded_movements = []
+        self.startup_time = None
+        if self.deci.name == IDA_DECOMPILER:
+            self.deci.force_click_recording = True
+            self.deci.artifact_change_callbacks[Context].append(self._handle_context_update)
 
         # artifact map
         self.artifact_dict_map = {
@@ -454,6 +463,58 @@ class BSController:
     def is_not_syncing_data(self):
         return self.sync_semaphore._value == self.DEFAULT_SEMAPHORE_SIZE
 
+    def _handle_context_update(self, *args, **kwargs):
+        ctx: Context = args[0] if len(args) > 0 else None
+        if ctx is None or ctx.last_change is None:
+            return
+
+        self.recorded_movements.append(ctx)
+        if len(self.recorded_movements) > 20:
+            self.recorded_movements.pop(0)
+
+        if self.startup_time is None:
+            self.startup_time = time.time()
+
+    def _had_recent_human_movement(self):
+        """
+        An attempt to detect if a change was made from a human, or from a script/automatic process.
+        Only relevant in IDA currently.
+        """
+        if self.deci.name != IDA_DECOMPILER:
+            return True
+
+        if len(self.recorded_movements) < 1:
+            return False
+
+        time_since_start = time.time() - self.startup_time
+        startup_leiniency = 10
+        human_delta_time = 1 if time_since_start > startup_leiniency else 2
+        last_ctx: Context = self.recorded_movements[-1]
+        if last_ctx is None or last_ctx.last_change is None:
+            return False
+
+        now = time.time()
+        # convert from datetime to timestamp
+        last_change = last_ctx.last_change.timestamp() if isinstance(last_ctx.last_change, datetime.datetime) else last_ctx.last_change
+        time_since_last_change = now - last_change
+
+        # Check if we have at least 2 movements to compare
+        if len(self.recorded_movements) >= 2:
+            prev_ctx: Context = self.recorded_movements[-2]
+
+            screen_change = prev_ctx.screen_name != last_ctx.screen_name
+            implicit_screen_change = prev_ctx.action == Context.ACT_VIEW_OPEN and last_ctx.action == Context.ACT_VIEW_OPEN
+            function_change = prev_ctx.func_addr != last_ctx.func_addr
+
+            # Case 1: A user opens a function or view after being on another view really fast
+            # Case 2: A user switches rapidly between the same view
+            # Case 3: A user switches functions
+            if screen_change or implicit_screen_change or function_change:
+                if time_since_last_change < human_delta_time:
+                    return False
+
+        return True
+
     def _commit_hook_based_changes(self, *args, **kwargs):
         """
         A special wrapper for callbacks to only commit artifacts when they are changed by the user, and not
@@ -463,7 +524,7 @@ class BSController:
         @param kwargs:
         @return:
         """
-        if self.should_watch_artifacts():
+        if self.should_watch_artifacts() and self._had_recent_human_movement():
             self.commit_artifact(*args, **kwargs)
 
     @init_checker
@@ -829,8 +890,10 @@ class BSController:
 
         _l.info("Magic Syncing Completed!")
         # summarize total synchage!
-        _l.info("In total: %d Structs, %d Functions, ", total_synced[Struct], total_synced[Function])
-                f"{total_synced[GlobalVariable]} Global Variables, and {total_synced[Enum]} Enums were synced.")
+        _l.info(
+            "In total: %d Structs, %d Functions, %d Global Variables, and %d Enums were synced.",
+            total_synced[Struct], total_synced[Function], total_synced[GlobalVariable], total_synced[Enum]
+        )
 
     def safe_sync_all(self, all_states: list[State]):
         """

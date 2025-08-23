@@ -15,7 +15,7 @@
 		"Linux" : "Install through the Binja Plugin Manager. To update do `pip install -U binsync`",
 		"Windows" : "Install through the Binja Plugin Manager. To update do `pip install -U binsync`"
 	},
-	"version": "5.7.7",
+	"version": "5.7.8",
 	"author": "BinSync Team",
 	"minimumbinaryninjaversion": 1200
 }
