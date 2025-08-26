@@ -20,12 +20,12 @@ class ControlPanelWindow(QMainWindow):
     changes to functions or structs.
     """
 
-    def __init__(self):
+    def __init__(self, deci=None):
         super(ControlPanelWindow, self).__init__()
         self.setWindowTitle("BinSync")
         self.width_hint = 300
 
-        self._interface = DecompilerInterface.discover(force_decompiler=GHIDRA_DECOMPILER)
+        self._interface = deci or DecompilerInterface.discover()
         self.controller = BSController(decompiler_interface=self._interface)
         self.control_panel = ControlPanel(self.controller)
         self._init_widgets()
@@ -48,9 +48,26 @@ class ControlPanelWindow(QMainWindow):
         self.controller.shutdown()
 
 
-def start_ghidra_remote_ui():
-    app = QApplication()
-    cp_window = ControlPanelWindow()
+def start_ghidra_ui():
+    # discover the decompiler interface first!
+    deci = DecompilerInterface.discover(force_decompiler=GHIDRA_DECOMPILER)
+    # detect if we are on macos
+    if sys.platform == "darwin":
+        from PyObjCTools.AppHelper import callAfter
+        # Schedule the GUI creation to run on the main thread
+        callAfter(_start_ghidra_ui_core, deci)
+    else:
+        _start_ghidra_ui_core(deci)
+
+
+def _start_ghidra_ui_core(deci):
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication(sys.argv)
+
+    # Prevent the application from quitting when the last window is closed
+    app.setQuitOnLastWindowClosed(False)
+    cp_window = ControlPanelWindow(deci=deci)
 
     # control panel should stay hidden until a good config happens
     cp_window.hide()
@@ -60,4 +77,8 @@ def start_ghidra_remote_ui():
     else:
         sys.exit(1)
 
-    app.exec_()
+    if not app.property("eventLoopRunning"):
+        app.setProperty("eventLoopRunning", True)
+    app.exec()
+
+
