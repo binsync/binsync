@@ -1,5 +1,7 @@
 import logging
 
+from libbs.decompilers import BINJA_DECOMPILER
+
 from binsync.controller import  MergeLevel
 from libbs.ui.qt_objects import (
     QCheckBox,
@@ -81,7 +83,9 @@ class QUtilPanel(QWidget):
         self._auto_fast_sync.stateChanged.connect(self._handle_auto_fast_sync_toggle)
 
         sync_options_layout.addLayout(sync_level_layout)
-        #sync_options_group.layout().addWidget(self._magic_sync_button)
+        if (self.controller.deci.find_current_decompiler == BINJA_DECOMPILER):
+            sync_options_group.layout().addWidget(self._magic_sync_button)
+
         sync_options_group.layout().addWidget(self._force_push_button)
         sync_options_group.layout().addWidget(self._pull_segments_button)
         sync_options_group.layout().addWidget(self._auto_fast_sync)
