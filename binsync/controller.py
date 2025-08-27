@@ -659,12 +659,19 @@ class BSController:
                 if do_type_search:
                     self.discover_and_sync_user_types(merged_artifact, state=state, master_state=master_state)
 
-                # in fast only, we disable writes that happen in the decompiler
-                if fast_only and isinstance(merged_artifact, Function):
-                    merged_artifact.stack_vars = {}
-                    if merged_artifact.header is not None:
-                        merged_artifact.header.args = {}
-                        merged_artifact.header.type = None
+                if isinstance(merged_artifact, Function):
+                    if isinstance(target_artifact, Function):
+                        has_svars = bool(target_artifact.stack_vars)
+                        has_fargs = bool(target_artifact.args)
+                        needs_decompilation = has_fargs | has_svars
+                        fast_only |= not needs_decompilation
+
+                    # in fast only, we disable writes that happen in the decompiler
+                    if fast_only:
+                        merged_artifact.stack_vars = {}
+                        if merged_artifact.header is not None:
+                            merged_artifact.header.args = {}
+                            merged_artifact.header.type = None
 
                 # set the imports into the decompiler
                 art_dict[identifier] = merged_artifact
