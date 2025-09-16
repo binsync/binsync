@@ -1,10 +1,13 @@
 import logging
 import sys
+import threading
+from time import sleep
 
 from libbs.ui.version import set_ui_version
 set_ui_version("PySide6")
 from libbs.ui.qt_objects import QMainWindow, QApplication
 from libbs.api import DecompilerInterface
+from libbs.api.decompiler_server import DecompilerServer
 from libbs.decompilers import GHIDRA_DECOMPILER
 
 from binsync.ui.control_panel import ControlPanel
@@ -49,18 +52,8 @@ class ControlPanelWindow(QMainWindow):
 
 
 def start_ghidra_ui():
-    # discover the decompiler interface first!
-    deci = DecompilerInterface.discover(force_decompiler=GHIDRA_DECOMPILER)
-    # detect if we are on macos
-    if sys.platform == "darwin":
-        from PyObjCTools.AppHelper import callAfter
-        # Schedule the GUI creation to run on the main thread
-        callAfter(_start_ghidra_ui_core, deci)
-    else:
-        _start_ghidra_ui_core(deci)
-
-
-def _start_ghidra_ui_core(deci):
+    from libbs.api.decompiler_client import DecompilerClient
+    deci = DecompilerClient.discover()
     app = QApplication.instance()
     if app is None:
         app = QApplication(sys.argv)
@@ -76,9 +69,27 @@ def _start_ghidra_ui_core(deci):
         cp_window.show()
     else:
         sys.exit(1)
-
-    if not app.property("eventLoopRunning"):
-        app.setProperty("eventLoopRunning", True)
     app.exec()
 
+class GhidraRemoteInterfaceWrapper:
+    """
+    This class is a wrapper class to start the Ghidra Interface with a server so that the GUI can connect in
+    another process.
+    """
 
+    def __init__(self, *args, **kwargs):
+        #import remote_pdb; remote_pdb.RemotePdb('localhost', 4444).set_trace()
+        self.server = DecompilerServer(force_decompiler="ghidra")
+        #self.server.start()
+        self.server_thread = threading.Thread(target=self.server.start, daemon=True)
+        self.server_thread.run()
+        sleep(1)
+        print("Server started on socket:", self.server.socket_path)
+
+    @property
+    def gui_plugin(self):
+        """
+        Just a stub to conform to the interface expected by the decompiler.
+        """
+        #self.server.wait_for_shutdown()
+        return None
