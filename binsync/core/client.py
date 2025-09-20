@@ -159,7 +159,7 @@ class Client:
         repo_root = self.repo_root
         if copy_files:
             # go to the repo root and copy the entire tree
-            temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True) # ignore_cleanup_errors=True (temporary fix)
+            temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
             abs_path_str = str(Path(temp_dir.name).absolute())
             # skip git lock files
             shutil.copytree(
@@ -190,9 +190,7 @@ class Client:
         )
 
     def __del__(self):
-        # Release locks and stop threads before deleting temporary directories.
-        # On Windows, deleting the temp repo first can fail with PermissionError
-        # if the FileLock (e.g., .git/binsync.lock) is still held.
+        # Release locks and stop threads before deleting temporary directories
         try:
             self.shutdown()
         finally:
