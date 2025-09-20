@@ -159,9 +159,15 @@ class Client:
         repo_root = self.repo_root
         if copy_files:
             # go to the repo root and copy the entire tree
-            temp_dir = tempfile.TemporaryDirectory()
+            temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True) # ignore_cleanup_errors=True (temporary fix)
             abs_path_str = str(Path(temp_dir.name).absolute())
-            shutil.copytree(self.repo_root, abs_path_str, dirs_exist_ok=True)
+            # skip git lock files
+            shutil.copytree(
+                self.repo_root,
+                abs_path_str,
+                dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns('.git/binsync.lock', '.git/index.lock')
+            )
             repo_root = abs_path_str
 
         return Client(
@@ -184,10 +190,17 @@ class Client:
         )
 
     def __del__(self):
-        if self._temp_directory is not None:
-            self._temp_directory.cleanup()
-
-        self.shutdown()
+        # Release locks and stop threads before deleting temporary directories.
+        # On Windows, deleting the temp repo first can fail with PermissionError
+        # if the FileLock (e.g., .git/binsync.lock) is still held.
+        try:
+            self.shutdown()
+        finally:
+            if self._temp_directory is not None:
+                try:
+                    self._temp_directory.cleanup()
+                except PermissionError:
+                    pass
 
     #
     # Initializers
@@ -264,6 +277,18 @@ class Client:
             self.connection_warnings.append(ConnectionWarnings.HASH_MISMATCH)
 
         assert not self.repo.bare, "it should not be a bare repo"
+
+        # If ignore_lock is set (e.g., temporary/copy clients), do not create a lock at all.
+        # This avoids keeping a handle to .git/binsync.lock which can block temp dir cleanup on Windows.
+        if self._ignore_lock:
+            # Best-effort: ensure no stale lock file is left in the copied repo
+            if self._repo_lock_path.exists():
+                try:
+                    self._repo_lock_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+            self.repo_lock = None
+            return self.repo
 
         self.repo_lock = filelock.FileLock(str(self._repo_lock_path))
         should_delete_lock = False
@@ -789,10 +814,18 @@ class Client:
         self.scheduler.stop_worker_thread()
 
         if self.repo_lock is not None:
-            self.repo_lock.release()
+            # Best-effort: release the lock and remove the lock file.
+            try:
+                self.repo_lock.release()
+            except Exception:
+                pass
             # force delete it!
-            if self._repo_lock_path.exists():
-                self._repo_lock_path.unlink(missing_ok=True)
+            try:
+                if self._repo_lock_path.exists():
+                    self._repo_lock_path.unlink(missing_ok=True)
+            except PermissionError:
+                # Ignore lingering handles on Windows; cleanup is best-effort.
+                pass
 
     def _get_best_refs(self, repo, force_local=False):
         candidates = {}
