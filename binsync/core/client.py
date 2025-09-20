@@ -279,7 +279,6 @@ class Client:
         # If ignore_lock is set (e.g., temporary/copy clients), do not create a lock at all.
         # This avoids keeping a handle to .git/binsync.lock which can block temp dir cleanup on Windows.
         if self._ignore_lock:
-            # Best-effort: ensure no stale lock file is left in the copied repo
             if self._repo_lock_path.exists():
                 try:
                     self._repo_lock_path.unlink(missing_ok=True)
@@ -812,7 +811,7 @@ class Client:
         self.scheduler.stop_worker_thread()
 
         if self.repo_lock is not None:
-            # Best-effort: release the lock and remove the lock file.
+            # release the lock and remove the lock file
             try:
                 self.repo_lock.release()
             except Exception:
@@ -822,7 +821,6 @@ class Client:
                 if self._repo_lock_path.exists():
                     self._repo_lock_path.unlink(missing_ok=True)
             except PermissionError:
-                # Ignore lingering handles on Windows; cleanup is best-effort.
                 pass
 
     def _get_best_refs(self, repo, force_local=False):
