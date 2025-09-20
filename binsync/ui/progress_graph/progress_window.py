@@ -509,6 +509,4 @@ class ProgressGraphWidget(QDialog):
 
     def closeEvent(self, event):
         self._controller.progress_view_open = False
-        # Clear any class-level selection to avoid referencing deleted items on reopen
         NodeItem.currently_selected_node = None
-
