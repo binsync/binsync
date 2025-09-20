@@ -159,7 +159,14 @@ class Client:
         repo_root = self.repo_root
         if copy_files:
             # go to the repo root and copy the entire tree
-            temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+            try:
+                temp_dir = tempfile.TemporaryDirectory()
+            except Exception as e:
+                try:
+                    l.error("Failed to create temporary directory for copy: %s", e)
+                except Exception:
+                    pass
+                raise
             abs_path_str = str(Path(temp_dir.name).absolute())
             # skip git lock files
             shutil.copytree(
@@ -197,8 +204,12 @@ class Client:
             if self._temp_directory is not None:
                 try:
                     self._temp_directory.cleanup()
-                except PermissionError:
-                    pass
+                except PermissionError as e:
+                    # log and ignore: Windows may still hold a handle briefly
+                    try:
+                        l.warning("Temp cleanup skipped (PermissionError) for %s: %s", self._temp_directory.name, e)
+                    except Exception:
+                        pass
 
     #
     # Initializers
@@ -815,13 +826,19 @@ class Client:
             try:
                 self.repo_lock.release()
             except Exception:
-                pass
+                try:
+                    l.error("Failed to release repo lock")
+                except Exception:
+                    pass
             # force delete it!
             try:
                 if self._repo_lock_path.exists():
                     self._repo_lock_path.unlink(missing_ok=True)
-            except PermissionError:
-                pass
+            except PermissionError as e:
+                try:
+                    l.warning("Failed to unlink repo lock file %s: %s", self._repo_lock_path, e)
+                except Exception:
+                    pass
 
     def _get_best_refs(self, repo, force_local=False):
         candidates = {}
