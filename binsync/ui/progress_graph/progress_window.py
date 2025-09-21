@@ -133,8 +133,12 @@ class NodeItem(QGraphicsEllipseItem):
 
     def mouseDoubleClickEvent(self, event):
         # Bold black outline for only one selected node
-        if NodeItem.currently_selected_node and NodeItem.currently_selected_node is not self:
-            NodeItem.currently_selected_node.setPen(NodeItem.currently_selected_node.default_pen)
+        prev = NodeItem.currently_selected_node
+        # TODO: this is a stopgap fix for Windows. A permission error can occur because the main and new child process access the same repo.
+        if prev is not None and prev is not self:
+            _l.debug("Windows temp permissions error")
+            if prev.scene() is not None:
+                prev.setPen(prev.default_pen)
 
         self.setPen(self.highlight_pen)
         NodeItem.currently_selected_node = self
@@ -239,7 +243,16 @@ class ProgressGraphWidget(QDialog):
         # no need to update hotness, it is static for now...
 
         if self._graph_view is not None:
-            self.main_layout.removeWidget(self._graph_view)
+            # Remove and delete the old view to fully destroy C++ items
+            old_view = self._graph_view
+            self.main_layout.removeWidget(old_view)
+            try:
+                if old_view.scene() is not None:
+                    old_view.scene().clear()
+            except Exception:
+                pass
+            old_view.deleteLater()
+            self._graph_view = None
 
         # update the actual graph view
         self._build_graph_view()
@@ -249,6 +262,8 @@ class ProgressGraphWidget(QDialog):
         # Create scene
         scene = QGraphicsScene(self)
         scene.setBackgroundBrush(QBrush(QColor("#333333")))
+        # Reset any stale selection from a previous scene
+        NodeItem.currently_selected_node = None
 
         # If no graph was provided, create a small sample
         # Each node has 'hotness' in [0..1], and 'size' in [1..10] (default=5).
@@ -490,4 +505,4 @@ class ProgressGraphWidget(QDialog):
 
     def closeEvent(self, event):
         self._controller.progress_view_open = False
-
+        NodeItem.currently_selected_node = None
