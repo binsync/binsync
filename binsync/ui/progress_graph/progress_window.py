@@ -134,15 +134,11 @@ class NodeItem(QGraphicsEllipseItem):
     def mouseDoubleClickEvent(self, event):
         # Bold black outline for only one selected node
         prev = NodeItem.currently_selected_node
+        # TODO: this is a stopgap fix for Windows. A permission error can occur because the main and new child process access the same repo.
         if prev is not None and prev is not self:
-            # guard if previous item was deleted
-            try:
-                # skip if not in a scene
-                if prev.scene() is not None:
-                    prev.setPen(prev.default_pen)
-            except RuntimeError:
-                # clear stale reference
-                NodeItem.currently_selected_node = None
+            _l.debug("Windows stopgap: prev=%r", prev)
+            if prev.scene() is not None:
+                prev.setPen(prev.default_pen)
 
         self.setPen(self.highlight_pen)
         NodeItem.currently_selected_node = self
