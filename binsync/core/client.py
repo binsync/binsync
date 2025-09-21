@@ -206,10 +206,7 @@ class Client:
                     self._temp_directory.cleanup()
                 except PermissionError as e:
                     # log and ignore: Windows may still hold a handle briefly
-                    try:
-                        l.warning("Temp cleanup skipped (PermissionError) for %s: %s", self._temp_directory.name, e)
-                    except Exception:
-                        pass
+                    l.warning("Temp cleanup skipped (PermissionError) for %s: %s", self._temp_directory.name, e)
 
     #
     # Initializers
@@ -826,19 +823,13 @@ class Client:
             try:
                 self.repo_lock.release()
             except Exception:
-                try:
-                    l.error("Failed to release repo lock")
-                except Exception:
-                    pass
+                l.error("Failed to release repo lock")
             # force delete it!
             try:
                 if self._repo_lock_path.exists():
                     self._repo_lock_path.unlink(missing_ok=True)
             except PermissionError as e:
-                try:
-                    l.warning("Failed to unlink repo lock file %s: %s", self._repo_lock_path, e)
-                except Exception:
-                    pass
+                l.warning("Failed to unlink repo lock file %s: %s", self._repo_lock_path, e)
 
     def _get_best_refs(self, repo, force_local=False):
         candidates = {}
