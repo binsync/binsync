@@ -136,7 +136,7 @@ class NodeItem(QGraphicsEllipseItem):
         prev = NodeItem.currently_selected_node
         # TODO: this is a stopgap fix for Windows. A permission error can occur because the main and new child process access the same repo.
         if prev is not None and prev is not self:
-            _l.debug("Windows stopgap: prev=%r", prev)
+            _l.debug("Windows temp permissions error")
             if prev.scene() is not None:
                 prev.setPen(prev.default_pen)
 
