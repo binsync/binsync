@@ -162,11 +162,7 @@ class Client:
             try:
                 temp_dir = tempfile.TemporaryDirectory()
             except Exception as e:
-                try:
-                    l.error("Failed to create temporary directory for copy: %s", e)
-                except Exception:
-                    pass
-                raise
+                l.error("Failed to create temporary directory for copy: %s", e)
             abs_path_str = str(Path(temp_dir.name).absolute())
             # skip git lock files
             shutil.copytree(
