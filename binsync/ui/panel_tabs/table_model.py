@@ -409,4 +409,4 @@ class BinsyncTableView(QTableView):
                 font-family: monospace;
             }
             """)
-            QToolTip.showText(QCursor.pos(), diff_html, self, QRect(), 3000)
+            QToolTip.showText(QCursor.pos(), diff_html, self, QRect(), 60000)

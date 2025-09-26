@@ -57,7 +57,7 @@ def main():
         """
     )
     parser.add_argument(
-        "-s", "--server", choices=[GHIDRA_DECOMPILER], help="""
+        "-s", "--server", choices=[GHIDRA_DECOMPILER, "headless"], help="""
         Execute the decompiler server for headless connection (only Ghidra supported).
         """
     )
@@ -139,11 +139,14 @@ def main():
         install()
 
     if args.server:
-        if args.server != GHIDRA_DECOMPILER:
-            raise ValueError("Only Ghidra is supported for use as a server")
-
-        from binsync.interface_overrides.ghidra import start_ghidra_remote_ui
-        start_ghidra_remote_ui()
+        if args.server == GHIDRA_DECOMPILER:
+            from binsync.interface_overrides.ghidra import start_ghidra_remote_ui
+            start_ghidra_remote_ui()
+        elif args.server == "headless":
+            from binsync.extras.server import start_server
+            start_server()
+        else:
+            exit(1)
 
     if EXTRAS_AVAILABLE and args.ai:
         if not (args.proj_path and args.binary_path):
