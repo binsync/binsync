@@ -222,7 +222,7 @@ class ProgressGraphWidget(QDialog):
         self._tag_selection = tag or ""
 
         self._show_only_changed = False
-        self._layouts = ["dot", "fdp", "neato", "twopi", "circo"]
+        self._layouts = ["dot", "fdp", "neato", "twopi", "circo", "sfdp"]
 
         self.displayed_graph = None
         self._graph_view = None
@@ -334,7 +334,7 @@ class ProgressGraphWidget(QDialog):
         self.layout_label = QLabel("Layout: ")
         self.layout_label.setStyleSheet("font-size: 16px;")
         self.layout_dropdown = QComboBox()
-        self.layout_dropdown.addItems(["dot", "fdp", "neato", "twopi", "circo"])
+        self.layout_dropdown.addItems(["dot", "fdp", "neato", "twopi", "circo", "sfdp"])
         self.layout_dropdown.currentTextChanged.connect(self._graph_layout_changed)
         # Create a container widget to hold label and dropdown
         layout_widget = QWidget()
