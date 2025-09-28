@@ -200,9 +200,9 @@ class QUtilPanel(QWidget):
         disconnect_from_server_btn = QPushButton("Disconnect from Server...")
         disconnect_from_server_btn.clicked.connect(self._disconnect_from_server)
         extras_layout.addWidget(disconnect_from_server_btn)
-        
+
         extras_group.setLayout(extras_layout)
-        
+
         return extras_group
 
     def _display_connect_to_server(self):
@@ -212,7 +212,7 @@ class QUtilPanel(QWidget):
             self.client_thread.start()
         else:
             l.info("You are already connected to a server!")
-        
+
     def _disconnect_from_server(self):
         if self.client_thread:
             self.client_thread.stop()
@@ -332,7 +332,7 @@ class ClientWorker(QObject):
     def __init__(self):
         super().__init__()
         self.connected = False
-        
+
     def run(self):
         host = "[::1]" # TODO: make host configurable
         port = 7962 # TODO: make port configurable
@@ -346,12 +346,12 @@ class ClientWorker(QObject):
             time.sleep(1)
         l.info(requests.get(self.server_url+"/disconnect").text)
         self.finished.emit()
-        
-        
+
+
     def stop(self):
         self.connected = False
-        
-        
+
+
 class ClientThread(QThread):
     def __init__(self):
         super().__init__()
@@ -359,7 +359,7 @@ class ClientThread(QThread):
 
     def run(self):
         self.worker.run()
-        
-        
+
+
     def stop(self):
         self.worker.stop()
