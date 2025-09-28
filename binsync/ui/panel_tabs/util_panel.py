@@ -186,8 +186,23 @@ class QUtilPanel(QWidget):
         progress_view_btn.clicked.connect(self._handle_progress_view)
         extras_layout.addWidget(progress_view_btn)
 
+        # Connect to binsync server
+        connect_to_server_btn = QPushButton("Connect to Server...")
+        connect_to_server_btn.clicked.connect(self._display_connect_to_server)
+        extras_layout.addWidget(connect_to_server_btn)
         extras_group.setLayout(extras_layout)
         return extras_group
+
+    def _display_connect_to_server(self):
+        # We are going to make it just connect to localhost for now
+        import socket
+        user_sock = socket.socket(socket.AF_INET6,socket.SOCK_STREAM)
+        user_sock.connect(("localhost",7962))
+        user_sock.send(b'hi!')
+        l.debug(b'Received: '+user_sock.recv(1024))
+        user_sock.close()
+        pass
+
 
     def _handle_progress_view(self):
         from ..progress_graph.progress_window import ProgressGraphWidget
