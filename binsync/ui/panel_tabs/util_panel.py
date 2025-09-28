@@ -195,12 +195,15 @@ class QUtilPanel(QWidget):
 
     def _display_connect_to_server(self):
         # We are going to make it just connect to localhost for now
-        import socket
-        user_sock = socket.socket(socket.AF_INET6,socket.SOCK_STREAM)
-        user_sock.connect(("localhost",7962))
-        user_sock.send(b'hi!')
-        l.debug(b'Received: '+user_sock.recv(1024))
-        user_sock.close()
+        import requests
+        import urllib.parse
+        host = "[::1]" # TODO: make host configurable
+        port = 7962 # TODO: make port configurable
+        server_url = f"http://{host}:{port}"
+        parsed = urllib.parse.urlparse(server_url)
+        if parsed.netloc != f"{host}:{port}":
+            l.error("HOST AND PORT COMBINATION IS NOT VALID: NETLOC %s BUT HOST %s AND PORT %s",parsed.netloc,parsed.host,parsed.port)
+        l.debug(requests.get(server_url).text)
         pass
 
 
