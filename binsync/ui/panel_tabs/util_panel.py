@@ -1,5 +1,7 @@
 import logging
 import time
+import requests
+
 from binsync.controller import  MergeLevel
 from libbs.ui.qt_objects import (
     QCheckBox,
@@ -14,7 +16,7 @@ from libbs.ui.qt_objects import (
     QLineEdit,
     QIntValidator
 )
-from PyQt5.QtCore import QThread
+from PyQt5.QtCore import QThread, QObject, pyqtSignal
 from binsync.ui.magic_sync_dialog import MagicSyncDialog
 from binsync.ui.force_push import ForcePushUI
 from binsync.ui.utils import no_concurrent_call
@@ -187,19 +189,35 @@ class QUtilPanel(QWidget):
         progress_view_btn.clicked.connect(self._handle_progress_view)
         extras_layout.addWidget(progress_view_btn)
 
-        # Connect to binsync server
+        # Binsync server
+        self.client_thread = None
         connect_to_server_btn = QPushButton("Connect to Server...")
         connect_to_server_btn.clicked.connect(self._display_connect_to_server)
         extras_layout.addWidget(connect_to_server_btn)
+        disconnect_from_server_btn = QPushButton("Disconnect from Server...")
+        disconnect_from_server_btn.clicked.connect(self._disconnect_from_server)
+        extras_layout.addWidget(disconnect_from_server_btn)
+        
         extras_group.setLayout(extras_layout)
+        
         return extras_group
 
     def _display_connect_to_server(self):
         # We are going to make it just connect to localhost for now without an actual display
-        self.client_thread = ClientThread()
-        self.client_thread.start() # TODO: Make it possible to close the client thread
+        if not self.client_thread:
+            self.client_thread = ClientThread()
+            self.client_thread.start()
+        else:
+            l.info("You are not already connected to a server!")
         
-
+    def _disconnect_from_server(self):
+        if self.client_thread:
+            self.client_thread.stop()
+            self.client_thread.quit()
+            self.client_thread.wait() # Issue - will block on thread cleanup
+            self.client_thread = None
+        else:
+            l.info("You are not currently connected to a server!")
 
     def _handle_progress_view(self):
         from ..progress_graph.progress_window import ProgressGraphWidget
@@ -306,19 +324,40 @@ class QUtilPanel(QWidget):
         else:
             self.controller.auto_pull_enabled = True
 
-class ClientThread(QThread):
+class ClientWorker(QObject):
+    finished = pyqtSignal()
     def __init__(self):
         super().__init__()
-
+        self.connected = False
+        
     def run(self):
-        import requests
         import urllib.parse
         host = "[::1]" # TODO: make host configurable
         port = 7962 # TODO: make port configurable
-        server_url = f"http://{host}:{port}"
-        parsed = urllib.parse.urlparse(server_url)
+        self.server_url = f"http://{host}:{port}"
+        parsed = urllib.parse.urlparse(self.server_url)
         if parsed.netloc != f"{host}:{port}":
             l.error("HOST AND PORT COMBINATION IS NOT VALID: NETLOC %s BUT HOST %s AND PORT %s",parsed.netloc,parsed.host,parsed.port)
-        l.info(requests.get(server_url+"/connect").text)
-        time.sleep(5)
-        l.info(requests.get(server_url+"/disconnect").text)
+        l.info(requests.get(self.server_url+"/connect").text)
+        self.connected = True
+        while self.connected:
+            time.sleep(1)
+        l.info(requests.get(self.server_url+"/disconnect").text)
+        self.finished.emit()
+        
+        
+    def stop(self):
+        self.connected = False
+        
+        
+class ClientThread(QThread):
+    def __init__(self):
+        super().__init__()
+        self.worker = ClientWorker()
+
+    def run(self):
+        self.worker.run()
+        
+        
+    def stop(self):
+        self.worker.stop()
