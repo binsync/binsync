@@ -1,5 +1,5 @@
 import logging
-
+import time
 from binsync.controller import  MergeLevel
 from libbs.ui.qt_objects import (
     QCheckBox,
@@ -14,6 +14,7 @@ from libbs.ui.qt_objects import (
     QLineEdit,
     QIntValidator
 )
+from PyQt5.QtCore import QThread
 from binsync.ui.magic_sync_dialog import MagicSyncDialog
 from binsync.ui.force_push import ForcePushUI
 from binsync.ui.utils import no_concurrent_call
@@ -194,17 +195,10 @@ class QUtilPanel(QWidget):
         return extras_group
 
     def _display_connect_to_server(self):
-        # We are going to make it just connect to localhost for now
-        import requests
-        import urllib.parse
-        host = "[::1]" # TODO: make host configurable
-        port = 7962 # TODO: make port configurable
-        server_url = f"http://{host}:{port}"
-        parsed = urllib.parse.urlparse(server_url)
-        if parsed.netloc != f"{host}:{port}":
-            l.error("HOST AND PORT COMBINATION IS NOT VALID: NETLOC %s BUT HOST %s AND PORT %s",parsed.netloc,parsed.host,parsed.port)
-        l.debug(requests.get(server_url).text)
-        pass
+        # We are going to make it just connect to localhost for now without an actual display
+        self.client_thread = ClientThread()
+        self.client_thread.start() # TODO: Make it possible to close the client thread
+        
 
 
     def _handle_progress_view(self):
@@ -312,3 +306,19 @@ class QUtilPanel(QWidget):
         else:
             self.controller.auto_pull_enabled = True
 
+class ClientThread(QThread):
+    def __init__(self):
+        super().__init__()
+
+    def run(self):
+        import requests
+        import urllib.parse
+        host = "[::1]" # TODO: make host configurable
+        port = 7962 # TODO: make port configurable
+        server_url = f"http://{host}:{port}"
+        parsed = urllib.parse.urlparse(server_url)
+        if parsed.netloc != f"{host}:{port}":
+            l.error("HOST AND PORT COMBINATION IS NOT VALID: NETLOC %s BUT HOST %s AND PORT %s",parsed.netloc,parsed.host,parsed.port)
+        l.info(requests.get(server_url+"/connect").text)
+        time.sleep(5)
+        l.info(requests.get(server_url+"/disconnect").text)
