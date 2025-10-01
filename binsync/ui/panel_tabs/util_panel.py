@@ -211,7 +211,7 @@ class QUtilPanel(QWidget):
             self.client_thread = ClientThread()
             self.client_thread.start()
         else:
-            l.info("You are not already connected to a server!")
+            l.info("You are already connected to a server!")
         
     def _disconnect_from_server(self):
         if self.client_thread:
