@@ -1,6 +1,7 @@
 import logging
 import time
 import requests
+import urllib.parse
 
 from binsync.controller import  MergeLevel
 from libbs.ui.qt_objects import (
@@ -14,9 +15,11 @@ from libbs.ui.qt_objects import (
     QVBoxLayout,
     QWidget,
     QLineEdit,
-    QIntValidator
+    QIntValidator,
+    QThread,
+    QObject,
+    Signal
 )
-from PyQt5.QtCore import QThread, QObject, pyqtSignal
 from binsync.ui.magic_sync_dialog import MagicSyncDialog
 from binsync.ui.force_push import ForcePushUI
 from binsync.ui.utils import no_concurrent_call
@@ -325,13 +328,12 @@ class QUtilPanel(QWidget):
             self.controller.auto_pull_enabled = True
 
 class ClientWorker(QObject):
-    finished = pyqtSignal()
+    finished = Signal()
     def __init__(self):
         super().__init__()
         self.connected = False
         
     def run(self):
-        import urllib.parse
         host = "[::1]" # TODO: make host configurable
         port = 7962 # TODO: make port configurable
         self.server_url = f"http://{host}:{port}"
