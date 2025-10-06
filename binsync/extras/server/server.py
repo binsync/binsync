@@ -25,8 +25,13 @@ def handle_disconnection():
 
 @app.route("/function",methods=["POST"])
 def receive_function():
-    current_function_address = int(request.form["address"],16)
-    l.info("Some user is at the function at address",hex(current_function_address))
+    function_addr_received = request.form["address"]
+    if function_addr_received:
+        current_function_address = int(request.form["address"])
+        l.info("Some user is at the function at address %x",current_function_address)
+    else:
+        l.info("A user made a post to function but the function address was not valid")
+    return "OK"
 
 # main driver function
 def start_server(port=7962):
