@@ -268,6 +268,9 @@ class BinsyncTableView(QTableView):
 
         self.stretch_col = stretch_col
         self.col_count = col_count
+        
+        # Track current tooltip content to prevent unnecessary redraws
+        self._current_tooltip_html = None
 
     def _doubleclick_handler(self):
         """ Handler for double clicking on a row, jumps to the respective function. """
@@ -372,6 +375,29 @@ class BinsyncTableView(QTableView):
                     args_html += f"<br><span style='color:{color}; background-color:#{highlight};'>{symbol} {arg}</span>"
                 diff_sections.append(args_html + "<hr>")
 
+        # For stack variables, show differences in stack variable names and types (if they exist)
+        if 'stack_vars' in differences:
+            master_vars_dict = differences['stack_vars']['master']
+            target_vars_dict = differences['stack_vars']['target']
+            
+            master_vars = [f"{hex(offset)} {var.type} {var.name}" if var.type else f"{hex(offset)} {var.name}"
+                           for offset, var in master_vars_dict.items()]
+            target_vars = [f"{hex(offset)} {var.type} {var.name}" if var.type else f"{hex(offset)} {var.name}"
+                           for offset, var in target_vars_dict.items()]
+
+            # Only show the stack variables that differ between master and target
+            unique_vars = set(master_vars) ^ set(target_vars)
+            
+            if unique_vars:
+                vars_html = "<b>Variables:</b>"
+                for var in unique_vars:
+                    # Same color highlighting pattern as args
+                    highlight = "eaffea" if var in target_vars else "ffecec"
+                    color = "red" if var in master_vars else "green"
+                    symbol = "-" if var in master_vars else "+"
+                    vars_html += f"<br><span style='color:{color}; background-color:#{highlight};'>{symbol} {var}</span>"
+                diff_sections.append(vars_html + "<hr>")
+
         # For comments, just show comments in target that are not also in master (this differs from what args are shown)
         target_comments = differences['comments']['target'].items()
         master_comments = differences['comments']['master'].items()
@@ -392,21 +418,26 @@ class BinsyncTableView(QTableView):
         Call preview_function_changes and parse the dictionary for any differences. Note this just applies to functions
         and their comments.
         """
-
         try:
             diff_html = self.render_tooltip_text(func_addr, user_name)
         except Exception:
             diff_html = None
 
         if diff_html:
-            self.setStyleSheet("""
-            QToolTip {
-                background-color: #fff;
-                color: black;
-                border: 1px solid gray;
-                padding: 2px;
-                max-width: 600px;
-                font-family: monospace;
-            }
-            """)
-            QToolTip.showText(QCursor.pos(), diff_html, self, QRect(), 60000)
+            # Check if tooltip is currently visible
+            tooltip_visible = QToolTip.text() != ""
+            
+            # Only update tooltip if content has changed OR if tooltip is not visible, prevents glitchy redraws
+            if self._current_tooltip_html != diff_html or not tooltip_visible:
+                self._current_tooltip_html = diff_html
+                self.setStyleSheet("""
+                QToolTip {
+                    background-color: #fff;
+                    color: black;
+                    border: 1px solid gray;
+                    padding: 2px;
+                    max-width: 600px;
+                    font-family: monospace;
+                }
+                """)
+                QToolTip.showText(QCursor.pos(), diff_html, self, QRect(), 86400000)

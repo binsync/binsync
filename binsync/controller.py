@@ -1434,8 +1434,9 @@ class BSController:
         """
         state = self.get_state(user=user, priority=SchedSpeed.FAST)
         user = user or state.user
-        master_state = self.client.master_state
-        master_func = master_state.get_function(func_addr)
+        
+        # Get the local function from the decompiler (current state in IDA)
+        master_func = self.deci.functions.get(func_addr)
         target_func = state.get_function(func_addr)
         
         # A lot of repetition so this is just a helper to get the relevant attributes 
@@ -1444,8 +1445,15 @@ class BSController:
         
         # Get the comments where each comment is a dictionary 
         get_comments = lambda state_obj: {addr: cmt.comment for addr, cmt in state_obj.get_func_comments(func_addr).items()}
-        # Need to handle the case that sometimes there is no master function in these cases 
-        master_comments = get_comments(master_state) if master_func else {}
+        
+        # Get local comments from decompiler by iterating through comments in function range
+        master_comments = {}
+        if master_func:
+            func_size = getattr(master_func, 'size', 0x1000)
+            for addr, cmt in self.deci.comments.items():
+                if master_func.addr <= addr < (master_func.addr + func_size):
+                    master_comments[addr] = cmt.comment
+        
         target_comments = get_comments(state)
         
         diffs = {
@@ -1461,6 +1469,10 @@ class BSController:
             'type': {
                 'master': get_header_attr(master_func, 'type'),
                 'target': get_header_attr(target_func, 'type')
+            },
+            'stack_vars': {
+                'master': master_func.stack_vars if master_func else {},
+                'target': target_func.stack_vars if target_func else {}
             },
             'comments': {
                 'master': master_comments,
