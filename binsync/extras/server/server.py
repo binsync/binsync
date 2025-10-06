@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, request
 from threading import Lock
 import logging
 
@@ -22,6 +22,11 @@ def handle_disconnection():
         user_count -= 1
         print(user_count)
     return 'You have disconnected!'
+
+@app.route("/function",methods=["POST"])
+def receive_function():
+    current_function_address = int(request.form["address"],16)
+    l.info("Some user is at the function at address",hex(current_function_address))
 
 # main driver function
 def start_server(port=7962):
