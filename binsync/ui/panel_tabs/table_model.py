@@ -414,6 +414,7 @@ class BinsyncTableView(QTableView):
         Call preview_function_changes and parse the dictionary for any differences. Note this just applies to functions
         and their comments.
         """
+        
         try:
             diff_html = self.render_tooltip_text(func_addr, user_name)
         except Exception:
@@ -428,6 +429,6 @@ class BinsyncTableView(QTableView):
                 padding: 2px;
                 max-width: 600px;
                 font-family: monospace;
-            }g
+            }
             """)
             QToolTip.showText(QCursor.pos(), diff_html, self, QRect(), 60000)
