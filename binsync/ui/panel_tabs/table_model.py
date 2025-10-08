@@ -423,20 +423,14 @@ class BinsyncTableView(QTableView):
             diff_html = None
 
         if diff_html:
-            # Check if tooltip is currently visible
-            tooltip_visible = QToolTip.text() != ""
-            
-            # Only update tooltip if content has changed OR if tooltip is not visible, prevents glitchy redraws
-            if self._current_tooltip_html != diff_html or not tooltip_visible:
-                self._current_tooltip_html = diff_html
-                self.setStyleSheet("""
-                QToolTip {
-                    background-color: #fff;
-                    color: black;
-                    border: 1px solid gray;
-                    padding: 2px;
-                    max-width: 600px;
-                    font-family: monospace;
-                }
-                """)
-                QToolTip.showText(QCursor.pos(), diff_html, self, QRect(), 86400000)
+            self.setStyleSheet("""
+            QToolTip {
+                background-color: #fff;
+                color: black;
+                border: 1px solid gray;
+                padding: 2px;
+                max-width: 600px;
+                font-family: monospace;
+            }
+            """)
+            QToolTip.showText(QCursor.pos(), diff_html, self, QRect(), 60000)
