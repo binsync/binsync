@@ -165,7 +165,6 @@ class FunctionTableView(BinsyncTableView):
                 action.hovered.connect(
                     lambda name=username: self.show_tooltip(func_addr, name))
         
-        menu.aboutToHide.connect(lambda: setattr(self, '_current_tooltip_html', None))
         menu.popup(self.mapToGlobal(event.pos()))
 
 

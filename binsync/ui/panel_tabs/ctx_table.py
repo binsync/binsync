@@ -127,7 +127,6 @@ class QCTXTable(BinsyncTableView):
             menu.addAction(sync_action)
             sync_action.hovered.connect(lambda: self.show_tooltip(self.model.saved_ctx, user_name))
 
-        menu.aboutToHide.connect(lambda: setattr(self, '_current_tooltip_html', None))
         menu.popup(self.mapToGlobal(event.pos()))
 
     def update_table(self, states, new_ctx=None):

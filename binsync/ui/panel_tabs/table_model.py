@@ -268,9 +268,6 @@ class BinsyncTableView(QTableView):
 
         self.stretch_col = stretch_col
         self.col_count = col_count
-        
-        # Track current tooltip content to prevent unnecessary redraws
-        self._current_tooltip_html = None
 
     def _doubleclick_handler(self):
         """ Handler for double clicking on a row, jumps to the respective function. """
@@ -431,6 +428,6 @@ class BinsyncTableView(QTableView):
                 padding: 2px;
                 max-width: 600px;
                 font-family: monospace;
-            }
+            }g
             """)
             QToolTip.showText(QCursor.pos(), diff_html, self, QRect(), 60000)
