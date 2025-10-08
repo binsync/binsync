@@ -391,7 +391,6 @@ class BinsyncTableView(QTableView):
             if unique_vars:
                 vars_html = "<b>Variables:</b>"
                 for var in unique_vars:
-                    # Same color highlighting pattern as args
                     highlight = "eaffea" if var in target_vars else "ffecec"
                     color = "red" if var in master_vars else "green"
                     symbol = "-" if var in master_vars else "+"
