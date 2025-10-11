@@ -187,7 +187,7 @@ class BSController:
         self.progress_view_open = False
         self.do_safe_sync_all = do_safe_sync_all
         self.safe_synced_users = {}
-        self.sync_preview_enabled = False
+        self.precise_diff_preview = False
 
         if self.headless:
             self._init_headless_components()
@@ -1325,8 +1325,8 @@ class BSController:
         _l.info("Loaded configuration file: '%s'", self.config.save_location)
         self.table_coloring_window = config.table_coloring_window or self.table_coloring_window
         self.merge_level = config.merge_level or self.merge_level
-        if config.sync_preview_enabled is not None:
-            self.sync_preview_enabled = config.sync_preview_enabled
+        if config.precise_diff_preview is not None:
+            self.precise_diff_preview = config.precise_diff_preview
 
         if config.log_level == "debug":
             logging.getLogger("binsync").setLevel("DEBUG")
@@ -1438,8 +1438,13 @@ class BSController:
         state = self.get_state(user=user, priority=SchedSpeed.FAST)
         user = user or state.user
         
-        # Get the local function from the decompiler (current state in IDA)
-        master_func = self.deci.functions.get(func_addr)
+        # Get the master function based on the selected method
+        if self.precise_diff_preview:
+            master_func = self.deci.functions.get(func_addr)
+        else:
+            master_state = self.client.master_state
+            master_func = master_state.get_function(func_addr)
+        
         target_func = state.get_function(func_addr)
         
         # A lot of repetition so this is just a helper to get the relevant attributes 
@@ -1449,13 +1454,16 @@ class BSController:
         # Get the comments where each comment is a dictionary 
         get_comments = lambda state_obj: {addr: cmt.comment for addr, cmt in state_obj.get_func_comments(func_addr).items()}
         
-        # Get local comments from decompiler by iterating through comments in function range
-        master_comments = {}
-        if master_func:
-            func_size = getattr(master_func, 'size', 0x1000)
-            for addr, cmt in self.deci.comments.items():
-                if master_func.addr <= addr < (master_func.addr + func_size):
-                    master_comments[addr] = cmt.comment
+        # Get master comments based on the selected method
+        if self.precise_diff_preview:
+            master_comments = {}
+            if master_func:
+                func_size = getattr(master_func, 'size', 0x1000)
+                for addr, cmt in self.deci.comments.items():
+                    if master_func.addr <= addr < (master_func.addr + func_size):
+                        master_comments[addr] = cmt.comment
+        else:
+            master_comments = get_comments(self.client.master_state)
         
         target_comments = get_comments(state)
         

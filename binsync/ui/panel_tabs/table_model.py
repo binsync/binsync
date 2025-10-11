@@ -419,10 +419,6 @@ class BinsyncTableView(QTableView):
         and their comments.
         """
         
-        # Check if sync preview is enabled
-        if not self.controller.sync_preview_enabled:
-            return
-        
         try:
             diff_html = self.render_tooltip_text(func_addr, user_name)
         except Exception:
