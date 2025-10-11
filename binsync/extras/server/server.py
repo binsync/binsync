@@ -7,6 +7,8 @@ app = Flask(__name__)
 
 user_count_lock = Lock()
 user_count = 0
+users:dict[str:any] = {}
+
 @app.route('/connect')
 def handle_connection():
     global user_count
@@ -25,12 +27,17 @@ def handle_disconnection():
 
 @app.route("/function",methods=["POST"])
 def receive_function():
-    function_addr_received = request.form["address"]
-    if function_addr_received:
-        current_function_address = int(request.form["address"])
-        l.info("Some user is at the function at address %x",current_function_address)
-    else:
-        l.info("A user made a post to function but the function address was not valid")
+    global users
+    l.info(request.form)
+    if "username" in request.form: # Can't keep track of users if they are not associated with a username
+        username = request.form["username"]
+        user_info = {}
+        if "address" in request.form:
+            user_info["addr"] = int(request.form["address"])
+        if "function_address" in request.form:
+            user_info["func_addr"] = int(request.form["function_address"])
+        users[username] = user_info
+    l.info(users)
     return "OK"
 
 # main driver function

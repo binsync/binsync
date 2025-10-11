@@ -208,7 +208,7 @@ class QUtilPanel(QWidget):
     def _display_connect_to_server(self):
         # We are going to make it just connect to localhost for now without an actual display
         if not self.client_thread:
-            self.client_thread = ClientThread(self.controller.deci)
+            self.client_thread = ClientThread(self.controller)
             self.client_thread.start()
         else:
             l.info("You are already connected to a server!")
@@ -329,10 +329,10 @@ class QUtilPanel(QWidget):
 
 class ClientWorker(QObject):
     finished = Signal()
-    def __init__(self,deci):
+    def __init__(self,controller):
         super().__init__()
         self.connected = False
-        self.deci = deci
+        self.controller = controller
         
     def run(self):
         host = "[::1]" # TODO: make host configurable
@@ -344,9 +344,15 @@ class ClientWorker(QObject):
         l.info(requests.get(self.server_url+"/connect").text)
         self.connected = True
         while self.connected:
-            requests.post(self.server_url+"/function",data={
-                "address":self.deci.gui_active_context().func_addr
-            })
+            post_data = {}
+            current_context = self.controller.deci.gui_active_context()
+            if current_context.addr:
+                post_data["address"] = current_context.addr
+            if current_context.func_addr:
+                post_data["function_address"] = current_context.func_addr
+            if self.controller.client:
+                post_data["username"] = self.controller.client.master_user
+            requests.post(self.server_url+"/function",data=post_data)
             time.sleep(1)
         l.info(requests.get(self.server_url+"/disconnect").text)
         self.finished.emit()
@@ -357,9 +363,9 @@ class ClientWorker(QObject):
 
 
 class ClientThread(QThread):
-    def __init__(self,deci):
+    def __init__(self,controller):
         super().__init__()
-        self.worker = ClientWorker(deci)
+        self.worker = ClientWorker(controller)
 
     def run(self):
         self.worker.run()
