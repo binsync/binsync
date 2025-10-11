@@ -187,6 +187,7 @@ class BSController:
         self.progress_view_open = False
         self.do_safe_sync_all = do_safe_sync_all
         self.safe_synced_users = {}
+        self.sync_preview_enabled = False
 
         if self.headless:
             self._init_headless_components()
@@ -1324,6 +1325,8 @@ class BSController:
         _l.info("Loaded configuration file: '%s'", self.config.save_location)
         self.table_coloring_window = config.table_coloring_window or self.table_coloring_window
         self.merge_level = config.merge_level or self.merge_level
+        if config.sync_preview_enabled is not None:
+            self.sync_preview_enabled = config.sync_preview_enabled
 
         if config.log_level == "debug":
             logging.getLogger("binsync").setLevel("DEBUG")
