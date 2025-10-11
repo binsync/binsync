@@ -86,11 +86,17 @@ class QUtilPanel(QWidget):
         self._auto_fast_sync.setChecked(self.controller.do_safe_sync_all)
         self._auto_fast_sync.stateChanged.connect(self._handle_auto_fast_sync_toggle)
 
+        self._enable_sync_preview = QCheckBox("Enable Sync Preview")
+        self._enable_sync_preview.setToolTip("Shows a popup with sync differences when hovering over sync options.")
+        self._enable_sync_preview.setChecked(self.controller.sync_preview_enabled)
+        self._enable_sync_preview.stateChanged.connect(self._handle_sync_preview_toggle)
+
         sync_options_layout.addLayout(sync_level_layout)
         #sync_options_group.layout().addWidget(self._magic_sync_button)
         sync_options_group.layout().addWidget(self._force_push_button)
         sync_options_group.layout().addWidget(self._pull_segments_button)
         sync_options_group.layout().addWidget(self._auto_fast_sync)
+        sync_options_group.layout().addWidget(self._enable_sync_preview)
 
         #
         # Developer Options Group
@@ -240,6 +246,14 @@ class QUtilPanel(QWidget):
             l.info("Disabling auto fast sync!")
             self.controller.do_safe_sync_all = False
 
+    def _handle_sync_preview_toggle(self, state):
+        if state == Qt.Checked:
+            l.info("Enabling sync preview!")
+            self.controller.sync_preview_enabled = True
+        else:
+            l.info("Disabling sync preview!")
+            self.controller.sync_preview_enabled = False
+
     def _handle_table_coloring_change(self):
         try:
             val = int(self._table_coloring_window_lineedit.text())
@@ -259,6 +273,8 @@ class QUtilPanel(QWidget):
         self.controller.config.merge_level = self.controller.merge_level
 
         self.controller.config.table_coloring_window = self.controller.table_coloring_window
+        
+        self.controller.config.sync_preview_enabled = self.controller.sync_preview_enabled
 
         if self.controller.config.save() is None:
             l.info("Error saving configuration file, check that the path '%s' is valid.", self.controller.config.save_location)
