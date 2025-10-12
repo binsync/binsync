@@ -341,22 +341,28 @@ class ClientWorker(QObject):
         parsed = urllib.parse.urlparse(self.server_url)
         if parsed.netloc != f"{host}:{port}":
             l.error("HOST AND PORT COMBINATION IS NOT VALID: NETLOC %s BUT HOST %s AND PORT %s",parsed.netloc,parsed.host,parsed.port)
-        l.info(requests.get(self.server_url+"/connect").text)
-        self.connected = True
-        while self.connected:
-            post_data = {}
-            current_context = self.controller.deci.gui_active_context()
-            if current_context.addr:
-                post_data["address"] = current_context.addr
-            if current_context.func_addr:
-                post_data["function_address"] = current_context.func_addr
-            if self.controller.client:
-                post_data["username"] = self.controller.client.master_user
-            requests.post(self.server_url+"/function",data=post_data)
-            time.sleep(1)
-        l.info(requests.get(self.server_url+"/disconnect").text)
+        self.manage_connections()
         self.finished.emit()
 
+    def manage_connections(self):
+        sess = requests.Session()
+        try:
+            l.info(sess.get(self.server_url+"/connect").text)
+            self.connected = True
+            while self.connected:
+                post_data = {}
+                current_context = self.controller.deci.gui_active_context()
+                if current_context.addr:
+                    post_data["address"] = current_context.addr
+                if current_context.func_addr:
+                    post_data["function_address"] = current_context.func_addr
+                if self.controller.client:
+                    post_data["username"] = self.controller.client.master_user
+                sess.post(self.server_url+"/function",data=post_data)
+                time.sleep(1)
+            l.info(sess.get(self.server_url+"/disconnect").text)
+        except requests.ConnectionError:
+            l.info("Server seems to be unresponsive... (Click the disconnect button so that you can reconnect)")
 
     def stop(self):
         self.connected = False
