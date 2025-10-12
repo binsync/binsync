@@ -333,6 +333,7 @@ class ClientWorker(QObject):
         super().__init__()
         self.connected = False
         self.controller = controller
+        self.old_post_data = {}
         
     def run(self):
         host = "[::1]" # TODO: make host configurable
@@ -358,7 +359,9 @@ class ClientWorker(QObject):
                     post_data["function_address"] = current_context.func_addr
                 if self.controller.client:
                     post_data["username"] = self.controller.client.master_user
-                sess.post(self.server_url+"/function",data=post_data)
+                if post_data != self.old_post_data: # No need to do extra communication with server if no change
+                    sess.post(self.server_url+"/function",data=post_data)
+                    self.old_post_data = post_data
                 time.sleep(1)
             l.info(sess.get(self.server_url+"/disconnect").text)
         except requests.ConnectionError:

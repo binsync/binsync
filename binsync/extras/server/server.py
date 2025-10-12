@@ -28,10 +28,12 @@ def handle_disconnection():
 @app.route("/function",methods=["POST"])
 def receive_function():
     global users
-    l.info(request.form)
     if "username" in request.form: # Can't keep track of users if they are not associated with a username
         username = request.form["username"]
-        user_info = {}
+        user_info = {
+            "addr":None,
+            "func_addr":None
+        }
         if "address" in request.form:
             user_info["addr"] = int(request.form["address"])
         if "function_address" in request.form:
