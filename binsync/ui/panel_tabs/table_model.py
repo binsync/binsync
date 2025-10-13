@@ -353,24 +353,50 @@ class BinsyncTableView(QTableView):
             create_simple_diff("Type", differences['type']['master'], differences['type']['target'])
         ]))
 
-        # Args are a bit more tedious, first just go through master and targer and put together lists of relevant arg details
+        # Args are a bit more tedious, first just go through master and target and put together lists of relevant arg details
         if differences['args']['master'] != differences['args']['target']:
-            master_args = [f"{k} {arg.type} {arg.name}" if arg.type else f"{k} {arg.name}"
-                           for k, arg in differences['args']['master'].items()]
-            target_args = [f"{k} {arg.type} {arg.name}" if arg.type else f"{k} {arg.name}"
-                           for k, arg in differences['args']['target'].items()]
+            master_args_dict = {k: f"{k} {arg.type} {arg.name}" if arg.type else f"{k} {arg.name}"
+                           for k, arg in differences['args']['master'].items()}
+            target_args_dict = {k: f"{k} {arg.type} {arg.name}" if arg.type else f"{k} {arg.name}"
+                           for k, arg in differences['args']['target'].items()}
 
-            # Only show the args that differ between master and target
-            unique_args = set(master_args) ^ set(target_args)
-            if unique_args:
+            # Find all positions that have changes
+            all_positions = set(master_args_dict.keys()) | set(target_args_dict.keys())
+            changed_positions = {pos for pos in all_positions 
+                               if master_args_dict.get(pos) != target_args_dict.get(pos)}
+            
+            if changed_positions:
                 args_html = "<b>Args:</b>"
-                for arg in unique_args:
-                    # Just another approach for handling the different color appearances for master and target
-                    highlight = "eaffea" if arg in target_args else "ffecec"
-                    color = "red" if arg in master_args else "green"
-                    symbol = "-" if arg in master_args else "+"
-                    args_html += f"<br><span style='color:{color}; background-color:#{highlight};'>{symbol} {arg}</span>"
+                for pos in sorted(changed_positions):
+                    if pos in master_args_dict:
+                        args_html += f"<br><span style='color:red; background-color:#ffecec;'>- {master_args_dict[pos]}</span>"
+                    if pos in target_args_dict:
+                        args_html += f"<br><span style='color:green; background-color:#eaffea;'>+ {target_args_dict[pos]}</span>"
                 diff_sections.append(args_html + "<hr>")
+
+        # For stack variables, show differences in stack variable names and types (if they exist)
+        if 'stack_vars' in differences:
+            master_vars_dict = differences['stack_vars']['master']
+            target_vars_dict = differences['stack_vars']['target']
+            
+            master_vars_formatted = {offset: f"{hex(offset)} {var.type} {var.name}" if var.type else f"{hex(offset)} {var.name}"
+                           for offset, var in master_vars_dict.items()}
+            target_vars_formatted = {offset: f"{hex(offset)} {var.type} {var.name}" if var.type else f"{hex(offset)} {var.name}"
+                           for offset, var in target_vars_dict.items()}
+
+            # Find all offsets that have changes
+            all_offsets = set(master_vars_formatted.keys()) | set(target_vars_formatted.keys())
+            changed_offsets = {offset for offset in all_offsets 
+                             if master_vars_formatted.get(offset) != target_vars_formatted.get(offset)}
+            
+            if changed_offsets:
+                vars_html = "<b>Variables:</b>"
+                for offset in sorted(changed_offsets):
+                    if offset in master_vars_formatted:
+                        vars_html += f"<br><span style='color:red; background-color:#ffecec;'>- {master_vars_formatted[offset]}</span>"
+                    if offset in target_vars_formatted:
+                        vars_html += f"<br><span style='color:green; background-color:#eaffea;'>+ {target_vars_formatted[offset]}</span>"
+                diff_sections.append(vars_html + "<hr>")
 
         # For comments, just show comments in target that are not also in master (this differs from what args are shown)
         target_comments = differences['comments']['target'].items()
@@ -392,7 +418,7 @@ class BinsyncTableView(QTableView):
         Call preview_function_changes and parse the dictionary for any differences. Note this just applies to functions
         and their comments.
         """
-
+        
         try:
             diff_html = self.render_tooltip_text(func_addr, user_name)
         except Exception:
