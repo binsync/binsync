@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, request
 from threading import Lock
 import logging
 
@@ -7,6 +7,8 @@ app = Flask(__name__)
 
 user_count_lock = Lock()
 user_count = 0
+users:dict[str:any] = {}
+
 @app.route('/connect')
 def handle_connection():
     global user_count
@@ -22,6 +24,23 @@ def handle_disconnection():
         user_count -= 1
         print(user_count)
     return 'You have disconnected!'
+
+@app.route("/function",methods=["POST"])
+def receive_function():
+    global users
+    if "username" in request.form: # Can't keep track of users if they are not associated with a username
+        username = request.form["username"]
+        user_info = {
+            "addr":None,
+            "func_addr":None
+        }
+        if "address" in request.form:
+            user_info["addr"] = int(request.form["address"])
+        if "function_address" in request.form:
+            user_info["func_addr"] = int(request.form["function_address"])
+        users[username] = user_info
+    l.info(users)
+    return "OK"
 
 # main driver function
 def start_server(port=7962):

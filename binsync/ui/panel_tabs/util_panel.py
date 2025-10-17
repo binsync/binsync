@@ -20,6 +20,9 @@ from libbs.ui.qt_objects import (
     QObject,
     Signal
 )
+from libbs.artifacts import (
+    Context
+)
 from binsync.ui.magic_sync_dialog import MagicSyncDialog
 from binsync.ui.force_push import ForcePushUI
 from binsync.ui.utils import no_concurrent_call
@@ -200,19 +203,19 @@ class QUtilPanel(QWidget):
         disconnect_from_server_btn = QPushButton("Disconnect from Server...")
         disconnect_from_server_btn.clicked.connect(self._disconnect_from_server)
         extras_layout.addWidget(disconnect_from_server_btn)
-        
+
         extras_group.setLayout(extras_layout)
-        
+
         return extras_group
 
     def _display_connect_to_server(self):
         # We are going to make it just connect to localhost for now without an actual display
         if not self.client_thread:
-            self.client_thread = ClientThread()
+            self.client_thread = ClientThread(self.controller)
             self.client_thread.start()
         else:
             l.info("You are already connected to a server!")
-        
+
     def _disconnect_from_server(self):
         if self.client_thread:
             self.client_thread.stop()
@@ -329,9 +332,11 @@ class QUtilPanel(QWidget):
 
 class ClientWorker(QObject):
     finished = Signal()
-    def __init__(self):
+    def __init__(self,controller):
         super().__init__()
         self.connected = False
+        self.controller = controller
+        self.old_post_data = {}
         
     def run(self):
         host = "[::1]" # TODO: make host configurable
@@ -340,26 +345,64 @@ class ClientWorker(QObject):
         parsed = urllib.parse.urlparse(self.server_url)
         if parsed.netloc != f"{host}:{port}":
             l.error("HOST AND PORT COMBINATION IS NOT VALID: NETLOC %s BUT HOST %s AND PORT %s",parsed.netloc,parsed.host,parsed.port)
-        l.info(requests.get(self.server_url+"/connect").text)
-        self.connected = True
-        while self.connected:
-            time.sleep(1)
-        l.info(requests.get(self.server_url+"/disconnect").text)
+        self.manage_connections()
         self.finished.emit()
-        
-        
+
+    def manage_connections(self):
+        self.sess = requests.Session()
+        try:
+            l.info(self.sess.get(self.server_url+"/connect").text)
+            self.connected = True
+            self.controller.deci.artifact_change_callbacks[Context].append(self.submit_new_context)
+            while self.connected:
+                time.sleep(1)
+            l.info(self.sess.get(self.server_url+"/disconnect").text)
+        except requests.ConnectionError:
+            l.info("Server seems to be unresponsive... (Click the disconnect button so that you can reconnect)")
+        finally:
+            pass # TODO: DEREGISTER CALLBACK HERE
+    
+    def submit_new_context(self,context,**_):
+        post_data = {}
+        if context.addr:
+            post_data["address"] = context.addr
+        if context.func_addr:
+            post_data["function_address"] = context.func_addr
+        if self.controller.client:
+            post_data["username"] = self.controller.client.master_user
+        if post_data != self.old_post_data: # No need to do extra communication with server if no change
+            try:
+                self.sess.post(self.server_url+"/function",data=post_data)
+                self.old_post_data = post_data
+            except requests.ConnectionError:
+                self.connected = False
+            
+    
+    # def submit_new_context(self):
+    #     post_data = {}
+    #     current_context = self.controller.deci.gui_active_context()
+    #     if current_context.addr:
+    #         post_data["address"] = current_context.addr
+    #     if current_context.func_addr:
+    #         post_data["function_address"] = current_context.func_addr
+    #     if self.controller.client:
+    #         post_data["username"] = self.controller.client.master_user
+    #     if post_data != self.old_post_data: # No need to do extra communication with server if no change
+    #         sess.post(self.server_url+"/function",data=post_data)
+    #         self.old_post_data = post_data
+
     def stop(self):
         self.connected = False
-        
-        
+
+
 class ClientThread(QThread):
-    def __init__(self):
+    def __init__(self,controller):
         super().__init__()
-        self.worker = ClientWorker()
+        self.worker = ClientWorker(controller)
 
     def run(self):
         self.worker.run()
-        
-        
+
+
     def stop(self):
         self.worker.stop()
