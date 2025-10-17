@@ -20,6 +20,9 @@ from libbs.ui.qt_objects import (
     QObject,
     Signal
 )
+from libbs.artifacts import (
+    Context
+)
 from binsync.ui.magic_sync_dialog import MagicSyncDialog
 from binsync.ui.force_push import ForcePushUI
 from binsync.ui.utils import no_concurrent_call
@@ -346,26 +349,47 @@ class ClientWorker(QObject):
         self.finished.emit()
 
     def manage_connections(self):
-        sess = requests.Session()
+        self.sess = requests.Session()
         try:
-            l.info(sess.get(self.server_url+"/connect").text)
+            l.info(self.sess.get(self.server_url+"/connect").text)
             self.connected = True
+            self.controller.deci.artifact_change_callbacks[Context].append(self.submit_new_context)
             while self.connected:
-                post_data = {}
-                current_context = self.controller.deci.gui_active_context()
-                if current_context.addr:
-                    post_data["address"] = current_context.addr
-                if current_context.func_addr:
-                    post_data["function_address"] = current_context.func_addr
-                if self.controller.client:
-                    post_data["username"] = self.controller.client.master_user
-                if post_data != self.old_post_data: # No need to do extra communication with server if no change
-                    sess.post(self.server_url+"/function",data=post_data)
-                    self.old_post_data = post_data
                 time.sleep(1)
-            l.info(sess.get(self.server_url+"/disconnect").text)
+            l.info(self.sess.get(self.server_url+"/disconnect").text)
         except requests.ConnectionError:
             l.info("Server seems to be unresponsive... (Click the disconnect button so that you can reconnect)")
+        finally:
+            pass # TODO: DEREGISTER CALLBACK HERE
+    
+    def submit_new_context(self,context,**_):
+        post_data = {}
+        if context.addr:
+            post_data["address"] = context.addr
+        if context.func_addr:
+            post_data["function_address"] = context.func_addr
+        if self.controller.client:
+            post_data["username"] = self.controller.client.master_user
+        if post_data != self.old_post_data: # No need to do extra communication with server if no change
+            try:
+                self.sess.post(self.server_url+"/function",data=post_data)
+                self.old_post_data = post_data
+            except requests.ConnectionError:
+                self.connected = False
+            
+    
+    # def submit_new_context(self):
+    #     post_data = {}
+    #     current_context = self.controller.deci.gui_active_context()
+    #     if current_context.addr:
+    #         post_data["address"] = current_context.addr
+    #     if current_context.func_addr:
+    #         post_data["function_address"] = current_context.func_addr
+    #     if self.controller.client:
+    #         post_data["username"] = self.controller.client.master_user
+    #     if post_data != self.old_post_data: # No need to do extra communication with server if no change
+    #         sess.post(self.server_url+"/function",data=post_data)
+    #         self.old_post_data = post_data
 
     def stop(self):
         self.connected = False
