@@ -353,6 +353,7 @@ class ClientWorker(QObject):
         try:
             l.info(self.sess.get(self.server_url+"/connect").text)
             self.connected = True
+            # Register callback to broadcast function context
             self.controller.deci.artifact_change_callbacks[Context].append(self.submit_new_context)
             while self.connected:
                 time.sleep(1)
@@ -360,7 +361,8 @@ class ClientWorker(QObject):
         except requests.ConnectionError:
             l.info("Server seems to be unresponsive... (Click the disconnect button so that you can reconnect)")
         finally:
-            pass # TODO: DEREGISTER CALLBACK HERE
+            # De-register callback to broadcast function context
+            self.controller.deci.artifact_change_callbacks[Context].remove(self.submit_new_context)
     
     def submit_new_context(self,context,**_):
         post_data = {}
