@@ -1458,7 +1458,7 @@ class BSController:
         if self.precise_diff_preview:
             master_comments = {}
             if master_func:
-                func_size = getattr(master_func, 'size', 0x1000)
+                func_size = master_func.size if hasattr(master_func, 'size') else 0x1000
                 for addr, cmt in self.deci.comments.items():
                     if master_func.addr <= addr < (master_func.addr + func_size):
                         master_comments[addr] = cmt.comment
