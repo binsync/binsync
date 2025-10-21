@@ -1,49 +1,48 @@
 from flask import Flask, request
 from threading import Lock
 import logging
-
+from binsync.extras.server.store import ServerStore
 l = logging.getLogger(__name__)
-app = Flask(__name__)
+    
+class Server:
+    def __init__(self,host,port,store:ServerStore):
+        self.host = host
+        self.port = port
+        self.store = store
+        self.app = self._create_app()
+    
+    def _create_app(self):
+        app = Flask(__name__)
+        store = self.store
+        @app.route('/connect')
+        def handle_connection():
+            store.incrementUser()
+            return 'You are connected!'
 
-user_count_lock = Lock()
-user_count = 0
-users:dict[str:any] = {}
+        @app.route("/disconnect")
+        def handle_disconnection():
+            store.decrementUser()
+            return 'You have disconnected!'
 
-@app.route('/connect')
-def handle_connection():
-    global user_count
-    with user_count_lock:
-        user_count += 1
-        print(user_count)
-    return 'You are connected!'
+        @app.route("/function",methods=["POST"])
+        def receive_function():
+            if "username" in request.form: # Can't keep track of users if they are not associated with a username
+                username = request.form["username"]
+                user_info = {
+                    "addr":None,
+                    "func_addr":None
+                }
+                if "address" in request.form:
+                    user_info["addr"] = int(request.form["address"])
+                if "function_address" in request.form:
+                    user_info["func_addr"] = int(request.form["function_address"])
+                store.setUserData(username,user_info)
+            l.info(store.getUserData())
+            return "OK"
+        
+        return app
 
-@app.route("/disconnect")
-def handle_disconnection():
-    global user_count
-    with user_count_lock:
-        user_count -= 1
-        print(user_count)
-    return 'You have disconnected!'
+    def run(self):
+        self.app.run(self.host,self.port)
 
-@app.route("/function",methods=["POST"])
-def receive_function():
-    global users
-    if "username" in request.form: # Can't keep track of users if they are not associated with a username
-        username = request.form["username"]
-        user_info = {
-            "addr":None,
-            "func_addr":None
-        }
-        if "address" in request.form:
-            user_info["addr"] = int(request.form["address"])
-        if "function_address" in request.form:
-            user_info["func_addr"] = int(request.form["function_address"])
-        users[username] = user_info
-    l.info(users)
-    return "OK"
-
-# main driver function
-def start_server(port=7962):
-    l.info("starting server!")
-    app.run("::",port)
-    l.info("stopping server!")
+    
