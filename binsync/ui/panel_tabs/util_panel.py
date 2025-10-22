@@ -333,11 +333,8 @@ class QUtilPanel(QWidget):
         else:
             self.controller.auto_pull_enabled = True
 
-class ClientWorker(QObject):
-    finished = Signal()
+class ServerClient():
     def __init__(self,controller):
-        super().__init__()
-        self.connected = False
         self.controller = controller
         self.old_post_data = {}
         
@@ -349,7 +346,6 @@ class ClientWorker(QObject):
         if parsed.netloc != f"{host}:{port}":
             l.error("HOST AND PORT COMBINATION IS NOT VALID: NETLOC %s BUT HOST %s AND PORT %s",parsed.netloc,parsed.host,parsed.port)
         self.manage_connections()
-        self.finished.emit()
 
     def manage_connections(self):
         self.sess = requests.Session()
@@ -384,3 +380,17 @@ class ClientWorker(QObject):
 
     def stop(self):
         self.connected = False
+
+
+class ClientWorker(QObject):
+    finished = Signal()
+    def __init__(self,controller):
+        super().__init__()
+        self.server_client = ServerClient(controller)
+        
+    def run(self):
+        self.server_client.run()
+        self.finished.emit()
+        
+    def stop(self):
+        self.server_client.stop()
