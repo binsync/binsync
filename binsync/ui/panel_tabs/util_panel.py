@@ -209,16 +209,19 @@ class QUtilPanel(QWidget):
         return extras_group
 
     def _display_connect_to_server(self):
-        # We are going to make it just connect to localhost for now without an actual display
         if not self.client_thread:
-            self.client_thread = ClientThread(self.controller)
+            self.client_thread = QThread()
+            self.client_worker = ClientWorker(self.controller)
+            self.client_worker.moveToThread(self.client_thread)
+            self.client_thread.started.connect(self.client_worker.run)
+            self.client_worker.finished.connect(self.client_thread.quit)
             self.client_thread.start()
         else:
             l.info("You are already connected to a server!")
 
     def _disconnect_from_server(self):
         if self.client_thread:
-            self.client_thread.stop()
+            self.client_worker.stop()
             self.client_thread.quit()
             self.client_thread.wait() # Issue - will block on thread cleanup
             self.client_thread = None
@@ -378,33 +381,6 @@ class ClientWorker(QObject):
                 self.old_post_data = post_data
             except requests.ConnectionError:
                 self.connected = False
-            
-    
-    # def submit_new_context(self):
-    #     post_data = {}
-    #     current_context = self.controller.deci.gui_active_context()
-    #     if current_context.addr:
-    #         post_data["address"] = current_context.addr
-    #     if current_context.func_addr:
-    #         post_data["function_address"] = current_context.func_addr
-    #     if self.controller.client:
-    #         post_data["username"] = self.controller.client.master_user
-    #     if post_data != self.old_post_data: # No need to do extra communication with server if no change
-    #         sess.post(self.server_url+"/function",data=post_data)
-    #         self.old_post_data = post_data
 
     def stop(self):
         self.connected = False
-
-
-class ClientThread(QThread):
-    def __init__(self,controller):
-        super().__init__()
-        self.worker = ClientWorker(controller)
-
-    def run(self):
-        self.worker.run()
-
-
-    def stop(self):
-        self.worker.stop()
