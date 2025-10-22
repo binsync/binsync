@@ -352,6 +352,8 @@ class ServerClient():
         try:
             l.info(self.sess.get(self.server_url+"/connect").text)
             self.connected = True
+            # Broadcast the starting context upon connection with server
+            self.submit_new_context(self.controller.deci.gui_active_context())
             # Register callback to broadcast function context
             self.controller.deci.artifact_change_callbacks[Context].append(self.submit_new_context)
             while self.connected:
