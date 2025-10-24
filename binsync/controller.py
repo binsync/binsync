@@ -196,6 +196,8 @@ class BSController:
         pass
 
     def shutdown(self):
+        if self.client and self.client.cache:
+            self.client.cache.clear_diffs()
         self.stop_worker_routines()
         self.deci.shutdown()
 
@@ -1435,6 +1437,15 @@ class BSController:
         on name, type, args, and comments for master and target functions which can then be parsed to see 
         how they differ. 
         """
+        # Check cache first
+        if self.client and self.client.cache:
+            cached_diff = self.client.cache.get_diff(func_addr, user)
+            if cached_diff is not None:
+                _l.info(f"[CACHE HIT] Retrieved diff from cache for func_addr={hex(func_addr) if func_addr else None}, user={user}")
+                return cached_diff
+
+        # Compute diff normally if no cache exists
+        _l.info(f"[CACHE MISS] Computing diff for func_addr={hex(func_addr) if func_addr else None}, user={user}")
         state = self.get_state(user=user, priority=SchedSpeed.FAST)
         user = user or state.user
         
@@ -1490,6 +1501,10 @@ class BSController:
                 'target': target_comments
             }
         }
+
+        # Cache the diff
+        if self.client and self.client.cache:
+            self.client.cache.set_diff(func_addr, user, diffs)
 
         return diffs
             
