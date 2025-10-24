@@ -1441,11 +1441,9 @@ class BSController:
         if self.client and self.client.cache:
             cached_diff = self.client.cache.get_diff(func_addr, user)
             if cached_diff is not None:
-                _l.info(f"[CACHE HIT] Retrieved diff from cache for func_addr={hex(func_addr) if func_addr else None}, user={user}")
                 return cached_diff
 
         # Compute diff normally if no cache exists
-        _l.info(f"[CACHE MISS] Computing diff for func_addr={hex(func_addr) if func_addr else None}, user={user}")
         state = self.get_state(user=user, priority=SchedSpeed.FAST)
         user = user or state.user
         
