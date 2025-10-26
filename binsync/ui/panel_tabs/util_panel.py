@@ -373,6 +373,8 @@ class ServerClient():
             # Register callback to broadcast function context
             self.controller.deci.artifact_change_callbacks[Context].append(self.submit_new_context)
             while self.connected:
+                users_data = self.sess.get(self.server_url+"/status").json()
+                l.info(users_data)
                 time.sleep(1)
             l.info(self.sess.get(self.server_url+"/disconnect").text)
         except requests.ConnectionError:

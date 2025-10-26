@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from threading import Lock
 import logging
 from binsync.extras.server.store import ServerStore
@@ -38,6 +38,11 @@ class Server:
         l.info(self.store.getUserData())
         return "OK"
     
+        @app.route("/status",methods=["GET"])
+        def return_user_data():
+            return jsonify(store.getUserData())
+        
+        return app
 
     def run(self):
         self.app.run(self.host,self.port)
