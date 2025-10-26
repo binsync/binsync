@@ -20,4 +20,6 @@ class ServerStore:
             self._user_map[username] = newData
             
     def getUserData(self):
-        return deepcopy(self._user_map)
+        with self._user_map_lock:
+            map_copy = deepcopy(self._user_map)
+        return map_copy
