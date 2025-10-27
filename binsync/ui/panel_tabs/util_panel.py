@@ -33,6 +33,7 @@ l = logging.getLogger(__name__)
 
 
 class QUtilPanel(QWidget):
+    display_clients = Signal()
     def __init__(self, controller: BSController, parent=None):
         super().__init__(parent)
         self.controller = controller
@@ -222,6 +223,7 @@ class QUtilPanel(QWidget):
             self.client_thread.started.connect(self.client_worker.run)
             self.client_worker.finished.connect(self.client_thread.quit)
             self.client_thread.start()
+            self.display_clients.emit()
         else:
             l.info("You are already connected to a server!")
 

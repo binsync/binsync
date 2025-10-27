@@ -167,6 +167,7 @@ class ActivityTableView(BinsyncTableView):
                     lambda chk, func=func_addr_str: self.controller.fill_artifact(func_addr, artifact_type=Function, user=user_name))
 
         menu.popup(self.mapToGlobal(event.pos()))
+        
 
 
 class QActivityTable(QWidget):
@@ -188,6 +189,9 @@ class QActivityTable(QWidget):
 
     def update_table(self, states):
         self.table.update_table(states)
-
+        
+    def add_live_addresses(self):
+        l.info("Add live addresses received")
+        
     def reload(self):
         pass
