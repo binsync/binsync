@@ -21,6 +21,8 @@ l = logging.getLogger(__name__)
 
 
 class ActivityTableModel(BinsyncTableModel):
+    USERNAME_COL = 0
+    ACTIVITY_COL = 2
     def __init__(self, controller: BSController, col_headers=None, filter_cols=None, time_col=None,
                  addr_col=None, parent=None):
         super().__init__(controller, col_headers, filter_cols, time_col, addr_col, parent)
@@ -35,12 +37,15 @@ class ActivityTableModel(BinsyncTableModel):
         col = index.column()
         row = index.row()
         if role == Qt.DisplayRole:
-            if col == 0:
+            if col == ActivityTableModel.USERNAME_COL:
                 return self.row_data[row][col]
-            elif col == 1:
+            elif col == self.addr_col:
+                data = self.row_data[row][col]
+                return hex(self.row_data[row][col]) if data != -1 else "ERROR - NOT CONNECTED TO SERVER?"
+            elif col == ActivityTableModel.ACTIVITY_COL:
                 data = self.row_data[row][col]
                 return hex(self.row_data[row][col]) if data != -1 else ""
-            elif col == 2:
+            elif col == self.time_col:
                 return friendly_datetime(self.row_data[row][col])
         elif role == self.SortRole:
             if col == self.time_col and isinstance(self.row_data[row][col], datetime.datetime):
@@ -49,7 +54,7 @@ class ActivityTableModel(BinsyncTableModel):
         elif role == Qt.BackgroundRole:
             return self.data_bgcolors[row]
         elif role == self.FilterRole:
-            return f"{self.row_data[row][0]} {hex(self.row_data[row][1])}"
+            return f"{self.row_data[row][ActivityTableModel.USERNAME_COL]} {hex(self.row_data[row][ActivityTableModel.ACTIVITY_COL])}"
         elif role == Qt.ToolTipRole:
             #return self.data_tooltips[row]
             pass
@@ -87,7 +92,7 @@ class ActivityTableModel(BinsyncTableModel):
                 most_recent_func = -1
                 last_state_change = state.last_push_time
 
-            self.data_dict[user_name] = [user_name, most_recent_func, last_state_change]
+            self.data_dict[user_name] = [user_name, 0x0, most_recent_func, last_state_change]
             updated_row_keys.add(user_name)
 
         self.context_menu_cache = cmenu_cache
@@ -95,13 +100,13 @@ class ActivityTableModel(BinsyncTableModel):
         self.refresh_time_cells()
 
 class ActivityTableView(BinsyncTableView):
-    HEADER = ['User', 'Activity', 'Last Push']
+    HEADER = ['User', 'Current', 'Activity', 'Last Push']
 
     def __init__(self, controller: BSController, filteredit: BinsyncTableFilterLineEdit=None, stretch_col=None,
                  col_count=None, parent=None):
         super().__init__(controller, filteredit, stretch_col, col_count, parent)
 
-        self.model = ActivityTableModel(controller, self.HEADER, filter_cols=[0, 1], time_col=2,
+        self.model = ActivityTableModel(controller, self.HEADER, filter_cols=[ActivityTableModel.USERNAME_COL, ActivityTableModel.ACTIVITY_COL], time_col=3, addr_col=1,
                                         parent=parent)
         self.proxymodel.setSourceModel(self.model)
         self.setModel(self.proxymodel)
@@ -152,8 +157,8 @@ class ActivityTableView(BinsyncTableView):
             col_hide_menu.addAction(act)
 
         if valid_row:
-            func_addr = self.model.row_data[idx.row()][1]
-            user_name = self.model.row_data[idx.row()][0]
+            func_addr = self.model.row_data[idx.row()][ActivityTableModel.ACTIVITY_COL]
+            user_name = self.model.row_data[idx.row()][ActivityTableModel.USERNAME_COL]
 
             menu.addSeparator()
             if isinstance(func_addr, int) and func_addr > 0:
@@ -179,7 +184,7 @@ class QActivityTable(QWidget):
         self._init_widgets()
 
     def _init_widgets(self):
-        self.table = ActivityTableView(self.controller, filteredit=None, stretch_col=1, col_count=3)
+        self.table = ActivityTableView(self.controller, filteredit=None, stretch_col=2, col_count=4)
         layout = QVBoxLayout()
         layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)
