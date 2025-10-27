@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from threading import Lock
 import logging
 from binsync.extras.server.store import ServerStore
@@ -40,7 +40,18 @@ class Server:
     
         @app.route("/status",methods=["GET"])
         def return_user_data():
-            return jsonify(store.getUserData())
+            if "If-None-Match" in request.headers:
+                etag = request.headers['If-None-Match']
+                if not (etag.startswith('"') and etag.endswith('"')):
+                    return Response("Bad ETag",400)
+                user_data = store.getUserDataCountNotMatch(int(etag[1:-1]))
+                if user_data == None: # User data unchanged
+                    return Response(status=304)
+            else:
+                user_data = store.getUserData()
+            resp = jsonify(user_data[0])
+            resp.set_etag(str(user_data[1]))
+            return resp
         
         return app
 

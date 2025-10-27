@@ -358,32 +358,47 @@ class ServerClient():
         host = "[::1]" # TODO: make host configurable
         port = 7962 # TODO: make port configurable
         self.server_url = f"http://{host}:{port}"
+        self._etag = None
         parsed = urllib.parse.urlparse(self.server_url)
         if parsed.netloc != f"{host}:{port}":
             l.error("HOST AND PORT COMBINATION IS NOT VALID: NETLOC %s BUT HOST %s AND PORT %s",parsed.netloc,parsed.host,parsed.port)
-        self.manage_connections()
+        self._manage_connections()
 
-    def manage_connections(self):
+    def _manage_connections(self):
         self.sess = requests.Session()
         try:
             l.info(self.sess.get(self.server_url+"/connect").text)
             self.connected = True
             # Broadcast the starting context upon connection with server
-            self.submit_new_context(self.controller.deci.gui_active_context())
+            self._submit_new_context(self.controller.deci.gui_active_context())
             # Register callback to broadcast function context
-            self.controller.deci.artifact_change_callbacks[Context].append(self.submit_new_context)
+            self.controller.deci.artifact_change_callbacks[Context].append(self._submit_new_context)
             while self.connected:
-                users_data = self.sess.get(self.server_url+"/status").json()
-                l.info(users_data)
+                self._poll_users_data()
                 time.sleep(1)
             l.info(self.sess.get(self.server_url+"/disconnect").text)
         except requests.ConnectionError:
             l.info("Server seems to be unresponsive... (Click the disconnect button so that you can reconnect)")
         finally:
             # De-register callback to broadcast function context
-            self.controller.deci.artifact_change_callbacks[Context].remove(self.submit_new_context)
+            self.controller.deci.artifact_change_callbacks[Context].remove(self._submit_new_context)
     
-    def submit_new_context(self,context,**_):
+    def _poll_users_data(self):
+        if self._etag == None:
+            r = self.sess.get(self.server_url+"/status")
+            self.users_data = r.json()
+            self._etag = r.headers["ETag"]
+            l.info(self.users_data)
+        else:
+            r = self.sess.get(self.server_url+"/status",headers={
+                "If-None-Match":str(self._etag)
+            })
+            if r.status_code != 304:
+                self.users_data = r.json()
+                self._etag = r.headers["ETag"]
+                l.info(self.users_data)
+    
+    def _submit_new_context(self,context,**_):
         post_data = {}
         if context.addr:
             post_data["address"] = context.addr
