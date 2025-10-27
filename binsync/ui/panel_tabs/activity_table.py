@@ -22,6 +22,7 @@ l = logging.getLogger(__name__)
 
 class ActivityTableModel(BinsyncTableModel):
     USERNAME_COL = 0
+    CURR_ADDR_COL = 1
     ACTIVITY_COL = 2
     def __init__(self, controller: BSController, col_headers=None, filter_cols=None, time_col=None,
                  addr_col=None, parent=None):
@@ -39,7 +40,7 @@ class ActivityTableModel(BinsyncTableModel):
         if role == Qt.DisplayRole:
             if col == ActivityTableModel.USERNAME_COL:
                 return self.row_data[row][col]
-            elif col == self.addr_col:
+            elif col == ActivityTableModel.CURR_ADDR_COL:
                 data = self.row_data[row][col]
                 return hex(self.row_data[row][col]) if data != -1 else "ERROR - NOT CONNECTED TO SERVER?"
             elif col == ActivityTableModel.ACTIVITY_COL:
@@ -106,13 +107,14 @@ class ActivityTableView(BinsyncTableView):
                  col_count=None, parent=None):
         super().__init__(controller, filteredit, stretch_col, col_count, parent)
 
-        self.model = ActivityTableModel(controller, self.HEADER, filter_cols=[ActivityTableModel.USERNAME_COL, ActivityTableModel.ACTIVITY_COL], time_col=3, addr_col=1,
+        self.model = ActivityTableModel(controller, self.HEADER, filter_cols=[ActivityTableModel.USERNAME_COL, ActivityTableModel.ACTIVITY_COL], time_col=3, addr_col=ActivityTableModel.CURR_ADDR_COL,
                                         parent=parent)
         self.proxymodel.setSourceModel(self.model)
         self.setModel(self.proxymodel)
 
         # always init settings *after* loading the model
         self._init_settings()
+        self.manage_address_visibility(False) # Initially hide the current addresses column as it only becomes relevant upon connection to the server
 
     def _get_valid_funcs_for_user(self, username):
         if username in self.model.context_menu_cache:
@@ -173,6 +175,16 @@ class ActivityTableView(BinsyncTableView):
 
         menu.popup(self.mapToGlobal(event.pos()))
         
+    def manage_address_visibility(self,show):
+        """
+        If show = true, displays user current address column
+        Otherwise, hides user current address column
+        """
+        self.column_visibility[ActivityTableModel.CURR_ADDR_COL] = show
+        if show:
+            self.showColumn(ActivityTableModel.CURR_ADDR_COL)
+        else:
+            self.hideColumn(ActivityTableModel.CURR_ADDR_COL)
 
 
 class QActivityTable(QWidget):
@@ -195,8 +207,8 @@ class QActivityTable(QWidget):
     def update_table(self, states):
         self.table.update_table(states)
         
-    def add_live_addresses(self):
-        l.info("Add live addresses received")
+    def add_live_addresses(self,show):
+        self.table.manage_address_visibility(show)
         
     def reload(self):
         pass

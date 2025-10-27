@@ -33,7 +33,7 @@ l = logging.getLogger(__name__)
 
 
 class QUtilPanel(QWidget):
-    display_clients = Signal()
+    display_clients = Signal(bool)
     def __init__(self, controller: BSController, parent=None):
         super().__init__(parent)
         self.controller = controller
@@ -223,7 +223,7 @@ class QUtilPanel(QWidget):
             self.client_thread.started.connect(self.client_worker.run)
             self.client_worker.finished.connect(self.client_thread.quit)
             self.client_thread.start()
-            self.display_clients.emit()
+            self.display_clients.emit(True) # Signal the activity table that it's time to display the current addresses column
         else:
             l.info("You are already connected to a server!")
 
@@ -233,6 +233,7 @@ class QUtilPanel(QWidget):
             self.client_thread.quit()
             self.client_thread.wait() # Issue - will block on thread cleanup
             self.client_thread = None
+            self.display_clients.emit(False) # Signal the activity table that it's time to hide the current addresses column
         else:
             l.info("You are not currently connected to a server!")
 
