@@ -24,6 +24,8 @@ class ActivityTableModel(BinsyncTableModel):
     USERNAME_COL = 0
     CURR_ADDR_COL = 1
     ACTIVITY_COL = 2
+    USER_OFFLINE = -2
+    INVALID_ADDRESS = -1
     def __init__(self, controller: BSController, col_headers=None, filter_cols=None, time_col=None,
                  addr_col=None, parent=None):
         super().__init__(controller, col_headers, filter_cols, time_col, addr_col, parent)
@@ -42,10 +44,17 @@ class ActivityTableModel(BinsyncTableModel):
                 return self.row_data[row][col]
             elif col == ActivityTableModel.CURR_ADDR_COL:
                 data = self.row_data[row][col]
-                return hex(self.row_data[row][col]) if data != -1 else "ERROR - NOT CONNECTED TO SERVER?"
+                if not isinstance(data,int):
+                    return "ERROR - NOT CONNECTED TO SERVER?"
+                elif data == ActivityTableModel.USER_OFFLINE:
+                    return "Offline"
+                elif data == ActivityTableModel.INVALID_ADDRESS:
+                    return "Invalid Address"
+                else:
+                    return hex(data)
             elif col == ActivityTableModel.ACTIVITY_COL:
                 data = self.row_data[row][col]
-                return hex(self.row_data[row][col]) if data != -1 else ""
+                return hex(data) if (isinstance(data,int) and data != -1) else ""
             elif col == self.time_col:
                 return friendly_datetime(self.row_data[row][col])
         elif role == self.SortRole:
@@ -92,11 +101,44 @@ class ActivityTableModel(BinsyncTableModel):
             else:
                 most_recent_func = -1
                 last_state_change = state.last_push_time
-
-            self.data_dict[user_name] = [user_name, 0x0, most_recent_func, last_state_change]
+            if user_name in self.data_dict:
+                self.data_dict[user_name] = [user_name, self.data_dict[user_name][1], most_recent_func, last_state_change]
+            else:
+                self.data_dict[user_name] = [user_name, None, most_recent_func, last_state_change]
             updated_row_keys.add(user_name)
 
         self.context_menu_cache = cmenu_cache
+        self._update_changed_rows(self.data_dict, updated_row_keys)
+        self.refresh_time_cells()
+        
+    def update_table_context(self, user_contexts:dict[str,dict[str,int]]):
+        updated_row_keys = set()
+        for user_name in user_contexts.keys():
+            if user_name not in self.data_dict:
+                self.data_dict[user_name] = [user_name, None, None, None]
+                updated_row_keys.add(user_name)
+        for user_name, entry in self.data_dict.items():
+            changed_entry = entry
+            if user_name not in user_contexts:
+                changed_entry[ActivityTableModel.CURR_ADDR_COL] = ActivityTableModel.USER_OFFLINE
+            else:
+                func_addr = user_contexts[user_name]["func_addr"]
+                if func_addr is None:
+                    changed_entry[ActivityTableModel.CURR_ADDR_COL] = ActivityTableModel.INVALID_ADDRESS
+                else:
+                    changed_entry[ActivityTableModel.CURR_ADDR_COL] = func_addr
+            self.data_dict[user_name] = changed_entry
+            updated_row_keys.add(user_name)
+        self._update_changed_rows(self.data_dict, updated_row_keys)
+        self.refresh_time_cells()
+        
+    def initialize_current_addresses(self,show):
+        updated_row_keys = set()
+        for user_name, entry in self.data_dict.items():
+            changed_entry = entry
+            changed_entry[ActivityTableModel.CURR_ADDR_COL] = ActivityTableModel.USER_OFFLINE if show else None
+            self.data_dict[user_name] = changed_entry
+            updated_row_keys.add(user_name)
         self._update_changed_rows(self.data_dict, updated_row_keys)
         self.refresh_time_cells()
 
@@ -115,7 +157,7 @@ class ActivityTableView(BinsyncTableView):
         # always init settings *after* loading the model
         self._init_settings()
         self.manage_address_visibility(False) # Initially hide the current addresses column as it only becomes relevant upon connection to the server
-
+        
     def _get_valid_funcs_for_user(self, username):
         if username in self.model.context_menu_cache:
             for addr in self.model.context_menu_cache[username]:
@@ -181,6 +223,7 @@ class ActivityTableView(BinsyncTableView):
         Otherwise, hides user current address column
         """
         self.column_visibility[ActivityTableModel.CURR_ADDR_COL] = show
+        self.model.initialize_current_addresses(show)
         if show:
             self.showColumn(ActivityTableModel.CURR_ADDR_COL)
         else:
