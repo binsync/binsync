@@ -31,9 +31,26 @@ from binsync.extras import EXTRAS_AVAILABLE
 
 l = logging.getLogger(__name__)
 
-
+# There are type warnings with the display_clients signal when ClientWorker is placed at the bottom
+class ClientWorker(QObject):
+    finished = Signal()
+    context_change = Signal(dict)
+    def __init__(self,controller):
+        super().__init__()
+        self.server_client = ServerClient(controller,self.client_context_callback)
+        
+    def run(self):
+        self.server_client.run()
+        self.finished.emit()
+    
+    def client_context_callback(self,contexts:dict[str,dict[str,int]]):
+        self.context_change.emit(contexts)
+    
+    def stop(self):
+        self.server_client.stop()
+        
 class QUtilPanel(QWidget):
-    display_clients = Signal(bool)
+    display_clients = Signal(ClientWorker)
     def __init__(self, controller: BSController, parent=None):
         super().__init__(parent)
         self.controller = controller
@@ -223,17 +240,18 @@ class QUtilPanel(QWidget):
             self.client_thread.started.connect(self.client_worker.run)
             self.client_worker.finished.connect(self.client_thread.quit)
             self.client_thread.start()
-            self.display_clients.emit(True) # Signal the activity table that it's time to display the current addresses column
+            self.display_clients.emit(self.client_worker) # Signal the activity table that it's time to display the current addresses column
         else:
             l.info("You are already connected to a server!")
 
     def _disconnect_from_server(self):
         if self.client_thread:
             self.client_worker.stop()
+            self.client_worker = None
             self.client_thread.quit()
             self.client_thread.wait() # Issue - will block on thread cleanup
             self.client_thread = None
-            self.display_clients.emit(False) # Signal the activity table that it's time to hide the current addresses column
+            self.display_clients.emit(None) # Signal the activity table that it's time to hide the current addresses column
         else:
             l.info("You are not currently connected to a server!")
 
@@ -353,9 +371,10 @@ class QUtilPanel(QWidget):
             self.controller.auto_pull_enabled = True
 
 class ServerClient():
-    def __init__(self,controller):
+    def __init__(self,controller,worker_update_callback):
         self.controller = controller
         self.old_post_data = {}
+        self.worker_update_callback = worker_update_callback
         
     def run(self):
         host = "[::1]" # TODO: make host configurable
@@ -392,6 +411,7 @@ class ServerClient():
             self.users_data = r.json()
             self._etag = r.headers["ETag"]
             l.info(self.users_data)
+            self.worker_update_callback(self.users_data)
         else:
             r = self.sess.get(self.server_url+"/status",headers={
                 "If-None-Match":str(self._etag)
@@ -400,6 +420,7 @@ class ServerClient():
                 self.users_data = r.json()
                 self._etag = r.headers["ETag"]
                 l.info(self.users_data)
+                self.worker_update_callback(self.users_data)
     
     def _submit_new_context(self,context,**_):
         post_data = {}
@@ -420,15 +441,3 @@ class ServerClient():
         self.connected = False
 
 
-class ClientWorker(QObject):
-    finished = Signal()
-    def __init__(self,controller):
-        super().__init__()
-        self.server_client = ServerClient(controller)
-        
-    def run(self):
-        self.server_client.run()
-        self.finished.emit()
-        
-    def stop(self):
-        self.server_client.stop()
