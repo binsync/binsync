@@ -187,6 +187,7 @@ class BSController:
         self.progress_view_open = False
         self.do_safe_sync_all = do_safe_sync_all
         self.safe_synced_users = {}
+        self.precise_diff_preview = False
 
         if self.headless:
             self._init_headless_components()
@@ -1324,6 +1325,8 @@ class BSController:
         _l.info("Loaded configuration file: '%s'", self.config.save_location)
         self.table_coloring_window = config.table_coloring_window or self.table_coloring_window
         self.merge_level = config.merge_level or self.merge_level
+        if config.precise_diff_preview is not None:
+            self.precise_diff_preview = config.precise_diff_preview
 
         if config.log_level == "debug":
             logging.getLogger("binsync").setLevel("DEBUG")
@@ -1434,8 +1437,14 @@ class BSController:
         """
         state = self.get_state(user=user, priority=SchedSpeed.FAST)
         user = user or state.user
-        master_state = self.client.master_state
-        master_func = master_state.get_function(func_addr)
+        
+        # Get the master function based on the selected method
+        if self.precise_diff_preview:
+            master_func = self.deci.functions.get(func_addr)
+        else:
+            master_state = self.client.master_state
+            master_func = master_state.get_function(func_addr)
+        
         target_func = state.get_function(func_addr)
         
         # A lot of repetition so this is just a helper to get the relevant attributes 
@@ -1444,8 +1453,18 @@ class BSController:
         
         # Get the comments where each comment is a dictionary 
         get_comments = lambda state_obj: {addr: cmt.comment for addr, cmt in state_obj.get_func_comments(func_addr).items()}
-        # Need to handle the case that sometimes there is no master function in these cases 
-        master_comments = get_comments(master_state) if master_func else {}
+        
+        # Get master comments based on the selected method
+        if self.precise_diff_preview:
+            master_comments = {}
+            if master_func:
+                func_size = master_func.size if hasattr(master_func, 'size') else 0x1000
+                for addr, cmt in self.deci.comments.items():
+                    if master_func.addr <= addr < (master_func.addr + func_size):
+                        master_comments[addr] = cmt.comment
+        else:
+            master_comments = get_comments(self.client.master_state)
+        
         target_comments = get_comments(state)
         
         diffs = {
@@ -1461,6 +1480,10 @@ class BSController:
             'type': {
                 'master': get_header_attr(master_func, 'type'),
                 'target': get_header_attr(target_func, 'type')
+            },
+            'stack_vars': {
+                'master': master_func.stack_vars if master_func else {},
+                'target': target_func.stack_vars if target_func else {}
             },
             'comments': {
                 'master': master_comments,

@@ -54,6 +54,7 @@ class BinSyncBSConfig(BSConfig):
         "table_coloring_window",
         "log_level",
         "merge_level",
+        "precise_diff_preview",
     )
 
     def __init__(self,
@@ -61,7 +62,8 @@ class BinSyncBSConfig(BSConfig):
                  recent_projects: Optional[Dict] = None,
                  table_coloring_window: Optional[int] = None,
                  log_level: Optional[str] = None,
-                 merge_level: Optional[int] = None
+                 merge_level: Optional[int] = None,
+                 precise_diff_preview: Optional[bool] = None
                  ):
         super().__init__(save_location)
 
@@ -69,6 +71,7 @@ class BinSyncBSConfig(BSConfig):
         self.table_coloring_window = table_coloring_window
         self.log_level = log_level
         self.merge_level = merge_level
+        self.precise_diff_preview = precise_diff_preview
         self.recent_projects = recent_projects or {}
 
     def save_project_data(self, binary_path, binary_hash, user=None, repo_path=None, remote=None):
