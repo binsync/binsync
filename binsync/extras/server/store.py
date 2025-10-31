@@ -21,6 +21,7 @@ class ServerStore:
             self._user_map[username] = newData
             self._map_modify_count += 1
             
+    # If getUserData and getUserDataCountNotMatch become more complex, consider changing _user_map_lock to an RLock
     def getUserData(self)->tuple[dict,int]:
         """
         Gets the user data stored as a tuple alongside the current modification counter.
@@ -32,6 +33,8 @@ class ServerStore:
     def getUserDataCountNotMatch(self,count)->tuple[dict,int]|None:
         """
         Gets the user data stored as a tuple alongside the current modification counter.
+        
+        If the modification counter matches the provided count, instead returns None
         """
         with self._user_map_lock:
             if self._map_modify_count != count:

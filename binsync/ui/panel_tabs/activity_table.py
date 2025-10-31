@@ -104,6 +104,7 @@ class ActivityTableModel(BinsyncTableModel):
             if user_name in self.data_dict:
                 self.data_dict[user_name] = [user_name, self.data_dict[user_name][1], most_recent_func, last_state_change]
             else:
+                # No good value to put as user current context
                 self.data_dict[user_name] = [user_name, None, most_recent_func, last_state_change]
             updated_row_keys.add(user_name)
 
@@ -113,10 +114,12 @@ class ActivityTableModel(BinsyncTableModel):
         
     def update_table_context(self, user_contexts:dict[str,dict[str,int]]):
         updated_row_keys = set()
+        # Insert users into data_dict if they were not already present
         for user_name in user_contexts.keys():
             if user_name not in self.data_dict:
                 self.data_dict[user_name] = [user_name, None, None, None]
                 updated_row_keys.add(user_name)
+        # Update data_dict with the updates to user contexts
         for user_name, entry in self.data_dict.items():
             changed_entry = entry
             if user_name not in user_contexts:
@@ -133,6 +136,13 @@ class ActivityTableModel(BinsyncTableModel):
         self.refresh_time_cells()
         
     def initialize_current_addresses(self,show):
+        '''
+        Updates the current address column in the table.
+        
+        If show = True (server connection), mark each user as initially offline.
+        
+        If show = False (server disconnection), mark each user with None (Display "ERROR - NOT CONNECTED TO SERVER?" to indicate issue if column is displayed)
+        '''
         updated_row_keys = set()
         for user_name, entry in self.data_dict.items():
             changed_entry = entry

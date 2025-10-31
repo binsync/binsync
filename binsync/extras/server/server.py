@@ -40,7 +40,14 @@ class Server:
         return "OK"
     
     def return_user_data(self):
-        if "If-None-Match" in request.headers:
+        '''
+        Returns all the user data being tracked by the server.
+        
+        If an If-None-Match header is provided and the ETag value matches the modification counter, 
+        returns a 304 to indicate unchanged data.
+        
+        '''
+        if "If-None-Match" in request.headers: # Check for the presence of an ETag
             etag = request.headers['If-None-Match']
             if not (etag.startswith('"') and etag.endswith('"')):
                 return Response("Bad ETag",400)

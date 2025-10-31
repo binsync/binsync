@@ -406,6 +406,9 @@ class ServerClient():
             self.controller.deci.artifact_change_callbacks[Context].remove(self._submit_new_context)
     
     def _poll_users_data(self):
+        """
+        Contacts server to check if there were any updates to user contexts
+        """
         if self._etag == None:
             r = self.sess.get(self.server_url+"/status")
             self.users_data = r.json()
