@@ -388,13 +388,18 @@ class ServerClient():
 
     def _manage_connections(self):
         self.sess = requests.Session()
+        callback_registered = False
         try:
             l.info(self.sess.get(self.server_url+"/connect").text)
             self.connected = True
-            # Broadcast the starting context upon connection with server
-            self._submit_new_context(self.controller.deci.gui_active_context())
+            
             # Register callback to broadcast function context
             self.controller.deci.artifact_change_callbacks[Context].append(self._submit_new_context)
+            callback_registered = True
+            
+            # Broadcast the starting context upon connection with server
+            self._submit_new_context(self.controller.deci.gui_active_context())
+            
             while self.connected:
                 self._poll_users_data()
                 time.sleep(1)
@@ -403,7 +408,8 @@ class ServerClient():
             l.info("Server seems to be unresponsive... (Click the disconnect button so that you can reconnect)")
         finally:
             # De-register callback to broadcast function context
-            self.controller.deci.artifact_change_callbacks[Context].remove(self._submit_new_context)
+            if callback_registered:
+                self.controller.deci.artifact_change_callbacks[Context].remove(self._submit_new_context)
     
     def _poll_users_data(self):
         """
