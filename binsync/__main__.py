@@ -144,8 +144,7 @@ def main():
             start_ghidra_remote_ui()
         elif args.server == "headless":
             from binsync.extras.server.server import Server
-            from binsync.extras.server.store import ServerStore
-            server = Server("::",7962,ServerStore())
+            server = Server("::",7962)
             server.run()
         else:
             exit(1)

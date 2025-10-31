@@ -5,10 +5,10 @@ from binsync.extras.server.store import ServerStore
 l = logging.getLogger(__name__)
     
 class Server:
-    def __init__(self,host,port,store:ServerStore):
+    def __init__(self,host,port):
         self.host = host
         self.port = port
-        self.store = store
+        self.store = ServerStore()
         self.app = self._create_app()
     
     def _create_app(self):
