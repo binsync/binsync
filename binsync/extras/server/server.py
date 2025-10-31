@@ -14,6 +14,7 @@ class Server:
         self.app.add_url_rule("/connect", view_func=self.handle_connection, methods=["GET"])
         self.app.add_url_rule("/disconnect", view_func=self.handle_disconnection, methods=["GET"])
         self.app.add_url_rule("/function", view_func=self.receive_function, methods=["POST"])
+        self.app.add_url_rule("/status", view_func=self.return_user_data, methods=["GET"])
     
     def handle_connection(self):
         self.store.incrementUser()
@@ -38,23 +39,20 @@ class Server:
         l.info(self.store.getUserData())
         return "OK"
     
-        @app.route("/status",methods=["GET"])
-        def return_user_data():
-            if "If-None-Match" in request.headers:
-                etag = request.headers['If-None-Match']
-                if not (etag.startswith('"') and etag.endswith('"')):
-                    return Response("Bad ETag",400)
-                user_data = store.getUserDataCountNotMatch(int(etag[1:-1]))
-                if user_data == None: # User data unchanged
-                    return Response(status=304)
-            else:
-                user_data = store.getUserData()
-            resp = jsonify(user_data[0])
-            resp.set_etag(str(user_data[1]))
-            return resp
+    def return_user_data(self):
+        if "If-None-Match" in request.headers:
+            etag = request.headers['If-None-Match']
+            if not (etag.startswith('"') and etag.endswith('"')):
+                return Response("Bad ETag",400)
+            user_data = self.store.getUserDataCountNotMatch(int(etag[1:-1]))
+            if user_data == None: # User data unchanged
+                return Response(status=304)
+        else:
+            user_data = self.store.getUserData()
+        resp = jsonify(user_data[0])
+        resp.set_etag(str(user_data[1]))
+        return resp
         
-        return app
-
     def run(self):
         self.app.run(self.host,self.port)
 
