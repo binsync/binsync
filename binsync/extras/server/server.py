@@ -9,38 +9,35 @@ class Server:
         self.host = host
         self.port = port
         self.store = ServerStore()
-        self.app = self._create_app()
-    
-    def _create_app(self):
-        app = Flask(__name__)
-        store = self.store
-        @app.route('/connect')
-        def handle_connection():
-            store.incrementUser()
-            return 'You are connected!'
-
-        @app.route("/disconnect")
-        def handle_disconnection():
-            store.decrementUser()
-            return 'You have disconnected!'
-
-        @app.route("/function",methods=["POST"])
-        def receive_function():
-            if "username" in request.form: # Can't keep track of users if they are not associated with a username
-                username = request.form["username"]
-                user_info = {
-                    "addr":None,
-                    "func_addr":None
-                }
-                if "address" in request.form:
-                    user_info["addr"] = int(request.form["address"])
-                if "function_address" in request.form:
-                    user_info["func_addr"] = int(request.form["function_address"])
-                store.setUserData(username,user_info)
-            l.info(store.getUserData())
-            return "OK"
+        self.app = Flask(__name__)
         
-        return app
+        self.app.add_url_rule("/connect", view_func=self.handle_connection, methods=["GET"])
+        self.app.add_url_rule("/disconnect", view_func=self.handle_disconnection, methods=["GET"])
+        self.app.add_url_rule("/function", view_func=self.receive_function, methods=["POST"])
+    
+    def handle_connection(self):
+        self.store.incrementUser()
+        return 'You are connected!'
+
+    def handle_disconnection(self):
+        self.store.decrementUser()
+        return 'You have disconnected!'
+
+    def receive_function(self):
+        if "username" in request.form: # Can't keep track of users if they are not associated with a username
+            username = request.form["username"]
+            user_info = {
+                "addr":None,
+                "func_addr":None
+            }
+            if "address" in request.form:
+                user_info["addr"] = int(request.form["address"])
+            if "function_address" in request.form:
+                user_info["func_addr"] = int(request.form["function_address"])
+            self.store.setUserData(username,user_info)
+        l.info(self.store.getUserData())
+        return "OK"
+    
 
     def run(self):
         self.app.run(self.host,self.port)
