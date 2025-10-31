@@ -1,30 +1,45 @@
-from flask import Flask
+from flask import Flask, request
 from threading import Lock
 import logging
-
+from binsync.extras.server.store import ServerStore
 l = logging.getLogger(__name__)
-app = Flask(__name__)
+    
+class Server:
+    def __init__(self,host,port):
+        self.host = host
+        self.port = port
+        self.store = ServerStore()
+        self.app = Flask(__name__)
+        
+        self.app.add_url_rule("/connect", view_func=self.handle_connection, methods=["GET"])
+        self.app.add_url_rule("/disconnect", view_func=self.handle_disconnection, methods=["GET"])
+        self.app.add_url_rule("/function", view_func=self.receive_function, methods=["POST"])
+    
+    def handle_connection(self):
+        self.store.incrementUser()
+        return 'You are connected!'
 
-user_count_lock = Lock()
-user_count = 0
-@app.route('/connect')
-def handle_connection():
-    global user_count
-    with user_count_lock:
-        user_count += 1
-        print(user_count)
-    return 'You are connected!'
+    def handle_disconnection(self):
+        self.store.decrementUser()
+        return 'You have disconnected!'
 
-@app.route("/disconnect")
-def handle_disconnection():
-    global user_count
-    with user_count_lock:
-        user_count -= 1
-        print(user_count)
-    return 'You have disconnected!'
+    def receive_function(self):
+        if "username" in request.form: # Can't keep track of users if they are not associated with a username
+            username = request.form["username"]
+            user_info = {
+                "addr":None,
+                "func_addr":None
+            }
+            if "address" in request.form:
+                user_info["addr"] = int(request.form["address"])
+            if "function_address" in request.form:
+                user_info["func_addr"] = int(request.form["function_address"])
+            self.store.setUserData(username,user_info)
+        l.info(self.store.getUserData())
+        return "OK"
+    
 
-# main driver function
-def start_server(port=7962):
-    l.info("starting server!")
-    app.run("::",port)
-    l.info("stopping server!")
+    def run(self):
+        self.app.run(self.host,self.port)
+
+    

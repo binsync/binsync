@@ -43,7 +43,8 @@ ghidra = [
 ]
 extras = [
     "dailalib",
-    "flask"
+    "flask",
+    "requests"
 ]
 
 [project.scripts]
