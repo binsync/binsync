@@ -121,16 +121,14 @@ class ActivityTableModel(BinsyncTableModel):
                 updated_row_keys.add(user_name)
         # Update data_dict with the updates to user contexts
         for user_name, entry in self.data_dict.items():
-            changed_entry = entry
             if user_name not in user_contexts:
-                changed_entry[ActivityTableModel.CURR_ADDR_COL] = ActivityTableModel.USER_OFFLINE
+                entry[ActivityTableModel.CURR_ADDR_COL] = ActivityTableModel.USER_OFFLINE
             else:
                 func_addr = user_contexts[user_name]["func_addr"]
                 if func_addr is None:
-                    changed_entry[ActivityTableModel.CURR_ADDR_COL] = ActivityTableModel.INVALID_ADDRESS
+                    entry[ActivityTableModel.CURR_ADDR_COL] = ActivityTableModel.INVALID_ADDRESS
                 else:
-                    changed_entry[ActivityTableModel.CURR_ADDR_COL] = func_addr
-            self.data_dict[user_name] = changed_entry
+                    entry[ActivityTableModel.CURR_ADDR_COL] = func_addr
             updated_row_keys.add(user_name)
         self._update_changed_rows(self.data_dict, updated_row_keys)
         self.refresh_time_cells()
@@ -145,9 +143,7 @@ class ActivityTableModel(BinsyncTableModel):
         '''
         updated_row_keys = set()
         for user_name, entry in self.data_dict.items():
-            changed_entry = entry
-            changed_entry[ActivityTableModel.CURR_ADDR_COL] = ActivityTableModel.USER_OFFLINE if show else None
-            self.data_dict[user_name] = changed_entry
+            entry[ActivityTableModel.CURR_ADDR_COL] = ActivityTableModel.USER_OFFLINE if show else None
             updated_row_keys.add(user_name)
         self._update_changed_rows(self.data_dict, updated_row_keys)
         self.refresh_time_cells()
