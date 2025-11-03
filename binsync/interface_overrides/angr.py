@@ -112,7 +112,7 @@ class BinsyncPlugin(GenericBSAngrManagementPlugin):
         if self.controller.check_client() and self.control_panel_view not in self.workspace.view_manager.views:
             self.workspace.add_view(self.control_panel_view)
             dock = self.workspace.view_manager.view_to_dock[self.control_panel_view]
-            dock.setAutoHide(True, SideBarRight)
+            dock.setAutoHide(False, SideBarRight)
             dock.closed.disconnect()
             dock.setFeature(CDockWidget.DockWidgetDeleteOnClose, False)
             # grab the dock manager by climbing up parents, probably a better way to directly grab it

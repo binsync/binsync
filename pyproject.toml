@@ -23,7 +23,7 @@ dependencies = [
     "ply",
     "prompt_toolkit",
     "tqdm",
-    "libbs>=2.16.4",
+    "libbs>=2.16.5",
     "wordfreq",
 ]
 dynamic = ["version"]
@@ -43,7 +43,8 @@ ghidra = [
 ]
 extras = [
     "dailalib",
-    "flask"
+    "flask",
+    "requests"
 ]
 
 [project.scripts]

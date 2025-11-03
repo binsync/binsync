@@ -20,6 +20,9 @@ from libbs.ui.qt_objects import (
     QObject,
     Signal
 )
+from libbs.artifacts import (
+    Context
+)
 from binsync.ui.magic_sync_dialog import MagicSyncDialog
 from binsync.ui.force_push import ForcePushUI
 from binsync.ui.utils import no_concurrent_call
@@ -86,11 +89,17 @@ class QUtilPanel(QWidget):
         self._auto_fast_sync.setChecked(self.controller.do_safe_sync_all)
         self._auto_fast_sync.stateChanged.connect(self._handle_auto_fast_sync_toggle)
 
+        self._enable_sync_preview = QCheckBox("Enable Precise Diff Preview")
+        self._enable_sync_preview.setToolTip("When enabled, shows precise diff preview from your current decompiler state. When disabled, shows diff from master state.")
+        self._enable_sync_preview.setChecked(self.controller.precise_diff_preview)
+        self._enable_sync_preview.stateChanged.connect(self._handle_sync_preview_toggle)
+
         sync_options_layout.addLayout(sync_level_layout)
         #sync_options_group.layout().addWidget(self._magic_sync_button)
         sync_options_group.layout().addWidget(self._force_push_button)
         sync_options_group.layout().addWidget(self._pull_segments_button)
         sync_options_group.layout().addWidget(self._auto_fast_sync)
+        sync_options_group.layout().addWidget(self._enable_sync_preview)
 
         #
         # Developer Options Group
@@ -200,22 +209,25 @@ class QUtilPanel(QWidget):
         disconnect_from_server_btn = QPushButton("Disconnect from Server...")
         disconnect_from_server_btn.clicked.connect(self._disconnect_from_server)
         extras_layout.addWidget(disconnect_from_server_btn)
-        
+
         extras_group.setLayout(extras_layout)
-        
+
         return extras_group
 
     def _display_connect_to_server(self):
-        # We are going to make it just connect to localhost for now without an actual display
         if not self.client_thread:
-            self.client_thread = ClientThread()
+            self.client_thread = QThread()
+            self.client_worker = ClientWorker(self.controller)
+            self.client_worker.moveToThread(self.client_thread)
+            self.client_thread.started.connect(self.client_worker.run)
+            self.client_worker.finished.connect(self.client_thread.quit)
             self.client_thread.start()
         else:
             l.info("You are already connected to a server!")
-        
+
     def _disconnect_from_server(self):
         if self.client_thread:
-            self.client_thread.stop()
+            self.client_worker.stop()
             self.client_thread.quit()
             self.client_thread.wait() # Issue - will block on thread cleanup
             self.client_thread = None
@@ -240,6 +252,14 @@ class QUtilPanel(QWidget):
             l.info("Disabling auto fast sync!")
             self.controller.do_safe_sync_all = False
 
+    def _handle_sync_preview_toggle(self, state):
+        if state == Qt.Checked:
+            l.info("Enabling precise diff preview!")
+            self.controller.precise_diff_preview = True
+        else:
+            l.info("Disabling precise diff preview!")
+            self.controller.precise_diff_preview = False
+
     def _handle_table_coloring_change(self):
         try:
             val = int(self._table_coloring_window_lineedit.text())
@@ -259,6 +279,8 @@ class QUtilPanel(QWidget):
         self.controller.config.merge_level = self.controller.merge_level
 
         self.controller.config.table_coloring_window = self.controller.table_coloring_window
+        
+        self.controller.config.precise_diff_preview = self.controller.precise_diff_preview
 
         if self.controller.config.save() is None:
             l.info("Error saving configuration file, check that the path '%s' is valid.", self.controller.config.save_location)
@@ -327,11 +349,10 @@ class QUtilPanel(QWidget):
         else:
             self.controller.auto_pull_enabled = True
 
-class ClientWorker(QObject):
-    finished = Signal()
-    def __init__(self):
-        super().__init__()
-        self.connected = False
+class ServerClient():
+    def __init__(self,controller):
+        self.controller = controller
+        self.old_post_data = {}
         
     def run(self):
         host = "[::1]" # TODO: make host configurable
@@ -340,26 +361,54 @@ class ClientWorker(QObject):
         parsed = urllib.parse.urlparse(self.server_url)
         if parsed.netloc != f"{host}:{port}":
             l.error("HOST AND PORT COMBINATION IS NOT VALID: NETLOC %s BUT HOST %s AND PORT %s",parsed.netloc,parsed.host,parsed.port)
-        l.info(requests.get(self.server_url+"/connect").text)
-        self.connected = True
-        while self.connected:
-            time.sleep(1)
-        l.info(requests.get(self.server_url+"/disconnect").text)
-        self.finished.emit()
-        
-        
+        self.manage_connections()
+
+    def manage_connections(self):
+        self.sess = requests.Session()
+        try:
+            l.info(self.sess.get(self.server_url+"/connect").text)
+            self.connected = True
+            # Broadcast the starting context upon connection with server
+            self.submit_new_context(self.controller.deci.gui_active_context())
+            # Register callback to broadcast function context
+            self.controller.deci.artifact_change_callbacks[Context].append(self.submit_new_context)
+            while self.connected:
+                time.sleep(1)
+            l.info(self.sess.get(self.server_url+"/disconnect").text)
+        except requests.ConnectionError:
+            l.info("Server seems to be unresponsive... (Click the disconnect button so that you can reconnect)")
+        finally:
+            # De-register callback to broadcast function context
+            self.controller.deci.artifact_change_callbacks[Context].remove(self.submit_new_context)
+    
+    def submit_new_context(self,context,**_):
+        post_data = {}
+        if context.addr:
+            post_data["address"] = context.addr
+        if context.func_addr:
+            post_data["function_address"] = context.func_addr
+        if self.controller.client:
+            post_data["username"] = self.controller.client.master_user
+        if post_data != self.old_post_data: # No need to do extra communication with server if no change
+            try:
+                self.sess.post(self.server_url+"/function",data=post_data)
+                self.old_post_data = post_data
+            except requests.ConnectionError:
+                self.connected = False
+
     def stop(self):
         self.connected = False
-        
-        
-class ClientThread(QThread):
-    def __init__(self):
-        super().__init__()
-        self.worker = ClientWorker()
 
-    def run(self):
-        self.worker.run()
+
+class ClientWorker(QObject):
+    finished = Signal()
+    def __init__(self,controller):
+        super().__init__()
+        self.server_client = ServerClient(controller)
         
+    def run(self):
+        self.server_client.run()
+        self.finished.emit()
         
     def stop(self):
-        self.worker.stop()
+        self.server_client.stop()
