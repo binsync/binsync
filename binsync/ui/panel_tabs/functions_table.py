@@ -12,9 +12,11 @@ from libbs.ui.qt_objects import (
     QWidget,
     QVBoxLayout,
     Qt,
+    QPushButton
 )
 from binsync.ui.utils import friendly_datetime
 from binsync.core.scheduler import SchedSpeed
+from binsync.ui.history_display.history_window import HistoryDisplayWidget
 from libbs.artifacts import Function
 
 l = logging.getLogger(__name__)
@@ -181,10 +183,18 @@ class QFunctionTable(QWidget):
         layout = QVBoxLayout()
         layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)
+        history_btn = QPushButton("History")
+        history_btn.clicked.connect(self._handle_history_view)
+        layout.addWidget(history_btn)
         layout.addWidget(self.table)
         layout.addWidget(self.filteredit)
         self.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
+
+    def _handle_history_view(self):
+        dialog = HistoryDisplayWidget(parent=self)
+        dialog.show()
+        dialog.exec_()
 
     def update_table(self, states):
         self.table.update_table(states)
