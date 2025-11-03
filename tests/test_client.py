@@ -122,7 +122,7 @@ class TestClient(unittest.TestCase):
             client.shutdown()
 
             # do some emulated file corruption making this TOML no longer valid
-            with open(pathlib.Path(tmpdir) / "functions" / "00400080.toml", "r+") as file:
+            with open(pathlib.Path(tmpdir) / "functions" / "00400080.toml", "r+", encoding="utf-8") as file:
                 file.truncate(5)
 
             # force a real git commit for later loading in the client
