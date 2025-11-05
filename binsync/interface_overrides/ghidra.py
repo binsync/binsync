@@ -49,6 +49,8 @@ class ControlPanelWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.controller.shutdown()
+        # Quit the QApplication event loop to allow the process to exit cleanly
+        QApplication.quit()
 
 
 def start_ghidra_ui():
