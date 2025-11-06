@@ -5,7 +5,7 @@ from time import sleep
 
 from libbs.ui.version import set_ui_version
 set_ui_version("PySide6")
-from libbs.ui.qt_objects import QMainWindow, QApplication
+from libbs.ui.qt_objects import QMainWindow, QApplication, QTimer
 from libbs.api import DecompilerInterface
 from libbs.api.decompiler_server import DecompilerServer
 from libbs.decompilers import GHIDRA_DECOMPILER
@@ -49,8 +49,9 @@ class ControlPanelWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.controller.shutdown()
-        # Quit the QApplication event loop to allow the process to exit cleanly
-        QApplication.quit()
+        # Brief delay to allow threads to finish cleanup
+        # With the Scheduler timeout fix, threads should exit quickly
+        QTimer.singleShot(200, QApplication.quit)
 
 
 def start_ghidra_ui():
