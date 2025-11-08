@@ -527,15 +527,30 @@ class Client:
         for user_name, ref in ref_dict.items():
             if user_name not in users:
                 continue
-
-            commits = list(repo.iter_commits(ref))
-            reverse_sorted_commits = sorted(commits, key=lambda x: x.committed_date, reverse=True)
-            for commit in reverse_sorted_commits:
-                if commit.committed_date <= ts:
-                    best_commits[user_name] = commit.hexsha
-                    break
-
+            commit_sha = self.find_commit_before_ts(repo, ts, ref=ref)
+            if commit_sha is not None:  
+                best_commits[user_name] = commit_sha
         return best_commits
+    
+    def find_commit_before_ts(self, repo: git.Repo, ts:int, user_name:str=None, ref:git.Reference=None)->str:
+        """
+        Get the last commit before a timestamp given either a user or a ref.
+        """
+        if user_name and ref:
+            raise ValueError("Can't specify both a user and a ref - unable to disambiguate")
+        elif ref:
+            commits = list(repo.iter_commits(ref))
+        elif user_name:
+            ref_dict = self._get_best_refs(repo, force_local=True)
+            commits = list(repo.iter_commits(ref_dict[user_name]))
+        elif not user_name and not ref:
+            raise ValueError("Must specify either a user or a ref")
+        
+        reverse_sorted_commits = sorted(commits, key=lambda x: x.committed_date, reverse=True)
+        for commit in reverse_sorted_commits:
+            if commit.committed_date <= ts:
+                return commit.hexsha
+        return None # No commits before timestamp
 
     def commit_master_state(self, commit_msg=None) -> int:
         # Attempt to commit dirty files in a update phase.
