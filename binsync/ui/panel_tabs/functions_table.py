@@ -192,7 +192,7 @@ class QFunctionTable(QWidget):
         self.setLayout(layout)
 
     def _handle_history_view(self):
-        dialog = HistoryDisplayWidget(parent=self)
+        dialog = HistoryDisplayWidget(controller=self.controller,parent=self)
         dialog.show()
         dialog.exec_()
 
