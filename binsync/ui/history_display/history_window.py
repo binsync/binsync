@@ -44,10 +44,14 @@ class HistoryDisplayWidget(QDialog):
         for addr, new_function in curr_state.functions.items():
             if addr not in old_state.functions:
                 # Is this case possible?
-                changed_functions.add(new_function)
+                changed_functions.append(new_function)
             else:
                 diffs = self._get_function_diffs(curr_state,old_state,addr)
-                l.info(diffs)
+                for diff_dict in diffs.values():
+                    if diff_dict["master"] != diff_dict["target"]:
+                        changed_functions.append(new_function)
+                        l.info(diffs)
+                        break
         for function in changed_functions:
             l.info(function)
     
