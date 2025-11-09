@@ -183,7 +183,7 @@ class QFunctionTable(QWidget):
         layout = QVBoxLayout()
         layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)
-        history_btn = QPushButton("History")
+        history_btn = QPushButton("Compare With Commit History")
         history_btn.clicked.connect(self._handle_history_view)
         layout.addWidget(history_btn)
         layout.addWidget(self.table)
