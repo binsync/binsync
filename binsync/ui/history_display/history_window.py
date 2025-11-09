@@ -12,7 +12,7 @@ from libbs.ui.qt_objects import (
     QMenu,
     QAction,
     Qt,
-    QAbstractTableModel
+    QColor
 )
 l = logging.getLogger(__name__)
 
@@ -32,7 +32,10 @@ class HistoryTableModel(BinsyncTableModel):
         col = index.column()
         row = index.row()
         if role == Qt.DisplayRole:
-            return self.row_data[row][col]
+            if col == self.addr_col:
+                return hex(self.row_data[row][col])
+            else:
+                return self.row_data[row][col]
         elif role == self.SortRole:
             return self.row_data[row][col]
         elif role == Qt.BackgroundRole:
@@ -129,9 +132,11 @@ class HistoryDisplayWidget(QDialog):
                         changed_functions.append(new_function)
                         l.info(diffs)
                         break
-        for function in changed_functions:
-            l.info(function)
-            self.table_view.model.insertRows(0)
+        l.info(changed_functions)
+        self.table_view.model.update_data(
+            [(func.addr,func.name) for func in changed_functions],
+            [QColor(0,0,0,0) for _ in changed_functions]
+        )
     
     def _get_function_diffs(self,state1, state2, addr)->dict[str,dict[str,any]]:
         '''
