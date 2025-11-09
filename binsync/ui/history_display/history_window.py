@@ -12,7 +12,8 @@ from libbs.ui.qt_objects import (
     QMenu,
     QAction,
     Qt,
-    QColor
+    QColor,
+    QFont
 )
 l = logging.getLogger(__name__)
 
@@ -103,7 +104,8 @@ class HistoryDisplayWidget(QDialog):
         top_layout = QHBoxLayout()
         bottom_layout = QVBoxLayout()
         
-        top_layout.addWidget(QLabel("top"))
+        top_layout.addWidget(QLabel("Functions Changed in the Past Day"))
+        
         self.table_view = HistoryTableView(self.controller)
         bottom_layout.addWidget(self.table_view)
         
@@ -130,9 +132,7 @@ class HistoryDisplayWidget(QDialog):
                 for diff_dict in diffs.values():
                     if diff_dict["master"] != diff_dict["target"]:
                         changed_functions.append(new_function)
-                        l.info(diffs)
                         break
-        l.info(changed_functions)
         self.table_view.model.update_data(
             [(func.addr,func.name) for func in changed_functions],
             [QColor(0,0,0,0) for _ in changed_functions]
