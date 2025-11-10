@@ -136,7 +136,7 @@ def file_to_str(src: Union[pathlib.Path, git.Tree], filename, client=None) -> Op
         if not src.exists():
             file_data = None
         else:
-            with open(src, "r") as fp:
+            with open(src, "r", encoding="utf-8") as fp:
                 file_data = fp.read()
 
     return file_data

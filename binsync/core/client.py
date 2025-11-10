@@ -319,9 +319,9 @@ class Client:
         # Ensure git identity is configured before making any commits
         self._ensure_git_identity()
         
-        with open(os.path.join(self.repo_root, ".gitignore"), "w") as f:
+        with open(os.path.join(self.repo_root, ".gitignore"), "w", encoding="utf-8") as f:
             f.write(".git/*\n")
-        with open(os.path.join(self.repo_root, "binary_hash"), "w") as f:
+        with open(os.path.join(self.repo_root, "binary_hash"), "w", encoding="utf-8") as f:
             f.write(self.binary_hash)
         self.repo.index.add([".gitignore", "binary_hash"])
         self.repo.index.commit("Root commit")
@@ -848,7 +848,7 @@ class Client:
 
     def _get_stored_hash(self):
         branch = [ref for ref in self.repo.refs if ref.name.endswith(BINSYNC_ROOT_BRANCH)][0]
-        return branch.commit.tree["binary_hash"].data_stream.read().decode().strip("\n")
+        return branch.commit.tree["binary_hash"].data_stream.read().decode('utf-8').strip("\n")
 
     @staticmethod
     def list_files_in_tree(base_tree: git.Tree):
@@ -898,7 +898,7 @@ class Client:
     @staticmethod
     def load_file_from_tree(tree: git.Tree, filename):
         try:
-            return tree[filename].data_stream.read().decode()
+            return tree[filename].data_stream.read().decode('utf-8')
         except KeyError:
             return None
 
