@@ -196,6 +196,59 @@ class TestAuxServer(unittest.TestCase):
         finally:
             server_thread.shutdown()
             server_thread.join()
+    
+    def test_see_other_clients(self):
+        num_connections = 10
+        def client_task(client:ServerClient):
+            client.run()
+        server = Server(self.HOST,self.PORT)
+        server_thread = ServerThread(server)
+        server_thread.start()
+        try:
+            controllers:list[BabyController] = []
+            clients:list[ServerClient] = []
+            client_threads:list[threading.Thread] = []
+            client_beliefs = []
+            def update_belief(index, context):
+                print("updating beliefs!",index,context)
+                client_beliefs[index] = context
+                print(client_beliefs)
+                
+            def make_belief_lambda(index):
+                # We need this function because of lambda late binding
+                return lambda context:update_belief(index,context)
+            try:
+                # Set up contexts
+                for i in range(num_connections):
+                    controller = BabyController(f"User_{i}")
+                    controller.deci._update_context({
+                        "address":0x40000+10*i,
+                        "function_address":0x500000+10*i
+                    })
+                    controllers.append(controller)
+                    client = ServerClient(controller,make_belief_lambda(i))
+                    clients.append(client)
+                    client_thread = threading.Thread(target=client_task,args=(client,))
+                    client_threads.append(client_thread)
+                    
+                    client_beliefs.append({})
+                # Start up client threads
+                for client_thread in client_threads:
+                    client_thread.start()
+                time.sleep(2)
+                # Make sure everyone's beliefs are the same
+                for i in range(len(client_beliefs)-1):
+                    self.assertDictEqual(client_beliefs[i],client_beliefs[i+1])
+                # Make sure everyone's beliefs match up with the server
+                self.assertDictEqual(client_beliefs[0],server.store._user_map)
+            finally:
+                for client in clients:
+                    client.stop()
+                for client_thread in client_threads:
+                    client_thread.join()
+        finally:
+            server_thread.shutdown()
+            server_thread.join()
         
 
 
