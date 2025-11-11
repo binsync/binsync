@@ -69,17 +69,17 @@ class TestAuxServer(unittest.TestCase):
         server_thread.start()
         time.sleep(1)
         server_thread.shutdown()
-        self.assertEqual(server.store._user_map,{})
-        self.assertEqual(server.store._user_count,0)
+        self.assertEqual(server.store._user_map,{}) # Validate that the initial map of user functions is empty
+        self.assertEqual(server.store._user_count,0) # Validate that the initial user count is 0
         server_thread.join()
         
     def test_single_connection(self):
         """
         Make sure a single user can connect and disconnect with no issues
         """
-            
         def client_task(client:ServerClient):
             client.run()
+            
         server = Server(self.HOST,self.PORT)
         client = ServerClient(BabyController("Alice"),lambda *args: None)
         server_thread = ServerThread(server)
@@ -90,11 +90,13 @@ class TestAuxServer(unittest.TestCase):
         for client_thread in client_threads:
             client_thread.start()
         time.sleep(1)
-        # Verify that the server received the connection
-        self.assertEqual(server.store._user_count,1)
+        
+        self.assertEqual(server.store._user_count,1) # Verify that the server received the connection
+        
         client.stop()
         time.sleep(1)
-        self.assertEqual(server.store._user_count,0)
+        self.assertEqual(server.store._user_count,0) # Verify that server received disconnection
+        
         for client_thread in client_threads:
             client_thread.join()
         server_thread.shutdown()
