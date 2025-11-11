@@ -150,7 +150,52 @@ class TestAuxServer(unittest.TestCase):
                     client_thread.join()
         finally:
             server_thread.shutdown()
-            server_thread.join()        
+            server_thread.join()
+    
+    def test_context_change(self):
+        """
+        Verify that clients contact the server when their context changes
+        """
+        def client_task(client:ServerClient):
+            client.run()
+            
+        server = Server(self.HOST,self.PORT)
+        server_thread = ServerThread(server)
+        server_thread.start()
+        try:
+            client_threads:list[threading.Thread] = []
+            try:
+                controller = BabyController("Alice")
+                client = ServerClient(controller,lambda *args: None)
+                client_threads.append(threading.Thread(target=client_task,args=(client,)))
+                for client_thread in client_threads:
+                    client_thread.start()
+                time.sleep(1)
+                
+                contexts_dict,_ = server.store.getUserData()
+                user_entry = contexts_dict[controller.client.master_user]
+                self.assertTrue(user_entry["addr"] == controller.deci._context.addr)
+                self.assertTrue(user_entry["func_addr"] == controller.deci._context.func_addr)
+                
+                # Update!
+                controller.deci._update_context({
+                    "address":0x444444,
+                    "function_address":0x454545
+                })
+                time.sleep(1)
+                
+                contexts_dict,_ = server.store.getUserData()
+                user_entry = contexts_dict[controller.client.master_user]
+                self.assertTrue(user_entry["addr"] == controller.deci._context.addr)
+                self.assertTrue(user_entry["func_addr"] == controller.deci._context.func_addr)
+                
+                client.stop()
+            finally:
+                for client_thread in client_threads:
+                    client_thread.join()
+        finally:
+            server_thread.shutdown()
+            server_thread.join()
         
 
 
