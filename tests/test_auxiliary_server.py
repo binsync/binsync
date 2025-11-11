@@ -5,18 +5,20 @@ from binsync.ui.panel_tabs.util_panel import ServerClient
 import unittest
 import threading
 import time
+import socket
+from werkzeug.serving import make_server
 
 from libbs.artifacts import Artifact, Context
 
-class Context:
+class BabyContext:
     def __init__(self):
         self.addr = 0x400010
         self.func_addr = 0x400000
 
-class Deci:
+class BabyDeci:
     def __init__(self):
         self.artifact_change_callbacks:dict[Artifact, list[function]] = {Context:[]}
-        self._context = Context()
+        self._context = BabyContext()
         
     def gui_active_context(self):
         return self._context
@@ -24,10 +26,10 @@ class Deci:
     def _update_context(self,new_values:dict[str,int]):
         self._context.addr = new_values["address"]
         self._context.func_addr = new_values["function_address"]
-        for callback_fn in self.artifact_change_callbacks[Context]:
+        for callback_fn in self.artifact_change_callbacks[BabyContext]:
             callback_fn(self._context)
         
-class Client:
+class BabyClient:
     def __init__(self,username):
         self.master_user = username
 
@@ -37,44 +39,52 @@ class BabyController:
     This avoids the issue of having to create the DecompilerInterface that BSControllers typically need.
     """
     def __init__(self, username):
-        self.deci = Deci()
-        self.client = Client(username)
+        self.deci = BabyDeci()
+        self.client = BabyClient(username)
+
+class ServerThread(threading.Thread):
+    """
+    Implementation of the server that enables shutting down the server in between tests
+    """
+    def __init__(self, server:Server):
+        super().__init__()
+        self.server = make_server(server.host,server.port,server.app)
+        
+    def run(self):
+        self.server.serve_forever()
+        
+    def shutdown(self):
+        self.server.shutdown()
 
 class TestAuxServer(unittest.TestCase):
     HOST = "::"
     PORT = 7962
-    
+    MAX_TRIES = 20
+ 
     def test_server_no_crash(self):
         """
         Make sure that the server can start up without issues.
         """
-        def server_task(server:Server,crash_signal:threading.Event):
-            try:
-                server.run()
-            except:
-                crash_signal.set()
         server = Server(self.HOST,self.PORT)
         crash_signal = threading.Event()
-        # Make server thread as a daemon
-        server_thread = threading.Thread(target=server_task,args=(server,crash_signal))
-        server_thread.daemon = True
-        server_thread.start()
-        server_thread.join(1)
-        self.assertFalse(crash_signal.is_set())
-        
-    def test_run_server(self):
-        def server_task(server:Server):
-            server.run()
-        server = Server(self.HOST,self.PORT)
-        # Make server thread as a daemon
-        server_thread = threading.Thread(target=server_task,args=(server,))
-        server_thread.daemon = True
+        server_thread = ServerThread(server)
         server_thread.start()
         time.sleep(1)
+        server_thread.shutdown()
+        server_thread.join()
+        
+    def test_run_server(self):
+        server = Server(self.HOST,self.PORT)
+        server_thread = ServerThread(server)
+        server_thread.start()
+        time.sleep(1)
+        server_thread.shutdown()
         self.assertEqual(server.store._user_map,{})
+        server_thread.join()
         
 
-
+    
+    
 
 
 if __name__ == "__main__":
