@@ -26,7 +26,7 @@ class BabyDeci:
     def _update_context(self,new_values:dict[str,int]):
         self._context.addr = new_values["address"]
         self._context.func_addr = new_values["function_address"]
-        for callback_fn in self.artifact_change_callbacks[BabyContext]:
+        for callback_fn in self.artifact_change_callbacks[Context]:
             callback_fn(self._context)
         
 class BabyClient:
@@ -57,6 +57,7 @@ class ServerThread(threading.Thread):
         self.server.shutdown()
 
 class TestAuxServer(unittest.TestCase):
+    # These cannot be changed for now because the client can only connect to localhost on port 7962
     HOST = "::"
     PORT = 7962
         
@@ -102,7 +103,50 @@ class TestAuxServer(unittest.TestCase):
         server_thread.shutdown()
         server_thread.join()
     
-    
+    def test_many_connections(self):
+        num_connections = 10
+        def client_task(client:ServerClient):
+            client.run()
+        try:
+            controllers:list[BabyController] = []
+            clients:list[ServerClient] = []
+            client_threads:list[threading.Thread] = []
+            server = Server(self.HOST,self.PORT)
+            server_thread = ServerThread(server)
+            server_thread.start()
+            # Set up contexts
+            for i in range(num_connections):
+                controller = BabyController(f"User_{i}")
+                controller.deci._update_context({
+                    "address":0x40000+10*i,
+                    "function_address":0x500000+10*i
+                })
+                controllers.append(controller)
+                client = ServerClient(controller,lambda *args:None)
+                clients.append(client)
+                client_thread = threading.Thread(target=client_task,args=(client,))
+                client_threads.append(client_thread)
+            
+            # Start up client threads
+            for client_thread in client_threads:
+                client_thread.start()
+            time.sleep(1)
+            # Make sure that each user's function context is present in the server's storage
+            contexts_dict,_ = server.store.getUserData()
+            for controller in controllers:
+                user_entry = contexts_dict[controller.client.master_user]
+                self.assertTrue(user_entry["addr"] == controller.deci._context.addr)
+                self.assertTrue(user_entry["func_addr"] == controller.deci._context.func_addr)
+        finally:
+            # Cleanup
+            for client in clients:
+                client.stop()
+            for client_thread in client_threads:
+                client_thread.join()
+            server_thread.shutdown()
+            server_thread.join()
+        
+        
 
 
 if __name__ == "__main__":
