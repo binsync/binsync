@@ -5,7 +5,40 @@ from binsync.ui.panel_tabs.util_panel import ServerClient
 import unittest
 import threading
 import time
-from binsync.controller import BSController
+
+from libbs.artifacts import Artifact, Context
+
+class Context:
+    def __init__(self):
+        self.addr = 0x400010
+        self.func_addr = 0x400000
+
+class Deci:
+    def __init__(self):
+        self.artifact_change_callbacks:dict[Artifact, list[function]] = {Context:[]}
+        self._context = Context()
+        
+    def gui_active_context(self):
+        return self._context
+    
+    def _update_context(self,new_values:dict[str,int]):
+        self._context.addr = new_values["address"]
+        self._context.func_addr = new_values["function_address"]
+        for callback_fn in self.artifact_change_callbacks[Context]:
+            callback_fn(self._context)
+        
+class Client:
+    def __init__(self,username):
+        self.master_user = username
+
+class BabyController:
+    """
+    A minimal implementation of a BSController that contains the information necessary for a ServerClient.
+    This avoids the issue of having to create the DecompilerInterface that BSControllers typically need.
+    """
+    def __init__(self, username):
+        self.deci = Deci()
+        self.client = Client(username)
 
 class TestAuxServer(unittest.TestCase):
     HOST = "::"
