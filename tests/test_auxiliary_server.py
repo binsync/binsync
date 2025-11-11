@@ -85,64 +85,69 @@ class TestAuxServer(unittest.TestCase):
         client = ServerClient(BabyController("Alice"),lambda *args: None)
         server_thread = ServerThread(server)
         server_thread.start()
-        
-        client_threads:list[threading.Thread] = []
-        client_threads.append(threading.Thread(target=client_task,args=(client,)))
-        for client_thread in client_threads:
-            client_thread.start()
-        time.sleep(1)
-        
-        self.assertEqual(server.store._user_count,1) # Verify that the server received the connection
-        
-        client.stop()
-        time.sleep(1)
-        self.assertEqual(server.store._user_count,0) # Verify that server received disconnection
-        
-        for client_thread in client_threads:
-            client_thread.join()
-        server_thread.shutdown()
-        server_thread.join()
+        try:
+            client_threads:list[threading.Thread] = []
+            client_threads.append(threading.Thread(target=client_task,args=(client,)))
+            for client_thread in client_threads:
+                client_thread.start()
+            time.sleep(1)
+            
+            self.assertEqual(server.store._user_count,1) # Verify that the server received the connection
+            
+            client.stop()
+            time.sleep(1)
+            self.assertEqual(server.store._user_count,0) # Verify that server received disconnection
+            
+            for client_thread in client_threads:
+                client_thread.join()
+        finally:
+            server_thread.shutdown()
+            server_thread.join()
     
     def test_many_connections(self):
+        """
+        Verify server can handle multiple connections at once
+        """
         num_connections = 10
         def client_task(client:ServerClient):
             client.run()
+        server = Server(self.HOST,self.PORT)
+        server_thread = ServerThread(server)
+        server_thread.start()
         try:
             controllers:list[BabyController] = []
             clients:list[ServerClient] = []
             client_threads:list[threading.Thread] = []
-            server = Server(self.HOST,self.PORT)
-            server_thread = ServerThread(server)
-            server_thread.start()
-            # Set up contexts
-            for i in range(num_connections):
-                controller = BabyController(f"User_{i}")
-                controller.deci._update_context({
-                    "address":0x40000+10*i,
-                    "function_address":0x500000+10*i
-                })
-                controllers.append(controller)
-                client = ServerClient(controller,lambda *args:None)
-                clients.append(client)
-                client_thread = threading.Thread(target=client_task,args=(client,))
-                client_threads.append(client_thread)
-            
-            # Start up client threads
-            for client_thread in client_threads:
-                client_thread.start()
-            time.sleep(1)
-            # Make sure that each user's function context is present in the server's storage
-            contexts_dict,_ = server.store.getUserData()
-            for controller in controllers:
-                user_entry = contexts_dict[controller.client.master_user]
-                self.assertTrue(user_entry["addr"] == controller.deci._context.addr)
-                self.assertTrue(user_entry["func_addr"] == controller.deci._context.func_addr)
+            try:
+                # Set up contexts
+                for i in range(num_connections):
+                    controller = BabyController(f"User_{i}")
+                    controller.deci._update_context({
+                        "address":0x40000+10*i,
+                        "function_address":0x500000+10*i
+                    })
+                    controllers.append(controller)
+                    client = ServerClient(controller,lambda *args:None)
+                    clients.append(client)
+                    client_thread = threading.Thread(target=client_task,args=(client,))
+                    client_threads.append(client_thread)
+                
+                # Start up client threads
+                for client_thread in client_threads:
+                    client_thread.start()
+                time.sleep(1)
+                # Make sure that each user's function context is present in the server's storage
+                contexts_dict,_ = server.store.getUserData()
+                for controller in controllers:
+                    user_entry = contexts_dict[controller.client.master_user]
+                    self.assertTrue(user_entry["addr"] == controller.deci._context.addr)
+                    self.assertTrue(user_entry["func_addr"] == controller.deci._context.func_addr)
+            finally:
+                for client in clients:
+                    client.stop()
+                for client_thread in client_threads:
+                    client_thread.join()
         finally:
-            # Cleanup
-            for client in clients:
-                client.stop()
-            for client_thread in client_threads:
-                client_thread.join()
             server_thread.shutdown()
             server_thread.join()
         
