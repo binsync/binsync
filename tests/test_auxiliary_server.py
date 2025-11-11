@@ -87,19 +87,20 @@ class TestAuxServer(unittest.TestCase):
         server_thread.start()
         try:
             client_threads:list[threading.Thread] = []
-            client_threads.append(threading.Thread(target=client_task,args=(client,)))
-            for client_thread in client_threads:
-                client_thread.start()
-            time.sleep(1)
-            
-            self.assertEqual(server.store._user_count,1) # Verify that the server received the connection
-            
-            client.stop()
-            time.sleep(1)
-            self.assertEqual(server.store._user_count,0) # Verify that server received disconnection
-            
-            for client_thread in client_threads:
-                client_thread.join()
+            try:
+                client_threads.append(threading.Thread(target=client_task,args=(client,)))
+                for client_thread in client_threads:
+                    client_thread.start()
+                time.sleep(1)
+                
+                self.assertEqual(server.store._user_count,1) # Verify that the server received the connection
+                
+                client.stop()
+                time.sleep(1)
+                self.assertEqual(server.store._user_count,0) # Verify that server received disconnection
+            finally:
+                for client_thread in client_threads:
+                    client_thread.join()
         finally:
             server_thread.shutdown()
             server_thread.join()
@@ -149,8 +150,7 @@ class TestAuxServer(unittest.TestCase):
                     client_thread.join()
         finally:
             server_thread.shutdown()
-            server_thread.join()
-        
+            server_thread.join()        
         
 
 
