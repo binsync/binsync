@@ -59,27 +59,18 @@ class ServerThread(threading.Thread):
 class TestAuxServer(unittest.TestCase):
     HOST = "::"
     PORT = 7962
-    MAX_TRIES = 20
- 
-    def test_server_no_crash(self):
+        
+    def test_run_server(self):
         """
         Make sure that the server can start up without issues.
         """
-        server = Server(self.HOST,self.PORT)
-        crash_signal = threading.Event()
-        server_thread = ServerThread(server)
-        server_thread.start()
-        time.sleep(1)
-        server_thread.shutdown()
-        server_thread.join()
-        
-    def test_run_server(self):
         server = Server(self.HOST,self.PORT)
         server_thread = ServerThread(server)
         server_thread.start()
         time.sleep(1)
         server_thread.shutdown()
         self.assertEqual(server.store._user_map,{})
+        self.assertEqual(server.store._user_count,0)
         server_thread.join()
         
     def test_single_connection(self):
