@@ -47,7 +47,7 @@ class ActivityTableModel(BinsyncTableModel):
                 if not isinstance(data,int):
                     return "ERROR - NOT CONNECTED TO SERVER?"
                 elif data == ActivityTableModel.USER_OFFLINE:
-                    return "Offline"
+                    return ""
                 elif data == ActivityTableModel.INVALID_ADDRESS:
                     return "Invalid Address"
                 else:
