@@ -134,7 +134,7 @@ class ActivityTableModel(BinsyncTableModel):
         self._update_changed_rows(self.data_dict, updated_row_keys)
         self.refresh_time_cells()
         
-    def initialize_current_addresses(self,show):
+    def initialize_current_addresses(self, show):
         '''
         Updates the current address column in the table.
         
@@ -261,7 +261,7 @@ class QActivityTable(QWidget):
         self.table.update_table(states)
         
     def add_live_addresses(self, client_worker):
-        self.table.manage_address_visibility(client_worker is not None,client_worker)
+        self.table.manage_address_visibility(client_worker is not None, client_worker)
         
     def reload(self):
         pass

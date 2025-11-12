@@ -39,5 +39,5 @@ class ServerStore:
         with self._user_map_lock:
             if self._map_modify_count != count:
                 map_copy = deepcopy(self._user_map)
-                return (map_copy,self._map_modify_count)
+                return (map_copy, self._map_modify_count)
         return None

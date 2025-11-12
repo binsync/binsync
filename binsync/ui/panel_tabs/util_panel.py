@@ -371,7 +371,7 @@ class QUtilPanel(QWidget):
             self.controller.auto_pull_enabled = True
 
 class ServerClient():
-    def __init__(self,controller,worker_update_callback):
+    def __init__(self, controller, worker_update_callback):
         self.controller = controller
         self.old_post_data = {}
         self.worker_update_callback = worker_update_callback
@@ -431,7 +431,7 @@ class ServerClient():
                 l.info(self.users_data)
                 self.worker_update_callback(self.users_data)
     
-    def _submit_new_context(self,context,**_):
+    def _submit_new_context(self, context, **_):
         post_data = {}
         if context.addr:
             post_data["address"] = context.addr
