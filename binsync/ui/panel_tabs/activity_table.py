@@ -32,6 +32,7 @@ class ActivityTableModel(BinsyncTableModel):
         self.data_dict = {}
         self.saved_color_window = self.controller.table_coloring_window
         self.context_menu_cache = {}
+        self.aux_server_connected = False
 
     def data(self, index, role=Qt.DisplayRole):
         if not index.isValid():
@@ -44,9 +45,9 @@ class ActivityTableModel(BinsyncTableModel):
                 return self.row_data[row][col]
             elif col == ActivityTableModel.CURR_ADDR_COL:
                 data = self.row_data[row][col]
-                if not isinstance(data,int):
+                if not self.aux_server_connected:
                     return "ERROR - NOT CONNECTED TO SERVER?"
-                elif data == ActivityTableModel.USER_OFFLINE:
+                elif not isinstance(data,int):
                     return ""
                 elif data == ActivityTableModel.INVALID_ADDRESS:
                     return "Invalid Address"
@@ -141,9 +142,10 @@ class ActivityTableModel(BinsyncTableModel):
         
         If show = False (server disconnection), mark each user with None (Display "ERROR - NOT CONNECTED TO SERVER?" to indicate issue if column is displayed)
         '''
+        self.aux_server_connected = show
         updated_row_keys = set()
         for user_name, entry in self.data_dict.items():
-            entry[ActivityTableModel.CURR_ADDR_COL] = ActivityTableModel.USER_OFFLINE if show else None
+            entry[ActivityTableModel.CURR_ADDR_COL] = None
             updated_row_keys.add(user_name)
         self._update_changed_rows(self.data_dict, updated_row_keys)
         self.refresh_time_cells()
