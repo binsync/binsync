@@ -10,15 +10,15 @@ from werkzeug.serving import make_server
 
 from libbs.artifacts import Artifact, Context
 
-class BabyContext:
+class MockContext:
     def __init__(self):
         self.addr = 0x400010
         self.func_addr = 0x400000
 
-class BabyDeci:
+class MockDeci:
     def __init__(self):
         self.artifact_change_callbacks:dict[Artifact, list[function]] = {Context:[]}
-        self._context = BabyContext()
+        self._context = MockContext()
         
     def gui_active_context(self):
         return self._context
@@ -29,18 +29,18 @@ class BabyDeci:
         for callback_fn in self.artifact_change_callbacks[Context]:
             callback_fn(self._context)
         
-class BabyClient:
+class MockClient:
     def __init__(self,username):
         self.master_user = username
 
-class BabyController:
+class MockController:
     """
     A minimal implementation of a BSController that contains the information necessary for a ServerClient.
     This avoids the issue of having to create the DecompilerInterface that BSControllers typically need.
     """
     def __init__(self, username):
-        self.deci = BabyDeci()
-        self.client = BabyClient(username)
+        self.deci = MockDeci()
+        self.client = MockClient(username)
 
 class ServerThread(threading.Thread):
     """
@@ -82,7 +82,7 @@ class TestAuxServer(unittest.TestCase):
             client.run()
             
         server = Server(self.HOST,self.PORT)
-        client = ServerClient(BabyController("Alice"),lambda *args: None)
+        client = ServerClient(MockController("Alice"),lambda *args: None)
         server_thread = ServerThread(server)
         server_thread.start()
         try:
@@ -116,13 +116,13 @@ class TestAuxServer(unittest.TestCase):
         server_thread = ServerThread(server)
         server_thread.start()
         try:
-            controllers:list[BabyController] = []
+            controllers:list[MockController] = []
             clients:list[ServerClient] = []
             client_threads:list[threading.Thread] = []
             try:
                 # Set up contexts
                 for i in range(num_connections):
-                    controller = BabyController(f"User_{i}")
+                    controller = MockController(f"User_{i}")
                     controller.deci._update_context({
                         "address":0x40000+10*i,
                         "function_address":0x500000+10*i
@@ -165,7 +165,7 @@ class TestAuxServer(unittest.TestCase):
         try:
             client_threads:list[threading.Thread] = []
             try:
-                controller = BabyController("Alice")
+                controller = MockController("Alice")
                 client = ServerClient(controller,lambda *args: None)
                 client_threads.append(threading.Thread(target=client_task,args=(client,)))
                 for client_thread in client_threads:
@@ -205,7 +205,7 @@ class TestAuxServer(unittest.TestCase):
         server_thread = ServerThread(server)
         server_thread.start()
         try:
-            controllers:list[BabyController] = []
+            controllers:list[MockController] = []
             clients:list[ServerClient] = []
             client_threads:list[threading.Thread] = []
             client_beliefs = []
@@ -220,7 +220,7 @@ class TestAuxServer(unittest.TestCase):
             try:
                 # Set up contexts
                 for i in range(num_connections):
-                    controller = BabyController(f"User_{i}")
+                    controller = MockController(f"User_{i}")
                     controller.deci._update_context({
                         "address":0x40000+10*i,
                         "function_address":0x500000+10*i
