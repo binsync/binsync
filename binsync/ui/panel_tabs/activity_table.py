@@ -24,7 +24,6 @@ class ActivityTableModel(BinsyncTableModel):
     USERNAME_COL = 0
     CURR_ADDR_COL = 1
     ACTIVITY_COL = 2
-    USER_OFFLINE = -2
     INVALID_ADDRESS = -1
     def __init__(self, controller: BSController, col_headers=None, filter_cols=None, time_col=None,
                  addr_col=None, parent=None):
@@ -123,7 +122,7 @@ class ActivityTableModel(BinsyncTableModel):
         # Update data_dict with the updates to user contexts
         for user_name, entry in self.data_dict.items():
             if user_name not in user_contexts:
-                entry[ActivityTableModel.CURR_ADDR_COL] = ActivityTableModel.USER_OFFLINE
+                entry[ActivityTableModel.CURR_ADDR_COL] = None
             else:
                 func_addr = user_contexts[user_name]["func_addr"]
                 if func_addr is None:
