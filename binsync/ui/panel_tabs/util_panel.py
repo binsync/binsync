@@ -43,7 +43,7 @@ class ClientWorker(QObject):
         self.server_client.run()
         self.finished.emit()
     
-    def client_context_callback(self,contexts:dict[str,dict[str,int]]):
+    def client_context_callback(self, contexts: dict[str,dict[str,int]]):
         self.context_change.emit(contexts)
     
     def stop(self):

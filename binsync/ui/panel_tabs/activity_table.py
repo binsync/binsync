@@ -223,7 +223,7 @@ class ActivityTableView(BinsyncTableView):
 
         menu.popup(self.mapToGlobal(event.pos()))
         
-    def manage_address_visibility(self,show,client_worker=None):
+    def manage_address_visibility(self, show, client_worker=None):
         """
         If show = true, displays user current address column
         Otherwise, hides user current address column
@@ -258,7 +258,7 @@ class QActivityTable(QWidget):
     def update_table(self, states):
         self.table.update_table(states)
         
-    def add_live_addresses(self,client_worker):
+    def add_live_addresses(self, client_worker):
         self.table.manage_address_visibility(client_worker is not None,client_worker)
         
     def reload(self):
