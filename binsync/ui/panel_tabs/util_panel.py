@@ -31,8 +31,26 @@ from binsync.extras import EXTRAS_AVAILABLE
 
 l = logging.getLogger(__name__)
 
-
+# There are type warnings with the display_clients signal when ClientWorker is placed at the bottom
+class ClientWorker(QObject):
+    finished = Signal()
+    context_change = Signal(dict)
+    def __init__(self,controller):
+        super().__init__()
+        self.server_client = ServerClient(controller,self.client_context_callback)
+        
+    def run(self):
+        self.server_client.run()
+        self.finished.emit()
+    
+    def client_context_callback(self, contexts: dict[str,dict[str,int]]):
+        self.context_change.emit(contexts)
+    
+    def stop(self):
+        self.server_client.stop()
+        
 class QUtilPanel(QWidget):
+    display_clients = Signal(ClientWorker)
     def __init__(self, controller: BSController, parent=None):
         super().__init__(parent)
         self.controller = controller
@@ -222,15 +240,18 @@ class QUtilPanel(QWidget):
             self.client_thread.started.connect(self.client_worker.run)
             self.client_worker.finished.connect(self.client_thread.quit)
             self.client_thread.start()
+            self.display_clients.emit(self.client_worker) # Signal the activity table that it's time to display the current addresses column
         else:
             l.info("You are already connected to a server!")
 
     def _disconnect_from_server(self):
         if self.client_thread:
             self.client_worker.stop()
+            self.client_worker = None
             self.client_thread.quit()
             self.client_thread.wait() # Issue - will block on thread cleanup
             self.client_thread = None
+            self.display_clients.emit(None) # Signal the activity table that it's time to hide the current addresses column
         else:
             l.info("You are not currently connected to a server!")
 
@@ -350,38 +371,67 @@ class QUtilPanel(QWidget):
             self.controller.auto_pull_enabled = True
 
 class ServerClient():
-    def __init__(self,controller):
+    def __init__(self, controller, worker_update_callback):
         self.controller = controller
         self.old_post_data = {}
+        self.worker_update_callback = worker_update_callback
         
     def run(self):
         host = "[::1]" # TODO: make host configurable
         port = 7962 # TODO: make port configurable
         self.server_url = f"http://{host}:{port}"
+        self._etag = None
         parsed = urllib.parse.urlparse(self.server_url)
         if parsed.netloc != f"{host}:{port}":
             l.error("HOST AND PORT COMBINATION IS NOT VALID: NETLOC %s BUT HOST %s AND PORT %s",parsed.netloc,parsed.host,parsed.port)
-        self.manage_connections()
+        self._manage_connections()
 
-    def manage_connections(self):
+    def _manage_connections(self):
         self.sess = requests.Session()
+        callback_registered = False
         try:
             l.info(self.sess.get(self.server_url+"/connect").text)
             self.connected = True
-            # Broadcast the starting context upon connection with server
-            self.submit_new_context(self.controller.deci.gui_active_context())
+            
             # Register callback to broadcast function context
-            self.controller.deci.artifact_change_callbacks[Context].append(self.submit_new_context)
+            self.controller.deci.artifact_change_callbacks[Context].append(self._submit_new_context)
+            callback_registered = True
+            
+            # Broadcast the starting context upon connection with server
+            self._submit_new_context(self.controller.deci.gui_active_context())
+            
             while self.connected:
+                self._poll_users_data()
                 time.sleep(1)
             l.info(self.sess.get(self.server_url+"/disconnect").text)
         except requests.ConnectionError:
             l.info("Server seems to be unresponsive... (Click the disconnect button so that you can reconnect)")
         finally:
             # De-register callback to broadcast function context
-            self.controller.deci.artifact_change_callbacks[Context].remove(self.submit_new_context)
+            if callback_registered:
+                self.controller.deci.artifact_change_callbacks[Context].remove(self._submit_new_context)
     
-    def submit_new_context(self,context,**_):
+    def _poll_users_data(self):
+        """
+        Contacts server to check if there were any updates to user contexts
+        """
+        if self._etag == None:
+            r = self.sess.get(self.server_url+"/status")
+            self.users_data = r.json()
+            self._etag = r.headers["ETag"]
+            l.info(self.users_data)
+            self.worker_update_callback(self.users_data)
+        else:
+            r = self.sess.get(self.server_url+"/status",headers={
+                "If-None-Match":str(self._etag)
+            })
+            if r.status_code != 304:
+                self.users_data = r.json()
+                self._etag = r.headers["ETag"]
+                l.info(self.users_data)
+                self.worker_update_callback(self.users_data)
+    
+    def _submit_new_context(self, context, **_):
         post_data = {}
         if context.addr:
             post_data["address"] = context.addr
@@ -400,15 +450,3 @@ class ServerClient():
         self.connected = False
 
 
-class ClientWorker(QObject):
-    finished = Signal()
-    def __init__(self,controller):
-        super().__init__()
-        self.server_client = ServerClient(controller)
-        
-    def run(self):
-        self.server_client.run()
-        self.finished.emit()
-        
-    def stop(self):
-        self.server_client.stop()
