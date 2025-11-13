@@ -1,7 +1,7 @@
 import sys
 
 from binsync.extras.aux_server.aux_server import Server
-from binsync.ui.panel_tabs.util_panel import ServerClient
+from binsync.extras.aux_server.aux_client import ServerClient
 import unittest
 import threading
 import time
