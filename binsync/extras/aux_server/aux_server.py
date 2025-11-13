@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, Response
 from threading import Lock
 import logging
-from binsync.extras.server.store import ServerStore
+from binsync.extras.aux_server.store import ServerStore
 l = logging.getLogger(__name__)
     
 class Server:
