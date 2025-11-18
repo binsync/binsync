@@ -7,7 +7,7 @@ import threading
 import time
 import socket
 from werkzeug.serving import make_server
-
+from contextlib import contextmanager
 from libbs.artifacts import Artifact, Context
 
 class MockContext:
@@ -41,7 +41,7 @@ class MockController:
     def __init__(self, username):
         self.deci = MockDeci()
         self.client = MockClient(username)
-
+        
 class ServerThread(threading.Thread):
     """
     Implementation of the server that enables shutting down the server in between tests
@@ -55,6 +55,17 @@ class ServerThread(threading.Thread):
         
     def shutdown(self):
         self.server.shutdown()
+        
+@contextmanager
+def get_server_thread(server:Server):
+    s_thread = ServerThread(server)
+    s_thread.start()
+    try:
+        yield s_thread
+    finally:
+        s_thread.shutdown()
+        s_thread.join()
+    
 
 class TestAuxServer(unittest.TestCase):
     # These cannot be changed for now because the client can only connect to localhost on port 7962
@@ -113,9 +124,7 @@ class TestAuxServer(unittest.TestCase):
         def client_task(client:ServerClient):
             client.run()
         server = Server(self.HOST,self.PORT)
-        server_thread = ServerThread(server)
-        server_thread.start()
-        try:
+        with get_server_thread(server):
             controllers:list[MockController] = []
             clients:list[ServerClient] = []
             client_threads:list[threading.Thread] = []
@@ -148,9 +157,6 @@ class TestAuxServer(unittest.TestCase):
                     client.stop()
                 for client_thread in client_threads:
                     client_thread.join()
-        finally:
-            server_thread.shutdown()
-            server_thread.join()
     
     def test_context_change(self):
         """
@@ -160,9 +166,7 @@ class TestAuxServer(unittest.TestCase):
             client.run()
             
         server = Server(self.HOST,self.PORT)
-        server_thread = ServerThread(server)
-        server_thread.start()
-        try:
+        with get_server_thread(server):
             client_threads:list[threading.Thread] = []
             try:
                 controller = MockController("Alice")
@@ -193,18 +197,13 @@ class TestAuxServer(unittest.TestCase):
             finally:
                 for client_thread in client_threads:
                     client_thread.join()
-        finally:
-            server_thread.shutdown()
-            server_thread.join()
     
     def test_see_other_clients(self):
         num_connections = 10
         def client_task(client:ServerClient):
             client.run()
         server = Server(self.HOST,self.PORT)
-        server_thread = ServerThread(server)
-        server_thread.start()
-        try:
+        with get_server_thread(server):
             controllers:list[MockController] = []
             clients:list[ServerClient] = []
             client_threads:list[threading.Thread] = []
@@ -244,9 +243,6 @@ class TestAuxServer(unittest.TestCase):
                     client.stop()
                 for client_thread in client_threads:
                     client_thread.join()
-        finally:
-            server_thread.shutdown()
-            server_thread.join()
         
 
 
