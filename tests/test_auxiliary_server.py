@@ -124,10 +124,10 @@ class TestAuxServer(unittest.TestCase):
         def client_task(client:ServerClient):
             client.run()
         server = Server(self.HOST,self.PORT)
+        controllers:list[MockController] = []
+        clients:list[ServerClient] = []
+        client_threads:list[threading.Thread] = []
         with get_server_thread(server):
-            controllers:list[MockController] = []
-            clients:list[ServerClient] = []
-            client_threads:list[threading.Thread] = []
             try:
                 # Set up contexts
                 for i in range(num_connections):
@@ -166,8 +166,8 @@ class TestAuxServer(unittest.TestCase):
             client.run()
             
         server = Server(self.HOST,self.PORT)
+        client_threads:list[threading.Thread] = []
         with get_server_thread(server):
-            client_threads:list[threading.Thread] = []
             try:
                 controller = MockController("Alice")
                 client = ServerClient(controller,lambda *args: None)
@@ -203,17 +203,18 @@ class TestAuxServer(unittest.TestCase):
         def client_task(client:ServerClient):
             client.run()
         server = Server(self.HOST,self.PORT)
+        controllers:list[MockController] = []
+        clients:list[ServerClient] = []
+        client_threads:list[threading.Thread] = []
+        client_beliefs = []
+        
+        def update_belief(index, context):
+            client_beliefs[index] = context
+            
+        def make_belief_lambda(index):
+            # We need this function because of lambda late binding
+            return lambda context:update_belief(index,context)
         with get_server_thread(server):
-            controllers:list[MockController] = []
-            clients:list[ServerClient] = []
-            client_threads:list[threading.Thread] = []
-            client_beliefs = []
-            def update_belief(index, context):
-                client_beliefs[index] = context
-                
-            def make_belief_lambda(index):
-                # We need this function because of lambda late binding
-                return lambda context:update_belief(index,context)
             try:
                 # Set up contexts
                 for i in range(num_connections):
