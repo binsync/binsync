@@ -74,7 +74,7 @@ class QUtilPanel(QWidget):
             Defines which method is used to sync artifacts from another user.<br>
             <b>Non-Conflicting</b>: Only syncs artifacts that are not currently defined by you, so nothing is ever overwritten.<br>
             <b>Overwrite</b>: Syncs all artifacts regardless of your defined ones, overwriting everything.<br>
-            <b>Merge</b>: You pick which artifacts are synced via the UI. <b>Unimplemented.</b>
+            <b>Merge</b>: Opens a dialog to resolve conflicts when syncing. Currently supports function name conflicts only.
             </p>
             </html>
             """)
