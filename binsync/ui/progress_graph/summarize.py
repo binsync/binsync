@@ -65,7 +65,7 @@ def summarize_changes(controller: "BSController", graph: nx.DiGraph, save_locati
         decompilation_text += decompilations[func].text + "\n\n"
 
     total_text = PRE_TEXT + decompilation_text + POST_TEXT
-    thread = threading.Thread(target=query_model, args=("gpt-4", total_text, save_location), daemon=True)
+    thread = threading.Thread(target=query_model, args=("gpt-5", total_text, save_location), daemon=True)
     thread.start()
 
 
