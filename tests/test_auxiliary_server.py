@@ -94,10 +94,8 @@ class TestAuxServer(unittest.TestCase):
             
         server = Server(self.HOST,self.PORT)
         client = ServerClient(MockController("Alice"),lambda *args: None)
-        server_thread = ServerThread(server)
-        server_thread.start()
-        try:
-            client_threads:list[threading.Thread] = []
+        client_threads:list[threading.Thread] = []
+        with get_server_thread(server):
             try:
                 client_threads.append(threading.Thread(target=client_task,args=(client,)))
                 for client_thread in client_threads:
@@ -112,9 +110,6 @@ class TestAuxServer(unittest.TestCase):
             finally:
                 for client_thread in client_threads:
                     client_thread.join()
-        finally:
-            server_thread.shutdown()
-            server_thread.join()
     
     def test_many_connections(self):
         """
