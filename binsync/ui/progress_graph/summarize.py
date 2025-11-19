@@ -2,6 +2,7 @@ import logging
 import typing
 import threading
 
+
 import networkx as nx
 
 if typing.TYPE_CHECKING:
@@ -22,6 +23,7 @@ Your job is the following, concisely:
 - summarize any important comments left behind, like those about control or exploitation
 - summarize how these functions may all relate to each other 
 - summarize the changes in the program, and how they may affect the overall program understanding
+- format all of the text meant for a .txt file, so that it is easy to read
 
 Here is all the code of the functions that the experts have identified as important:
 
@@ -35,7 +37,10 @@ Using that information, summarize the changes and what conclusions the reverses 
 Prettyify your response with HTML so that it can be rendered and is easy to read. If you need, copy some code
 snippets from the above code to help explain your points.
 """
-
+def model_type(model_name):
+    model = ["gpt-5"] #Decided on only using gpt-5
+    if model_name in model:
+        return model_name
 
 def summarize_changes(controller: "BSController", graph: nx.DiGraph, save_location: str):
     """
@@ -60,7 +65,7 @@ def summarize_changes(controller: "BSController", graph: nx.DiGraph, save_locati
         decompilation_text += decompilations[func].text + "\n\n"
 
     total_text = PRE_TEXT + decompilation_text + POST_TEXT
-    thread = threading.Thread(target=query_model, args=("o3-mini", total_text, save_location), daemon=True)
+    thread = threading.Thread(target=query_model, args=("gpt-5", total_text, save_location), daemon=True)
     thread.start()
 
 

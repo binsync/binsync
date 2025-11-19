@@ -1,5 +1,6 @@
 import logging
 import typing
+import os
 
 import networkx as nx
 import numpy as np
@@ -13,6 +14,7 @@ from libbs.ui.qt_objects import (
     QGraphicsLineItem,
     QGraphicsItem,
     QLabel,
+    QLineEdit,
     QHBoxLayout,
     QVBoxLayout,
     QWidget,
@@ -368,7 +370,7 @@ class ProgressGraphWidget(QDialog):
 
         # Summarize button
         self.summarize_button = QPushButton("Summarize")
-        self.summarize_button.clicked.connect(self.summarize)
+        self.summarize_button.clicked.connect(self.checkApi)
         right_layout.addWidget(self.summarize_button)
 
         # Label right (only `changes` is pink)
@@ -471,6 +473,36 @@ class ProgressGraphWidget(QDialog):
         _l.info("Selected tag: %s", tag)
         self._tag_selection = tag
         self._update_progress_widgets()
+
+    
+    def checkApi(self):
+        if "sk" in os.environ.get("OPENAI_API_KEY"): #Check if the api key is set
+            self.summarize()
+        else:
+            dialog = QDialog(self) 
+            dialog.setWindowTitle("Enter Key")
+            
+            
+            dlg_layout = QVBoxLayout()
+            
+            key_input = QLineEdit()
+            key_input.setPlaceholderText("Enter OpenAi API Key:")
+            
+            save_btn = QPushButton("Save")
+            
+            dlg_layout.addWidget(QLabel("Key:"))
+            dlg_layout.addWidget(key_input)
+            def setAPIKey():
+                user_key = key_input.text()
+                os.environ["OPENAI_API_KEY"] = user_key #Will be set so that a dialog opens for user to enter key
+
+            dlg_layout.addWidget(save_btn)
+            
+            dialog.setLayout(dlg_layout)
+            save_btn.clicked.connect(setAPIKey)
+
+            
+            dialog.exec()
 
     def summarize(self, *args, **kwargs):
         if not EXTRAS_AVAILABLE:
