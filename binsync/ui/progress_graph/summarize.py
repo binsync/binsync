@@ -66,10 +66,14 @@ def summarize_changes(controller: "BSController", graph: nx.DiGraph, save_locati
 
     total_text = PRE_TEXT + decompilation_text + POST_TEXT
 <<<<<<< HEAD
+<<<<<<< HEAD
     thread = threading.Thread(target=query_model, args=("gpt-5", total_text, save_location), daemon=True)
 =======
     thread = threading.Thread(target=query_model, args=("gpt-4", total_text, save_location), daemon=True)
 >>>>>>> 501f4e1 (Changed to GPT-5, and created Dialog for setting API Key)
+=======
+    thread = threading.Thread(target=query_model, args=("gpt-5", total_text, save_location), daemon=True)
+>>>>>>> e01504f (Changed model to gpt-5 for real)
     thread.start()
 
 
