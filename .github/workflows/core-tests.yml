@@ -27,8 +27,8 @@ jobs:
         python -m pip install --upgrade pip
         pip install flake8 pytest
         (git clone https://github.com/binsync/libbs.git /tmp/libbs && cd /tmp/libbs && git checkout $BRANCH_NAME || true && pip install .)
-        pip install .
+        pip install .[extras]
 
     - name: Pytest
       run: |
-        pytest ./tests/test_client.py ./tests/test_state.py
+        pytest ./tests/test_client.py ./tests/test_state.py ./tests/test_auxiliary_server.py
