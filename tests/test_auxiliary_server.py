@@ -42,30 +42,21 @@ class MockController:
         self.deci = MockDeci()
         self.client = MockClient(username)
         
-class ServerThread(threading.Thread):
+class ServerThreadManager():
     """
     Implementation of the server that enables shutting down the server in between tests
     """
     def __init__(self, server:Server):
-        super().__init__()
         self.server = make_server(server.host,server.port,server.app)
         
-    def run(self):
-        self.server.serve_forever()
+    def __enter__(self):
+        self._thread = threading.Thread(target=self.server.serve_forever)
+        self._thread.start()
         
-    def shutdown(self):
+    def __exit__(self, exc_type, exc_val, exc_tb):
         self.server.shutdown()
+        self._thread.join()
         
-@contextmanager
-def get_server_thread(server:Server):
-    s_thread = ServerThread(server)
-    s_thread.start()
-    try:
-        yield s_thread
-    finally:
-        s_thread.shutdown()
-        s_thread.join()
-    
 
 class TestAuxServer(unittest.TestCase):
     # These cannot be changed for now because the client can only connect to localhost on port 7962
@@ -89,13 +80,10 @@ class TestAuxServer(unittest.TestCase):
         Make sure that the server can start up without issues.
         """
         server = Server(self.HOST,self.PORT)
-        server_thread = ServerThread(server)
-        server_thread.start()
-        time.sleep(1)
-        server_thread.shutdown()
+        with ServerThreadManager(server):
+            time.sleep(1)
         assert server.store._user_map == {} # Validate that the initial map of user functions is empty
         assert server.store._user_count == 0 # Validate that the initial user count is 0
-        server_thread.join()
         
     def test_single_connection(self):
         """
@@ -106,7 +94,7 @@ class TestAuxServer(unittest.TestCase):
             
         server = Server(self.HOST,self.PORT)
         self.clients.append(ServerClient(MockController("Alice"),lambda *args: None))
-        with get_server_thread(server):
+        with ServerThreadManager(server):
             self.client_threads.append(threading.Thread(target=client_task,args=(self.clients[0],)))
             for client_thread in self.client_threads:
                 client_thread.start()
@@ -126,7 +114,7 @@ class TestAuxServer(unittest.TestCase):
             client.run()
         server = Server(self.HOST,self.PORT)
         controllers:list[MockController] = []
-        with get_server_thread(server):
+        with ServerThreadManager(server):
             # Set up contexts
             for i in range(num_connections):
                 controller = MockController(f"User_{i}")
@@ -159,7 +147,7 @@ class TestAuxServer(unittest.TestCase):
             client.run()
             
         server = Server(self.HOST,self.PORT)
-        with get_server_thread(server):
+        with ServerThreadManager(server):
             controller = MockController("Alice")
             self.clients.append(ServerClient(controller,lambda *args: None))
             self.client_threads.append(threading.Thread(target=client_task,args=(self.clients[0],)))
@@ -198,7 +186,7 @@ class TestAuxServer(unittest.TestCase):
         def make_belief_lambda(index):
             # We need this function because of lambda late binding
             return lambda context:update_belief(index,context)
-        with get_server_thread(server):
+        with ServerThreadManager(server):
             # Set up contexts
             for i in range(num_connections):
                 controller = MockController(f"User_{i}")
