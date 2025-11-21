@@ -223,19 +223,17 @@ class QUtilPanel(QWidget):
 
         # Binsync server
         self.client_thread = None
-        connect_to_server_btn = QPushButton("Connect to Server...")
-        connect_to_server_btn.clicked.connect(self._display_connect_to_server)
-        extras_layout.addWidget(connect_to_server_btn)
-        disconnect_from_server_btn = QPushButton("Disconnect from Server...")
-        disconnect_from_server_btn.clicked.connect(self._disconnect_from_server)
-        extras_layout.addWidget(disconnect_from_server_btn)
+        self._connect_to_server_btn = QPushButton("Connect to Server...")
+        self._connect_to_server_btn.clicked.connect(self._handle_connection)
+        extras_layout.addWidget(self._connect_to_server_btn)
 
         extras_group.setLayout(extras_layout)
 
         return extras_group
 
-    def _display_connect_to_server(self):
+    def _handle_connection(self):
         if not self.client_thread:
+            # User is trying to connect
             self.client_thread = QThread()
             self.client_worker = ClientWorker(self.controller)
             self.client_worker.moveToThread(self.client_thread)
@@ -243,19 +241,16 @@ class QUtilPanel(QWidget):
             self.client_worker.finished.connect(self.client_thread.quit)
             self.client_thread.start()
             self.display_clients.emit(self.client_worker) # Signal the activity table that it's time to display the current addresses column
+            self._connect_to_server_btn.setText("Disconnect From Server...")
         else:
-            l.info("You are already connected to a server!")
-
-    def _disconnect_from_server(self):
-        if self.client_thread:
+            # User is trying to disconnect
             self.client_worker.stop()
             self.client_worker = None
             self.client_thread.quit()
             self.client_thread.wait() # Issue - will block on thread cleanup
             self.client_thread = None
             self.display_clients.emit(None) # Signal the activity table that it's time to hide the current addresses column
-        else:
-            l.info("You are not currently connected to a server!")
+            self._connect_to_server_btn.setText("Connect to Server...") # Text is hardcoded and duplicates setup - good idea?
 
     def _handle_progress_view(self):
         from ..progress_graph.progress_window import ProgressGraphWidget
