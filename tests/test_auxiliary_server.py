@@ -113,8 +113,7 @@ class TestAuxServer(unittest.TestCase):
             time.sleep(1)
             
             assert server.store._user_count == 1 # Verify that the server received the connection
-            for client in self.clients:
-                client.stop()
+            self.clients.pop(0).stop()
             time.sleep(1)
             assert server.store._user_count == 0 # Verify that server received disconnection
     
@@ -127,38 +126,30 @@ class TestAuxServer(unittest.TestCase):
             client.run()
         server = Server(self.HOST,self.PORT)
         controllers:list[MockController] = []
-        clients:list[ServerClient] = []
-        client_threads:list[threading.Thread] = []
         with get_server_thread(server):
-            try:
-                # Set up contexts
-                for i in range(num_connections):
-                    controller = MockController(f"User_{i}")
-                    controller.deci._update_context({
-                        "address":0x40000+10*i,
-                        "function_address":0x500000+10*i
-                    })
-                    controllers.append(controller)
-                    client = ServerClient(controller,lambda *args:None)
-                    clients.append(client)
-                    client_thread = threading.Thread(target=client_task,args=(client,))
-                    client_threads.append(client_thread)
-                
-                # Start up client threads
-                for client_thread in client_threads:
-                    client_thread.start()
-                time.sleep(1)
-                # Make sure that each user's function context is present in the server's storage
-                contexts_dict,_ = server.store.getUserData()
-                for controller in controllers:
-                    user_entry = contexts_dict[controller.client.master_user]
-                    assert user_entry["addr"] == controller.deci._context.addr
-                    assert user_entry["func_addr"] == controller.deci._context.func_addr
-            finally:
-                for client in clients:
-                    client.stop()
-                for client_thread in client_threads:
-                    client_thread.join()
+            # Set up contexts
+            for i in range(num_connections):
+                controller = MockController(f"User_{i}")
+                controller.deci._update_context({
+                    "address":0x40000+10*i,
+                    "function_address":0x500000+10*i
+                })
+                controllers.append(controller)
+                client = ServerClient(controller,lambda *args:None)
+                self.clients.append(client)
+                client_thread = threading.Thread(target=client_task,args=(client,))
+                self.client_threads.append(client_thread)
+            
+            # Start up client threads
+            for client_thread in self.client_threads:
+                client_thread.start()
+            time.sleep(1)
+            # Make sure that each user's function context is present in the server's storage
+            contexts_dict,_ = server.store.getUserData()
+            for controller in controllers:
+                user_entry = contexts_dict[controller.client.master_user]
+                assert user_entry["addr"] == controller.deci._context.addr
+                assert user_entry["func_addr"] == controller.deci._context.func_addr
     
     def test_context_change(self):
         """
@@ -168,46 +159,37 @@ class TestAuxServer(unittest.TestCase):
             client.run()
             
         server = Server(self.HOST,self.PORT)
-        client_threads:list[threading.Thread] = []
         with get_server_thread(server):
-            try:
-                controller = MockController("Alice")
-                client = ServerClient(controller,lambda *args: None)
-                client_threads.append(threading.Thread(target=client_task,args=(client,)))
-                for client_thread in client_threads:
-                    client_thread.start()
-                time.sleep(1)
+            controller = MockController("Alice")
+            self.clients.append(ServerClient(controller,lambda *args: None))
+            self.client_threads.append(threading.Thread(target=client_task,args=(self.clients[0],)))
+            for client_thread in self.client_threads:
+                client_thread.start()
+            time.sleep(1)
+            
+            contexts_dict,_ = server.store.getUserData()
+            user_entry = contexts_dict[controller.client.master_user]
+            assert user_entry["addr"] == controller.deci._context.addr
+            assert user_entry["func_addr"] == controller.deci._context.func_addr
+            
+            # Update!
+            controller.deci._update_context({
+                "address":0x444444,
+                "function_address":0x454545
+            })
+            time.sleep(1)
+            
+            contexts_dict,_ = server.store.getUserData()
+            user_entry = contexts_dict[controller.client.master_user]
+            assert user_entry["addr"] == controller.deci._context.addr
+            assert user_entry["func_addr"] == controller.deci._context.func_addr
                 
-                contexts_dict,_ = server.store.getUserData()
-                user_entry = contexts_dict[controller.client.master_user]
-                assert user_entry["addr"] == controller.deci._context.addr
-                assert user_entry["func_addr"] == controller.deci._context.func_addr
-                
-                # Update!
-                controller.deci._update_context({
-                    "address":0x444444,
-                    "function_address":0x454545
-                })
-                time.sleep(1)
-                
-                contexts_dict,_ = server.store.getUserData()
-                user_entry = contexts_dict[controller.client.master_user]
-                assert user_entry["addr"] == controller.deci._context.addr
-                assert user_entry["func_addr"] == controller.deci._context.func_addr
-                
-                client.stop()
-            finally:
-                for client_thread in client_threads:
-                    client_thread.join()
-    
     def test_see_other_clients(self):
         num_connections = 10
         def client_task(client:ServerClient):
             client.run()
         server = Server(self.HOST,self.PORT)
         controllers:list[MockController] = []
-        clients:list[ServerClient] = []
-        client_threads:list[threading.Thread] = []
         client_beliefs = []
         
         def update_belief(index, context):
@@ -217,35 +199,29 @@ class TestAuxServer(unittest.TestCase):
             # We need this function because of lambda late binding
             return lambda context:update_belief(index,context)
         with get_server_thread(server):
-            try:
-                # Set up contexts
-                for i in range(num_connections):
-                    controller = MockController(f"User_{i}")
-                    controller.deci._update_context({
-                        "address":0x40000+10*i,
-                        "function_address":0x500000+10*i
-                    })
-                    controllers.append(controller)
-                    client = ServerClient(controller,make_belief_lambda(i))
-                    clients.append(client)
-                    client_thread = threading.Thread(target=client_task,args=(client,))
-                    client_threads.append(client_thread)
-                    
-                    client_beliefs.append({})
-                # Start up client threads
-                for client_thread in client_threads:
-                    client_thread.start()
-                time.sleep(2)
-                # Make sure everyone's beliefs are the same
-                for i in range(len(client_beliefs)-1):
-                    assert client_beliefs[i] == client_beliefs[i+1]
-                # Make sure everyone's beliefs match up with the server
-                assert client_beliefs[0] == server.store._user_map  
-            finally:
-                for client in clients:
-                    client.stop()
-                for client_thread in client_threads:
-                    client_thread.join()
+            # Set up contexts
+            for i in range(num_connections):
+                controller = MockController(f"User_{i}")
+                controller.deci._update_context({
+                    "address":0x40000+10*i,
+                    "function_address":0x500000+10*i
+                })
+                controllers.append(controller)
+                client = ServerClient(controller,make_belief_lambda(i))
+                self.clients.append(client)
+                client_thread = threading.Thread(target=client_task,args=(client,))
+                self.client_threads.append(client_thread)
+                
+                client_beliefs.append({})
+            # Start up client threads
+            for client_thread in self.client_threads:
+                client_thread.start()
+            time.sleep(2)
+            # Make sure everyone's beliefs are the same
+            for i in range(len(client_beliefs)-1):
+                assert client_beliefs[i] == client_beliefs[i+1]
+            # Make sure everyone's beliefs match up with the server
+            assert client_beliefs[0] == server.store._user_map  
         
 
 
