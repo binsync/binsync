@@ -72,6 +72,18 @@ class TestAuxServer(unittest.TestCase):
     HOST = "::"
     PORT = 7962
         
+    def setUp(self):
+        self.clients:list[ServerClient] = []
+        self.client_threads:list[threading.Thread] = []
+        
+    def tearDown(self):
+        # Note: Not all clients may be present in self.clients as some tests shut down the clients early
+        for client in self.clients:
+            client.stop()
+        for client_thread in self.client_threads:
+            client_thread.join()
+            
+    
     def test_run_server(self):
         """
         Make sure that the server can start up without issues.
@@ -93,23 +105,18 @@ class TestAuxServer(unittest.TestCase):
             client.run()
             
         server = Server(self.HOST,self.PORT)
-        client = ServerClient(MockController("Alice"),lambda *args: None)
-        client_threads:list[threading.Thread] = []
+        self.clients.append(ServerClient(MockController("Alice"),lambda *args: None))
         with get_server_thread(server):
-            try:
-                client_threads.append(threading.Thread(target=client_task,args=(client,)))
-                for client_thread in client_threads:
-                    client_thread.start()
-                time.sleep(1)
-                
-                assert server.store._user_count == 1 # Verify that the server received the connection
-                
+            self.client_threads.append(threading.Thread(target=client_task,args=(self.clients[0],)))
+            for client_thread in self.client_threads:
+                client_thread.start()
+            time.sleep(1)
+            
+            assert server.store._user_count == 1 # Verify that the server received the connection
+            for client in self.clients:
                 client.stop()
-                time.sleep(1)
-                assert server.store._user_count == 0 # Verify that server received disconnection
-            finally:
-                for client_thread in client_threads:
-                    client_thread.join()
+            time.sleep(1)
+            assert server.store._user_count == 0 # Verify that server received disconnection
     
     def test_many_connections(self):
         """
