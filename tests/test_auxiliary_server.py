@@ -217,6 +217,9 @@ class TestAuxServer(unittest.TestCase):
             for client_thread in self.client_threads:
                 client_thread.start()
             time.sleep(2)
+            
+            # Make sure beliefs have been updated to something
+            assert client_beliefs[0] != {}
             # Make sure everyone's beliefs are the same
             for i in range(len(client_beliefs)-1):
                 assert client_beliefs[i] == client_beliefs[i+1]
