@@ -18,7 +18,10 @@ from libbs.ui.qt_objects import (
     QIntValidator,
     QThread,
     QObject,
-    Signal
+    Signal,
+    QDialog,
+    QLineEdit,
+    QDialogButtonBox,
 )
 from libbs.artifacts import (
     Context
@@ -31,15 +34,47 @@ from binsync.extras import EXTRAS_AVAILABLE
 
 l = logging.getLogger(__name__)
 
+class AuxServerDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.first = QLineEdit("[::1]",self)
+        self.second = QLineEdit("7962",self)
+        buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        
+        layout = QVBoxLayout()
+        inputs_layout = QHBoxLayout()
+        
+        host_layout = QVBoxLayout()
+        host_layout.addWidget(QLabel("Host"))
+        host_layout.addWidget(self.first)
+        inputs_layout.addLayout(host_layout)
+        
+        port_layout = QVBoxLayout()
+        port_layout.addWidget(QLabel("Port"))
+        port_layout.addWidget(self.second)
+        inputs_layout.addLayout(port_layout)
+
+        layout.addLayout(inputs_layout)
+        
+        layout.addWidget(buttonBox)
+        buttonBox.accepted.connect(self.accept)
+        buttonBox.rejected.connect(self.reject)
+        
+        self.setLayout(layout)
+        
+    def getInputs(self)->tuple[str,str]:
+        return (self.first.text(), self.second.text())
+        
+
 # There are type warnings with the display_clients signal when ClientWorker is placed at the bottom
 class ClientWorker(QObject):
     finished = Signal()
     context_change = Signal(dict)
-    def __init__(self,controller):
+    def __init__(self,host:str,port:int,controller):
         super().__init__()
         from binsync.extras.aux_server.aux_client import ServerClient
 
-        self.server_client = ServerClient(controller,self.client_context_callback)
+        self.server_client = ServerClient(host,port,controller,self.client_context_callback)
         
     def run(self):
         self.server_client.run()
@@ -234,23 +269,33 @@ class QUtilPanel(QWidget):
     def _handle_connection(self):
         if not self.client_thread:
             # User is trying to connect
+            dialog = AuxServerDialog()
+            if dialog.exec():
+                host, port_str = dialog.getInputs()
+                if not port_str.isdigit():
+                    l.info("Port is not a valid number.")
+                    return
+            else:
+                l.info("Connection failed. Provide a host and port.")
+                return
             self.client_thread = QThread()
-            self.client_worker = ClientWorker(self.controller)
+            self._connect_to_server_btn.setText("Disconnect From Server...")
+            self.client_worker = ClientWorker(host,int(port_str),self.controller)
             self.client_worker.moveToThread(self.client_thread)
             self.client_thread.started.connect(self.client_worker.run)
             self.client_worker.finished.connect(self.client_thread.quit)
             self.client_thread.start()
             self.display_clients.emit(self.client_worker) # Signal the activity table that it's time to display the current addresses column
-            self._connect_to_server_btn.setText("Disconnect From Server...")
         else:
             # User is trying to disconnect
-            self.client_worker.stop()
-            self.client_worker = None
+            if self.client_worker: # Small possibility that client worker crashed on init and so is not a valid ClientWorker
+                self.client_worker.stop()
+                self.client_worker = None
             self.client_thread.quit()
             self.client_thread.wait() # Issue - will block on thread cleanup
             self.client_thread = None
-            self.display_clients.emit(None) # Signal the activity table that it's time to hide the current addresses column
             self._connect_to_server_btn.setText("Connect to Server...") # Text is hardcoded and duplicates setup - good idea?
+            self.display_clients.emit(None) # Signal the activity table that it's time to hide the current addresses column
 
     def _handle_progress_view(self):
         from ..progress_graph.progress_window import ProgressGraphWidget

@@ -8,18 +8,18 @@ from libbs.artifacts import (
 l = logging.getLogger(__name__)
 
 class ServerClient():
-    def __init__(self, controller, worker_update_callback):
+    def __init__(self, host:str, port:int, controller, worker_update_callback):
+        self.host = host
+        self.port = str(port)
         self.controller = controller
         self.old_post_data = {}
         self.worker_update_callback = worker_update_callback
         
     def run(self):
-        host = "[::1]" # TODO: make host configurable
-        port = 7962 # TODO: make port configurable
-        self.server_url = f"http://{host}:{port}"
+        self.server_url = f"http://{self.host}:{self.port}"
         self._etag = None
         parsed = urllib.parse.urlparse(self.server_url)
-        if parsed.netloc != f"{host}:{port}":
+        if parsed.netloc != f"{self.host}:{self.port}":
             l.error("HOST AND PORT COMBINATION IS NOT VALID: NETLOC %s BUT HOST %s AND PORT %s",parsed.netloc,parsed.host,parsed.port)
         self._manage_connections()
 
