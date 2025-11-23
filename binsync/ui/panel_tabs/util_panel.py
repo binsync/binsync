@@ -275,12 +275,14 @@ class QUtilPanel(QWidget):
                 if not port_str.isdigit():
                     l.info("Port is not a valid number.")
                     return
+                port = int(port_str)
             else:
-                l.info("Connection failed. Provide a host and port.")
+                # Connection was cancelled
                 return
+            self.client_worker = ClientWorker(host,port,self.controller)
             self.client_thread = QThread()
-            self._connect_to_server_btn.setText("Disconnect From Server...")
-            self.client_worker = ClientWorker(host,int(port_str),self.controller)
+            # Text is set up here because existence of thread controls the behavior of the button
+            self._connect_to_server_btn.setText("Disconnect From Server...") 
             self.client_worker.moveToThread(self.client_thread)
             self.client_thread.started.connect(self.client_worker.run)
             self.client_worker.finished.connect(self.client_thread.quit)

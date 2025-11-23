@@ -1,4 +1,4 @@
-import urllib
+import urllib.parse
 import requests
 import logging
 import time
@@ -20,7 +20,7 @@ class ServerClient():
         self._etag = None
         parsed = urllib.parse.urlparse(self.server_url)
         if parsed.netloc != f"{self.host}:{self.port}":
-            l.error("HOST AND PORT COMBINATION IS NOT VALID: NETLOC %s BUT HOST %s AND PORT %s",parsed.netloc,parsed.host,parsed.port)
+            l.error("HOST AND PORT COMBINATION IS NOT VALID: NETLOC %s BUT HOST %s AND PORT %s",parsed.netloc,parsed.hostname,parsed.port)
         self._manage_connections()
 
     def _manage_connections(self):
