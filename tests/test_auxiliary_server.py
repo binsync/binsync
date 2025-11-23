@@ -59,7 +59,7 @@ class ServerThreadManager():
         
 
 class TestAuxServer(unittest.TestCase):
-    HOST = "[::1]"
+    HOST = "127.0.0.1"
     PORT = 7962
         
     def setUp(self):
