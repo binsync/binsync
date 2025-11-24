@@ -15,16 +15,10 @@ _l = logging.getLogger(__name__)
 
 
 class FunctionNameMergeDialog(QDialog):
-    """
-    Dialog for resolving a function name conflict between the current and
-    incoming versions of a function.
-
-    It presents the two candidate signatures and lets the user choose which
-    name should be used in the final merged state via a dropdown.
-    """
-
     def __init__(self, current_signature, incoming_signature, parent=None):
         super().__init__(parent)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.resize(480, 220)
         self._current_signature = current_signature
         self._incoming_signature = incoming_signature
 
@@ -67,9 +61,15 @@ class FunctionNameMergeDialog(QDialog):
 
         choice_label = QLabel("Final name:", self)
         self._choice_combo = QComboBox(self)
-        # Highlight the dropdown to indicate there is a conflict to resolve
         self._choice_combo.setStyleSheet(
-            "QComboBox { background-color: rgb(255, 255, 200); }"
+            "QComboBox { "
+            "background-color: rgb(255, 255, 200); "
+            "border: 1px solid rgb(200, 180, 0); "
+            "padding: 2px 4px; "
+            "} "
+            "QComboBox QAbstractItemView { "
+            "background-color: rgb(255, 255, 230); "
+            "}"
         )
 
         current_text = self._current_signature or "<no name>"
