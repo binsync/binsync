@@ -370,7 +370,7 @@ class ProgressGraphWidget(QDialog):
 
         # Summarize button
         self.summarize_button = QPushButton("Summarize")
-        self.summarize_button.clicked.connect(self.checkApi)
+        self.summarize_button.clicked.connect(self.summarize)
         right_layout.addWidget(self.summarize_button)
 
         # Label right (only `changes` is pink)
@@ -478,10 +478,14 @@ class ProgressGraphWidget(QDialog):
     def checkApi(self):
         if "sk" in os.environ.get("OPENAI_API_KEY"): #Check if the api key is set
 <<<<<<< HEAD
+<<<<<<< HEAD
             _l.info("API Key set already, good to go!")
 =======
             self.summarize()
 >>>>>>> 501f4e1 (Changed to GPT-5, and created Dialog for setting API Key)
+=======
+            print("API Key set already, good to go!")
+>>>>>>> 015e203 (Put CheckApi in Summarize and changed button function to Summarize)
         else:
             dialog = QDialog(self) 
             dialog.setWindowTitle("Enter Key")
@@ -500,10 +504,14 @@ class ProgressGraphWidget(QDialog):
                 user_key = key_input.text()
                 os.environ["OPENAI_API_KEY"] = user_key #Will be set so that a dialog opens for user to enter key
 <<<<<<< HEAD
+<<<<<<< HEAD
                 dialog.accept()
 =======
 
 >>>>>>> 501f4e1 (Changed to GPT-5, and created Dialog for setting API Key)
+=======
+                dialog.accept()
+>>>>>>> 015e203 (Put CheckApi in Summarize and changed button function to Summarize)
             dlg_layout.addWidget(save_btn)
             
             dialog.setLayout(dlg_layout)
