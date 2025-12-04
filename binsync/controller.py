@@ -1173,13 +1173,57 @@ class BSController:
         elif merge_level == MergeLevel.NON_CONFLICTING:
             merge_art = art1.nonconflict_merge(art2, **kwargs)
         elif merge_level == MergeLevel.MERGE:
-            _l.warning("Manual Merging is not currently supported, using non-conflict syncing...")
-            merge_art = art1.nonconflict_merge(art2, **kwargs)
+            # Manual merge is only supported for function name conflicts in GUI mode
+            if isinstance(art1, Function) and isinstance(art2, Function):
+                merge_art = self._merge_function_with_dialog(art1, art2, **kwargs)
+            else:
+                _l.debug("Manual merge not supported for %s, using non-conflict merge", type(art1).__name__)
+                merge_art = art1.nonconflict_merge(art2, **kwargs)
 
         else:
             raise Exception("Your BinSync Client has an unsupported Sync Level activated")
 
         return merge_art
+
+    def _merge_function_with_dialog(self, func1: Function, func2: Function, **kwargs) -> Function:
+        """
+        Merge two functions, opening a dialog for name conflicts if in GUI mode.
+        For all other attributes, use non-conflicting merge.
+        """
+        # Start with a non-conflicting merge for everything
+        merged_func = func1.nonconflict_merge(func2, **kwargs)
+
+        # Check if there's a name conflict that needs manual resolution
+        name1 = func1.name
+        name2 = func2.name
+
+        # Only open dialog if both names exist, are different, and neither is a default name
+        has_conflict = (
+            name1 is not None and name2 is not None and
+            name1 != name2 and
+            not self.is_default_name(name1) and
+            not self.is_default_name(name2)
+        )
+
+        if has_conflict and not self.headless:
+            from binsync.ui.function_merge_dialog import resolve_function_name_conflict
+
+            _l.info("Function name conflict detected: '%s' vs '%s'", name1, name2)
+            choice = resolve_function_name_conflict(name1, name2)
+
+            if choice == "current":
+                merged_func.name = name1
+                _l.info("User selected current name: '%s'", name1)
+            elif choice == "incoming":
+                merged_func.name = name2
+                _l.info("User selected incoming name: '%s'", name2)
+            else:
+                # Dialog was cancelled, keep the non-conflicting merge result
+                _l.info("Merge dialog cancelled, keeping non-conflicting merge result")
+        elif has_conflict:
+            _l.debug("Function name conflict in headless mode, using non-conflicting merge")
+
+        return merged_func
 
     def changed_artifacts_of_type(self, type_: Artifact, users=[], states={}):
         prop_map = {
