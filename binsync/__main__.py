@@ -2,6 +2,7 @@ import argparse
 import logging
 from pathlib import Path
 import os
+import sys
 
 from libbs.decompilers import SUPPORTED_DECOMPILERS, GHIDRA_DECOMPILER, ANGR_DECOMPILER, IDA_DECOMPILER, BINJA_DECOMPILER
 
@@ -59,6 +60,7 @@ def main():
     parser.add_argument(
         "-s", "--server", choices=[GHIDRA_DECOMPILER, "headless"], help="""
         Execute the decompiler server for headless connection (only Ghidra supported).
+        If extras are enabled, can instead start up the auxiliar server using "headless".
         """
     )
     parser.add_argument(
@@ -106,6 +108,16 @@ def main():
             type=str,
             choices=SUPPORTED_DECOMPILERS
         )
+        parser.add_argument(
+            "--host", help="""
+            The host address to be used for the auxiliary server. Only relevant if -s headless specified.
+            """, type=str
+        )
+        parser.add_argument(
+            "--port", help="""
+            The port to be used for the auxiliary server. Only relevant if -s headless specified.
+            """, type=int
+        )
 
     args = parser.parse_args()
 
@@ -144,7 +156,9 @@ def main():
             start_ghidra_remote_ui()
         elif args.server == "headless":
             from binsync.extras.aux_server.aux_server import Server
-            server = Server("::",7962)
+            host = args.host or "::"
+            port = args.port or 7962
+            server = Server(host,port)
             server.run()
         else:
             exit(1)

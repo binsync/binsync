@@ -59,8 +59,7 @@ class ServerThreadManager():
         
 
 class TestAuxServer(unittest.TestCase):
-    # These cannot be changed for now because the client can only connect to localhost on port 7962
-    HOST = "::"
+    HOST = "127.0.0.1"
     PORT = 7962
         
     def setUp(self):
@@ -93,7 +92,7 @@ class TestAuxServer(unittest.TestCase):
             client.run()
             
         server = Server(self.HOST,self.PORT)
-        self.clients.append(ServerClient(MockController("Alice"),lambda *args: None))
+        self.clients.append(ServerClient(self.HOST, self.PORT, MockController("Alice"),lambda *args: None))
         with ServerThreadManager(server):
             self.client_threads.append(threading.Thread(target=client_task,args=(self.clients[0],)))
             for client_thread in self.client_threads:
@@ -123,7 +122,7 @@ class TestAuxServer(unittest.TestCase):
                     "function_address":0x500000+10*i
                 })
                 controllers.append(controller)
-                client = ServerClient(controller,lambda *args:None)
+                client = ServerClient(self.HOST, self.PORT, controller,lambda *args:None)
                 self.clients.append(client)
                 client_thread = threading.Thread(target=client_task,args=(client,))
                 self.client_threads.append(client_thread)
@@ -149,7 +148,7 @@ class TestAuxServer(unittest.TestCase):
         server = Server(self.HOST,self.PORT)
         with ServerThreadManager(server):
             controller = MockController("Alice")
-            self.clients.append(ServerClient(controller,lambda *args: None))
+            self.clients.append(ServerClient(self.HOST, self.PORT, controller,lambda *args: None))
             self.client_threads.append(threading.Thread(target=client_task,args=(self.clients[0],)))
             for client_thread in self.client_threads:
                 client_thread.start()
@@ -195,7 +194,7 @@ class TestAuxServer(unittest.TestCase):
                     "function_address":0x500000+10*i
                 })
                 controllers.append(controller)
-                client = ServerClient(controller,make_belief_lambda(i))
+                client = ServerClient(self.HOST, self.PORT, controller,make_belief_lambda(i))
                 self.clients.append(client)
                 client_thread = threading.Thread(target=client_task,args=(client,))
                 self.client_threads.append(client_thread)
