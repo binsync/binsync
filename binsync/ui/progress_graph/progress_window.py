@@ -479,6 +479,7 @@ class ProgressGraphWidget(QDialog):
         if "sk" in os.environ.get("OPENAI_API_KEY"): #Check if the api key is set
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
             _l.info("API Key set already, good to go!")
 =======
             self.summarize()
@@ -486,6 +487,9 @@ class ProgressGraphWidget(QDialog):
 =======
             print("API Key set already, good to go!")
 >>>>>>> 015e203 (Put CheckApi in Summarize and changed button function to Summarize)
+=======
+            _l.info("API Key set already, good to go!")
+>>>>>>> 8be6043 (_l.info instead of print)
         else:
             dialog = QDialog(self) 
             dialog.setWindowTitle("Enter Key")
