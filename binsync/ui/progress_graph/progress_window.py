@@ -1,5 +1,6 @@
 import logging
 import typing
+import os
 
 import networkx as nx
 import numpy as np
@@ -13,6 +14,7 @@ from libbs.ui.qt_objects import (
     QGraphicsLineItem,
     QGraphicsItem,
     QLabel,
+    QLineEdit,
     QHBoxLayout,
     QVBoxLayout,
     QWidget,
@@ -472,10 +474,43 @@ class ProgressGraphWidget(QDialog):
         self._tag_selection = tag
         self._update_progress_widgets()
 
+    
+    def checkApi(self):
+        if "sk" in os.environ.get("OPENAI_API_KEY"): #Check if the api key is set
+            _l.info("API Key set already, good to go!")
+        else:
+            dialog = QDialog(self) 
+            dialog.setWindowTitle("Enter Key")
+            
+            
+            dlg_layout = QVBoxLayout()
+            
+            key_input = QLineEdit()
+            key_input.setPlaceholderText("Enter OpenAi API Key:")
+            
+            save_btn = QPushButton("Save")
+            
+            dlg_layout.addWidget(QLabel("Key:"))
+            dlg_layout.addWidget(key_input)
+            def setAPIKey():
+                user_key = key_input.text()
+                os.environ["OPENAI_API_KEY"] = user_key #Will be set so that a dialog opens for user to enter key
+                dialog.accept()
+            dlg_layout.addWidget(save_btn)
+            
+            dialog.setLayout(dlg_layout)
+            save_btn.clicked.connect(setAPIKey)
+
+            
+            dialog.exec()
+
     def summarize(self, *args, **kwargs):
         if not EXTRAS_AVAILABLE:
             _l.error("Summarization requires extras, which are not available.")
             return
+
+        #Call checkApi here, so we can check for extras first and then see if api key is set before selecting a save file
+        self.checkApi()
 
         file_location, _ = QFileDialog.getSaveFileName(None, "Save File", "", "All Files (*);;Text Files (*.txt)")
         _l.info("Summarizing changes...")
