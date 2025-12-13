@@ -1,23 +1,36 @@
 import logging
+import idaapi
 
 try:
     # new location for sip
     # https://www.riverbankcomputing.com/static/Docs/PyQt5/incompatibilities.html#pyqt-v5-11
-    from PyQt5 import sip
+    if idaapi.IDA_SDK_VERSION < 920:
+        from PyQt5 import sip
+    else:
+        from PyQt6 import sip
 except ImportError:
     import sip
-from PyQt5.QtGui import QKeyEvent
-from PyQt5 import QtCore
-from PyQt5.QtWidgets import QWidget, QVBoxLayout
-from PyQt5.QtCore import Qt
 
-import idaapi
+if idaapi.IDA_SDK_VERSION < 920:
+    from PyQt5.QtGui import QKeyEvent
+    from PyQt5 import QtCore
+    from PyQt5.QtWidgets import QWidget, QVBoxLayout
+    from PyQt5.QtCore import Qt
+else:
+    from PySide6.QtGui import QKeyEvent
+    from PySide6 import QtCore
+    from PySide6.QtWidgets import QWidget, QVBoxLayout
+    from PySide6.QtCore import Qt
+
 import ida_kernwin
 import ida_hexrays
 import idautils
 
 from libbs.ui.version import set_ui_version
-set_ui_version("PyQt5")
+if idaapi.IDA_SDK_VERSION < 920:
+    set_ui_version("PyQt5")
+else:
+    set_ui_version("PySide6")
 from libbs.decompilers.ida.compat import has_older_hexrays_version, generate_generic_ida_plugic_cls
 from libbs.decompilers.ida.ida_ui import IDAWidgetWrapper
 from libbs.decompilers.ida.interface import IDAInterface
