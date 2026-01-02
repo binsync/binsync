@@ -2,7 +2,7 @@
 # @author BinSync Team
 # @category Collaboration
 # @menupath Tools.BinSync.Connect...
-#@runtime PyGhidra
+# @runtime PyGhidra
 
 def create_plugin(*args, **kwargs):
     # REPLACE_ME this import with an import of your plugin's create_plugin function
@@ -20,5 +20,11 @@ def PLUGIN_ENTRY(*args, **kwargs):
     """
     return create_plugin(*args, **kwargs)
 
+try:
+    import idaapi
+    HAS_IDA = True
+except ImportError:
+    HAS_IDA = False
 
-create_plugin()
+if not HAS_IDA:
+    create_plugin()

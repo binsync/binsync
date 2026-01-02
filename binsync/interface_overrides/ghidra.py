@@ -2,19 +2,19 @@ import logging
 import sys
 import threading
 from time import sleep
+import subprocess
 
 from libbs.ui.version import set_ui_version
 set_ui_version("PySide6")
 from libbs.ui.qt_objects import QMainWindow, QApplication, QTimer
 from libbs.api import DecompilerInterface
 from libbs.api.decompiler_server import DecompilerServer
-from libbs.decompilers import GHIDRA_DECOMPILER
 
 from binsync.ui.control_panel import ControlPanel
 from binsync.ui.config_dialog import ConfigureBSDialog
 from binsync.controller import BSController
 
-l = logging.getLogger(__name__)
+_l = logging.getLogger(__name__)
 
 
 class ControlPanelWindow(QMainWindow):
@@ -87,12 +87,36 @@ class GhidraRemoteInterfaceWrapper:
         self.server_thread = threading.Thread(target=self.server.start, daemon=True)
         self.server_thread.run()
         sleep(1)
-        print("Server started on socket:", self.server.socket_path)
+        _l.info("Server started on socket: %s", self.server.socket_path)
+        self.start_gui_in_new_process()
+
+    @staticmethod
+    def start_gui_in_new_process():
+        _l.info("Starting the Ghidra BinSync UI in a new process...")
+        # first attempt to use the binsync binary
+        proc = subprocess.Popen(
+            ["binsync", "-s", "ghidra"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        sleep(1)
+        if proc.poll() is not None:
+            # fallback to starting the UI using python modules
+            proc = subprocess.Popen(
+                ["python", "-m", "binsync", "-s", "ghidra"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            sleep(1)
+            if proc.poll() is not None:
+                raise RuntimeError(f"Unable to start the new Python process for the Ghidra BinSync UI: {proc.stderr}")
+        _l.info("Ghidra BinSync UI process started with PID %d", proc.pid)
 
     @property
     def gui_plugin(self):
         """
         Just a stub to conform to the interface expected by the decompiler.
         """
-        #self.server.wait_for_shutdown()
         return None
