@@ -102,6 +102,7 @@ class GhidraRemoteInterfaceWrapper:
         )
         sleep(1)
         if proc.poll() is not None:
+            _l.warning("Unable to start the Ghidra BinSync UI using the 'binsync' binary: %s", proc.stderr.read())
             # fallback to starting the UI using python modules
             proc = subprocess.Popen(
                 ["python", "-m", "binsync", "-s", "ghidra"],
@@ -111,7 +112,7 @@ class GhidraRemoteInterfaceWrapper:
             )
             sleep(1)
             if proc.poll() is not None:
-                raise RuntimeError(f"Unable to start the new Python process for the Ghidra BinSync UI: {proc.stderr}")
+                raise RuntimeError(f"Unable to start the new Python process for the Ghidra BinSync UI: {proc.stderr.read()}")
         _l.info("Ghidra BinSync UI process started with PID %d", proc.pid)
 
     @property
