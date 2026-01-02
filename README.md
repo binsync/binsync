@@ -45,7 +45,7 @@ If you are planning on installing the package to be editable (`-e`), like in a d
 - IDA Pro: **>= 8.4** (if you have an older version, use `v4.10.1`)
 - Binary Ninja: **>= 2.4**
 - angr-management: **>= 9.0**
-- Ghidra: **>= 10.1**
+- Ghidra: **>= 12.0** (in PyGhidra mode)
 
 All versions require **Python >= 3.10** and **Git** installed on your system. 
 Ghidra support is still very much in early stage, so only expect the minimal features like artifact name syncing and comments.
@@ -112,7 +112,7 @@ To understand the difference between artifact support, pull, push, and auto push
 For scripting please see [Lib BinSync](https://github.com/binsync/libbs), which allows you to do all lifting and data manipulation in Python.
 
 ## Sponsors 
-BinSync and it's associated projects would not be possible without sponsorship. 
+BinSync and its associated projects would not be possible without sponsorship. 
 In no particular order, we'd like to thank all the organizations that have previously or are currently sponsoring
 one of the many BinSync projects.
 
