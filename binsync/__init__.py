@@ -1,4 +1,4 @@
-__version__ = "5.8.0"
+__version__ = "5.9.0"
 # don't forget to bump binsync/stub_files/plugin.json
 
 import os
@@ -9,6 +9,7 @@ import platform
 #
 
 import logging
+
 logging.getLogger("binsync").addHandler(logging.NullHandler())
 from binsync.loggercfg import Loggers
 loggers = Loggers()
@@ -34,11 +35,10 @@ def create_plugin(*args, **kwargs):
         deci_cls = BinjaBSInterface
     elif current_decompiler == ANGR_DECOMPILER:
         # angr: special cased since BinSync is shipped in angr
-        pass
         deci_cls = None
     elif current_decompiler == GHIDRA_DECOMPILER:
-        pass
-        deci_cls = None
+        from binsync.interface_overrides.ghidra import GhidraRemoteInterfaceWrapper
+        deci_cls = GhidraRemoteInterfaceWrapper
     else:
         raise ValueError(f"Unknown decompiler {current_decompiler}")
 
@@ -49,7 +49,10 @@ def create_plugin(*args, **kwargs):
         deci = deci_cls(
             plugin_name="BinSync",
             init_plugin=True,
+            force_decompiler=current_decompiler,
             gui_init_args=args,
             gui_init_kwargs=kwargs
         )
         return deci.gui_plugin
+
+    return None

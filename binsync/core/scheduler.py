@@ -46,6 +46,7 @@ class Job:
 
 
 class Scheduler:
+    MAX_WAIT_TIME = 10
     def __init__(self, sleep_interval=0.05, name="Scheduler"):
         self.sleep_interval = sleep_interval
         self.name = name
@@ -63,7 +64,7 @@ class Scheduler:
 
     def _worker_thread(self):
         while self._work:
-            self._complete_a_job(block=True)
+            self._complete_a_job(block=True, timeout=self.MAX_WAIT_TIME)
 
     def schedule_job(self, job: Job, priority=SchedSpeed.SLOW):
         if not self._work:
@@ -85,12 +86,17 @@ class Scheduler:
             else:
                 raise job.exception
 
-    def _complete_a_job(self, block=False):
-        if block:
-            _, job = self._job_queue.get()
-        elif self._job_queue.not_empty:
-            _, job = self._job_queue.get_nowait()
-        else:
+    def _complete_a_job(self, block=False, timeout=None):
+        from queue import Empty
+        try:
+            if block:
+                _, job = self._job_queue.get(timeout=timeout)
+            elif self._job_queue.not_empty:
+                _, job = self._job_queue.get_nowait()
+            else:
+                return
+        except Empty:
+            # Timeout occurred, no job available
             return
 
         _l.debug("%s: completing scheduled job now: %s", self.name, job)

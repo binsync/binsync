@@ -112,14 +112,14 @@ def main():
             "--host", help="""
             The host address (IPv4 or IPv6) to be used for the auxiliary server. Only relevant if -s headless specified. Default :: if not specified.
             Example: --host 0.0.0.0
-            """, 
+            """,
             type=str,
             default="::"
         )
         parser.add_argument(
             "--port", help="""
             The port number to be used for the auxiliary server. Only relevant if -s headless specified. Default 7962 if not specified.
-            """, 
+            """,
             type=int,
             default=7962
         )
@@ -157,8 +157,8 @@ def main():
 
     if args.server:
         if args.server == GHIDRA_DECOMPILER:
-            from binsync.interface_overrides.ghidra import start_ghidra_remote_ui
-            start_ghidra_remote_ui()
+            from binsync.interface_overrides.ghidra import start_ghidra_ui
+            start_ghidra_ui()
         elif args.server == "headless":
             from binsync.extras.aux_server.aux_server import Server
             host = args.host
