@@ -1,0 +1,30 @@
+{
+  "IDAMetadataDescriptorVersion": 1,
+  "plugin": {
+    "name": "BinSync",
+    "entryPoint": "binsync_plugin.py",
+    "version": "5.10.1",
+    "idaVersions": ["8.4", "9.0","9.1", "9.2"],
+    "description": "A reversing plugin for cross-decompiler collaboration, built on git. Supports IDA, Ghidra, Binary Ninja, and angr-management!",
+    "license": "BSD 2 Simplified",
+    "categories": [
+      "collaboration-and-productivity"
+    ],
+    "logoPath": "binsync.png",
+    "pythonDependencies": ["binsync==5.10.1"],
+    "urls": {
+      "repository": "https://github.com/binsync/binsync"
+    },
+    "authors": [{
+      "name": "The BinSync Team",
+      "email": "binsync@mahaloz.re"
+    }],
+    "keywords": [
+      "activity-tracking",
+      "collaboration",
+      "ai-integration",
+      "translation",
+      "converter"
+    ]
+  }
+}

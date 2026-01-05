@@ -6,18 +6,26 @@ on:
     - "v**"
 
 jobs:
-
   release-github:
     name: Create Github Release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+      - name: Package IDA Plugin
+        run: |
+          mkdir binsync-ida-plugin
+          cp binsync/stub_files/ida-plugin.json binsync-ida-plugin/
+          cp binsync/stub_files/README.md binsync-ida-plugin/
+          cp binsync/binsync_plugin.py binsync-ida-plugin/
+          cp assets/images/binsync.png binsync-ida-plugin/
+          zip -r binsync-ida-plugin.zip binsync-ida-plugin
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
           # binsync-ghidra-plugin.zip will be uploaded from another workflow
           generateReleaseNotes: true
+          artifacts: binsync-ida-plugin.zip
 
   release-pypi:
     name: Release pypi package
