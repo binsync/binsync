@@ -1,23 +1,14 @@
 import logging
 
-try:
-    # new location for sip
-    # https://www.riverbankcomputing.com/static/Docs/PyQt5/incompatibilities.html#pyqt-v5-11
-    from PyQt5 import sip
-except ImportError:
-    import sip
-from PyQt5.QtGui import QKeyEvent
-from PyQt5 import QtCore
-from PyQt5.QtWidgets import QWidget, QVBoxLayout
-from PyQt5.QtCore import Qt
-
 import idaapi
 import ida_kernwin
 import ida_hexrays
 import idautils
 
+from libbs.decompilers.ida.compat import get_ida_gui_version
 from libbs.ui.version import set_ui_version
-set_ui_version("PyQt5")
+set_ui_version(get_ida_gui_version())
+from libbs.ui.qt_objects import QEvent, Qt, QKeyEvent, QWidget, QVBoxLayout, wrapInstance
 from libbs.decompilers.ida.compat import has_older_hexrays_version, generate_generic_ida_plugic_cls
 from libbs.decompilers.ida.ida_ui import IDAWidgetWrapper
 from libbs.decompilers.ida.interface import IDAInterface
@@ -65,7 +56,7 @@ class IdaHotkeyHook(ida_kernwin.UI_Hooks):
         key_event = uie.get_source_QEvent()
         keycode = key_event.key()
         if keycode[0] in self.keys_to_pass:
-            ke = QKeyEvent(QtCore.QEvent.KeyPress, keycode[0], QtCore.Qt.NoModifier)
+            ke = QKeyEvent(QEvent.KeyPress, keycode[0], Qt.NoModifier)
             # send new event
             self.ui.event(ke)
             # consume the event so ida doesn't take it
@@ -83,7 +74,7 @@ class ControlPanelViewWrapper(object):
     def __init__(self, controller):
         # create a dockable view
         self.twidget = idaapi.create_empty_widget(ControlPanelViewWrapper.NAME)
-        self.widget = sip.wrapinstance(int(self.twidget), QWidget)
+        self.widget = wrapInstance(int(self.twidget), QWidget)
         self.widget.name = ControlPanelViewWrapper.NAME
         self.width_hint = 250
 
