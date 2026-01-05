@@ -15,6 +15,7 @@ description = "A Collaboration framework for binary analysis tasks."
 urls = {Homepage = "https://github.com/binsync/binsync"}
 requires-python = ">= 3.10"
 dependencies = [
+    "libbs[ghidra]>=3.1.1",
     "sortedcontainers",
     "toml",
     "GitPython",
@@ -23,7 +24,6 @@ dependencies = [
     "ply",
     "prompt_toolkit",
     "tqdm",
-    "libbs>=3.1.0",
     "wordfreq",
 ]
 dynamic = ["version"]
@@ -37,9 +37,6 @@ test = [
     "pytest-qt",
     "flake8",
     "pytest",
-]
-ghidra = [
-    "PySide6-Essentials>=6.4.2,!=6.7.0",
 ]
 extras = [
     "dailalib",

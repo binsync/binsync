@@ -35,17 +35,17 @@ pip3 install binsync && binsync --install
 ```
 
 BinSync is also available in the Binary Ninja plugin manager.
-**If you plan on using BS with Ghidra**, you need to also do `pip3 install binsync[ghidra]`.
+If you plan on using BS with Ghidra, you must launch it in [PyGhidra mode](https://github.com/NationalSecurityAgency/ghidra/blob/stable/GhidraDocs/GettingStarted.md#pyghidra-mode).
 If you plan on using extra BS features, like the ChatGPT User, install the package like this: `pip3 install binsync[extras]`, which will install extra packages for support.
 For full install information, please read our [quickstart docs](https://binsync.net/docs/home).
 
-If you are planning on installing the package to be editable (`-e`), like in a developer install, make sure `pip>=23.0.0`.
+For developers, install the package to be editable (`-e`) and make sure `pip>=23.0.0`.
 
 ## Supported Platforms
-- IDA Pro: **>= 8.4** (if you have an older version, use `v4.10.1`)
+- IDA Pro: **>= 8.4** (if you have an older version, use [BinSync v4.10.1](https://github.com/binsync/binsync/commit/bac7b9d4a6cca64810bb07428391415702765cd4))
 - Binary Ninja: **>= 2.4**
 - angr-management: **>= 9.0**
-- Ghidra: **>= 12.0** (in PyGhidra mode)
+- Ghidra: **>= 12.0** ([PyGhidra mode](https://github.com/NationalSecurityAgency/ghidra/blob/stable/GhidraDocs/GettingStarted.md#pyghidra-mode))
 
 All versions require **Python >= 3.10** and **Git** installed on your system. 
 Ghidra support is still very much in early stage, so only expect the minimal features like artifact name syncing and comments.
