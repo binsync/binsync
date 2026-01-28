@@ -3,7 +3,7 @@
   "plugin": {
     "name": "BinSync",
     "entryPoint": "binsync_plugin.py",
-    "version": "5.10.1",
+    "version": "5.11.1",
     "idaVersions": ["8.4", "9.0","9.1", "9.2"],
     "description": "A reversing plugin for cross-decompiler collaboration, built on git. Supports IDA, Ghidra, Binary Ninja, and angr-management!",
     "license": "BSD 2 Simplified",
