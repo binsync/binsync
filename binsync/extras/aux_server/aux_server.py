@@ -15,6 +15,7 @@ class Server:
         self.app.add_url_rule("/disconnect", view_func=self.handle_disconnection, methods=["GET"])
         self.app.add_url_rule("/function", view_func=self.receive_function, methods=["POST"])
         self.app.add_url_rule("/status", view_func=self.return_user_data, methods=["GET"])
+        self.app.add_url_rule("/link_project", view_func=self.handle_link_project, methods=["POST"])
     
     def handle_connection(self):
         self.store.incrementUser()
@@ -60,6 +61,25 @@ class Server:
         resp.set_etag(str(user_data[1]))
         return resp
         
+    def handle_link_project(self):
+        '''
+        Links a project into the server based on Git url (with optional Group specifier)
+        
+        Expected form parameters: url (mandatory) and group (optional, assumed to be None)
+        '''
+        if "url" in request.form:
+            url = request.form["url"]
+            if "group" in request.form:
+                success = self.store.link_project(url, request.form["group"])
+            else:
+                success = self.store.link_project(url)
+            if success:
+                return Response("OK", 200)
+            else:
+                return Response("Unknown Error", 500)
+        else:
+            return Response("Missing Project URL", 400)
+    
     def run(self):
         self.app.run(self.host,self.port)
 

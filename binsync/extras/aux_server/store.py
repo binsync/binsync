@@ -8,6 +8,9 @@ class ServerStore:
         self._user_map_lock = threading.Lock()
         self._map_modify_count = 0 # Counter to help minimize unnecessary requests on a fetch
         
+        self._linked_projects_lock = threading.Lock()
+        self._linked_projects:dict[str|None,list[str]] = {}
+        
     def incrementUser(self):
         with self._user_count_lock:
             self._user_count+=1
@@ -41,3 +44,11 @@ class ServerStore:
                 map_copy = deepcopy(self._user_map)
                 return (map_copy, self._map_modify_count)
         return None
+    
+    def link_project(self, url, group=None)->bool:
+        with self._linked_projects_lock:
+            if group in self._linked_projects:
+                self._linked_projects[group].append(url)
+            else:
+                self._linked_projects[group] = [url]
+        return True
