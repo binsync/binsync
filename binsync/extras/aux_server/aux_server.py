@@ -27,7 +27,7 @@ class Server:
     def receive_function(self):
         if "username" in request.form: # Can't keep track of users if they are not associated with a username
             username = request.form["username"]
-            user_info = {
+            user_info:dict[str,None|int] = {
                 "addr":None,
                 "func_addr":None
             }

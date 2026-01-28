@@ -3,7 +3,7 @@ from copy import deepcopy
 class ServerStore:
     def __init__(self):
         self._user_count = 0
-        self._user_map = {}
+        self._user_map:dict[str,dict[str,int|None]] = {}
         self._user_count_lock = threading.Lock()
         self._user_map_lock = threading.Lock()
         self._map_modify_count = 0 # Counter to help minimize unnecessary requests on a fetch
@@ -16,7 +16,7 @@ class ServerStore:
         with self._user_count_lock:
             self._user_count-=1
     
-    def setUserData(self,username,newData):
+    def setUserData(self, username:str, newData:dict[str,int|None]):
         with self._user_map_lock:
             self._user_map[username] = newData
             self._map_modify_count += 1
