@@ -1,6 +1,5 @@
 import logging
 import typing
-import os
 
 import networkx as nx
 import numpy as np
@@ -14,7 +13,6 @@ from libbs.ui.qt_objects import (
     QGraphicsLineItem,
     QGraphicsItem,
     QLabel,
-    QLineEdit,
     QHBoxLayout,
     QVBoxLayout,
     QWidget,
@@ -214,7 +212,7 @@ class GraphView(QGraphicsView):
             self.scale(1 / zoom_factor, 1 / zoom_factor)
 
 
-class ProgressGraphWidget(QDialog):
+class CircleGraphWidget(QDialog):
     """
     A QWidget that displays a NetworkX graph.
     """
@@ -228,7 +226,7 @@ class ProgressGraphWidget(QDialog):
         self._tag_selection = tag or ""
 
         self._show_only_changed = False
-        self._layouts = ["dot", "fdp", "neato", "twopi", "circo", "sfdp"]
+        self._layouts = ["twopi"]
 
         self.displayed_graph = None
         self._graph_view = None
@@ -236,12 +234,7 @@ class ProgressGraphWidget(QDialog):
 
         self._init_widgets()
 
-
-    def _open_circle_page(self):
-        from ..progress_graph.circular_view import CircleGraphWidget
-        dialog = CircleGraphWidget(graph=self._controller.deci.get_callgraph(), controller=self._controller, parent=self)
-        dialog.show()
-        dialog.exec_()
+        
 
     def _update_progress_widgets(self):
         # rebuild the graph
@@ -318,7 +311,7 @@ class ProgressGraphWidget(QDialog):
 
     def _init_widgets(self):
         # start adding things
-        self.setWindowTitle("Graph Viewer")
+        self.setWindowTitle("Circular View")
 
         self.main_layout = QVBoxLayout()
         top_layout = QHBoxLayout()
@@ -338,40 +331,25 @@ class ProgressGraphWidget(QDialog):
         self.completion_label.setStyleSheet("font-size: 16px;")
         left_layout.addWidget(self.completion_label)
 
-        # Label left, tag selection
-        self.tag_label = QLabel("Tag: ")
-        self.tag_label.setStyleSheet("font-size: 16px;")
-        self.tag_dropdown = QComboBox()
-        self.tag_dropdown.addItems(self._tags)
-        self.tag_dropdown.currentTextChanged.connect(self.on_tag_selected)
-        # Create a container widget to hold label and dropdown
-        tag_widget = QWidget()
-        tag_layout = QHBoxLayout(tag_widget)
-        tag_layout.addWidget(self.tag_label)
-        tag_layout.addWidget(self.tag_dropdown)
-        tag_layout.setSpacing(1)  # Adjust spacing between label and dropdown
-        tag_layout.setContentsMargins(0, 0, 0, 0)  # Remove extra margins
-        tag_widget.setLayout(tag_layout)
-        left_layout.addWidget(tag_widget)
+        
+        
 
         # Label left, graph layout selection
-        self.layout_label = QLabel("Layout: ")
+        self.layout_label = QLabel("Layout: twopi (Default)")
         self.layout_label.setStyleSheet("font-size: 16px;")
         self.layout_dropdown = QComboBox()
-        self.layout_dropdown.addItems(["dot", "fdp", "neato", "twopi", "circo", "sfdp"])
+        self.layout_dropdown.addItems(["twopi"])
         self.layout_dropdown.currentTextChanged.connect(self._graph_layout_changed)
-        # Create Button Widget
-        self.center_btn = QPushButton("Circular View")   # change text as you like
-        self.center_btn.clicked.connect(self._open_circle_page)  # handler below
+        
 
 
         # Create a container widget to hold label and dropdown
         layout_widget = QWidget()
         layout_layout = QHBoxLayout(layout_widget)
         layout_layout.addWidget(self.layout_label)
-        layout_layout.addWidget(self.layout_dropdown)
-        layout_layout.addWidget(self.center_btn)
-        layout_layout.setSpacing(2)  # Adjust spacing between label and dropdown
+        #layout_layout.addWidget(self.layout_dropdown)
+       
+        layout_layout.setSpacing(4)  # Adjust spacing between label and dropdown
         layout_layout.setContentsMargins(0, 0, 0, 0)  # Remove extra margins
         layout_widget.setLayout(layout_layout)
         left_layout.addWidget(layout_widget)
@@ -384,10 +362,7 @@ class ProgressGraphWidget(QDialog):
         self.only_changed_checkbox.stateChanged.connect(self._only_changed_clicked)
         right_layout.addWidget(self.only_changed_checkbox)
 
-        # Summarize button
-        self.summarize_button = QPushButton("Summarize")
-        self.summarize_button.clicked.connect(self.summarize)
-        right_layout.addWidget(self.summarize_button)
+        
 
         # Label right (only `changes` is pink)
         self.hotness_label = QLabel("Hotness: <span style='color: pink;'>changes</span>")
@@ -492,43 +467,10 @@ class ProgressGraphWidget(QDialog):
         self._tag_selection = tag
         self._update_progress_widgets()
 
-    
-    def checkApi(self):
-        if "sk" in os.environ.get("OPENAI_API_KEY"): #Check if the api key is set
-            _l.info("API Key set already, good to go!")
-        else:
-            dialog = QDialog(self) 
-            dialog.setWindowTitle("Enter Key")
-            
-            
-            dlg_layout = QVBoxLayout()
-            
-            key_input = QLineEdit()
-            key_input.setPlaceholderText("Enter OpenAi API Key:")
-            
-            save_btn = QPushButton("Save")
-            
-            dlg_layout.addWidget(QLabel("Key:"))
-            dlg_layout.addWidget(key_input)
-            def setAPIKey():
-                user_key = key_input.text()
-                os.environ["OPENAI_API_KEY"] = user_key #Will be set so that a dialog opens for user to enter key
-                dialog.accept()
-            dlg_layout.addWidget(save_btn)
-            
-            dialog.setLayout(dlg_layout)
-            save_btn.clicked.connect(setAPIKey)
-
-            
-            dialog.exec()
-
     def summarize(self, *args, **kwargs):
         if not EXTRAS_AVAILABLE:
             _l.error("Summarization requires extras, which are not available.")
             return
-
-        #Call checkApi here, so we can check for extras first and then see if api key is set before selecting a save file
-        self.checkApi()
 
         file_location, _ = QFileDialog.getSaveFileName(None, "Save File", "", "All Files (*);;Text Files (*.txt)")
         _l.info("Summarizing changes...")
