@@ -17,6 +17,7 @@ class Server:
         self.app.add_url_rule("/status", view_func=self.return_user_data, methods=["GET"])
         
         self.app.add_url_rule("/link_project", view_func=self.handle_link_project, methods=["POST"])
+        self.app.add_url_rule("/unlink_project", view_func=self.handle_unlink_project, methods=["POST"])
         self.app.add_url_rule("/list_projects", view_func=self.return_linked_projects, methods=["GET"])
     
     def handle_connection(self):
@@ -79,6 +80,20 @@ class Server:
                 return Response("OK", 200)
             else:
                 return Response("Unknown Error", 500)
+        else:
+            return Response("Missing Project URL", 400)
+    
+    def handle_unlink_project(self):
+        if "url" in request.form:
+            url = request.form["url"]
+            if "group" in request.form:
+                status = self.store.unlink_project(url, request.form["group"])
+            else:
+                status = self.store.unlink_project(url)
+            if status[0]:
+                return Response("OK", 200)
+            else:
+                return Response(status[1], 500)
         else:
             return Response("Missing Project URL", 400)
     
