@@ -15,6 +15,10 @@ class Server:
         self.app.add_url_rule("/disconnect", view_func=self.handle_disconnection, methods=["GET"])
         self.app.add_url_rule("/function", view_func=self.receive_function, methods=["POST"])
         self.app.add_url_rule("/status", view_func=self.return_user_data, methods=["GET"])
+        
+        self.app.add_url_rule("/link_project", view_func=self.handle_link_project, methods=["POST"])
+        self.app.add_url_rule("/unlink_project", view_func=self.handle_unlink_project, methods=["POST"])
+        self.app.add_url_rule("/list_projects", view_func=self.return_linked_projects, methods=["GET"])
     
     def handle_connection(self):
         self.store.incrementUser()
@@ -27,7 +31,7 @@ class Server:
     def receive_function(self):
         if "username" in request.form: # Can't keep track of users if they are not associated with a username
             username = request.form["username"]
-            user_info = {
+            user_info:dict[str,None|int] = {
                 "addr":None,
                 "func_addr":None
             }
@@ -60,6 +64,45 @@ class Server:
         resp.set_etag(str(user_data[1]))
         return resp
         
+    def handle_link_project(self):
+        '''
+        Links a project into the server based on Git url (with optional Group specifier)
+        
+        Expected form parameters: url (mandatory) and group (optional, assumed to be None)
+        '''
+        if "url" in request.form:
+            url = request.form["url"]
+            if "group" in request.form:
+                success = self.store.link_project(url, request.form["group"])
+            else:
+                success = self.store.link_project(url)
+            if success:
+                return Response("OK", 200)
+            else:
+                return Response("Unknown Error", 500)
+        else:
+            return Response("Missing Project URL", 400)
+    
+    def handle_unlink_project(self):
+        if "url" in request.form:
+            url = request.form["url"]
+            if "group" in request.form:
+                status = self.store.unlink_project(url, request.form["group"])
+            else:
+                status = self.store.unlink_project(url)
+            if status[0]:
+                return Response("OK", 200)
+            else:
+                return Response(status[1], 500)
+        else:
+            return Response("Missing Project URL", 400)
+    
+    def return_linked_projects(self):
+        '''
+        Returns all linked projects.
+        '''
+        return jsonify(self.store.list_projects())
+    
     def run(self):
         self.app.run(self.host,self.port)
 

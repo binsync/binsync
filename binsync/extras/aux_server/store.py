@@ -3,10 +3,14 @@ from copy import deepcopy
 class ServerStore:
     def __init__(self):
         self._user_count = 0
-        self._user_map = {}
+        self._user_map:dict[str,dict[str,int|None]] = {}
         self._user_count_lock = threading.Lock()
         self._user_map_lock = threading.Lock()
         self._map_modify_count = 0 # Counter to help minimize unnecessary requests on a fetch
+        
+        self._linked_projects_lock = threading.Lock()
+        # We use a dict for the projects in each group so that we can preserve order while retaining fast access
+        self._linked_projects:dict[str|None,dict[str,None]] = {} 
         
     def incrementUser(self):
         with self._user_count_lock:
@@ -16,7 +20,7 @@ class ServerStore:
         with self._user_count_lock:
             self._user_count-=1
     
-    def setUserData(self,username,newData):
+    def setUserData(self, username:str, newData:dict[str,int|None]):
         with self._user_map_lock:
             self._user_map[username] = newData
             self._map_modify_count += 1
@@ -41,3 +45,34 @@ class ServerStore:
                 map_copy = deepcopy(self._user_map)
                 return (map_copy, self._map_modify_count)
         return None
+    
+    def link_project(self, url, group=None)->bool:
+        with self._linked_projects_lock:
+            if group in self._linked_projects:
+                self._linked_projects[group][url] = None
+            else:
+                self._linked_projects[group] = {url: None}
+        return True
+    
+    def unlink_project(self, url, group=None)->tuple[bool,str]:
+        '''
+        Unlinks a project. 
+        
+        Returns (True,"") on successful removal. 
+        If not in the group specified (or None if no group specified), returns (False, "error message"). 
+        '''
+        with self._linked_projects_lock:
+            if group in self._linked_projects:
+                curr_group = self._linked_projects[group]
+                if url in curr_group:
+                    del curr_group[url]
+                    return (True, "")
+                else:
+                    return (False, "project does not exist in group")
+            else:
+                return (False, "group does not exist")
+    
+    def list_projects(self):
+        # Might want to convert the nested dicts back into lists
+        with self._linked_projects_lock:
+            return deepcopy(self._linked_projects)
