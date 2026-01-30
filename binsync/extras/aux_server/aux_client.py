@@ -7,6 +7,14 @@ from libbs.artifacts import (
 )
 l = logging.getLogger(__name__)
 
+def _connection_required(func):
+    def check_for_session(self, *args, **kwargs):
+        if self.sess:
+            func(self, *args, **kwargs)
+        else:
+            l.error("Tried to call a method that requires a session to be established beforehand") 
+    return check_for_session
+
 class ServerClient():
     def __init__(self, host:str, port:int, controller, worker_update_callback):
         self.host = host
@@ -14,7 +22,9 @@ class ServerClient():
         self.controller = controller
         self.old_post_data = {}
         self.worker_update_callback = worker_update_callback
-        
+    
+    
+    
     def run(self):
         self.server_url = f"http://{self.host}:{self.port}"
         self._etag = None
@@ -24,7 +34,8 @@ class ServerClient():
         self._manage_connections()
 
     def _manage_connections(self):
-        self.sess = requests.Session()
+        # Note: requests Sessions seem to be thread safe as long as we don't mess with cookies
+        self.sess = requests.Session() 
         callback_registered = False
         try:
             l.info(self.sess.get(self.server_url+"/connect").text)
@@ -48,6 +59,7 @@ class ServerClient():
             if callback_registered:
                 self.controller.deci.artifact_change_callbacks[Context].remove(self._submit_new_context)
     
+    @_connection_required
     def _poll_users_data(self):
         """
         Contacts server to check if there were any updates to user contexts
@@ -68,6 +80,7 @@ class ServerClient():
                 l.info(self.users_data)
                 self.worker_update_callback(self.users_data)
     
+    @_connection_required
     def _submit_new_context(self, context, **_):
         post_data = {}
         if context.addr:
