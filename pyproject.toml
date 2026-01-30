@@ -15,7 +15,7 @@ description = "A Collaboration framework for binary analysis tasks."
 urls = {Homepage = "https://github.com/binsync/binsync"}
 requires-python = ">= 3.10"
 dependencies = [
-    "libbs[ghidra]>=3.3.2",
+    "libbs[ghidra]>=3.3.3",
     "sortedcontainers",
     "toml",
     "GitPython",
