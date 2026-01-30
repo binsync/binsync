@@ -15,7 +15,9 @@ class Server:
         self.app.add_url_rule("/disconnect", view_func=self.handle_disconnection, methods=["GET"])
         self.app.add_url_rule("/function", view_func=self.receive_function, methods=["POST"])
         self.app.add_url_rule("/status", view_func=self.return_user_data, methods=["GET"])
+        
         self.app.add_url_rule("/link_project", view_func=self.handle_link_project, methods=["POST"])
+        self.app.add_url_rule("/list_projects", view_func=self.return_linked_projects, methods=["GET"])
     
     def handle_connection(self):
         self.store.incrementUser()
@@ -79,6 +81,12 @@ class Server:
                 return Response("Unknown Error", 500)
         else:
             return Response("Missing Project URL", 400)
+    
+    def return_linked_projects(self):
+        '''
+        Returns all linked projects.
+        '''
+        return jsonify(self.store.list_projects())
     
     def run(self):
         self.app.run(self.host,self.port)

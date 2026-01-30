@@ -52,3 +52,7 @@ class ServerStore:
             else:
                 self._linked_projects[group] = [url]
         return True
+    
+    def list_projects(self):
+        with self._linked_projects_lock:
+            return deepcopy(self._linked_projects)
