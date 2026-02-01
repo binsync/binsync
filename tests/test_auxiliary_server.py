@@ -1,6 +1,8 @@
 import sys
 
 from binsync.extras.aux_server.aux_server import Server
+from binsync.extras.aux_server.store import ServerStore
+
 from binsync.extras.aux_server.aux_client import ServerClient
 import unittest
 import threading
@@ -214,6 +216,10 @@ class TestAuxServer(unittest.TestCase):
             assert client_beliefs[0] == server.store._user_map  
     
     def test_link_unlink_projects(self):
+        '''
+        Test: Client creates a new group, links a project to that group, then deletes the group. 
+        There should be errors when deleting the group a second time and when trying to unlink the project (as it is already deleted).
+        '''
         def client_task(client:ServerClient):
             client.run()
             
@@ -226,30 +232,40 @@ class TestAuxServer(unittest.TestCase):
             client_thread.start()
             
             project_url = "https://github.com/binsync/binsync.git"
+            group_name = "binsync"
+            # Client makes new group
+            group_create_result = client.create_group(group_name)
+            assert group_create_result == (True, "")
+            
             # Client links a project
-            link_result = client.link_project(project_url)
+            link_result = client.link_project(project_url, group_name)
             assert link_result == (True, "")
             
             # Validate projects list contains only our one project
             project_list = client.list_projects()
-            self.assertEqual(project_list, {
-                "default": {
+            assert project_list == {
+                ServerStore.DEFAULT_GROUPNAME: {},
+                group_name: {
                     project_url: None
                 }
-            })
+            }
+        
+            # Client deletes the group
+            group_delete_result_1 = client.delete_group(group_name)
+            assert group_delete_result_1 == (True, "")
             
-            # Client unlinks the project
-            unlink_1_result = client.unlink_project(project_url)
-            assert unlink_1_result == (True, "")
+            # Client deletes the group (should error)
+            group_delete_result_2 = client.delete_group(group_name)
+            assert group_delete_result_2[0] == False
             
             # Client unlinks the project (should error)
-            unlink_2_result = client.unlink_project(project_url)
-            assert unlink_2_result[0] == False
+            unlink_result = client.unlink_project(project_url)
+            assert unlink_result[0] == False
             
             # Validate projects list is empty
             project_list = client.list_projects()
             assert project_list == {
-                "default": {}
+                ServerStore.DEFAULT_GROUPNAME: {}
             }
             
 

@@ -1,6 +1,7 @@
 import threading
 from copy import deepcopy
 class ServerStore:
+    DEFAULT_GROUPNAME = "default"
     def __init__(self):
         self._user_count = 0
         self._user_map:dict[str,dict[str,int|None]] = {}
@@ -10,7 +11,7 @@ class ServerStore:
         
         self._linked_projects_lock = threading.Lock()
         # We use a dict for the projects in each group so that we can preserve order while retaining fast access
-        self._linked_projects:dict[str|None,dict[str,None]] = {} 
+        self._linked_projects:dict[str|None,dict[str,None]] = {ServerStore.DEFAULT_GROUPNAME: {}} 
         
     def incrementUser(self):
         with self._user_count_lock:
@@ -46,15 +47,38 @@ class ServerStore:
                 return (map_copy, self._map_modify_count)
         return None
     
-    def link_project(self, url, group="default")->bool:
+    def create_group(self, group)->tuple[bool,str]:
+        with self._linked_projects_lock:
+            if group not in self._linked_projects:
+                self._linked_projects[group] = {}
+                return (True, "")
+            else:
+                return (False, "group already exists")
+    
+    def delete_group(self, group)->tuple[bool,str]:
         with self._linked_projects_lock:
             if group in self._linked_projects:
-                self._linked_projects[group][url] = None
+                if group != ServerStore.DEFAULT_GROUPNAME:
+                    del self._linked_projects[group]
+                    return (True, "")
+                else:
+                    return (False, "cannot delete default group")
             else:
-                self._linked_projects[group] = {url: None}
-        return True
+                return (False, "group does not exist")
     
-    def unlink_project(self, url, group="default")->tuple[bool,str]:
+    def link_project(self, url, group=DEFAULT_GROUPNAME)->tuple[bool,str]:
+        with self._linked_projects_lock:
+            if group in self._linked_projects:
+                curr_group = self._linked_projects[group]
+                if url not in curr_group:
+                    self._linked_projects[group][url] = None
+                    return (True, "")
+                else:
+                    return (False, "project already exists in group")
+            else:
+                return (False, "group does not exist")
+    
+    def unlink_project(self, url, group=DEFAULT_GROUPNAME)->tuple[bool,str]:
         '''
         Unlinks a project. 
         

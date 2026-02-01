@@ -18,6 +18,9 @@ class Server:
         self.app.add_url_rule("/function", view_func=self.receive_function, methods=["POST"])
         self.app.add_url_rule("/status", view_func=self.return_user_data, methods=["GET"])
         
+        self.app.add_url_rule("/create_group", view_func=self.handle_create_group, methods=["POST"])
+        self.app.add_url_rule("/delete_group", view_func=self.handle_delete_group, methods=["POST"])
+        
         self.app.add_url_rule("/link_project", view_func=self.handle_link_project, methods=["POST"])
         self.app.add_url_rule("/unlink_project", view_func=self.handle_unlink_project, methods=["POST"])
         self.app.add_url_rule("/list_projects", view_func=self.return_linked_projects, methods=["GET"])
@@ -65,6 +68,32 @@ class Server:
         resp = jsonify(user_data[0])
         resp.set_etag(str(user_data[1]))
         return resp
+        
+    def handle_create_group(self):
+        '''
+        Creates a group.
+        '''
+        if "group" in request.form:
+            result = self.store.create_group(request.form["group"])
+            if result[0] == True:
+                return Response("OK", 200)
+            else:
+                return Response(result[1], 500)
+        else:
+            return Response("Missing group", 400)
+    
+    def handle_delete_group(self):
+        '''
+        Deletes a group and all projects linked within it.
+        '''
+        if "group" in request.form:
+            result = self.store.delete_group(request.form["group"])
+            if result[0] == True:
+                return Response("OK", 200)
+            else:
+                return Response(result[1], 500)
+        else:
+            return Response("Missing group", 400)
         
     def handle_link_project(self):
         '''

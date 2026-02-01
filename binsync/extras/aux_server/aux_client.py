@@ -115,6 +115,38 @@ class ServerClient():
             return (False, result.text)
 
     @_connection_required
+    def create_group(self, group):
+        '''
+        Attempts to create a project group.
+        
+        Returns (True,"") on success (200 response) and (False,"error message") on error
+        '''
+        post_data = {
+            "group": group
+        }
+        result = self.sess.post(self.server_url+"/create_group", data=post_data)
+        if result.status_code == 200:
+            return (True, "")
+        else:
+            return (False, result.text)
+        
+    @_connection_required
+    def delete_group(self, group):
+        '''
+        Attempts to delete a project group.
+        
+        Returns (True,"") on success (200 response) and (False,"error message") on error
+        '''
+        post_data = {
+            "group": group
+        }
+        result = self.sess.post(self.server_url+"/delete_group", data=post_data)
+        if result.status_code == 200:
+            return (True, "")
+        else:
+            return (False, result.text)
+
+    @_connection_required
     def link_project(self, url, group=None):
         '''
         Attempts to link a project to the server. 
@@ -125,7 +157,7 @@ class ServerClient():
             "url":url 
         }
         if group is not None:
-            post_data[group] = group
+            post_data["group"] = group
         result = self.sess.post(self.server_url+"/link_project", data=post_data)
         if result.status_code == 200:
             return (True, "")
@@ -143,7 +175,7 @@ class ServerClient():
             "url":url 
         }
         if group is not None:
-            post_data[group] = group
+            post_data["group"] = group
         result = self.sess.post(self.server_url+"/unlink_project", data=post_data)
         if result.status_code == 200:
             return (True, "")
