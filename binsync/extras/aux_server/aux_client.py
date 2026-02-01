@@ -9,8 +9,8 @@ l = logging.getLogger(__name__)
 
 def _connection_required(func):
     def check_for_session(self, *args, **kwargs):
-        if self.sess:
-            func(self, *args, **kwargs)
+        if hasattr(self, "sess"):
+            return func(self, *args, **kwargs)
         else:
             l.error("Tried to call a method that requires a session to be established beforehand") 
     return check_for_session
@@ -95,6 +95,65 @@ class ServerClient():
                 self.old_post_data = post_data
             except requests.ConnectionError:
                 self.connected = False
+
+    @_connection_required
+    def _link_project(self, url, group=None):
+        '''
+        Attempts to link a project to the server. 
+        
+        Returns (True,"") on success (200 response) and (False,"error message") on error
+        '''
+        post_data = {
+            "url":url 
+        }
+        if group is not None:
+            post_data[group] = group
+        result = self.sess.post(self.server_url+"/link_project", data=post_data)
+        if result.status_code == 200:
+            return (True, "")
+        else:
+            return (False, result.text)
+
+    @_connection_required
+    def link_project(self, url, group=None):
+        '''
+        Attempts to link a project to the server. 
+        
+        Returns (True,"") on success (200 response) and (False,"error message") on error
+        '''
+        post_data = {
+            "url":url 
+        }
+        if group is not None:
+            post_data[group] = group
+        result = self.sess.post(self.server_url+"/link_project", data=post_data)
+        if result.status_code == 200:
+            return (True, "")
+        else:
+            return (False, result.text)
+    
+    @_connection_required
+    def unlink_project(self, url, group=None):
+        '''
+        Attempts to unlink a project from the server. 
+        
+        Returns (True,"") on success (200 response) and (False,"error message") on error
+        '''
+        post_data = {
+            "url":url 
+        }
+        if group is not None:
+            post_data[group] = group
+        result = self.sess.post(self.server_url+"/unlink_project", data=post_data)
+        if result.status_code == 200:
+            return (True, "")
+        else:
+            return (False, result.text)
+        
+    @_connection_required
+    def list_projects(self):
+        result = self.sess.get(self.server_url+"/list_projects")
+        return result.json()
 
     def stop(self):
         self.connected = False

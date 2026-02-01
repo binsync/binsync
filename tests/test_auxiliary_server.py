@@ -212,7 +212,46 @@ class TestAuxServer(unittest.TestCase):
                 assert client_beliefs[i] == client_beliefs[i+1]
             # Make sure everyone's beliefs match up with the server
             assert client_beliefs[0] == server.store._user_map  
-        
+    
+    def test_link_unlink_projects(self):
+        def client_task(client:ServerClient):
+            client.run()
+            
+        server = Server(self.HOST,self.PORT)
+        with ServerThreadManager(server):
+            client = ServerClient(self.HOST, self.PORT, MockController("Alice"), lambda *args:None)
+            self.clients.append(client)
+            client_thread = threading.Thread(target=client_task,args=(client,))
+            self.client_threads.append(client_thread)
+            client_thread.start()
+            
+            project_url = "https://github.com/binsync/binsync.git"
+            # Client links a project
+            link_result = client.link_project(project_url)
+            assert link_result == (True, "")
+            
+            # Validate projects list contains only our one project
+            project_list = client.list_projects()
+            self.assertEqual(project_list, {
+                "default": {
+                    project_url: None
+                }
+            })
+            
+            # Client unlinks the project
+            unlink_1_result = client.unlink_project(project_url)
+            assert unlink_1_result == (True, "")
+            
+            # Client unlinks the project (should error)
+            unlink_2_result = client.unlink_project(project_url)
+            assert unlink_2_result[0] == False
+            
+            # Validate projects list is empty
+            project_list = client.list_projects()
+            assert project_list == {
+                "default": {}
+            }
+            
 
 
 if __name__ == "__main__":
