@@ -46,7 +46,7 @@ class ServerStore:
                 return (map_copy, self._map_modify_count)
         return None
     
-    def link_project(self, url, group=None)->bool:
+    def link_project(self, url, group="default")->bool:
         with self._linked_projects_lock:
             if group in self._linked_projects:
                 self._linked_projects[group][url] = None
@@ -54,12 +54,12 @@ class ServerStore:
                 self._linked_projects[group] = {url: None}
         return True
     
-    def unlink_project(self, url, group=None)->tuple[bool,str]:
+    def unlink_project(self, url, group="default")->tuple[bool,str]:
         '''
         Unlinks a project. 
         
         Returns (True,"") on successful removal. 
-        If not in the group specified (or None if no group specified), returns (False, "error message"). 
+        If not in the group specified (or "default" if no group specified), returns (False, "error message"). 
         '''
         with self._linked_projects_lock:
             if group in self._linked_projects:

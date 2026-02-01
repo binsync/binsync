@@ -10,7 +10,9 @@ class Server:
         self.port = port
         self.store = ServerStore()
         self.app = Flask(__name__)
-        
+        # When returning the list of linked projects, we want order to be preserved in case users care
+        self.app.json.sort_keys = False # type: ignore
+
         self.app.add_url_rule("/connect", view_func=self.handle_connection, methods=["GET"])
         self.app.add_url_rule("/disconnect", view_func=self.handle_disconnection, methods=["GET"])
         self.app.add_url_rule("/function", view_func=self.receive_function, methods=["POST"])
