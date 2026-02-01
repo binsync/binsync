@@ -267,8 +267,53 @@ class TestAuxServer(unittest.TestCase):
             assert project_list == {
                 ServerStore.DEFAULT_GROUPNAME: {}
             }
+    
+    def test_multi_user_link_unlink_projects(self):
+        '''
+        Client A links a project, then Client B lists out linked projects.
+        Client C then unlinks the project and Client B lists out linked projects again.
+        '''
+        def client_task(client:ServerClient):
+            client.run()
             
+        server = Server(self.HOST,self.PORT)
+        with ServerThreadManager(server):
+            client_a = ServerClient(self.HOST, self.PORT, MockController("Alice"), lambda *args:None)
+            self.clients.append(client_a)
+            client_b = ServerClient(self.HOST, self.PORT, MockController("Bob"), lambda *args:None)
+            self.clients.append(client_b)
+            client_c = ServerClient(self.HOST, self.PORT, MockController("Carol"), lambda *args:None)
+            self.clients.append(client_c)
+            
+            for client in self.clients:
+                self.client_threads.append(threading.Thread(target=client_task,args=(client,)))
 
-
+            for client_thread in self.client_threads:
+                client_thread.start()
+            
+            project_url = "https://github.com/binsync/binsync.git"
+            
+            # Client A links project
+            link_result = client_a.link_project(project_url)
+            assert link_result == (True, "")
+            
+            # Client B lists out projects
+            list_result_1 = client_b.list_projects()
+            assert list_result_1 == {
+                ServerStore.DEFAULT_GROUPNAME: {
+                    project_url: None
+                }
+            }
+            
+            # Client C unlinks project
+            unlink_result = client_c.unlink_project(project_url)
+            assert unlink_result == (True, "")
+            
+            # Client B lists out projects
+            list_result_2 = client_b.list_projects()
+            assert list_result_2 == {
+                ServerStore.DEFAULT_GROUPNAME: {}
+            }
+            
 if __name__ == "__main__":
     unittest.main(argv=sys.argv)
