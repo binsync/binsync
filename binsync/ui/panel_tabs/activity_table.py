@@ -224,16 +224,14 @@ class ActivityTableView(BinsyncTableView):
 
         menu.popup(self.mapToGlobal(event.pos()))
         
-    def manage_address_visibility(self, show, client_worker=None):
+    def manage_address_visibility(self, connected):
         """
         If show = true, displays user current address column
         Otherwise, hides user current address column
         """
-        self.column_visibility[ActivityTableModel.CURR_ADDR_COL] = show
-        self.model.initialize_current_addresses(show)
-        if client_worker:
-            client_worker.context_change.connect(self.model.update_table_context)
-        if show:
+        self.column_visibility[ActivityTableModel.CURR_ADDR_COL] = connected
+        self.model.initialize_current_addresses(connected)
+        if connected:
             self.showColumn(ActivityTableModel.CURR_ADDR_COL)
         else:
             self.hideColumn(ActivityTableModel.CURR_ADDR_COL)
@@ -259,8 +257,14 @@ class QActivityTable(QWidget):
     def update_table(self, states):
         self.table.update_table(states)
         
-    def add_live_addresses(self, client_worker):
-        self.table.manage_address_visibility(client_worker is not None, client_worker)
+    def add_live_addresses(self, connected):
+        self.table.manage_address_visibility(connected)
+        
+    def update_table_context(self, context):
+        '''
+        Updates user contexts as emitted by auxiliary server client
+        '''
+        self.table.model.update_table_context(context)
         
     def reload(self):
         pass

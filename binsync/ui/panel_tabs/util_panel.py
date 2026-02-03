@@ -87,7 +87,9 @@ class ClientWorker(QObject):
         self.server_client.stop()
         
 class QUtilPanel(QWidget):
-    display_clients = Signal(ClientWorker)
+    connected_to_server = Signal(bool)
+    server_context_change = Signal(object) # type is dict[str,dict[str,int]] but we get a TypeError: bytes or ASCII string expected not 'types.GenericAlias'
+    
     def __init__(self, controller: BSController, parent=None):
         super().__init__(parent)
         self.controller = controller
@@ -280,6 +282,7 @@ class QUtilPanel(QWidget):
                 # Connection was cancelled
                 return
             self.client_worker = ClientWorker(host,port,self.controller)
+            self.client_worker.context_change.connect(self.server_context_change)
             self.client_thread = QThread()
             # Text is set up here because existence of thread controls the behavior of the button
             self._connect_to_server_btn.setText("Disconnect From Server...") 
@@ -287,7 +290,7 @@ class QUtilPanel(QWidget):
             self.client_thread.started.connect(self.client_worker.run)
             self.client_worker.finished.connect(self.client_thread.quit)
             self.client_thread.start()
-            self.display_clients.emit(self.client_worker) # Signal the activity table that it's time to display the current addresses column
+            self.connected_to_server.emit(True) # Signal the activity table that it's time to display the current addresses column
         else:
             # User is trying to disconnect
             if self.client_worker: # Small possibility that client worker crashed on init and so is not a valid ClientWorker
@@ -297,7 +300,7 @@ class QUtilPanel(QWidget):
             self.client_thread.wait() # Issue - will block on thread cleanup
             self.client_thread = None
             self._connect_to_server_btn.setText("Connect to Server...") # Text is hardcoded and duplicates setup - good idea?
-            self.display_clients.emit(None) # Signal the activity table that it's time to hide the current addresses column
+            self.connected_to_server.emit(False) # Signal the activity table that it's time to hide the current addresses column
 
     def _handle_progress_view(self):
         from ..progress_graph.progress_window import ProgressGraphWidget

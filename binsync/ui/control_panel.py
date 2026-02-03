@@ -104,7 +104,8 @@ class ControlPanel(QWidget):
         self.tabView.addTab(self._utilities_panel, "Utilities")
 
         # Connect signal from utility panel to function in activity table to facilitate displaying user locations for binsync Server extra
-        self._utilities_panel.display_clients.connect(self._activity_table.add_live_addresses) 
+        self._utilities_panel.connected_to_server.connect(self._activity_table.add_live_addresses) 
+        self._utilities_panel.server_context_change.connect(self._activity_table.update_table_context)
 
         self.tables.update({
             "functions": self._func_table,
