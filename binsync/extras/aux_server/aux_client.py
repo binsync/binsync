@@ -8,12 +8,17 @@ from libbs.artifacts import (
 l = logging.getLogger(__name__)
 
 def _connection_required(func):
-    def check_for_session(self, *args, **kwargs):
-        if hasattr(self, "sess"):
-            return func(self, *args, **kwargs)
+    def check_for_connected(self, *args, **kwargs):
+        if self.connected:
+            try:
+                return func(self, *args, **kwargs)
+            except requests.ConnectionError:
+                self.connected = False
+                l.info("Server seems to be unresponsive... (Click the disconnect button so that you can reconnect)")
         else:
-            l.error("Tried to call a method that requires a session to be established beforehand") 
-    return check_for_session
+            l.error("Tried to call a method that requires a connection to be established beforehand") 
+        
+    return check_for_connected
 
 class ServerClient():
     def __init__(self, host:str, port:int, controller, worker_update_callback):
@@ -22,45 +27,25 @@ class ServerClient():
         self.controller = controller
         self.old_post_data = {}
         self.worker_update_callback = worker_update_callback
+        self.connected = False
+        
     
     
-    
-    def run(self):
+    def connect(self):
         self.server_url = f"http://{self.host}:{self.port}"
         self._etag = None
         parsed = urllib.parse.urlparse(self.server_url)
         if parsed.netloc != f"{self.host}:{self.port}":
             l.error("HOST AND PORT COMBINATION IS NOT VALID: NETLOC %s BUT HOST %s AND PORT %s",parsed.netloc,parsed.hostname,parsed.port)
-        self._manage_connections()
+        self.sess = requests.Session()
+        l.info(self.sess.get(self.server_url+"/connect").text)
+        self.connected = True
+        self.controller.deci.artifact_change_callbacks[Context].append(self._submit_new_context)
+        self.callback_registered = True
+        self._submit_new_context(self.controller.deci.gui_active_context())
 
-    def _manage_connections(self):
-        # Note: requests Sessions seem to be thread safe as long as we don't mess with cookies
-        self.sess = requests.Session() 
-        callback_registered = False
-        try:
-            l.info(self.sess.get(self.server_url+"/connect").text)
-            self.connected = True
-            
-            # Register callback to broadcast function context
-            self.controller.deci.artifact_change_callbacks[Context].append(self._submit_new_context)
-            callback_registered = True
-            
-            # Broadcast the starting context upon connection with server
-            self._submit_new_context(self.controller.deci.gui_active_context())
-            
-            while self.connected:
-                self._poll_users_data()
-                time.sleep(1)
-            l.info(self.sess.get(self.server_url+"/disconnect").text)
-        except requests.ConnectionError:
-            l.info("Server seems to be unresponsive... (Click the disconnect button so that you can reconnect)")
-        finally:
-            # De-register callback to broadcast function context
-            if callback_registered:
-                self.controller.deci.artifact_change_callbacks[Context].remove(self._submit_new_context)
-    
     @_connection_required
-    def _poll_users_data(self):
+    def poll_users_data(self):
         """
         Contacts server to check if there were any updates to user contexts
         """
@@ -69,7 +54,6 @@ class ServerClient():
             self.users_data = r.json()
             self._etag = r.headers["ETag"]
             l.info(self.users_data)
-            self.worker_update_callback(self.users_data)
         else:
             r = self.sess.get(self.server_url+"/status",headers={
                 "If-None-Match":str(self._etag)
@@ -78,7 +62,7 @@ class ServerClient():
                 self.users_data = r.json()
                 self._etag = r.headers["ETag"]
                 l.info(self.users_data)
-                self.worker_update_callback(self.users_data)
+        return self.users_data
     
     @_connection_required
     def _submit_new_context(self, context, **_):
@@ -188,4 +172,11 @@ class ServerClient():
         return result.json()
 
     def stop(self):
-        self.connected = False
+        if self.callback_registered:
+            self.controller.deci.artifact_change_callbacks[Context].remove(self._submit_new_context)
+            self.callback_registered = False
+        if self.connected:
+            l.info(self.sess.get(self.server_url+"/disconnect").text)
+            self.connected = False
+        else:
+            l.info("Disconnected without contacting server as it was previously unreachable")

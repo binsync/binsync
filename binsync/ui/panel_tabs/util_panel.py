@@ -22,10 +22,12 @@ from libbs.ui.qt_objects import (
     QDialog,
     QLineEdit,
     QDialogButtonBox,
+    QTimer
 )
 from libbs.artifacts import (
     Context
 )
+from binsync.ui.aux_server_panel.aux_server_window import AuxServerWidget
 from binsync.ui.magic_sync_dialog import MagicSyncDialog
 from binsync.ui.force_push import ForcePushUI
 from binsync.ui.utils import no_concurrent_call
@@ -74,17 +76,28 @@ class ClientWorker(QObject):
         super().__init__()
         from binsync.extras.aux_server.aux_client import ServerClient
 
-        self.server_client = ServerClient(host,port,controller,self.client_context_callback)
+        self.server_client = ServerClient(host,port,controller,self._client_context_callback)
         
     def run(self):
-        self.server_client.run()
-        self.finished.emit()
+        self.server_client.connect()
+        
+        self.timer = QTimer()
+        self.timer.timeout.connect(self._client_context_callback)
+        self.timer.start(1000)
+        
     
-    def client_context_callback(self, contexts: dict[str,dict[str,int]]):
-        self.context_change.emit(contexts)
-    
-    def stop(self):
+    def _client_context_callback(self):
+        user_contexts = self.server_client.poll_users_data()
+        if user_contexts is not None: # Connection with server might have dropped
+            self.context_change.emit(user_contexts)
+        else:
+            self.stop()
+            
+    # Are there issues with stop being called multiple times? (On disconnect button click & on connection being dropped)
+    def stop(self): 
+        self.timer.stop()
         self.server_client.stop()
+        self.finished.emit()
         
 class QUtilPanel(QWidget):
     connected_to_server = Signal(bool)
