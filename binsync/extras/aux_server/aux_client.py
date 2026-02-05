@@ -21,13 +21,13 @@ def _connection_required(func):
     return check_for_connected
 
 class ServerClient():
-    def __init__(self, host:str, port:int, controller, worker_update_callback):
+    def __init__(self, host:str, port:int, controller):
         self.host = host
         self.port = str(port)
         self.controller = controller
         self.old_post_data = {}
-        self.worker_update_callback = worker_update_callback
         self.connected = False
+        self.callback_registered = False
         
     
     
@@ -43,6 +43,7 @@ class ServerClient():
         self.controller.deci.artifact_change_callbacks[Context].append(self._submit_new_context)
         self.callback_registered = True
         self._submit_new_context(self.controller.deci.gui_active_context())
+        return True
 
     @_connection_required
     def poll_users_data(self):

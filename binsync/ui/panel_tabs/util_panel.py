@@ -22,7 +22,8 @@ from libbs.ui.qt_objects import (
     QDialog,
     QLineEdit,
     QDialogButtonBox,
-    QTimer
+    QTimer,
+    Slot
 )
 from libbs.artifacts import (
     Context
@@ -67,41 +68,66 @@ class AuxServerDialog(QDialog):
     def getInputs(self)->tuple[str,str]:
         return (self.first.text(), self.second.text())
         
+def _client_required(func):
+    def check_for_connected(self, *args, **kwargs):
+        if self.server_client is not None:
+            return func(self, *args, **kwargs)
+        else:
+            l.error("Tried to call a method that requires a server client to exist") 
+    return check_for_connected
 
 # There are type warnings with the display_clients signal when ClientWorker is placed at the bottom
 class ClientWorker(QObject):
     finished = Signal()
     context_change = Signal(dict)
-    def __init__(self,host:str,port:int,controller):
+    def __init__(self, controller):
         super().__init__()
+        self.controller = controller
+        self.server_client = None
+        self.timer = None
+        
+    @Slot(tuple) # Using @Slot is MANDATORY as it blocks in main thread otherwise
+    def connect_client(self, host_and_port):
         from binsync.extras.aux_server.aux_client import ServerClient
-
-        self.server_client = ServerClient(host,port,controller,self._client_context_callback)
-        
-    def run(self):
-        self.server_client.connect()
-        
+        host, port = host_and_port
+        self.server_client = ServerClient(host, port, self.controller)
+        success = self.server_client.connect()
+        if not success:
+            self.server_client.stop()
+            self.server_client = None
+            return # Client failed to connect so no need to do remaining setup
         self.timer = QTimer()
         self.timer.timeout.connect(self._client_context_callback)
         self.timer.start(1000)
-        
     
+    @Slot()    
+    @_client_required
     def _client_context_callback(self):
-        user_contexts = self.server_client.poll_users_data()
+        user_contexts = self.server_client.poll_users_data() # type: ignore (is ok because of _client_required decorator)
         if user_contexts is not None: # Connection with server might have dropped
             self.context_change.emit(user_contexts)
         else:
-            self.stop()
-            
+            self.disconnect_client()
+    
+    @Slot() 
+    @_client_required
+    def disconnect_client(self):
+        if self.timer: # Might have run into an error making the client connect
+            self.timer.stop()
+            self.timer = None
+        self.server_client.stop() # type: ignore (is ok because of _client_required decorator)
+        self.server_client = None
+    
     # Are there issues with stop being called multiple times? (On disconnect button click & on connection being dropped)
     def stop(self): 
-        self.timer.stop()
-        self.server_client.stop()
+        if self.server_client is not None:
+            self.disconnect_client()
         self.finished.emit()
         
 class QUtilPanel(QWidget):
     connected_to_server = Signal(bool)
     server_context_change = Signal(object) # type is dict[str,dict[str,int]] but we get a TypeError: bytes or ASCII string expected not 'types.GenericAlias'
+    connect_signal = Signal(tuple)
     
     def __init__(self, controller: BSController, parent=None):
         super().__init__(parent)
@@ -294,15 +320,17 @@ class QUtilPanel(QWidget):
             else:
                 # Connection was cancelled
                 return
-            self.client_worker = ClientWorker(host,port,self.controller)
+            self.client_worker = ClientWorker(self.controller)
             self.client_worker.context_change.connect(self.server_context_change)
+            self.connect_signal.connect(self.client_worker.connect_client)
             self.client_thread = QThread()
             # Text is set up here because existence of thread controls the behavior of the button
             self._connect_to_server_btn.setText("Disconnect From Server...") 
             self.client_worker.moveToThread(self.client_thread)
-            self.client_thread.started.connect(self.client_worker.run)
             self.client_worker.finished.connect(self.client_thread.quit)
             self.client_thread.start()
+            
+            self.connect_signal.emit((host,port))
             self.connected_to_server.emit(True) # Signal the activity table that it's time to display the current addresses column
         else:
             # User is trying to disconnect
