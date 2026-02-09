@@ -67,19 +67,33 @@ class ServerThreadManager():
         self.server.shutdown()
         self._thread.join()
 
-class MockEmitter(QWidget):
+class MockUser(QWidget):
+    '''
+    Handles ownership of ClientWorkers and their threads, as well as related signals
+    '''
     connect_signal = Signal(tuple)
     stop_signal = Signal()
-    def __init__(self):
+    def __init__(self, controller):
         super().__init__()
+        self.worker = ClientWorker(controller)
+        self.thread = QThread()
+        self.connect_signal.connect(self.worker.connect_client)
+        self.stop_signal.connect(self.worker.stop)
+        self.worker.moveToThread(self.thread)
+        self.worker.finished.connect(self.thread.quit)
+        self.thread.start()
+    
+    def shutdown(self):
+        self.stop_signal.emit()
+        self.thread.quit()
+        self.thread.wait()
 
 class TestAuxServer(unittest.TestCase):
     HOST = "127.0.0.1"
     PORT = 7962
         
     def setUp(self):
-        self.clients:list[ClientWorker] = []
-        self.client_threads:list[QThread] = []
+        self.users:list[MockUser] = []
         self.app = QApplication.instance()
         if not self.app:
             self.app = QApplication([])
@@ -92,12 +106,8 @@ class TestAuxServer(unittest.TestCase):
         else:
             self.app.quit() # type: ignore # My linter complains that app can be None here
         # Note: Not all clients may be present in self.clients as some tests shut down the clients early
-        for client in self.clients:
-            pass
-            # client.stop()
-        for client_thread in self.client_threads:
-            client_thread.quit()
-            client_thread.wait()
+        for user in self.users:
+            user.shutdown()
             
     
     def test_run_server(self):
@@ -116,22 +126,13 @@ class TestAuxServer(unittest.TestCase):
         """
             
         server = Server(self.HOST,self.PORT)
-        mock_emitter = MockEmitter()
         with ServerThreadManager(server):
-            self.clients.append(ClientWorker(MockController("Alice")))
-            mock_emitter.connect_signal.connect(self.clients[0].connect_client)
-            mock_emitter.stop_signal.connect(self.clients[0].stop)
-            self.client_threads.append(QThread())
+            self.users.append(MockUser(MockController("Alice")))
             
-            self.clients[0].moveToThread(self.client_threads[0])
-            self.clients[0].finished.connect(self.client_threads[0].quit)
-            self.client_threads[0].start()
-            
-            mock_emitter.connect_signal.emit((self.HOST, self.PORT))
+            self.users[0].connect_signal.emit((self.HOST, self.PORT))
             time.sleep(1)
             assert server.store._user_count == 1 # Verify that the server received the connection
-            mock_emitter.stop_signal.emit()
-            # self.clients.pop()
+            self.users[0].stop_signal.emit()
             time.sleep(1)
             assert server.store._user_count == 0 # Verify that server received disconnection
     
