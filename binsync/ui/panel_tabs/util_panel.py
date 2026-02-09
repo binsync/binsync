@@ -119,6 +119,7 @@ class ClientWorker(QObject):
         self.server_client = None
     
     # Are there issues with stop being called multiple times? (On disconnect button click & on connection being dropped)
+    @Slot() 
     def stop(self): 
         if self.server_client is not None:
             self.disconnect_client()
@@ -128,6 +129,7 @@ class QUtilPanel(QWidget):
     connected_to_server = Signal(bool)
     server_context_change = Signal(object) # type is dict[str,dict[str,int]] but we get a TypeError: bytes or ASCII string expected not 'types.GenericAlias'
     connect_signal = Signal(tuple)
+    stop_signal = Signal()
     
     def __init__(self, controller: BSController, parent=None):
         super().__init__(parent)
@@ -323,6 +325,7 @@ class QUtilPanel(QWidget):
             self.client_worker = ClientWorker(self.controller)
             self.client_worker.context_change.connect(self.server_context_change)
             self.connect_signal.connect(self.client_worker.connect_client)
+            self.stop_signal.connect(self.client_worker.stop)
             self.client_thread = QThread()
             # Text is set up here because existence of thread controls the behavior of the button
             self._connect_to_server_btn.setText("Disconnect From Server...") 
@@ -334,9 +337,9 @@ class QUtilPanel(QWidget):
             self.connected_to_server.emit(True) # Signal the activity table that it's time to display the current addresses column
         else:
             # User is trying to disconnect
+            print("Worker: ", self.client_worker)
             if self.client_worker: # Small possibility that client worker crashed on init and so is not a valid ClientWorker
-                self.client_worker.stop()
-                self.client_worker = None
+                self.stop_signal.emit()
             self.client_thread.quit()
             self.client_thread.wait() # Issue - will block on thread cleanup
             self.client_thread = None
