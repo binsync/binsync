@@ -34,6 +34,7 @@ from binsync.ui.force_push import ForcePushUI
 from binsync.ui.utils import no_concurrent_call
 from binsync.controller import BSController
 from binsync.extras import EXTRAS_AVAILABLE
+from functools import wraps
 
 l = logging.getLogger(__name__)
 
@@ -69,11 +70,13 @@ class AuxServerDialog(QDialog):
         return (self.first.text(), self.second.text())
         
 def _client_required(func):
+    @wraps(func) # appears to be necessary to avoid RecursionError when timer in ClientWorker calls _client_context_callback
     def check_for_connected(self, *args, **kwargs):
-        if self.server_client is not None:
-            return func(self, *args, **kwargs)
-        else:
-            l.error("Tried to call a method that requires a server client to exist") 
+        return func(self, *args, **kwargs)
+        # if self.server_client is not None:
+        #     return func(self, *args, **kwargs)
+        # else:
+        #     l.error("Tried to call a method that requires a server client to exist") 
     return check_for_connected
 
 # There are type warnings with the display_clients signal when ClientWorker is placed at the bottom

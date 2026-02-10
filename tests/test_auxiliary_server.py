@@ -77,10 +77,15 @@ class MockUser(QWidget):
         super().__init__()
         self.worker = ClientWorker(controller)
         self.thread = QThread()
+        
+        
+        self.worker.moveToThread(self.thread)
         self.connect_signal.connect(self.worker.connect_client)
         self.stop_signal.connect(self.worker.stop)
-        self.worker.moveToThread(self.thread)
         self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+
         self.thread.start()
     
     def shutdown(self):
@@ -99,15 +104,15 @@ class TestAuxServer(unittest.TestCase):
             self.app = QApplication([])
         
     def tearDown(self):
+        # Note: Not all clients may be present in self.clients as some tests shut down the clients early
+        for user in self.users:
+            user.shutdown()
         try:
             self.app
         except:
             pass
         else:
             self.app.quit() # type: ignore # My linter complains that app can be None here
-        # Note: Not all clients may be present in self.clients as some tests shut down the clients early
-        for user in self.users:
-            user.shutdown()
             
     
     def test_run_server(self):
@@ -136,39 +141,34 @@ class TestAuxServer(unittest.TestCase):
             time.sleep(1)
             assert server.store._user_count == 0 # Verify that server received disconnection
     
-    # def test_many_connections(self):
-    #     """
-    #     Verify server can handle multiple connections at once
-    #     """
-    #     num_connections = 10
-    #     def client_task(client:ServerClient):
-    #         client.run()
-    #     server = Server(self.HOST,self.PORT)
-    #     controllers:list[MockController] = []
-    #     with ServerThreadManager(server):
-    #         # Set up contexts
-    #         for i in range(num_connections):
-    #             controller = MockController(f"User_{i}")
-    #             controller.deci._update_context({
-    #                 "address":0x40000+10*i,
-    #                 "function_address":0x500000+10*i
-    #             })
-    #             controllers.append(controller)
-    #             client = ServerClient(self.HOST, self.PORT, controller,lambda *args:None)
-    #             self.clients.append(client)
-    #             client_thread = threading.Thread(target=client_task,args=(client,))
-    #             self.client_threads.append(client_thread)
+    def test_many_connections(self):
+        """
+        Verify server can handle multiple connections at once
+        """
+        num_connections = 10
+        server = Server(self.HOST,self.PORT)
+        controllers:list[MockController] = []
+        with ServerThreadManager(server):
+            # Set up contexts
+            for i in range(num_connections):
+                controller = MockController(f"User_{i}")
+                controller.deci._update_context({
+                    "address":0x40000+10*i,
+                    "function_address":0x500000+10*i
+                })
+                controllers.append(controller)
+                self.users.append(MockUser(controller))
             
-    #         # Start up client threads
-    #         for client_thread in self.client_threads:
-    #             client_thread.start()
-    #         time.sleep(1)
-    #         # Make sure that each user's function context is present in the server's storage
-    #         contexts_dict,_ = server.store.getUserData()
-    #         for controller in controllers:
-    #             user_entry = contexts_dict[controller.client.master_user]
-    #             assert user_entry["addr"] == controller.deci._context.addr
-    #             assert user_entry["func_addr"] == controller.deci._context.func_addr
+            # Start up client threads
+            for user in self.users:
+                user.connect_signal.emit((self.HOST, self.PORT))
+            time.sleep(2)
+            # Make sure that each user's function context is present in the server's storage
+            contexts_dict,_ = server.store.getUserData()
+            for controller in controllers:
+                user_entry = contexts_dict[controller.client.master_user]
+                assert user_entry["addr"] == controller.deci._context.addr
+                assert user_entry["func_addr"] == controller.deci._context.func_addr
     
     # def test_context_change(self):
     #     """

@@ -177,7 +177,10 @@ class ServerClient():
             self.controller.deci.artifact_change_callbacks[Context].remove(self._submit_new_context)
             self.callback_registered = False
         if self.connected:
-            l.info(self.sess.get(self.server_url+"/disconnect").text)
+            try:
+                l.info(self.sess.get(self.server_url+"/disconnect").text)
+            except requests.ConnectionError:
+                l.info("Server unresponsive")
             self.connected = False
         else:
             l.info("Disconnected without contacting server as it was previously unreachable")
