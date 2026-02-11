@@ -82,6 +82,8 @@ def _client_required(func):
 class ClientWorker(QObject):
     finished = Signal()
     context_change = Signal(dict)
+    client_connected = Signal(bool)
+    
     def __init__(self, controller):
         super().__init__()
         self.controller = controller
@@ -91,6 +93,8 @@ class ClientWorker(QObject):
     @Slot(tuple) # Using @Slot is MANDATORY as it blocks in main thread otherwise
     def connect_client(self, host_and_port):
         from binsync.extras.aux_server.aux_client import ServerClient
+        if self.server_client is not None:
+            return # We've already connected and should wait for a disconnect signal
         host, port = host_and_port
         self.server_client = ServerClient(host, port, self.controller)
         success = self.server_client.connect()
@@ -98,6 +102,7 @@ class ClientWorker(QObject):
             self.server_client.stop()
             self.server_client = None
             return # Client failed to connect so no need to do remaining setup
+        self.client_connected.emit(True)
         self.timer = QTimer()
         self.timer.timeout.connect(self._client_context_callback)
         self.timer.start(1000)
@@ -118,6 +123,7 @@ class ClientWorker(QObject):
             self.timer.stop()
             self.timer = None
         self.server_client.stop() # type: ignore (is ok because of _client_required decorator)
+        self.client_connected.emit(False)
         self.server_client = None
     
     # Are there issues with stop being called multiple times? (On disconnect button click & on connection being dropped)
@@ -132,7 +138,6 @@ class QUtilPanel(QWidget):
     server_context_change = Signal(object) # type is dict[str,dict[str,int]] but we get a TypeError: bytes or ASCII string expected not 'types.GenericAlias'
     connect_signal = Signal(tuple)
     disconnect_signal = Signal()
-    stop_signal = Signal()
     
     def __init__(self, controller: BSController, parent=None):
         super().__init__(parent)
@@ -306,9 +311,8 @@ class QUtilPanel(QWidget):
         self.client_connected = False
         self.client_worker = ClientWorker(self.controller)
         self.client_worker.context_change.connect(lambda new_context: self.server_context_change.emit(new_context))
-        self.connect_signal.connect(self.client_worker.connect_client)
-        self.disconnect_signal.connect(self.client_worker.disconnect_client)
-        self.stop_signal.connect(self.client_worker.stop)
+        # self.connect_signal.connect(self.client_worker.connect_client)
+        # self.disconnect_signal.connect(self.client_worker.disconnect_client)
         self.client_thread = QThread()
         self.client_worker.moveToThread(self.client_thread)
         self.client_worker.finished.connect(self.client_thread.quit)
@@ -322,30 +326,36 @@ class QUtilPanel(QWidget):
         return extras_group
 
     def _handle_connection(self):
-        if not self.client_connected:
-            # User is trying to connect
-            dialog = AuxServerDialog()
-            if dialog.exec():
-                host, port_str = dialog.getInputs()
-                if not port_str.isdigit():
-                    l.info("Port is not a valid number.")
-                    return
-                port = int(port_str)
-            else:
-                # Connection was cancelled
-                return
+        dialog = AuxServerWidget(self.client_worker.server_client is not None, self)
+        dialog.connect_signal.connect(self.client_worker.connect_client)
+        dialog.disconnect_signal.connect(self.client_worker.disconnect_client)
+        self.client_worker.client_connected.connect(dialog.update_layout)
+        dialog.show()
+        dialog.exec()
+        # if not self.client_connected:
+        #     # User is trying to connect
+        #     dialog = AuxServerDialog()
+        #     if dialog.exec():
+        #         host, port_str = dialog.getInputs()
+        #         if not port_str.isdigit():
+        #             l.info("Port is not a valid number.")
+        #             return
+        #         port = int(port_str)
+        #     else:
+        #         # Connection was cancelled
+        #         return
             
-            # Text is set up here because existence of thread controls the behavior of the button
-            self._connect_to_server_btn.setText("Disconnect From Server...") 
-            self.connect_signal.emit((host,port))
-            self.client_connected = True
-            self.connected_to_server.emit(True) # Signal the activity table that it's time to display the current addresses column
-        else:
-            # User is trying to disconnect
-            self.disconnect_signal.emit()
-            self.client_connected = False
-            self._connect_to_server_btn.setText("Connect to Server...") # Text is hardcoded and duplicates setup - good idea?
-            self.connected_to_server.emit(False) # Signal the activity table that it's time to hide the current addresses column
+        #     # Text is set up here because existence of thread controls the behavior of the button
+        #     self._connect_to_server_btn.setText("Disconnect From Server...") 
+        #     self.connect_signal.emit((host,port))
+        #     self.client_connected = True
+        #     self.connected_to_server.emit(True) # Signal the activity table that it's time to display the current addresses column
+        # else:
+        #     # User is trying to disconnect
+        #     self.disconnect_signal.emit()
+        #     self.client_connected = False
+        #     self._connect_to_server_btn.setText("Connect to Server...") # Text is hardcoded and duplicates setup - good idea?
+        #     self.connected_to_server.emit(False) # Signal the activity table that it's time to hide the current addresses column
 
     def _handle_progress_view(self):
         from ..progress_graph.progress_window import ProgressGraphWidget

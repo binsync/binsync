@@ -38,12 +38,15 @@ class ServerClient():
         if parsed.netloc != f"{self.host}:{self.port}":
             l.error("HOST AND PORT COMBINATION IS NOT VALID: NETLOC %s BUT HOST %s AND PORT %s",parsed.netloc,parsed.hostname,parsed.port)
         self.sess = requests.Session()
-        l.info(self.sess.get(self.server_url+"/connect").text)
-        self.connected = True
-        self.controller.deci.artifact_change_callbacks[Context].append(self._submit_new_context)
-        self.callback_registered = True
-        self._submit_new_context(self.controller.deci.gui_active_context())
-        return True
+        try:
+            l.info(self.sess.get(self.server_url+"/connect").text)
+            self.connected = True
+            self.controller.deci.artifact_change_callbacks[Context].append(self._submit_new_context)
+            self.callback_registered = True
+            self._submit_new_context(self.controller.deci.gui_active_context())
+            return True
+        except requests.ConnectionError:
+            return False
 
     @_connection_required
     def poll_users_data(self):
