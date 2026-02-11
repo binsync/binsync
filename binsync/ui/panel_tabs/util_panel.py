@@ -131,6 +131,7 @@ class QUtilPanel(QWidget):
     connected_to_server = Signal(bool)
     server_context_change = Signal(object) # type is dict[str,dict[str,int]] but we get a TypeError: bytes or ASCII string expected not 'types.GenericAlias'
     connect_signal = Signal(tuple)
+    disconnect_signal = Signal()
     stop_signal = Signal()
     
     def __init__(self, controller: BSController, parent=None):
@@ -302,7 +303,16 @@ class QUtilPanel(QWidget):
         extras_layout.addWidget(progress_view_btn)
 
         # Binsync server
-        self.client_thread = None
+        self.client_connected = False
+        self.client_worker = ClientWorker(self.controller)
+        self.client_worker.context_change.connect(self.server_context_change)
+        self.connect_signal.connect(self.client_worker.connect_client)
+        self.disconnect_signal.connect(self.client_worker.disconnect_client)
+        self.stop_signal.connect(self.client_worker.stop)
+        self.client_thread = QThread()
+        self.client_worker.moveToThread(self.client_thread)
+        self.client_worker.finished.connect(self.client_thread.quit)
+        self.client_thread.start()
         self._connect_to_server_btn = QPushButton("Connect to Server...")
         self._connect_to_server_btn.clicked.connect(self._handle_connection)
         extras_layout.addWidget(self._connect_to_server_btn)
@@ -312,7 +322,7 @@ class QUtilPanel(QWidget):
         return extras_group
 
     def _handle_connection(self):
-        if not self.client_thread:
+        if not self.client_connected:
             # User is trying to connect
             dialog = AuxServerDialog()
             if dialog.exec():
@@ -324,27 +334,16 @@ class QUtilPanel(QWidget):
             else:
                 # Connection was cancelled
                 return
-            self.client_worker = ClientWorker(self.controller)
-            self.client_worker.context_change.connect(self.server_context_change)
-            self.connect_signal.connect(self.client_worker.connect_client)
-            self.stop_signal.connect(self.client_worker.stop)
-            self.client_thread = QThread()
+            
             # Text is set up here because existence of thread controls the behavior of the button
             self._connect_to_server_btn.setText("Disconnect From Server...") 
-            self.client_worker.moveToThread(self.client_thread)
-            self.client_worker.finished.connect(self.client_thread.quit)
-            self.client_thread.start()
-            
             self.connect_signal.emit((host,port))
+            self.client_connected = True
             self.connected_to_server.emit(True) # Signal the activity table that it's time to display the current addresses column
         else:
             # User is trying to disconnect
-            print("Worker: ", self.client_worker)
-            if self.client_worker: # Small possibility that client worker crashed on init and so is not a valid ClientWorker
-                self.stop_signal.emit()
-            self.client_thread.quit()
-            self.client_thread.wait() # Issue - will block on thread cleanup
-            self.client_thread = None
+            self.disconnect_signal.emit()
+            self.client_connected = False
             self._connect_to_server_btn.setText("Connect to Server...") # Text is hardcoded and duplicates setup - good idea?
             self.connected_to_server.emit(False) # Signal the activity table that it's time to hide the current addresses column
 
