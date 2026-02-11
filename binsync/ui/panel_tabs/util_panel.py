@@ -305,7 +305,7 @@ class QUtilPanel(QWidget):
         # Binsync server
         self.client_connected = False
         self.client_worker = ClientWorker(self.controller)
-        self.client_worker.context_change.connect(self.server_context_change)
+        self.client_worker.context_change.connect(lambda new_context: self.server_context_change.emit(new_context))
         self.connect_signal.connect(self.client_worker.connect_client)
         self.disconnect_signal.connect(self.client_worker.disconnect_client)
         self.stop_signal.connect(self.client_worker.stop)
