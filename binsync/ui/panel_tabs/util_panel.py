@@ -72,11 +72,10 @@ class AuxServerDialog(QDialog):
 def _client_required(func):
     @wraps(func) # appears to be necessary to avoid RecursionError when timer in ClientWorker calls _client_context_callback
     def check_for_connected(self, *args, **kwargs):
-        return func(self, *args, **kwargs)
-        # if self.server_client is not None:
-        #     return func(self, *args, **kwargs)
-        # else:
-        #     l.error("Tried to call a method that requires a server client to exist") 
+        if self.server_client is not None:
+            return func(self, *args, **kwargs)
+        else:
+            l.error("Tried to call a method that requires a server client to exist") 
     return check_for_connected
 
 # There are type warnings with the display_clients signal when ClientWorker is placed at the bottom
