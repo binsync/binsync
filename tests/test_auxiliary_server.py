@@ -9,7 +9,8 @@ from libbs.ui.qt_objects import (
     QThread,
     QWidget,
     Signal,
-    QApplication
+    QApplication,
+    Slot
 )
 import unittest
 import threading
@@ -75,13 +76,18 @@ class MockUser(QWidget):
     stop_signal = Signal()
     def __init__(self, controller):
         super().__init__()
+        self.beliefs = {}
+        
         self.worker = ClientWorker(controller)
         self.thread = QThread()
         
-        
         self.worker.moveToThread(self.thread)
+        
+        self.worker.context_change.connect(self._update_beliefs)
+        
         self.connect_signal.connect(self.worker.connect_client)
         self.stop_signal.connect(self.worker.stop)
+        
         self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
@@ -92,6 +98,11 @@ class MockUser(QWidget):
         self.stop_signal.emit()
         self.thread.quit()
         self.thread.wait()
+
+    @Slot(dict)
+    def _update_beliefs(self, new_beliefs):
+        self.beliefs = new_beliefs
+        
 
 class TestAuxServer(unittest.TestCase):
     HOST = "127.0.0.1"
@@ -199,47 +210,35 @@ class TestAuxServer(unittest.TestCase):
             assert user_entry["addr"] == controller.deci._context.addr
             assert user_entry["func_addr"] == controller.deci._context.func_addr
                 
-    # def test_see_other_clients(self):
-    #     num_connections = 10
-    #     def client_task(client:ServerClient):
-    #         client.run()
-    #     server = Server(self.HOST,self.PORT)
-    #     controllers:list[MockController] = []
-    #     client_beliefs = []
+    def test_see_other_clients(self):
+        num_connections = 10
+        server = Server(self.HOST,self.PORT)
         
-    #     def update_belief(index, context):
-    #         client_beliefs[index] = context
+        with ServerThreadManager(server):
+            # Set up contexts
+            controllers:list[MockController] = []
+            for i in range(num_connections):
+                controller = MockController(f"User_{i}")
+                controller.deci._update_context({
+                    "address":0x40000+10*i,
+                    "function_address":0x500000+10*i
+                })
+                controllers.append(controller)
+                self.users.append(MockUser(controller))
             
-    #     def make_belief_lambda(index):
-    #         # We need this function because of lambda late binding
-    #         return lambda context:update_belief(index,context)
-    #     with ServerThreadManager(server):
-    #         # Set up contexts
-    #         for i in range(num_connections):
-    #             controller = MockController(f"User_{i}")
-    #             controller.deci._update_context({
-    #                 "address":0x40000+10*i,
-    #                 "function_address":0x500000+10*i
-    #             })
-    #             controllers.append(controller)
-    #             client = ServerClient(self.HOST, self.PORT, controller,make_belief_lambda(i))
-    #             self.clients.append(client)
-    #             client_thread = threading.Thread(target=client_task,args=(client,))
-    #             self.client_threads.append(client_thread)
-                
-    #             client_beliefs.append({})
-    #         # Start up client threads
-    #         for client_thread in self.client_threads:
-    #             client_thread.start()
-    #         time.sleep(2)
+            for user in self.users:
+                user.connect_signal.emit((self.HOST, self.PORT))
+            time.sleep(2)
             
-    #         # Make sure beliefs have been updated to something
-    #         assert client_beliefs[0] != {}
-    #         # Make sure everyone's beliefs are the same
-    #         for i in range(len(client_beliefs)-1):
-    #             assert client_beliefs[i] == client_beliefs[i+1]
-    #         # Make sure everyone's beliefs match up with the server
-    #         assert client_beliefs[0] == server.store._user_map  
+            self.app.processEvents() # required for beliefs to update in this test
+            
+            # Make sure beliefs have been updated to something
+            assert self.users[0].beliefs != {}
+            # Make sure everyone's beliefs are the same
+            for i in range(len(self.users)-1):
+                assert self.users[i].beliefs == self.users[i+1].beliefs
+            # Make sure everyone's beliefs match up with the server
+            assert self.users[0].beliefs == server.store._user_map  
     
     # def test_link_unlink_projects(self):
     #     '''
