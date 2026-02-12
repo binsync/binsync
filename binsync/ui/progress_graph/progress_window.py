@@ -23,6 +23,7 @@ from libbs.ui.qt_objects import (
     QPushButton,
     QCheckBox,
     QFileDialog,
+    QTextBrowser,
     # QtGui
     QPen, QBrush, QColor, QPainter, QFont, QFontMetrics,
     # QtCore
@@ -476,10 +477,14 @@ class ProgressGraphWidget(QDialog):
 
     
     def checkApi(self):
+<<<<<<< HEAD
         if "sk" in os.environ.get("OPENAI_API_KEY"): #Check if the api key is set
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+=======
+        if os.environ.get("OPENAI_API_KEY") != "": #Check if the api key is set
+>>>>>>> 895b62c (Added HTML Window, Stylesheet for formatting, and updated to gpt-4o-mini (for now))
             _l.info("API Key set already, good to go!")
 =======
             self.summarize()
@@ -528,13 +533,65 @@ class ProgressGraphWidget(QDialog):
         if not EXTRAS_AVAILABLE:
             _l.error("Summarization requires extras, which are not available.")
             return
+        
+        
 
         #Call checkApi here, so we can check for extras first and then see if api key is set before selecting a save file
         self.checkApi()
-
         file_location, _ = QFileDialog.getSaveFileName(None, "Save File", "", "All Files (*);;Text Files (*.txt)")
         _l.info("Summarizing changes...")
-        summarize_changes(self._controller, self.displayed_graph, file_location)
+        #response = summarize_changes(self._controller, self.displayed_graph, file_location)
+        with open(file_location, "r") as f:
+            response = f.read()
+        #response = response.replace("\n", "")
+        response = response.replace("```html", "").replace("```", "").strip()
+        dialog = QDialog(self) 
+        dialog.setWindowTitle("Summarization Results")
+        dialog.setMinimumSize(600, 400)
+        
+        dlg_layout = QVBoxLayout()
+        
+        htmlresponse = QTextBrowser()
+        htmlresponse.setStyleSheet("""
+    QTextBrowser {
+        background-color: #1e1e1e;   /* Deep dark background */
+        color: #000000;              /* Soft light gray text */
+        border: none;
+        font-family: 'Segoe UI', Tahoma, sans-serif;
+        font-size: 13px;
+    }
+
+    /* Target the body and all children to override inline styles */
+    QWidget {
+        background-color: #1e1e1e;
+        color: #000000;
+    }
+
+    /* This targets the 'highlighted' look you saw in your image */
+    span, p, div, li {
+        background-color: transparent !important; 
+        color: #000000 !important;
+    }
+
+    /* Style links so they don't disappear in the dark */
+    a {
+        color: #0000EE;
+        text-decoration: underline;
+    }
+
+    /* Keep headers distinct and bright */
+    h1, h2, h3 {
+        color: #005a4e;
+        margin-top: 15px;
+    }
+""")
+        htmlresponse.setHtml(response)
+        htmlresponse.setOpenExternalLinks(True)
+        dlg_layout.addWidget(htmlresponse)
+        
+        dialog.setLayout(dlg_layout)
+            
+        dialog.exec()
 
     @staticmethod
     def compute_size_outlier_scores(node_sizes: list[int], max_size=3, min_size=1) -> dict:
