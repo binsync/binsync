@@ -217,7 +217,8 @@ class QUtilPanel(QWidget):
         self.client_thread = QThread()
         self.client_worker.moveToThread(self.client_thread)
         self.client_worker.context_change.connect(lambda new_context: self.server_context_change.emit(new_context))
-
+        self.client_worker.client_connected.connect(lambda connected: self.connected_to_server.emit(connected))
+        
         self.client_worker.finished.connect(self.client_thread.quit)
         self.client_thread.start()
         self._connect_to_server_btn = QPushButton("Connect to Server...")
