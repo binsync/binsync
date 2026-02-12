@@ -11,7 +11,7 @@ class ServerStore:
         
         self._linked_projects_lock = threading.Lock()
         # We use a dict for the projects in each group so that we can preserve order while retaining fast access
-        self._linked_projects:dict[str|None,dict[str,None]] = {ServerStore.DEFAULT_GROUPNAME: {}} 
+        self._linked_projects:dict[str,dict[str,None]] = {ServerStore.DEFAULT_GROUPNAME: {}} 
         
     def incrementUser(self):
         with self._user_count_lock:

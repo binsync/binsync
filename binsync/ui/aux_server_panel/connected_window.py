@@ -37,7 +37,7 @@ class LinkedProjectsWidget(QWidget):
         self.setLayout(layout)
     
     @Slot(dict)
-    def update_linked_projects(self, linked_projects: dict[str|None,dict[str,None]]):
+    def update_linked_projects(self, linked_projects: dict[str,dict[str,None]]):
         l.info("updating linked projects: %s",linked_projects)
 
 class AuxServerConnectedWidget(QWidget):
