@@ -1,40 +1,92 @@
+'''
+Don't import unless extras are enabled as we import from aux_server at the top level
+'''
 import logging
-import time
-import requests
-import urllib.parse
 
 from libbs.ui.qt_objects import (
-    QCheckBox,
-    QComboBox,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
-    Qt,
     QVBoxLayout,
     QWidget,
     QLineEdit,
-    QIntValidator,
-    QThread,
     QObject,
     Signal,
     QDialog,
     QLineEdit,
     QDialogButtonBox,
     Slot,
-    QStackedLayout
+    QStackedLayout,
+    QTimer
 )
-from libbs.artifacts import (
-    Context
-)
-from binsync.ui.magic_sync_dialog import MagicSyncDialog
-from binsync.ui.force_push import ForcePushUI
-from binsync.ui.utils import no_concurrent_call
-from binsync.controller import BSController
-from binsync.extras import EXTRAS_AVAILABLE
+from functools import wraps
+from binsync.extras.aux_server.aux_client import ServerClient
 
 l = logging.getLogger(__name__)
     
+def _client_required(func):
+    @wraps(func) # appears to be necessary to avoid RecursionError when timer in ClientWorker calls _client_context_callback
+    def check_for_connected(self, *args, **kwargs):
+        if self.server_client is not None:
+            return func(self, *args, **kwargs)
+        else:
+            l.error("Tried to call a method that requires a server client to exist") 
+    return check_for_connected
+
+# There are type warnings with the display_clients signal when ClientWorker is placed at the bottom
+class ClientWorker(QObject):
+    finished = Signal()
+    context_change = Signal(dict)
+    client_connected = Signal(bool)
+    
+    def __init__(self, controller):
+        super().__init__()
+        self.controller = controller
+        self.server_client = None
+        self.timer = None
+        
+    @Slot(tuple) # Using @Slot is MANDATORY as it blocks in main thread otherwise
+    def connect_client(self, host_and_port):
+        if self.server_client is not None:
+            return # We've already connected and should wait for a disconnect signal
+        host, port = host_and_port
+        self.server_client = ServerClient(host, port, self.controller)
+        success = self.server_client.connect()
+        if not success:
+            self.server_client.stop()
+            self.server_client = None
+            return # Client failed to connect so no need to do remaining setup
+        self.client_connected.emit(True)
+        self.timer = QTimer()
+        self.timer.timeout.connect(self._client_context_callback)
+        self.timer.start(1000)
+    
+    @Slot()    
+    @_client_required
+    def _client_context_callback(self):
+        user_contexts = self.server_client.poll_users_data() # type: ignore (is ok because of _client_required decorator)
+        if user_contexts is not None: # Connection with server might have dropped
+            self.context_change.emit(user_contexts)
+        else:
+            self.disconnect_client()
+    
+    @Slot() 
+    @_client_required
+    def disconnect_client(self):
+        if self.timer: # Might have run into an error making the client connect
+            self.timer.stop()
+            self.timer = None
+        self.server_client.stop() # type: ignore (is ok because of _client_required decorator)
+        self.client_connected.emit(False)
+        self.server_client = None
+    
+    # Are there issues with stop being called multiple times? (On disconnect button click & on connection being dropped)
+    @Slot() 
+    def stop(self): 
+        if self.server_client is not None:
+            self.disconnect_client()
+        self.finished.emit()
+
 class AuxServerDisconnectedWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -103,7 +155,7 @@ class AuxServerWidget(QDialog):
         self.stacked_layout.addWidget(self.disconnected_widget)
         self.stacked_layout.addWidget(self.connected_widget)
             
-        self.stacked_layout.setCurrentIndex(self.DISCONNECTED_INDEX)
+        self.stacked_layout.setCurrentIndex(self.DISCONNECTED_INDEX if not connected else self.CONNECTED_INDEX)
         self.resize(1000, 800)
 
     @Slot()

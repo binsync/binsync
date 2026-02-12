@@ -28,116 +28,17 @@ from libbs.ui.qt_objects import (
 from libbs.artifacts import (
     Context
 )
-from binsync.ui.aux_server_panel.aux_server_window import AuxServerWidget
 from binsync.ui.magic_sync_dialog import MagicSyncDialog
 from binsync.ui.force_push import ForcePushUI
 from binsync.ui.utils import no_concurrent_call
 from binsync.controller import BSController
 from binsync.extras import EXTRAS_AVAILABLE
-from functools import wraps
 
 l = logging.getLogger(__name__)
-
-class AuxServerDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.first = QLineEdit("[::1]",self)
-        self.second = QLineEdit("7962",self)
-        buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
-        
-        layout = QVBoxLayout()
-        inputs_layout = QHBoxLayout()
-        
-        host_layout = QVBoxLayout()
-        host_layout.addWidget(QLabel("Host"))
-        host_layout.addWidget(self.first)
-        inputs_layout.addLayout(host_layout)
-        
-        port_layout = QVBoxLayout()
-        port_layout.addWidget(QLabel("Port"))
-        port_layout.addWidget(self.second)
-        inputs_layout.addLayout(port_layout)
-
-        layout.addLayout(inputs_layout)
-        
-        layout.addWidget(buttonBox)
-        buttonBox.accepted.connect(self.accept)
-        buttonBox.rejected.connect(self.reject)
-        
-        self.setLayout(layout)
-        
-    def getInputs(self)->tuple[str,str]:
-        return (self.first.text(), self.second.text())
-        
-def _client_required(func):
-    @wraps(func) # appears to be necessary to avoid RecursionError when timer in ClientWorker calls _client_context_callback
-    def check_for_connected(self, *args, **kwargs):
-        if self.server_client is not None:
-            return func(self, *args, **kwargs)
-        else:
-            l.error("Tried to call a method that requires a server client to exist") 
-    return check_for_connected
-
-# There are type warnings with the display_clients signal when ClientWorker is placed at the bottom
-class ClientWorker(QObject):
-    finished = Signal()
-    context_change = Signal(dict)
-    client_connected = Signal(bool)
-    
-    def __init__(self, controller):
-        super().__init__()
-        self.controller = controller
-        self.server_client = None
-        self.timer = None
-        
-    @Slot(tuple) # Using @Slot is MANDATORY as it blocks in main thread otherwise
-    def connect_client(self, host_and_port):
-        from binsync.extras.aux_server.aux_client import ServerClient
-        if self.server_client is not None:
-            return # We've already connected and should wait for a disconnect signal
-        host, port = host_and_port
-        self.server_client = ServerClient(host, port, self.controller)
-        success = self.server_client.connect()
-        if not success:
-            self.server_client.stop()
-            self.server_client = None
-            return # Client failed to connect so no need to do remaining setup
-        self.client_connected.emit(True)
-        self.timer = QTimer()
-        self.timer.timeout.connect(self._client_context_callback)
-        self.timer.start(1000)
-    
-    @Slot()    
-    @_client_required
-    def _client_context_callback(self):
-        user_contexts = self.server_client.poll_users_data() # type: ignore (is ok because of _client_required decorator)
-        if user_contexts is not None: # Connection with server might have dropped
-            self.context_change.emit(user_contexts)
-        else:
-            self.disconnect_client()
-    
-    @Slot() 
-    @_client_required
-    def disconnect_client(self):
-        if self.timer: # Might have run into an error making the client connect
-            self.timer.stop()
-            self.timer = None
-        self.server_client.stop() # type: ignore (is ok because of _client_required decorator)
-        self.client_connected.emit(False)
-        self.server_client = None
-    
-    # Are there issues with stop being called multiple times? (On disconnect button click & on connection being dropped)
-    @Slot() 
-    def stop(self): 
-        if self.server_client is not None:
-            self.disconnect_client()
-        self.finished.emit()
         
 class QUtilPanel(QWidget):
     connected_to_server = Signal(bool)
-    server_context_change = Signal(object) # type is dict[str,dict[str,int]] but we get a TypeError: bytes or ASCII string expected not 'types.GenericAlias'
-    connect_signal = Signal(tuple)
-    disconnect_signal = Signal()
+    server_context_change = Signal(dict) # type is dict[str,dict[str,int]] but we get a TypeError: bytes or ASCII string expected not 'types.GenericAlias'
     
     def __init__(self, controller: BSController, parent=None):
         super().__init__(parent)
@@ -295,6 +196,8 @@ class QUtilPanel(QWidget):
     #
 
     def _create_extras_group(self):
+        from binsync.ui.aux_server_panel.aux_server_window import ClientWorker
+
         extras_group = QGroupBox()
         extras_layout = QVBoxLayout()
         extras_group.setTitle("BS Extras")
@@ -310,11 +213,11 @@ class QUtilPanel(QWidget):
         # Binsync server
         self.client_connected = False
         self.client_worker = ClientWorker(self.controller)
-        self.client_worker.context_change.connect(lambda new_context: self.server_context_change.emit(new_context))
-        # self.connect_signal.connect(self.client_worker.connect_client)
-        # self.disconnect_signal.connect(self.client_worker.disconnect_client)
+        
         self.client_thread = QThread()
         self.client_worker.moveToThread(self.client_thread)
+        self.client_worker.context_change.connect(lambda new_context: self.server_context_change.emit(new_context))
+
         self.client_worker.finished.connect(self.client_thread.quit)
         self.client_thread.start()
         self._connect_to_server_btn = QPushButton("Connect to Server...")
@@ -326,36 +229,14 @@ class QUtilPanel(QWidget):
         return extras_group
 
     def _handle_connection(self):
+        from binsync.ui.aux_server_panel.aux_server_window import AuxServerWidget
+
         dialog = AuxServerWidget(self.client_worker.server_client is not None, self)
         dialog.connect_signal.connect(self.client_worker.connect_client)
         dialog.disconnect_signal.connect(self.client_worker.disconnect_client)
         self.client_worker.client_connected.connect(dialog.update_layout)
         dialog.show()
         dialog.exec()
-        # if not self.client_connected:
-        #     # User is trying to connect
-        #     dialog = AuxServerDialog()
-        #     if dialog.exec():
-        #         host, port_str = dialog.getInputs()
-        #         if not port_str.isdigit():
-        #             l.info("Port is not a valid number.")
-        #             return
-        #         port = int(port_str)
-        #     else:
-        #         # Connection was cancelled
-        #         return
-            
-        #     # Text is set up here because existence of thread controls the behavior of the button
-        #     self._connect_to_server_btn.setText("Disconnect From Server...") 
-        #     self.connect_signal.emit((host,port))
-        #     self.client_connected = True
-        #     self.connected_to_server.emit(True) # Signal the activity table that it's time to display the current addresses column
-        # else:
-        #     # User is trying to disconnect
-        #     self.disconnect_signal.emit()
-        #     self.client_connected = False
-        #     self._connect_to_server_btn.setText("Connect to Server...") # Text is hardcoded and duplicates setup - good idea?
-        #     self.connected_to_server.emit(False) # Signal the activity table that it's time to hide the current addresses column
 
     def _handle_progress_view(self):
         from ..progress_graph.progress_window import ProgressGraphWidget

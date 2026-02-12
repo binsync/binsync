@@ -3,8 +3,7 @@ import sys
 from binsync.extras.aux_server.aux_server import Server
 from binsync.extras.aux_server.store import ServerStore
 
-from binsync.extras.aux_server.aux_client import ServerClient
-from binsync.ui.panel_tabs.util_panel import ClientWorker
+from binsync.ui.aux_server_panel.aux_server_window import ClientWorker
 from libbs.ui.qt_objects import (
     QThread,
     QWidget,
@@ -245,19 +244,17 @@ class TestAuxServer(unittest.TestCase):
     #     Test: Client creates a new group, links a project to that group, then deletes the group. 
     #     There should be errors when deleting the group a second time and when trying to unlink the project (as it is already deleted).
     #     '''
-    #     def client_task(client:ServerClient):
-    #         client.run()
             
     #     server = Server(self.HOST,self.PORT)
+    #     project_url = "https://github.com/binsync/binsync.git"
+    #     group_name = "binsync"
     #     with ServerThreadManager(server):
-    #         client = ServerClient(self.HOST, self.PORT, MockController("Alice"), lambda *args:None)
-    #         self.clients.append(client)
-    #         client_thread = threading.Thread(target=client_task,args=(client,))
-    #         self.client_threads.append(client_thread)
-    #         client_thread.start()
+    #         self.users.append(MockUser(MockController("Alice")))
+    #         for user in self.users:
+    #             user.connect_signal.emit((self.HOST, self.PORT))
+    #         time.sleep(1)
             
-    #         project_url = "https://github.com/binsync/binsync.git"
-    #         group_name = "binsync"
+            
     #         # Client makes new group
     #         group_create_result = client.create_group(group_name)
     #         assert group_create_result == (True, "")
