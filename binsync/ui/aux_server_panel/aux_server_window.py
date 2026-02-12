@@ -3,6 +3,8 @@ Don't import unless extras are enabled as we import from aux_server at the top l
 '''
 import logging
 
+from binsync.ui.aux_server_panel.connected_window import AuxServerConnectedWidget
+from binsync.ui.aux_server_panel.disconnected_window import AuxServerDisconnectedWidget
 from libbs.ui.qt_objects import (
     QHBoxLayout,
     QLabel,
@@ -86,48 +88,6 @@ class ClientWorker(QObject):
         if self.server_client is not None:
             self.disconnect_client()
         self.finished.emit()
-
-class AuxServerDisconnectedWidget(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._init_widgets()
-
-    def _init_widgets(self):
-        self.first = QLineEdit("[::1]",self)
-        self.second = QLineEdit("7962",self)
-        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
-        
-        self.connect_layout = QVBoxLayout()
-        inputs_layout = QHBoxLayout()
-        
-        host_layout = QVBoxLayout()
-        host_layout.addWidget(QLabel("Host"))
-        host_layout.addWidget(self.first)
-        inputs_layout.addLayout(host_layout)
-        
-        port_layout = QVBoxLayout()
-        port_layout.addWidget(QLabel("Port"))
-        port_layout.addWidget(self.second)
-        inputs_layout.addLayout(port_layout)
-
-        self.connect_layout.addLayout(inputs_layout)
-        
-        self.connect_layout.addWidget(self.buttonBox)
-        self.setLayout(self.connect_layout)
-    
-    def get_inputs(self)->tuple[str,str]:
-        return (self.first.text(), self.second.text())
-
-class AuxServerConnectedWidget(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._init_widgets()
-
-    def _init_widgets(self):
-        self.disconnect_layout = QVBoxLayout()
-        self.disconnect_button = QPushButton("Disconnect")
-        self.disconnect_layout.addWidget(self.disconnect_button)
-        self.setLayout(self.disconnect_layout)
             
 class AuxServerWidget(QDialog):
     '''

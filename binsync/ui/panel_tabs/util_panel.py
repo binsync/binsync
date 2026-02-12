@@ -221,7 +221,7 @@ class QUtilPanel(QWidget):
         
         self.client_worker.finished.connect(self.client_thread.quit)
         self.client_thread.start()
-        self._connect_to_server_btn = QPushButton("Connect to Server...")
+        self._connect_to_server_btn = QPushButton("Auxiliary Server")
         self._connect_to_server_btn.clicked.connect(self._handle_connection)
         extras_layout.addWidget(self._connect_to_server_btn)
 
