@@ -1,3 +1,4 @@
+import logging
 from libbs.ui.qt_objects import (
     QHBoxLayout,
     QLabel,
@@ -7,6 +8,9 @@ from libbs.ui.qt_objects import (
     QLineEdit,
     QDialogButtonBox,
 )
+
+l = logging.getLogger(__name__)
+
 
 class AuxServerDisconnectedWidget(QWidget):
     def __init__(self, parent=None):

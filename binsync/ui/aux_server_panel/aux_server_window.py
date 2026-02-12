@@ -40,6 +40,7 @@ class ClientWorker(QObject):
     finished = Signal()
     context_change = Signal(dict)
     client_connected = Signal(bool)
+    projects_list = Signal(dict)
     
     def __init__(self, controller):
         super().__init__()
@@ -71,6 +72,12 @@ class ClientWorker(QObject):
             self.context_change.emit(user_contexts)
         else:
             self.disconnect_client()
+    
+    @Slot()
+    @_client_required
+    def get_linked_projects(self):
+        linked_projects = self.server_client.list_projects() # type: ignore
+        self.projects_list.emit(linked_projects)
     
     @Slot() 
     @_client_required
@@ -110,7 +117,10 @@ class AuxServerWidget(QDialog):
         """
         self.connect_signal.connect(client_worker.connect_client)
         self.disconnect_signal.connect(client_worker.disconnect_client)
+        self.connected_widget.linked_projects_view.list_projects.connect(client_worker.get_linked_projects)
+        
         client_worker.client_connected.connect(self.update_layout)
+        client_worker.projects_list.connect(self.connected_widget.linked_projects_view.update_linked_projects)
         
     def _init_widgets(self, connected:bool):
         self.disconnected_widget = AuxServerDisconnectedWidget(self)
