@@ -233,9 +233,7 @@ class QUtilPanel(QWidget):
         from binsync.ui.aux_server_panel.aux_server_window import AuxServerWidget
 
         dialog = AuxServerWidget(self.client_worker.server_client is not None, self)
-        dialog.connect_signal.connect(self.client_worker.connect_client)
-        dialog.disconnect_signal.connect(self.client_worker.disconnect_client)
-        self.client_worker.client_connected.connect(dialog.update_layout)
+        dialog.connect_worker(self.client_worker)
         dialog.show()
         dialog.exec()
 

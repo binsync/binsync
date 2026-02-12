@@ -103,6 +103,14 @@ class AuxServerWidget(QDialog):
         super().__init__(parent)
         self._init_widgets(connected)
         self.setWindowTitle("Server")
+    
+    def connect_worker(self, client_worker):
+        """
+        Links up signals & slots of worker with this popup window
+        """
+        self.connect_signal.connect(client_worker.connect_client)
+        self.disconnect_signal.connect(client_worker.disconnect_client)
+        client_worker.client_connected.connect(self.update_layout)
         
     def _init_widgets(self, connected:bool):
         self.disconnected_widget = AuxServerDisconnectedWidget(self)
