@@ -516,7 +516,7 @@ class ProgressGraphWidget(QDialog):
         self.checkApi()
         file_location, _ = QFileDialog.getSaveFileName(None, "Save File", "", "All Files (*);;Text Files (*.txt)")
         _l.info("Summarizing changes...")
-        response = summarize_changes(self._controller, self.displayed_graph, file_location)
+        summarize_changes(self._controller, self.displayed_graph, file_location)
         with open(file_location, "r") as f:
             response = f.read()
         #response = response.replace("\n", "")
