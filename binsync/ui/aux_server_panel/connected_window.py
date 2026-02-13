@@ -17,16 +17,22 @@ l = logging.getLogger(__name__)
 
 
 class LinkedProjectGroup(QWidget):
-    def __init__(self, group_name, projects:dict[str,None], parent=None):
+    def __init__(self, group_name, projects:dict[str,None], delete_group_signal, parent=None):
         super().__init__(parent)
-        self._init_widgets(group_name, projects)
+        self._init_widgets(group_name, projects, delete_group_signal)
 
-    def _init_widgets(self, group_name, projects):
+    def _init_widgets(self, group_name, projects, delete_group_signal):
         layout = QVBoxLayout()
         group_layout = QHBoxLayout()
         group_layout.addWidget(QLabel(group_name))
+        
         add_project_button = QPushButton("+")
         group_layout.addWidget(add_project_button)
+        
+        delete_group_button = QPushButton("🗑️") # Is it a good idea to use utf 8 emojis?
+        delete_group_button.clicked.connect(lambda: delete_group_signal.emit(group_name))
+        group_layout.addWidget(delete_group_button)
+        
         layout.addLayout(group_layout)
         for project in projects:
             layout.addWidget(QLabel(project))
@@ -96,7 +102,7 @@ class LinkedProjectsWidget(QWidget):
     def update_linked_projects(self, linked_projects: dict[str,dict[str,None]]):
         # self.delete_layout_items(self.projects_layout)
         for group_name, projects in linked_projects.items():
-            self.projects_layout.addWidget(LinkedProjectGroup(group_name, projects)) 
+            self.projects_layout.addWidget(LinkedProjectGroup(group_name, projects, self.delete_group)) 
         self.projects_area_widget.adjustSize()
 
     def delete_layout_items(self, layout):
