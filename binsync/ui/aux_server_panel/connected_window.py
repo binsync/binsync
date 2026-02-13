@@ -15,28 +15,57 @@ from libbs.ui.qt_objects import (
 
 l = logging.getLogger(__name__)
 
+class LinkProjectDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.url_field = QLineEdit("",self)
+        buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        
+        layout = QVBoxLayout()
+        
+        group_layout = QVBoxLayout()
+        group_layout.addWidget(QLabel("Project URL"))
+        group_layout.addWidget(self.url_field)
+        layout.addLayout(group_layout)
+        
+        layout.addWidget(buttonBox)
+        buttonBox.accepted.connect(self.accept)
+        buttonBox.rejected.connect(self.reject)
+        
+        self.setLayout(layout)
+        
+    def getInput(self)->str:
+        return self.url_field.text()
 
 class LinkedProjectGroup(QWidget):
-    def __init__(self, group_name, projects:dict[str,None], delete_group_signal, parent=None):
+    def __init__(self, group_name, projects:dict[str,None], add_project_signal, delete_group_signal, parent=None):
         super().__init__(parent)
-        self._init_widgets(group_name, projects, delete_group_signal)
+        self.group_name = group_name
+        self.parent_add_project_signal = add_project_signal
+        self._init_widgets(projects, delete_group_signal)
 
-    def _init_widgets(self, group_name, projects, delete_group_signal):
+    def _init_widgets(self, projects, delete_group_signal):
         layout = QVBoxLayout()
         group_layout = QHBoxLayout()
-        group_layout.addWidget(QLabel(group_name))
+        group_layout.addWidget(QLabel(self.group_name))
         
         add_project_button = QPushButton("+")
+        add_project_button.clicked.connect(self.handle_add_project)
         group_layout.addWidget(add_project_button)
         
         delete_group_button = QPushButton("🗑️") # Is it a good idea to use utf 8 emojis?
-        delete_group_button.clicked.connect(lambda: delete_group_signal.emit(group_name))
+        delete_group_button.clicked.connect(lambda: delete_group_signal.emit(self.group_name))
         group_layout.addWidget(delete_group_button)
         
         layout.addLayout(group_layout)
         for project in projects:
             layout.addWidget(QLabel(project))
         self.setLayout(layout)
+
+    def handle_add_project(self):
+        link_dialog = LinkProjectDialog()
+        if link_dialog.exec():
+            self.parent_add_project_signal.emit((link_dialog.getInput(), self.group_name))
 
 class CreateGroupDialog(QDialog):
     def __init__(self, parent=None):
@@ -64,6 +93,7 @@ class LinkedProjectsWidget(QWidget):
     list_projects = Signal()
     add_group = Signal(str)
     delete_group = Signal(str)
+    add_project = Signal(tuple)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -102,7 +132,7 @@ class LinkedProjectsWidget(QWidget):
     def update_linked_projects(self, linked_projects: dict[str,dict[str,None]]):
         # self.delete_layout_items(self.projects_layout)
         for group_name, projects in linked_projects.items():
-            self.projects_layout.addWidget(LinkedProjectGroup(group_name, projects, self.delete_group)) 
+            self.projects_layout.addWidget(LinkedProjectGroup(group_name, projects, self.add_project, self.delete_group)) 
         self.projects_area_widget.adjustSize()
 
     def delete_layout_items(self, layout):
