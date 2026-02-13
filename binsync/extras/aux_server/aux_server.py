@@ -104,13 +104,13 @@ class Server:
         if "url" in request.form:
             url = request.form["url"]
             if "group" in request.form:
-                success = self.store.link_project(url, request.form["group"])
+                result = self.store.link_project(url, request.form["group"])
             else:
-                success = self.store.link_project(url)
-            if success:
+                result = self.store.link_project(url)
+            if result[0] == True:
                 return Response("OK", 200)
             else:
-                return Response("Unknown Error", 500)
+                return Response(result[1], 500)
         else:
             return Response("Missing Project URL", 400)
     
