@@ -477,24 +477,8 @@ class ProgressGraphWidget(QDialog):
 
     
     def checkApi(self):
-<<<<<<< HEAD
-        if "sk" in os.environ.get("OPENAI_API_KEY"): #Check if the api key is set
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
         if os.environ.get("OPENAI_API_KEY") != "": #Check if the api key is set
->>>>>>> 895b62c (Added HTML Window, Stylesheet for formatting, and updated to gpt-4o-mini (for now))
             _l.info("API Key set already, good to go!")
-=======
-            self.summarize()
->>>>>>> 501f4e1 (Changed to GPT-5, and created Dialog for setting API Key)
-=======
-            print("API Key set already, good to go!")
->>>>>>> 015e203 (Put CheckApi in Summarize and changed button function to Summarize)
-=======
-            _l.info("API Key set already, good to go!")
->>>>>>> 8be6043 (_l.info instead of print)
         else:
             dialog = QDialog(self) 
             dialog.setWindowTitle("Enter Key")
@@ -512,15 +496,7 @@ class ProgressGraphWidget(QDialog):
             def setAPIKey():
                 user_key = key_input.text()
                 os.environ["OPENAI_API_KEY"] = user_key #Will be set so that a dialog opens for user to enter key
-<<<<<<< HEAD
-<<<<<<< HEAD
                 dialog.accept()
-=======
-
->>>>>>> 501f4e1 (Changed to GPT-5, and created Dialog for setting API Key)
-=======
-                dialog.accept()
->>>>>>> 015e203 (Put CheckApi in Summarize and changed button function to Summarize)
             dlg_layout.addWidget(save_btn)
             
             dialog.setLayout(dlg_layout)
@@ -540,7 +516,7 @@ class ProgressGraphWidget(QDialog):
         self.checkApi()
         file_location, _ = QFileDialog.getSaveFileName(None, "Save File", "", "All Files (*);;Text Files (*.txt)")
         _l.info("Summarizing changes...")
-        #response = summarize_changes(self._controller, self.displayed_graph, file_location)
+        response = summarize_changes(self._controller, self.displayed_graph, file_location)
         with open(file_location, "r") as f:
             response = f.read()
         #response = response.replace("\n", "")

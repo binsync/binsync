@@ -1,7 +1,6 @@
 import logging
 import typing
 import threading
-import os
 
 
 import networkx as nx
@@ -39,7 +38,7 @@ Prettyify your response with HTML so that it can be rendered and is easy to read
 snippets from the above code to help explain your points.
 """
 def model_type(model_name):
-    model = ["gpt-4o-mini"] #Decided on only using gpt-5
+    model = ["gpt-5"] #Decided on only using gpt-5
     if model_name in model:
         return model_name
 
@@ -64,29 +63,13 @@ def summarize_changes(controller: "BSController", graph: nx.DiGraph, save_locati
     decompilation_text = ""
     for func, _ in funcs:
         decompilation_text += decompilations[func].text + "\n\n"
-    
-    response = {"text": ""}
+
     total_text = PRE_TEXT + decompilation_text + POST_TEXT
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-    thread = threading.Thread(target=query_model, args=("gpt-5", total_text, save_location), daemon=True)
-=======
     thread = threading.Thread(target=query_model, args=("gpt-4", total_text, save_location), daemon=True)
->>>>>>> 501f4e1 (Changed to GPT-5, and created Dialog for setting API Key)
-=======
-    thread = threading.Thread(target=query_model, args=("gpt-5", total_text, save_location), daemon=True)
->>>>>>> e01504f (Changed model to gpt-5 for real)
-=======
-    thread = threading.Thread(target=query_model, args=("gpt-4o-mini", total_text, save_location, response), daemon=True)
->>>>>>> 895b62c (Added HTML Window, Stylesheet for formatting, and updated to gpt-4o-mini (for now))
     thread.start()
 
-    thread.join()
-    return response["text"]
 
-
-def query_model(model, text, save_location, response):
+def query_model(model, text, save_location):
     from dailalib.api import LiteLLMAIAPI
     _l.info("Summarizing with LLM API...")
 
@@ -94,6 +77,6 @@ def query_model(model, text, save_location, response):
     resp, cost = llm_api.query_model(text)
     with open(save_location, "w") as f:
         f.write(resp)
-    response["text"] = resp
-    
+
     _l.info("Summary completed and saved to %s", save_location)
+
