@@ -530,32 +530,32 @@ class ProgressGraphWidget(QDialog):
         htmlresponse = QTextBrowser()
         htmlresponse.setStyleSheet("""
     QTextBrowser {
-        background-color: #1e1e1e;   /* Deep dark background */
-        color: #000000;              /* Soft light gray text */
+        background-color: #1e1e1e;   
+        color: #000000;              
         border: none;
         font-family: 'Segoe UI', Tahoma, sans-serif;
         font-size: 13px;
     }
 
-    /* Target the body and all children to override inline styles */
+    
     QWidget {
         background-color: #1e1e1e;
         color: #000000;
     }
 
-    /* This targets the 'highlighted' look you saw in your image */
+    
     span, p, div, li {
         background-color: transparent !important; 
         color: #000000 !important;
     }
 
-    /* Style links so they don't disappear in the dark */
+    
     a {
         color: #0000EE;
         text-decoration: underline;
     }
 
-    /* Keep headers distinct and bright */
+    
     h1, h2, h3 {
         color: #005a4e;
         margin-top: 15px;
