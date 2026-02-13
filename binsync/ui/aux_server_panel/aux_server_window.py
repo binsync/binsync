@@ -122,6 +122,12 @@ class AuxServerWidget(QDialog):
         client_worker.client_connected.connect(self.update_layout)
         client_worker.projects_list.connect(self.connected_widget.linked_projects_view.update_linked_projects)
         
+    def startup_emits(self):
+        """
+        Performs initial emits to improve initial page appearance for users
+        """
+        self.connected_widget.linked_projects_view.list_projects.emit()
+        
     def _init_widgets(self, connected:bool):
         self.disconnected_widget = AuxServerDisconnectedWidget(self)
         self.disconnected_widget.buttonBox.accepted.connect(self.try_connect)
@@ -151,6 +157,7 @@ class AuxServerWidget(QDialog):
         if not connected:
             self.stacked_layout.setCurrentIndex(self.DISCONNECTED_INDEX)
         else:
+            self.connected_widget.linked_projects_view.list_projects.emit() # Load in linked projects
             self.stacked_layout.setCurrentIndex(self.CONNECTED_INDEX)
     
     

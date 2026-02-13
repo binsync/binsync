@@ -234,6 +234,7 @@ class QUtilPanel(QWidget):
 
         dialog = AuxServerWidget(self.client_worker.server_client is not None, self)
         dialog.connect_worker(self.client_worker)
+        dialog.startup_emits()
         dialog.show()
         dialog.exec()
 

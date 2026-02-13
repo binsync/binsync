@@ -25,20 +25,45 @@ class LinkedProjectsWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._init_widgets()
+        self.groups:dict[str, LinkedProjectGroup] = {}
 
     def _init_widgets(self):
-        layout = QVBoxLayout()
+        self.layout = QVBoxLayout()
         refresh_button = QPushButton("Refresh")
         refresh_button.clicked.connect(lambda: self.list_projects.emit())
-        layout.addWidget(refresh_button)
+        self.layout.addWidget(refresh_button)
 
-        layout.addWidget(QLabel("hello"))
+        self.projects_layout = QVBoxLayout()
+        self.projects_layout.addWidget(QLabel("Waiting for server to provide linked projects..."))
+        self.layout.addLayout(self.projects_layout) # It's going to be replaced later
         
-        self.setLayout(layout)
+        self.setLayout(self.layout)
     
     @Slot(dict)
     def update_linked_projects(self, linked_projects: dict[str,dict[str,None]]):
         l.info("updating linked projects: %s",linked_projects)
+        self.delete_layout_items(self.projects_layout)
+        self.projects_layout.deleteLater()
+        self.layout.removeItem(self.projects_layout)
+        
+        new_layout = QVBoxLayout()
+        new_layout.addWidget(QLabel(str(linked_projects))) 
+        self.projects_layout = new_layout
+        self.layout.addLayout(self.projects_layout)
+        self.updateGeometry()
+
+
+    def delete_layout_items(self, layout):
+        if layout:
+            while layout.count() > 0:
+                item = layout.takeAt(0)
+                widget = item.widget()
+                if widget:
+                    widget.setParent(None)
+                    widget.deleteLater()
+                else:
+                    self.delete_layout_items(item.layout())
+
 
 class AuxServerConnectedWidget(QWidget):
     def __init__(self, parent=None):
