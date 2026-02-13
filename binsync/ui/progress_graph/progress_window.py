@@ -510,7 +510,6 @@ class ProgressGraphWidget(QDialog):
             _l.error("Summarization requires extras, which are not available.")
             return
         
-        
 
         #Call checkApi here, so we can check for extras first and then see if api key is set before selecting a save file
         self.checkApi()
