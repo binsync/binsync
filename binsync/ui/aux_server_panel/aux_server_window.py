@@ -168,6 +168,7 @@ class AuxServerWidget(QDialog):
             
         self.stacked_layout.setCurrentIndex(self.DISCONNECTED_INDEX if not connected else self.CONNECTED_INDEX)
         self.resize(1000, 800)
+        self.setLayout(self.stacked_layout)
 
     @Slot()
     def try_connect(self):

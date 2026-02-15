@@ -11,6 +11,7 @@ from libbs.ui.qt_objects import (
     QDialog,
     QLineEdit,
     QDialogButtonBox,
+    QSizePolicy
 )
 
 l = logging.getLogger(__name__)
@@ -108,6 +109,7 @@ class LinkedProjectsWidget(QWidget):
 
         projects_area = QScrollArea()
         self.projects_area_widget = QWidget()
+        self.projects_area_widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.MinimumExpanding)
         self.projects_layout = QVBoxLayout()
         self.projects_layout.addWidget(QLabel("Waiting for server to provide linked projects..."))
         self.projects_area_widget.setLayout(self.projects_layout)
@@ -154,7 +156,6 @@ class AuxServerConnectedWidget(QWidget):
 
     def _init_widgets(self):
         disconnect_layout = QVBoxLayout()
-        
         self.disconnect_button = QPushButton("Disconnect")
         disconnect_layout.addWidget(self.disconnect_button)
         
