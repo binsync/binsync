@@ -11,7 +11,8 @@ from libbs.ui.qt_objects import (
     QDialog,
     QLineEdit,
     QDialogButtonBox,
-    QSizePolicy
+    QSizePolicy,
+    Qt,
 )
 
 l = logging.getLogger(__name__)
@@ -114,6 +115,7 @@ class LinkedProjectsWidget(QWidget):
         self.projects_area_widget = QWidget()
         self.projects_area_widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.MinimumExpanding)
         self.projects_layout = QVBoxLayout()
+        self.projects_layout.setAlignment(Qt.AlignTop)
         self.projects_layout.addWidget(QLabel("Waiting for server to provide linked projects...")) # This message will be replaced later
         self.projects_area_widget.setLayout(self.projects_layout)
         projects_area.setWidget(self.projects_area_widget)
