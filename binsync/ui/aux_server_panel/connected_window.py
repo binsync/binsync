@@ -48,7 +48,9 @@ class LinkedProjectGroup(QWidget):
     def _init_widgets(self, projects, delete_group_signal):
         layout = QVBoxLayout()
         group_layout = QHBoxLayout()
-        group_layout.addWidget(QLabel(self.group_name))
+        
+        group_name_label = QLabel(self.group_name)
+        group_layout.addWidget(group_name_label)
         
         add_project_button = QPushButton("+")
         add_project_button.clicked.connect(self.handle_add_project)
@@ -60,7 +62,8 @@ class LinkedProjectGroup(QWidget):
         
         layout.addLayout(group_layout)
         for project in projects:
-            layout.addWidget(QLabel(project))
+            project_name_label = QLabel(project)
+            layout.addWidget(project_name_label)
         self.setLayout(layout)
 
     def handle_add_project(self):
@@ -111,11 +114,12 @@ class LinkedProjectsWidget(QWidget):
         self.projects_area_widget = QWidget()
         self.projects_area_widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.MinimumExpanding)
         self.projects_layout = QVBoxLayout()
-        self.projects_layout.addWidget(QLabel("Waiting for server to provide linked projects..."))
+        self.projects_layout.addWidget(QLabel("Waiting for server to provide linked projects...")) # This message will be replaced later
         self.projects_area_widget.setLayout(self.projects_layout)
         projects_area.setWidget(self.projects_area_widget)
+        projects_area.setWidgetResizable(True)
         
-        self.layout.addWidget(projects_area) # It's going to be replaced later
+        self.layout.addWidget(projects_area)
         
         add_group_button = QPushButton("Add Group")
         add_group_button.clicked.connect(self.handle_add_group)
@@ -132,10 +136,10 @@ class LinkedProjectsWidget(QWidget):
     
     @Slot(dict)
     def update_linked_projects(self, linked_projects: dict[str,dict[str,None]]):
-        # self.delete_layout_items(self.projects_layout)
+        self.delete_layout_items(self.projects_layout)
         for group_name, projects in linked_projects.items():
-            self.projects_layout.addWidget(LinkedProjectGroup(group_name, projects, self.add_project, self.delete_group)) 
-        self.projects_area_widget.adjustSize()
+            new_group = LinkedProjectGroup(group_name, projects, self.add_project, self.delete_group)
+            self.projects_layout.addWidget(new_group) 
 
     def delete_layout_items(self, layout):
         if layout:
