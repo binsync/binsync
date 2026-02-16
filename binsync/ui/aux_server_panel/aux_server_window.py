@@ -87,6 +87,13 @@ class ClientWorker(QObject):
         if result[0] == False:
             l.error(result[1])
     
+    @Slot(tuple)
+    @_client_required
+    def unlink_project(self, project_info):
+        url, group = project_info
+        result = self.server_client.unlink_project(url, group) # type: ignore
+        if result[0] == False:
+            l.error(result[1])
     
     @Slot(str)
     @_client_required
@@ -142,6 +149,7 @@ class AuxServerWidget(QDialog):
         self.disconnect_signal.connect(client_worker.disconnect_client)
         self.connected_widget.linked_projects_view.list_projects.connect(client_worker.get_linked_projects)
         self.connected_widget.linked_projects_view.add_project.connect(client_worker.link_project)
+        self.connected_widget.linked_projects_view.unlink_project.connect(client_worker.unlink_project)
         self.connected_widget.linked_projects_view.add_group.connect(client_worker.add_group)
         self.connected_widget.linked_projects_view.delete_group.connect(client_worker.delete_group)
         

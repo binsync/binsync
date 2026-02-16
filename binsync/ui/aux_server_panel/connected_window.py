@@ -40,13 +40,13 @@ class LinkProjectDialog(QDialog):
         return self.url_field.text()
 
 class LinkedProjectGroup(QWidget):
-    def __init__(self, group_name, projects:dict[str,None], add_project_signal, delete_group_signal, parent=None):
+    def __init__(self, group_name, projects:dict[str,None], add_project_signal, unlink_project_signal, delete_group_signal, parent=None):
         super().__init__(parent)
         self.group_name = group_name
         self.parent_add_project_signal = add_project_signal
-        self._init_widgets(projects, delete_group_signal)
+        self._init_widgets(projects, unlink_project_signal, delete_group_signal)
 
-    def _init_widgets(self, projects, delete_group_signal):
+    def _init_widgets(self, projects, unlink_project_signal, delete_group_signal):
         layout = QVBoxLayout()
         group_layout = QHBoxLayout()
         
@@ -63,8 +63,16 @@ class LinkedProjectGroup(QWidget):
         
         layout.addLayout(group_layout)
         for project in projects:
+            project_layout = QHBoxLayout()
+            
             project_name_label = QLabel(project)
-            layout.addWidget(project_name_label)
+            project_layout.addWidget(project_name_label)
+            
+            unlink_project_button = QPushButton("🗑️") # Is it a good idea to use utf 8 emojis?
+            unlink_project_button.clicked.connect(lambda: unlink_project_signal.emit((project, self.group_name)))
+            project_layout.addWidget(unlink_project_button)
+            
+            layout.addLayout(project_layout)
         self.setLayout(layout)
 
     def handle_add_project(self):
@@ -99,6 +107,7 @@ class LinkedProjectsWidget(QWidget):
     add_group = Signal(str)
     delete_group = Signal(str)
     add_project = Signal(tuple)
+    unlink_project = Signal(tuple)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -140,7 +149,7 @@ class LinkedProjectsWidget(QWidget):
     def update_linked_projects(self, linked_projects: dict[str,dict[str,None]]):
         self.delete_layout_items(self.projects_layout)
         for group_name, projects in linked_projects.items():
-            new_group = LinkedProjectGroup(group_name, projects, self.add_project, self.delete_group)
+            new_group = LinkedProjectGroup(group_name, projects, self.add_project, self.unlink_project, self.delete_group)
             self.projects_layout.addWidget(new_group) 
 
     def delete_layout_items(self, layout):
