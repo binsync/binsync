@@ -33,14 +33,14 @@ class MockDeci:
     def gui_active_context(self):
         return self._context
     
-    def _update_context(self,new_values:dict[str,int]):
+    def _update_context(self, new_values:dict[str, int]):
         self._context.addr = new_values["address"]
         self._context.func_addr = new_values["function_address"]
         for callback_fn in self.artifact_change_callbacks[Context]:
             callback_fn(self._context)
         
 class MockClient:
-    def __init__(self,username):
+    def __init__(self, username):
         self.master_user = username
 
 class MockController:
@@ -57,7 +57,7 @@ class ServerThreadManager():
     Implementation of the server that enables shutting down the server in between tests
     """
     def __init__(self, server:Server):
-        self.server = make_server(server.host,server.port,server.app)
+        self.server = make_server(server.host, server.port, server.app)
         
     def __enter__(self):
         self._thread = threading.Thread(target=self.server.serve_forever)
@@ -130,7 +130,7 @@ class TestAuxServer(unittest.TestCase):
         """
         Make sure that the server can start up without issues.
         """
-        server = Server(self.HOST,self.PORT)
+        server = Server(self.HOST, self.PORT)
         with ServerThreadManager(server):
             time.sleep(1)
         assert server.store._user_map == {} # Validate that the initial map of user functions is empty
@@ -141,7 +141,7 @@ class TestAuxServer(unittest.TestCase):
         Make sure a single user can connect and disconnect with no issues
         """
             
-        server = Server(self.HOST,self.PORT)
+        server = Server(self.HOST, self.PORT)
         with ServerThreadManager(server):
             self.users.append(MockUser(MockController("Alice")))
             
@@ -157,7 +157,7 @@ class TestAuxServer(unittest.TestCase):
         Verify server can handle multiple connections at once
         """
         num_connections = 10
-        server = Server(self.HOST,self.PORT)
+        server = Server(self.HOST, self.PORT)
         controllers:list[MockController] = []
         with ServerThreadManager(server):
             # Set up contexts
@@ -175,7 +175,7 @@ class TestAuxServer(unittest.TestCase):
                 user.connect_signal.emit((self.HOST, self.PORT))
             time.sleep(2)
             # Make sure that each user's function context is present in the server's storage
-            contexts_dict,_ = server.store.getUserData()
+            contexts_dict, _ = server.store.getUserData()
             for controller in controllers:
                 user_entry = contexts_dict[controller.client.master_user]
                 assert user_entry["addr"] == controller.deci._context.addr
@@ -185,7 +185,7 @@ class TestAuxServer(unittest.TestCase):
         """
         Verify that clients contact the server when their context changes
         """ 
-        server = Server(self.HOST,self.PORT)
+        server = Server(self.HOST, self.PORT)
         with ServerThreadManager(server):
             controller = MockController("Alice")
             self.users.append(MockUser(controller))
@@ -193,7 +193,7 @@ class TestAuxServer(unittest.TestCase):
                 user.connect_signal.emit((self.HOST, self.PORT))
             time.sleep(1)
             
-            contexts_dict,_ = server.store.getUserData()
+            contexts_dict, _ = server.store.getUserData()
             user_entry = contexts_dict[controller.client.master_user]
             assert user_entry["addr"] == controller.deci._context.addr
             assert user_entry["func_addr"] == controller.deci._context.func_addr
@@ -205,14 +205,14 @@ class TestAuxServer(unittest.TestCase):
             })
             time.sleep(1)
             
-            contexts_dict,_ = server.store.getUserData()
+            contexts_dict, _ = server.store.getUserData()
             user_entry = contexts_dict[controller.client.master_user]
             assert user_entry["addr"] == controller.deci._context.addr
             assert user_entry["func_addr"] == controller.deci._context.func_addr
                 
     def test_see_other_clients(self):
         num_connections = 20
-        server = Server(self.HOST,self.PORT)
+        server = Server(self.HOST, self.PORT)
         
         with ServerThreadManager(server):
             # Set up contexts
@@ -246,7 +246,7 @@ class TestAuxServer(unittest.TestCase):
     #     There should be errors when deleting the group a second time and when trying to unlink the project (as it is already deleted).
     #     '''
             
-    #     server = Server(self.HOST,self.PORT)
+    #     server = Server(self.HOST, self.PORT)
     #     project_url = "https://github.com/binsync/binsync.git"
     #     group_name = "binsync"
     #     with ServerThreadManager(server):
@@ -299,7 +299,7 @@ class TestAuxServer(unittest.TestCase):
     #     def client_task(client:ServerClient):
     #         client.run()
             
-    #     server = Server(self.HOST,self.PORT)
+    #     server = Server(self.HOST, self.PORT)
     #     with ServerThreadManager(server):
     #         client_a = ServerClient(self.HOST, self.PORT, MockController("Alice"), lambda *args:None)
     #         self.clients.append(client_a)
@@ -309,7 +309,7 @@ class TestAuxServer(unittest.TestCase):
     #         self.clients.append(client_c)
             
     #         for client in self.clients:
-    #             self.client_threads.append(threading.Thread(target=client_task,args=(client,)))
+    #             self.client_threads.append(threading.Thread(target=client_task, args=(client, )))
 
     #         for client_thread in self.client_threads:
     #             client_thread.start()
