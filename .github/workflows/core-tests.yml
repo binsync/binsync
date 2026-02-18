@@ -28,5 +28,7 @@ jobs:
         
 
     - name: Pytest
+      env:
+        QT_QPA_PLATFORM: "offscreen"
       run: |
-        pytest ./tests/test_client.py ./tests/test_state.py ./tests/test_auxiliary_server.py -s
+        QT_QPA_PLATFORM="offscreen" pytest ./tests/test_client.py ./tests/test_state.py ./tests/test_auxiliary_server.py -s
