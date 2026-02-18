@@ -90,13 +90,11 @@ class MockUser(QWidget):
         self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
-
+        
         self.thread.start()
     
     def shutdown(self):
         self.stop_signal.emit()
-        self.thread.quit()
-        self.thread.wait()
 
     @Slot(dict)
     def _update_beliefs(self, new_beliefs):
@@ -117,6 +115,10 @@ class TestAuxServer(unittest.TestCase):
         # Note: Not all clients may be present in self.clients as some tests shut down the clients early
         for user in self.users:
             user.shutdown()
+        time.sleep(3) # Give time for clients' blocking requests to finish (server has shut down already) so that they can begin emitting shutdown signals
+        # Note: figure out a better way to do this so that there isn't a forced 3sec sleep every testcase
+        self.app.processEvents() # Process events so that threads can receive their quit signal
+        
         try:
             self.app
         except:
@@ -210,7 +212,7 @@ class TestAuxServer(unittest.TestCase):
             assert user_entry["func_addr"] == controller.deci._context.func_addr
                 
     def test_see_other_clients(self):
-        num_connections = 10
+        num_connections = 20
         server = Server(self.HOST,self.PORT)
         
         with ServerThreadManager(server):
