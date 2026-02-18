@@ -3,9 +3,6 @@
 sudo apt-get update && sudo apt-get install -y \
   libegl1 libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
   libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 x11-utils
-# start Xvfb daemon
-/sbin/start-stop-daemon --start --quiet --pidfile /tmp/custom_xvfb_99.pid --make-pidfile --background \
-  --exec /usr/bin/Xvfb -- :99 -screen 0 1920x1200x24 -ac +extension GLX
 # update pip
 python -m pip install --upgrade pip
 # install the parallel branch of libbs that matches the current branch
