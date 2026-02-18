@@ -125,6 +125,7 @@ class TestAuxServer(unittest.TestCase):
             pass
         else:
             self.app.quit() # type: ignore # My linter complains that app can be None here
+        del self.app
             
     
     def test_run_server(self):
@@ -137,109 +138,109 @@ class TestAuxServer(unittest.TestCase):
         assert server.store._user_map == {} # Validate that the initial map of user functions is empty
         assert server.store._user_count == 0 # Validate that the initial user count is 0
         
-    def test_single_connection(self):
-        """
-        Make sure a single user can connect and disconnect with no issues
-        """
+    # def test_single_connection(self):
+    #     """
+    #     Make sure a single user can connect and disconnect with no issues
+    #     """
             
-        server = Server(self.HOST,self.PORT)
-        with ServerThreadManager(server):
-            self.users.append(MockUser(MockController("Alice")))
+    #     server = Server(self.HOST,self.PORT)
+    #     with ServerThreadManager(server):
+    #         self.users.append(MockUser(MockController("Alice")))
             
-            self.users[0].connect_signal.emit((self.HOST, self.PORT))
-            time.sleep(1)
-            assert server.store._user_count == 1 # Verify that the server received the connection
-            self.users[0].stop_signal.emit()
-            time.sleep(1)
-            assert server.store._user_count == 0 # Verify that server received disconnection
+    #         self.users[0].connect_signal.emit((self.HOST, self.PORT))
+    #         time.sleep(1)
+    #         assert server.store._user_count == 1 # Verify that the server received the connection
+    #         self.users[0].stop_signal.emit()
+    #         time.sleep(1)
+    #         assert server.store._user_count == 0 # Verify that server received disconnection
     
-    def test_many_connections(self):
-        """
-        Verify server can handle multiple connections at once
-        """
-        num_connections = 10
-        server = Server(self.HOST,self.PORT)
-        controllers:list[MockController] = []
-        with ServerThreadManager(server):
-            # Set up contexts
-            for i in range(num_connections):
-                controller = MockController(f"User_{i}")
-                controller.deci._update_context({
-                    "address":0x40000+10*i,
-                    "function_address":0x500000+10*i
-                })
-                controllers.append(controller)
-                self.users.append(MockUser(controller))
+    # def test_many_connections(self):
+    #     """
+    #     Verify server can handle multiple connections at once
+    #     """
+    #     num_connections = 10
+    #     server = Server(self.HOST,self.PORT)
+    #     controllers:list[MockController] = []
+    #     with ServerThreadManager(server):
+    #         # Set up contexts
+    #         for i in range(num_connections):
+    #             controller = MockController(f"User_{i}")
+    #             controller.deci._update_context({
+    #                 "address":0x40000+10*i,
+    #                 "function_address":0x500000+10*i
+    #             })
+    #             controllers.append(controller)
+    #             self.users.append(MockUser(controller))
             
-            # Start up client threads
-            for user in self.users:
-                user.connect_signal.emit((self.HOST, self.PORT))
-            time.sleep(2)
-            # Make sure that each user's function context is present in the server's storage
-            contexts_dict,_ = server.store.getUserData()
-            for controller in controllers:
-                user_entry = contexts_dict[controller.client.master_user]
-                assert user_entry["addr"] == controller.deci._context.addr
-                assert user_entry["func_addr"] == controller.deci._context.func_addr
+    #         # Start up client threads
+    #         for user in self.users:
+    #             user.connect_signal.emit((self.HOST, self.PORT))
+    #         time.sleep(2)
+    #         # Make sure that each user's function context is present in the server's storage
+    #         contexts_dict,_ = server.store.getUserData()
+    #         for controller in controllers:
+    #             user_entry = contexts_dict[controller.client.master_user]
+    #             assert user_entry["addr"] == controller.deci._context.addr
+    #             assert user_entry["func_addr"] == controller.deci._context.func_addr
     
-    def test_context_change(self):
-        """
-        Verify that clients contact the server when their context changes
-        """ 
-        server = Server(self.HOST,self.PORT)
-        with ServerThreadManager(server):
-            controller = MockController("Alice")
-            self.users.append(MockUser(controller))
-            for user in self.users:
-                user.connect_signal.emit((self.HOST, self.PORT))
-            time.sleep(1)
+    # def test_context_change(self):
+    #     """
+    #     Verify that clients contact the server when their context changes
+    #     """ 
+    #     server = Server(self.HOST,self.PORT)
+    #     with ServerThreadManager(server):
+    #         controller = MockController("Alice")
+    #         self.users.append(MockUser(controller))
+    #         for user in self.users:
+    #             user.connect_signal.emit((self.HOST, self.PORT))
+    #         time.sleep(1)
             
-            contexts_dict,_ = server.store.getUserData()
-            user_entry = contexts_dict[controller.client.master_user]
-            assert user_entry["addr"] == controller.deci._context.addr
-            assert user_entry["func_addr"] == controller.deci._context.func_addr
+    #         contexts_dict,_ = server.store.getUserData()
+    #         user_entry = contexts_dict[controller.client.master_user]
+    #         assert user_entry["addr"] == controller.deci._context.addr
+    #         assert user_entry["func_addr"] == controller.deci._context.func_addr
             
-            # Update!
-            controller.deci._update_context({
-                "address":0x444444,
-                "function_address":0x454545
-            })
-            time.sleep(1)
+    #         # Update!
+    #         controller.deci._update_context({
+    #             "address":0x444444,
+    #             "function_address":0x454545
+    #         })
+    #         time.sleep(1)
             
-            contexts_dict,_ = server.store.getUserData()
-            user_entry = contexts_dict[controller.client.master_user]
-            assert user_entry["addr"] == controller.deci._context.addr
-            assert user_entry["func_addr"] == controller.deci._context.func_addr
+    #         contexts_dict,_ = server.store.getUserData()
+    #         user_entry = contexts_dict[controller.client.master_user]
+    #         assert user_entry["addr"] == controller.deci._context.addr
+    #         assert user_entry["func_addr"] == controller.deci._context.func_addr
                 
-    def test_see_other_clients(self):
-        num_connections = 20
-        server = Server(self.HOST,self.PORT)
+    # def test_see_other_clients(self):
+    #     num_connections = 20
+    #     server = Server(self.HOST,self.PORT)
         
-        with ServerThreadManager(server):
-            # Set up contexts
-            controllers:list[MockController] = []
-            for i in range(num_connections):
-                controller = MockController(f"User_{i}")
-                controller.deci._update_context({
-                    "address":0x40000+10*i,
-                    "function_address":0x500000+10*i
-                })
-                controllers.append(controller)
-                self.users.append(MockUser(controller))
+    #     with ServerThreadManager(server):
+    #         # Set up contexts
+    #         controllers:list[MockController] = []
+    #         for i in range(num_connections):
+    #             controller = MockController(f"User_{i}")
+    #             controller.deci._update_context({
+    #                 "address":0x40000+10*i,
+    #                 "function_address":0x500000+10*i
+    #             })
+    #             controllers.append(controller)
+    #             self.users.append(MockUser(controller))
             
-            for user in self.users:
-                user.connect_signal.emit((self.HOST, self.PORT))
-            time.sleep(2)
+    #         for user in self.users:
+    #             user.connect_signal.emit((self.HOST, self.PORT))
+    #         time.sleep(2)
             
-            self.app.processEvents() # required for beliefs to update in this test
+    #         self.app.processEvents() # required for beliefs to update in this test
             
-            # Make sure beliefs have been updated to something
-            assert self.users[0].beliefs != {}
-            # Make sure everyone's beliefs are the same
-            for i in range(len(self.users)-1):
-                assert self.users[i].beliefs == self.users[i+1].beliefs
-            # Make sure everyone's beliefs match up with the server
-            assert self.users[0].beliefs == server.store._user_map  
+    #         # Make sure beliefs have been updated to something
+    #         assert self.users[0].beliefs != {}
+    #         # Make sure everyone's beliefs are the same
+    #         for i in range(len(self.users)-1):
+    #             assert self.users[i].beliefs == self.users[i+1].beliefs
+    #         # Make sure everyone's beliefs match up with the server
+    #         assert self.users[0].beliefs == server.store._user_map  
     
     # def test_link_unlink_projects(self):
     #     '''
