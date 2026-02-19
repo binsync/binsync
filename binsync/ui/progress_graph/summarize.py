@@ -42,7 +42,7 @@ def model_type(model_name):
     if model_name in model:
         return model_name
 
-def summarize_changes(controller: "BSController", graph: nx.DiGraph, save_location: str, callback=None):
+def summarize_changes(controller: "BSController", graph: nx.DiGraph, save_location: str):
     """
     Summarize the changes in the graph and display them in a table.
     """
@@ -66,12 +66,11 @@ def summarize_changes(controller: "BSController", graph: nx.DiGraph, save_locati
 
     total_text = PRE_TEXT + decompilation_text + POST_TEXT
     thread = threading.Thread(target=query_model, args=("gpt-4", total_text, save_location), daemon=True)
-    _l.info(total_text)
+    #_l.info(total_text)
     thread.start()
-    return thread
 
 
-def query_model(model, text, save_location, callback=None):
+def query_model(model, text, save_location):
     from dailalib.api import LiteLLMAIAPI
     _l.info("Summarizing with LLM API...")
 
@@ -79,7 +78,5 @@ def query_model(model, text, save_location, callback=None):
     resp, cost = llm_api.query_model(text)
     with open(save_location, "w") as f:
         f.write(resp)
-    if callback:
-        callback(resp)
     _l.info("Summary completed and saved to %s", save_location)
 

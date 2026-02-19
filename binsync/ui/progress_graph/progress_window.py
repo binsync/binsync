@@ -27,9 +27,10 @@ from libbs.ui.qt_objects import (
     # QtGui
     QPen, QBrush, QColor, QPainter, QFont, QFontMetrics,
     # QtCore
-    Qt, QLineF
+    Qt, QLineF, QTimer
 )
 from libbs.artifacts import Function
+from libbs.api.decompiler_interface import DecompilerInterface
 from binsync.extras import EXTRAS_AVAILABLE
 
 from .summarize import summarize_changes
@@ -476,7 +477,7 @@ class ProgressGraphWidget(QDialog):
         self._update_progress_widgets()
 
     
-    def checkApi(self):
+    def _checkApi(self):
         if os.environ.get("OPENAI_API_KEY") != "": #Check if the api key is set
             _l.info("API Key set already, good to go!")
         else:
@@ -485,7 +486,6 @@ class ProgressGraphWidget(QDialog):
             
             
             dlg_layout = QVBoxLayout()
-            
             key_input = QLineEdit()
             key_input.setPlaceholderText("Enter OpenAi API Key:")
             
@@ -502,72 +502,140 @@ class ProgressGraphWidget(QDialog):
             dialog.setLayout(dlg_layout)
             save_btn.clicked.connect(setAPIKey)
 
-            
+
             dialog.exec()
+
+    def _function_hotlink(self, url):
+        url_str = url.toString() if hasattr(url, "toString") else str(url)
+
+        func_addr_str = url_str.split(":")[-1].strip("/")
+        _l.info(f"Parsed function address: {func_addr_str} also url not url_str: {url}")
+        try:
+            func_addr = int(func_addr_str, 0)
+            _l.info(f"Attempting to jump to: {func_addr}")
+            self._controller.deci.gui_goto(func_addr)
+
+        except ValueError:
+            _l.error("Invalid function address in URL: %s", url_str)
+
+    
+    def _load_ai_text(self, file_location, fileText):
+
+        try:
+            with open(file_location, "r") as f:
+                response = f.read()
+        except Exception as e:
+            response = ""
+
+
+        if response == fileText or response.strip() == "":
+            return
+        response = response.replace("```html", "").replace("```", "").strip()
+        #Parse to hotlink functions here
+        deci = self._controller.deci
+        for func in deci.functions.values():
+            if func.name in response:
+                response = response.replace(func.name, f"<a href='ida:{func.addr}'>{func.name}</a>") #Good start BUT this tells windows to open an ida app and doesn't actually work we want to use gui_goto
+
+        _l.info(response)
+
+        self.htmlresponse.setStyleSheet("""
+QTextBrowser {
+            background-color: #ffffff;   
+            color: #2b2b2b;              
+            border: 1px solid #dcdcdc;  
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            line-height: 1.6;           
+            padding: 10px;               
+
+        
+        h1, h2, h3 {
+            color: #005a9e;              
+        }
+
+        p {
+            
+            color: #2b2b2b;  
+        }
+
+        a {
+            color: #0066cc;             
+            text-decoration: none;
+            font-weight: bold;
+        }
+""")
+        self.htmlresponse.setHtml(response)
+
+        if self.timer.isActive():
+            self.timer.stop()
+
+
 
     def summarize(self, *args, **kwargs):
         if not EXTRAS_AVAILABLE:
             _l.error("Summarization requires extras, which are not available.")
             return
-        
+
 
         #Call checkApi here, so we can check for extras first and then see if api key is set before selecting a save file
-        self.checkApi()
+        self._checkApi()
         file_location, _ = QFileDialog.getSaveFileName(None, "Save File", "", "All Files (*);;Text Files (*.txt)")
         _l.info("Summarizing changes...")
         summarize_changes(self._controller, self.displayed_graph, file_location)
-        with open(file_location, "r") as f:
-            response = f.read()
-        #response = response.replace("\n", "")
-        response = response.replace("```html", "").replace("```", "").strip()
-        dialog = QDialog(self) 
-        dialog.setWindowTitle("Summarization Results")
-        dialog.setMinimumSize(600, 400)
-        
-        dlg_layout = QVBoxLayout()
-        
-        htmlresponse = QTextBrowser()
-        htmlresponse.setStyleSheet("""
+        try:
+            with open(file_location, "r") as f:
+                filetext = f.read()
+        except Exception as e:
+            filetext = ""
+        self.summary_dialog = QDialog(self)
+        self.summary_dialog.setWindowTitle("Summarization Results")
+        self.summary_dialog.setMinimumSize(600, 400)
+
+        # Make it modeless so you can interact with IDA while waiting
+        self.summary_dialog.setWindowFlags(Qt.Window)
+
+        self.dlg_layout = QVBoxLayout()
+
+        # --- The Text Browser ---
+        self.htmlresponse = QTextBrowser()
+        self.htmlresponse.setStyleSheet("""
     QTextBrowser {
-        background-color: #1e1e1e;   
-        color: #000000;              
-        border: none;
-        font-family: 'Segoe UI', Tahoma, sans-serif;
-        font-size: 13px;
-    }
+                background-color: #ffffff;   
+                color: #2b2b2b;              
+                border: 1px solid #dcdcdc;   
+                font-family: 'Segoe UI', Tahoma, sans-serif;
+                line-height: 1.6;           
+                padding: 10px;               
+            }
 
-    
-    QWidget {
-        background-color: #1e1e1e;
-        color: #000000;
-    }
+           
+            h1, h2, h3 {
+                color: #005a9e;             
+            }
 
-    
-    span, p, div, li {
-        background-color: transparent !important; 
-        color: #000000 !important;
-    }
-
-    
-    a {
-        color: #0000EE;
-        text-decoration: underline;
-    }
-
-    
-    h1, h2, h3 {
-        color: #005a4e;
-        margin-top: 15px;
-    }
+            p {
+                color: #2b2b2b;
+            }
+                                        
+            a {
+                color: #0066cc;              
+                text-decoration: none;
+                font-weight: bold;
+            }
 """)
-        htmlresponse.setHtml(response)
-        htmlresponse.setOpenExternalLinks(True)
-        dlg_layout.addWidget(htmlresponse)
-        
-        dialog.setLayout(dlg_layout)
-            
-        dialog.exec()
+        self.htmlresponse.setText("<h3>Generating Summary...</h3><p>The AI is writing to the file in the background.<br>Click <b>Refresh</b> below to check if it's done.</p>")
+        self.htmlresponse.setOpenExternalLinks(False)
+        self.htmlresponse.anchorClicked.connect(self._function_hotlink)
+        self.htmlresponse.setOpenLinks(False)
+        self.timer = QTimer()
+        self.timer.timeout.connect(lambda: self._load_ai_text(file_location, filetext))
+        self.timer.start(2000)
 
+
+        self.dlg_layout.addWidget(self.htmlresponse)
+
+        self.summary_dialog.setLayout(self.dlg_layout)
+        self.summary_dialog.show()
     @staticmethod
     def compute_size_outlier_scores(node_sizes: list[int], max_size=3, min_size=1) -> dict:
         """
