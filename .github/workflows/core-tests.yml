@@ -24,7 +24,11 @@ jobs:
       run: echo "BRANCH_NAME=${GITHUB_HEAD_REF}" >> $GITHUB_ENV
     - name: Install dependencies
       run: |
-        ./tests/ci/setup_core_ci.sh    
+        python -m pip install --upgrade pip
+        pip install flake8 pytest
+        (git clone https://github.com/binsync/libbs.git /tmp/libbs && cd /tmp/libbs && git checkout $BRANCH_NAME || true && pip install .)
+        pip install .[extras]
+
     - name: Pytest
       run: |
-        QT_QPA_PLATFORM="offscreen" pytest ./tests/test_client.py ./tests/test_state.py ./tests/test_auxiliary_server.py -s
+        pytest ./tests/test_client.py ./tests/test_state.py ./tests/test_auxiliary_server.py
