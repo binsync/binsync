@@ -116,7 +116,7 @@ class TestAuxServer(unittest.TestCase):
         for user in self.users:
             user.shutdown()
         time.sleep(3) # Give time for clients' blocking requests to finish (server has shut down already) so that they can begin emitting shutdown signals
-        # Note: figure out a better way to do this so that there isn't a forced 3sec sleep every testcase
+        # TODO: figure out a better way to do this so that there isn't a forced 3sec sleep every testcase
         self.app.processEvents() # Process events so that threads can receive their quit signal
         
         try:
@@ -240,6 +240,8 @@ class TestAuxServer(unittest.TestCase):
             # Make sure everyone's beliefs match up with the server
             assert self.users[0].beliefs == server.store._user_map  
     
+    # TODO: re-implement test cases for linking & unlinking projects. 
+    # Modifications to ClientWorker broke these tests so they are disabled for now.
     # def test_link_unlink_projects(self):
     #     '''
     #     Test: Client creates a new group, links a project to that group, then deletes the group. 
