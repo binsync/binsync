@@ -24,11 +24,7 @@ jobs:
       run: echo "BRANCH_NAME=${GITHUB_HEAD_REF}" >> $GITHUB_ENV
     - name: Install dependencies
       run: |
-        ./tests/ci/setup_core_ci.sh
-        
-
+        ./tests/ci/setup_core_ci.sh    
     - name: Pytest
-      env:
-        QT_QPA_PLATFORM: "offscreen"
       run: |
         QT_QPA_PLATFORM="offscreen" pytest ./tests/test_client.py ./tests/test_state.py ./tests/test_auxiliary_server.py -s
