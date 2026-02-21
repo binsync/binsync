@@ -22,8 +22,10 @@ and written them directly into the code.
 Your job is the following, concisely:
 - summarize any important comments left behind, like those about control or exploitation
 - summarize how these functions may all relate to each other 
+- whenever you reference or mention a function, surround it with (func)(/func) ie. (func)start(/func)
 - summarize the changes in the program, and how they may affect the overall program understanding
-- format all of the text meant for a .txt file, so that it is easy to read
+- format all of the text for a .html file, and expect it to be rendered into a window as HTML.
+    - When formatting for html, use <h1> for the main title, <h2> for section titles, and <p> for paragraphs. Use <code> for code snippets and (func) for function names.
 
 Here is all the code of the functions that the experts have identified as important:
 

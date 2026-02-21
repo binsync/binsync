@@ -479,7 +479,7 @@ class ProgressGraphWidget(QDialog):
     
     def _checkApi(self):
         if os.environ.get("OPENAI_API_KEY") != "": #Check if the api key is set
-            _l.info("API Key set already, good to go!")
+            _l.debug("API Key set already, good to go!")
         else:
             dialog = QDialog(self) 
             dialog.setWindowTitle("Enter Key")
@@ -509,10 +509,10 @@ class ProgressGraphWidget(QDialog):
         url_str = url.toString() if hasattr(url, "toString") else str(url)
 
         func_addr_str = url_str.split(":")[-1].strip("/")
-        _l.info(f"Parsed function address: {func_addr_str} also url not url_str: {url}")
+        _l.debug("Parsed function address: %s also url not url_str: %s", func_addr_str, url_str)
         try:
             func_addr = int(func_addr_str, 0)
-            _l.info(f"Attempting to jump to: {func_addr}")
+            _l.debug("Attempting to jump to: %s", hex(func_addr))
             self._controller.deci.gui_goto(func_addr)
 
         except ValueError:
@@ -534,27 +534,27 @@ class ProgressGraphWidget(QDialog):
         #Parse to hotlink functions here
         deci = self._controller.deci
         for func in deci.functions.values():
-            if func.name in response:
-                response = response.replace(func.name, f"<a href='ida:{func.addr}'>{func.name}</a>") #Good start BUT this tells windows to open an ida app and doesn't actually work we want to use gui_goto
+            refFunc = "(func)" + func.name + "(/func)"
+            if refFunc in response:
+                responselink = "<a href='ida:" + str(func.addr) + "'>" + func.name + "</a>" #Good start BUT this tells windows to open an ida app and doesn't actually work we want to use gui_goto
+                response = response.replace(refFunc, responselink)
 
-        _l.info(response)
+        _l.debug(response)
 
         self.htmlresponse.setStyleSheet("""
 QTextBrowser {
             background-color: #ffffff;   
             color: #2b2b2b;              
             border: 1px solid #dcdcdc;  
-            font-family: 'Segoe UI', Tahoma, sans-serif;
+            font-family: 'Segoe UI', Tahoma, sans-serif; 
             line-height: 1.6;           
             padding: 10px;               
-
         
         h1, h2, h3 {
             color: #005a9e;              
         }
 
         p {
-            
             color: #2b2b2b;  
         }
 
@@ -597,7 +597,7 @@ QTextBrowser {
         self.dlg_layout = QVBoxLayout()
 
         # --- The Text Browser ---
-        self.htmlresponse = QTextBrowser()
+        self.htmlresponse = QTextBrowser() #For the stylesheet, we could adjust text sizing to be bigger but my monitor is 2560x1440 so I'm not sure how it looks on smaller windows
         self.htmlresponse.setStyleSheet("""
     QTextBrowser {
                 background-color: #ffffff;   
@@ -607,7 +607,6 @@ QTextBrowser {
                 line-height: 1.6;           
                 padding: 10px;               
             }
-
            
             h1, h2, h3 {
                 color: #005a9e;             
@@ -622,14 +621,14 @@ QTextBrowser {
                 text-decoration: none;
                 font-weight: bold;
             }
-""")
-        self.htmlresponse.setText("<h3>Generating Summary...</h3><p>The AI is writing to the file in the background.<br>Click <b>Refresh</b> below to check if it's done.</p>")
+""")    #Our HTML Window for the AI Response, below is the code for updating it with the AI response and hotlinking functions
+        self.htmlresponse.setText("<h3>Generating Summary...</h3><p>The AI is writing to the file in the background.<br>This window will auto-update when it's done.</p>")
         self.htmlresponse.setOpenExternalLinks(False)
         self.htmlresponse.anchorClicked.connect(self._function_hotlink)
         self.htmlresponse.setOpenLinks(False)
         self.timer = QTimer()
         self.timer.timeout.connect(lambda: self._load_ai_text(file_location, filetext))
-        self.timer.start(2000)
+        self.timer.start(2000) #Timer is stopped in _load_ai_text when new AI response is received
 
 
         self.dlg_layout.addWidget(self.htmlresponse)
