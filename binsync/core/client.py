@@ -527,12 +527,12 @@ class Client:
         for user_name, ref in ref_dict.items():
             if user_name not in users:
                 continue
-            commit_sha = self.find_commit_before_ts(repo, ts, ref=ref)
+            commit_sha = self._find_commit_before_ts(repo, ts, ref=ref)
             if commit_sha is not None:  
                 best_commits[user_name] = commit_sha
         return best_commits
     
-    def find_commit_before_ts(self, repo: git.Repo, ts:int, user_name:str=None, ref:git.Reference=None)->str:
+    def _find_commit_before_ts(self, repo: git.Repo, ts:float, user_name:str|None=None, ref:git.Reference|None=None):
         """
         Get the last commit before a timestamp given either a user or a ref.
         """
@@ -551,6 +551,13 @@ class Client:
             if commit.committed_date <= ts:
                 return commit.hexsha
         return None # No commits before timestamp
+    
+    @atomic_git_action
+    def find_commit_before_ts(self, repo: git.Repo, ts:float, user_name:str|None=None, ref:git.Reference|None=None):
+        """
+        Wrapper around _find_commit_before_ts that enforces atomic git actions
+        """
+        return self._find_commit_before_ts(repo, ts, user_name, ref)
 
     def commit_master_state(self, commit_msg=None) -> int:
         # Attempt to commit dirty files in a update phase.
