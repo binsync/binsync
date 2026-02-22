@@ -1467,7 +1467,7 @@ class BSController:
         self.progress_view_open = True
 
 
-    def preview_function_changes(self, func_addr=None, user=None, **kwargs):
+    def preview_function_changes(self, func_addr=None, user: str|None = None, state: str|None = None, **kwargs):
         """
         Get a preview of the function differences between two functions about to be synced.
 
@@ -1479,8 +1479,14 @@ class BSController:
         on name, type, args, and comments for master and target functions which can then be parsed to see 
         how they differ. 
         """
-        state = self.get_state(user=user, priority=SchedSpeed.FAST)
-        user = user or state.user
+        if user is not None and state is not None:
+            _l.error("Cannot provide both user and state for function change preview")
+        elif user is not None:
+            other_state = self.get_state(user=user, priority=SchedSpeed.FAST)
+        elif state is not None:
+            other_state = state
+        else:
+            other_state = self.get_state(priority=SchedSpeed.FAST) # user = None
         
         # Get the master function based on the selected method
         if self.precise_diff_preview:
@@ -1489,7 +1495,7 @@ class BSController:
             master_state = self.client.master_state
             master_func = master_state.get_function(func_addr)
         
-        target_func = state.get_function(func_addr)
+        target_func = other_state.get_function(func_addr)
         
         # A lot of repetition so this is just a helper to get the relevant attributes 
         def get_header_attr(func, attr):
@@ -1509,7 +1515,7 @@ class BSController:
         else:
             master_comments = get_comments(self.client.master_state)
         
-        target_comments = get_comments(state)
+        target_comments = get_comments(other_state)
         
         diffs = {
             'name': {
