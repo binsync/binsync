@@ -194,7 +194,6 @@ class QFunctionTable(QWidget):
     def _handle_history_view(self):
         dialog = HistoryDisplayWidget(controller=self.controller,parent=self)
         dialog.show()
-        dialog.exec_()
 
     def update_table(self, states):
         self.table.update_table(states)
