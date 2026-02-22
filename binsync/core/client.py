@@ -41,7 +41,8 @@ def atomic_git_action(f):
     Cache. Generally, just never call functions with this decorator until the Client is done initing.
 
     This function will also attempt to check the cache for requested data on the same thread the original call
-    was made from. If not found, the atomic scheduling is done.
+    was made from. If not found, the atomic scheduling is done. If no_cache is True, then this function will 
+    neither check the cache nor save results to the cache.
 
     @param f:   A Client object function
     @return:
@@ -62,7 +63,8 @@ def atomic_git_action(f):
             priority=priority
         )
 
-        if ret_val:
+        no_save_cache = kwargs.get("no_save_cache", False)
+        if ret_val and not no_save_cache:
             self._set_cache(f, ret_val, **kwargs)
 
         return ret_val if ret_val is not None else {}
@@ -460,8 +462,8 @@ class Client:
 
 
     @atomic_git_action
-    def get_state(self, user=None, priority=None, no_cache=False, commit_hash=None) -> State:
-        if user is None:
+    def get_state(self, user=None, priority=None, no_cache=False, no_save_cache = False, commit_hash=None) -> State:
+        if user is None and commit_hash is None:
             user = self.master_user
 
         state = self.parse_state_from_commit(
@@ -474,8 +476,12 @@ class Client:
         # artifacts to retrieve. As the cache is using a defaultdict() we will
         # get an empty state back when querying from the cache, and we always
         # get this empty state as we don't update the cache.
-        if no_cache or not self.cache.get_state(user):
-            self.cache.set_state(state, user=user)
+        
+        # I am not sure what this code is doing but I had the expectation that 
+        # no_cache would keep you from caching results so I've commented it out. 
+        # Also, doesn't atomic_git_action handle caching already?
+        # if no_cache or not self.cache.get_state(user):
+        #     self.cache.set_state(state, user=user)
 
         return state
 
@@ -553,7 +559,7 @@ class Client:
         return None # No commits before timestamp
     
     @atomic_git_action
-    def find_commit_before_ts(self, repo: git.Repo, ts:float, user_name:str|None=None, ref:git.Reference|None=None):
+    def find_commit_before_ts(self, repo: git.Repo, ts:float, user_name:str|None= None, ref:git.Reference|None=None):
         """
         Wrapper around _find_commit_before_ts that enforces atomic git actions
         """
