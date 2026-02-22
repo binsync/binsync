@@ -122,7 +122,7 @@ class HistoryDisplayWidget(QDialog):
         if client is None:
             l.error("Client is None when trying display diff")
             return
-        previous_time =  (datetime.now(timezone.utc)-timedelta(minutes=1)).timestamp()
+        previous_time =  (datetime.now(timezone.utc)-timedelta(days=1)).timestamp()
         old_commit = client.find_commit_before_ts(client.repo, previous_time,user_name=client.master_user)
         # Because we're not grabbing from the newest commit we don't want to mess around with the cache
         old_state = client.get_state(priority = SchedSpeed.FAST, no_cache=True, no_save_cache=True, commit_hash=old_commit)
