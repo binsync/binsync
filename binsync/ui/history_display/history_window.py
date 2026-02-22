@@ -2,7 +2,7 @@ import logging
 from binsync.controller import BSController
 from datetime import datetime, timezone, timedelta
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableView
-
+from binsync.core.client import SchedSpeed
 from libbs.ui.qt_objects import (
     # QtWidgets
     QDialog,
@@ -122,12 +122,16 @@ class HistoryDisplayWidget(QDialog):
         if client is None:
             l.error("Client is None when trying display diff")
             return
-        previous_time =  (datetime.now(timezone.utc)-timedelta(days=1)).timestamp()
+        previous_time =  (datetime.now(timezone.utc)-timedelta(minutes=1)).timestamp()
         old_commit = client.find_commit_before_ts(client.repo, previous_time,user_name=client.master_user)
-        old_state = client.parse_state_from_commit(client.repo,commit_hash=old_commit)
+        # Because we're not grabbing from the newest commit we don't want to mess around with the cache
+        old_state = client.get_state(priority = SchedSpeed.FAST, no_cache=True, no_save_cache=True, commit_hash=old_commit)
+        
         curr_state = self.controller.get_state()
+        
         # Get the comments where each comment is a dictionary 
         get_comments = lambda state_obj, func_addr: {addr: cmt.comment for addr, cmt in state_obj.get_func_comments(func_addr).items()}
+        
         for addr, new_function in curr_state.functions.items():
             if addr not in old_state.functions:
                 # Is this case possible?
