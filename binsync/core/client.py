@@ -41,8 +41,8 @@ def atomic_git_action(f):
     Cache. Generally, just never call functions with this decorator until the Client is done initing.
 
     This function will also attempt to check the cache for requested data on the same thread the original call
-    was made from. If not found, the atomic scheduling is done. If no_cache is True, then this function will 
-    neither check the cache nor save results to the cache.
+    was made from. If not found, the atomic scheduling is done. 
+    If no_save_cache is True, then this function will not save results to the cache.
 
     @param f:   A Client object function
     @return:
@@ -479,7 +479,10 @@ class Client:
         
         # I am not sure what this code is doing but I had the expectation that 
         # no_cache would keep you from caching results so I've commented it out. 
+        # This behavior is incompatible with the HistoryDisplayWidget's use of
+        # older commits, as we don't want those to be saved to the cache.
         # Also, doesn't atomic_git_action handle caching already?
+        # TODO figure out the original intention of this code to see how to restore it
         # if no_cache or not self.cache.get_state(user):
         #     self.cache.set_state(state, user=user)
 
