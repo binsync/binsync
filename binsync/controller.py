@@ -1467,7 +1467,7 @@ class BSController:
         self.progress_view_open = True
 
 
-    def preview_function_changes(self, func_addr=None, user: str|None = None, state: str|None = None, **kwargs):
+    def preview_function_changes(self, func_addr=None, user: str|None = None, **kwargs):
         """
         Get a preview of the function differences between two functions about to be synced.
 
@@ -1479,14 +1479,8 @@ class BSController:
         on name, type, args, and comments for master and target functions which can then be parsed to see 
         how they differ. 
         """
-        if user is not None and state is not None:
-            _l.error("Cannot provide both user and state for function change preview")
-        elif user is not None:
-            other_state = self.get_state(user=user, priority=SchedSpeed.FAST)
-        elif state is not None:
-            other_state = state
-        else:
-            other_state = self.get_state(priority=SchedSpeed.FAST) # user = None
+        other_state = self.get_state(user=user, priority=SchedSpeed.FAST)
+        user = user or other_state.user
         
         # Get the master function based on the selected method
         if self.precise_diff_preview:
@@ -1496,10 +1490,6 @@ class BSController:
             master_func = master_state.get_function(func_addr)
         
         target_func = other_state.get_function(func_addr)
-        
-        # A lot of repetition so this is just a helper to get the relevant attributes 
-        def get_header_attr(func, attr):
-            return getattr(func.header, attr, None) if func and func.header else None
         
         # Get the comments where each comment is a dictionary 
         get_comments = lambda state_obj: {addr: cmt.comment for addr, cmt in state_obj.get_func_comments(func_addr).items()}
@@ -1517,27 +1507,35 @@ class BSController:
         
         target_comments = get_comments(other_state)
         
+        return self.get_function_comment_diffs(master_func, master_comments, target_func, target_comments)
+    
+    @staticmethod
+    def get_function_comment_diffs(func_1, comments_1, func_2, comments_2):
+        # A lot of repetition so this is just a helper to get the relevant attributes 
+        def get_header_attr(func, attr):
+            return getattr(func.header, attr, None) if func and func.header else None
+
         diffs = {
             'name': {
                 # can change this to use helper func since func and func.header should have same name 
-                'master': master_func.name if master_func else None,
-                'target': target_func.name if target_func else None
+                'master': func_1.name if func_1 else None,
+                'target': func_2.name if func_2 else None
             },
             'args': {
-                'master': get_header_attr(master_func, 'args') or {},
-                'target': get_header_attr(target_func, 'args') or {}
+                'master': get_header_attr(func_1, 'args') or {},
+                'target': get_header_attr(func_2, 'args') or {}
             },
             'type': {
-                'master': get_header_attr(master_func, 'type'),
-                'target': get_header_attr(target_func, 'type')
+                'master': get_header_attr(func_1, 'type'),
+                'target': get_header_attr(func_2, 'type')
             },
             'stack_vars': {
-                'master': master_func.stack_vars if master_func else {},
-                'target': target_func.stack_vars if target_func else {}
+                'master': func_1.stack_vars if func_1 else {},
+                'target': func_2.stack_vars if func_2 else {}
             },
             'comments': {
-                'master': master_comments,
-                'target': target_comments
+                'master': comments_1,
+                'target': comments_2
             }
         }
 
