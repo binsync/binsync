@@ -40,18 +40,23 @@ class LinkProjectDialog(QDialog):
         return self.url_field.text()
 
 class LinkedProjectGroup(QWidget):
-    def __init__(self, group_name, projects:dict[str,None], add_project_signal, unlink_project_signal, delete_group_signal, parent=None):
+    def __init__(self, group_name, projects:dict[str, None], add_project_signal, unlink_project_signal, delete_group_signal, parent=None):
         super().__init__(parent)
         self.group_name = group_name
+        self.projects = projects
         self.parent_add_project_signal = add_project_signal
-        self._init_widgets(projects, unlink_project_signal, delete_group_signal)
+        self._init_widgets(unlink_project_signal, delete_group_signal)
 
-    def _init_widgets(self, projects, unlink_project_signal, delete_group_signal):
+    def _init_widgets(self, unlink_project_signal, delete_group_signal):
         layout = QVBoxLayout()
         group_layout = QHBoxLayout()
         
         group_name_label = QLabel(self.group_name)
         group_layout.addWidget(group_name_label)
+        
+        download_projects_button = QPushButton("Download")
+        download_projects_button.clicked.connect(self.handle_download_projects)
+        group_layout.addWidget(download_projects_button)
         
         add_project_button = QPushButton("+")
         add_project_button.clicked.connect(self.handle_add_project)
@@ -62,7 +67,7 @@ class LinkedProjectGroup(QWidget):
         group_layout.addWidget(delete_group_button)
         
         layout.addLayout(group_layout)
-        for project in projects:
+        for project in self.projects:
             project_layout = QHBoxLayout()
             
             project_name_label = QLabel(project)
@@ -75,6 +80,9 @@ class LinkedProjectGroup(QWidget):
             layout.addLayout(project_layout)
         self.setLayout(layout)
 
+    def handle_download_projects(self):
+        l.info("Downloading projects %s", self.projects)
+        
     def handle_add_project(self):
         link_dialog = LinkProjectDialog()
         if link_dialog.exec():
