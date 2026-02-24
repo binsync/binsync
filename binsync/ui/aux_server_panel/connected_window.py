@@ -90,14 +90,14 @@ class LinkedProjectGroup(QWidget):
         directory_dialog.setFileMode(QFileDialog.Directory)
         if directory_dialog.exec():
             target_dir = directory_dialog.selectedFiles()[0] # Returns a list so we want to get the directory
-            l.info("Downloading projects %s into directory %s", self.projects, target_dir)
+            l.info("Cloning projects %s into directory %s", list(self.projects.keys()), target_dir)
             for project in self.projects:
                 project_name = project.split("/")[-1]
                 # Take out .git in url
                 if project_name.endswith(".git"):
                     project_name = project_name[:-4]
                 Repo.clone_from(project, os.path.join(target_dir, project_name))
-            l.info("Done!")
+            l.info("Finished cloning")
                 
         
     def handle_add_project(self):
