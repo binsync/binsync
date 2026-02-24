@@ -13,6 +13,7 @@ from libbs.ui.qt_objects import (
     QDialogButtonBox,
     QSizePolicy,
     Qt,
+    QFileDialog,
 )
 
 l = logging.getLogger(__name__)
@@ -81,7 +82,10 @@ class LinkedProjectGroup(QWidget):
         self.setLayout(layout)
 
     def handle_download_projects(self):
-        l.info("Downloading projects %s", self.projects)
+        directory_dialog = QFileDialog(self)
+        directory_dialog.setFileMode(QFileDialog.Directory)
+        if directory_dialog.exec():
+            l.info("Downloading projects %s into directory %s", self.projects, directory_dialog.selectedFiles())
         
     def handle_add_project(self):
         link_dialog = LinkProjectDialog()
