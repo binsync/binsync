@@ -15,7 +15,9 @@ from libbs.ui.qt_objects import (
     Qt,
     QFileDialog,
 )
-
+from git import Repo
+from functools import partial
+import os
 l = logging.getLogger(__name__)
 
 class LinkProjectDialog(QDialog):
@@ -87,7 +89,16 @@ class LinkedProjectGroup(QWidget):
         directory_dialog = QFileDialog(self)
         directory_dialog.setFileMode(QFileDialog.Directory)
         if directory_dialog.exec():
-            l.info("Downloading projects %s into directory %s", self.projects, directory_dialog.selectedFiles())
+            target_dir = directory_dialog.selectedFiles()[0] # Returns a list so we want to get the directory
+            l.info("Downloading projects %s into directory %s", self.projects, target_dir)
+            for project in self.projects:
+                project_name = project.split("/")[-1]
+                # Take out .git in url
+                if project_name.endswith(".git"):
+                    project_name = project_name[:-4]
+                Repo.clone_from(project, os.path.join(target_dir, project_name))
+            l.info("Done!")
+                
         
     def handle_add_project(self):
         link_dialog = LinkProjectDialog()
