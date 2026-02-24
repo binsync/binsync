@@ -75,7 +75,9 @@ class LinkedProjectGroup(QWidget):
             project_layout.addWidget(project_name_label)
             
             unlink_project_button = QPushButton("🗑️") # Is it a good idea to use utf 8 emojis?
-            unlink_project_button.clicked.connect(lambda: unlink_project_signal.emit((project, self.group_name)))
+            unlink_project_button.clicked.connect(
+                partial(lambda p_name: unlink_project_signal.emit((p_name, self.group_name)), project)
+                    )
             project_layout.addWidget(unlink_project_button)
             
             layout.addLayout(project_layout)
