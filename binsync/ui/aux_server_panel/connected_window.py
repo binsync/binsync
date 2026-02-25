@@ -92,6 +92,8 @@ class LinkedProjectGroup(QWidget):
         Checks if the projects to be cloned already exist by checking for remote urls.
         Note that if the remote url uses a different protocol (e.g. ssh vs https),
         it will be treated as a different project and clone anyways.
+        Will not clone a repo if there is a name conflict with a pre-existing file
+        or directory.
         """
         directory_dialog = QFileDialog(self)
         directory_dialog.setFileMode(QFileDialog.Directory)
@@ -117,10 +119,18 @@ class LinkedProjectGroup(QWidget):
                 if project in existing_repos:
                     continue # No need to re-clone repo, it already exists
                 project_name = project.split("/")[-1]
+                
                 # Take out .git in url
                 if project_name.endswith(".git"):
                     project_name = project_name[:-4]
-                git.Repo.clone_from(project, str(target_dir.joinpath(project_name)))
+                    
+                target_path = target_dir.joinpath(project_name)
+                if target_path.exists():
+                    l.info('Skipped cloning "%s" due to a file already existing at the intended path "%s"',
+                           project, target_path)
+                    continue # Can't clone this repo into the path we want because of name conflict
+                
+                git.Repo.clone_from(project, str(target_path))
             l.info("Finished cloning")
                 
         
