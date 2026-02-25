@@ -314,52 +314,51 @@ class TestAuxServer(unittest.TestCase):
                 libbs_group_name: {}
             }
     
-    # def test_multi_user_link_unlink_projects(self):
-    #     '''
-    #     Client A links a project, then Client B lists out linked projects.
-    #     Client C then unlinks the project and Client B lists out linked projects again.
-    #     '''
-    #     def client_task(client:ServerClient):
-    #         client.run()
+    def test_multi_user_link_unlink_projects(self):
+        '''
+        User A links a project, then User B lists out linked projects.
+        User C then unlinks the project and User B lists out linked projects again.
+        '''
             
-    #     server = Server(self.HOST, self.PORT)
-    #     with ServerThreadManager(server):
-    #         client_a = ServerClient(self.HOST, self.PORT, MockController("Alice"), lambda *args:None)
-    #         self.clients.append(client_a)
-    #         client_b = ServerClient(self.HOST, self.PORT, MockController("Bob"), lambda *args:None)
-    #         self.clients.append(client_b)
-    #         client_c = ServerClient(self.HOST, self.PORT, MockController("Carol"), lambda *args:None)
-    #         self.clients.append(client_c)
+        server = Server(self.HOST, self.PORT)
+        with ServerThreadManager(server):
+            user_a = MockUser(MockController("Alice"))
+            self.users.append(user_a)
+            user_b = MockUser(MockController("Bob"))
+            self.users.append(user_b)
+            user_c = MockUser(MockController("Carol"))
+            self.users.append(user_c)
             
-    #         for client in self.clients:
-    #             self.client_threads.append(threading.Thread(target=client_task, args=(client, )))
-
-    #         for client_thread in self.client_threads:
-    #             client_thread.start()
+            for user in self.users:
+                user.connect_signal.emit((self.HOST, self.PORT))
             
-    #         project_url = "https://github.com/binsync/binsync.git"
+            project_url = "https://github.com/binsync/binsync.git"
             
-    #         # Client A links project
-    #         link_result = client_a.link_project(project_url)
-    #         assert link_result == (True, "")
+            # Client A links project
+            user_a.link_project.emit((project_url, ServerStore.DEFAULT_GROUPNAME))
+            time.sleep(0.5) # Give time for server to receive the project
             
-    #         # Client B lists out projects
-    #         list_result_1 = client_b.list_projects()
-    #         assert list_result_1 == {
-    #             ServerStore.DEFAULT_GROUPNAME: {
-    #                 project_url: None
-    #             }
-    #         }
+            # Client B lists out projects
+            user_b.list_projects.emit()
+            time.sleep(1)
+            self.app.processEvents()
+            self.assertEqual(user_b.linked_projects, {
+                ServerStore.DEFAULT_GROUPNAME: {
+                    project_url: None
+                }
+            })
             
-    #         # Client C unlinks project
-    #         unlink_result = client_c.unlink_project(project_url)
-    #         assert unlink_result == (True, "")
+            # Client C unlinks project
+            user_c.unlink_project.emit((project_url, ServerStore.DEFAULT_GROUPNAME))
+            time.sleep(0.5) # Give time for server to receive the unlink
             
-    #         # Client B lists out projects
-    #         list_result_2 = client_b.list_projects()
-    #         assert list_result_2 == {
-    #             ServerStore.DEFAULT_GROUPNAME: {}
-    #         }
+            # Client B lists out projects
+            user_b.list_projects.emit()
+            time.sleep(1)
+            self.app.processEvents()
+            assert user_b.linked_projects == {
+                ServerStore.DEFAULT_GROUPNAME: {}
+            }
             
 if __name__ == "__main__":
     unittest.main(argv=sys.argv)
