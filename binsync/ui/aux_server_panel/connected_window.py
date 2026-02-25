@@ -130,7 +130,10 @@ class LinkedProjectGroup(QWidget):
                            project, target_path)
                     continue # Can't clone this repo into the path we want because of name conflict
                 
-                git.Repo.clone_from(project, str(target_path))
+                try:
+                    git.Repo.clone_from(project, str(target_path))
+                except git.exc.GitCommandError as e: # Mainly to handle bad urls so that we can clone the other projects
+                    l.error("%s",e)
             l.info("Finished cloning")
                 
         
