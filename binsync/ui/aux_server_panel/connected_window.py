@@ -15,9 +15,10 @@ from libbs.ui.qt_objects import (
     Qt,
     QFileDialog,
 )
-from git import Repo
-from functools import partial
-import os
+import git
+import git.exc
+import functools
+import pathlib
 l = logging.getLogger(__name__)
 
 class LinkProjectDialog(QDialog):
@@ -78,7 +79,7 @@ class LinkedProjectGroup(QWidget):
             
             unlink_project_button = QPushButton("🗑️") # Is it a good idea to use utf 8 emojis?
             unlink_project_button.clicked.connect(
-                partial(lambda p_name: unlink_project_signal.emit((p_name, self.group_name)), project)
+                functools.partial(lambda p_name: unlink_project_signal.emit((p_name, self.group_name)), project)
                     )
             project_layout.addWidget(unlink_project_button)
             
@@ -86,17 +87,40 @@ class LinkedProjectGroup(QWidget):
         self.setLayout(layout)
 
     def handle_download_projects(self):
+        """
+        Downloads projects associated with this group. 
+        Checks if the projects to be cloned already exist by checking for remote urls.
+        Note that if the remote url uses a different protocol (e.g. ssh vs https),
+        it will be treated as a different project and clone anyways.
+        """
         directory_dialog = QFileDialog(self)
         directory_dialog.setFileMode(QFileDialog.Directory)
         if directory_dialog.exec():
-            target_dir = directory_dialog.selectedFiles()[0] # Returns a list so we want to get the directory
+            target_dir = pathlib.Path(directory_dialog.selectedFiles()[0]) # Returns a list so we want to get the directory
             l.info("Cloning projects %s into directory %s", list(self.projects.keys()), target_dir)
+            # Collect a set of Git projects already in the directory by url
+            existing_repos = set()
+            for f in target_dir.iterdir():
+                if not f.is_dir():
+                    continue
+                
+                try:
+                    repo = git.Repo(str(f))
+                    remotes = repo.remotes
+                    if len(remotes) == 0:
+                        continue # No remote repo so no chance of conflict
+                    existing_repos.add(remotes.origin.url)
+                except git.exc.InvalidGitRepositoryError:
+                    pass
+
             for project in self.projects:
+                if project in existing_repos:
+                    continue # No need to re-clone repo, it already exists
                 project_name = project.split("/")[-1]
                 # Take out .git in url
                 if project_name.endswith(".git"):
                     project_name = project_name[:-4]
-                Repo.clone_from(project, os.path.join(target_dir, project_name))
+                git.Repo.clone_from(project, str(target_dir.joinpath(project_name)))
             l.info("Finished cloning")
                 
         
