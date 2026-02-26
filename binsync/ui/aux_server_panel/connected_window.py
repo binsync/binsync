@@ -44,6 +44,8 @@ class LinkProjectDialog(QDialog):
         return self.url_field.text()
 
 class LinkedProjectGroup(QWidget):
+    DELETE_BUTTON = "DELETE_BUTTON"
+    
     def __init__(self, group_name, projects:dict[str, None], add_project_signal, unlink_project_signal, delete_group_signal, parent=None):
         super().__init__(parent)
         self.group_name = group_name
@@ -73,18 +75,20 @@ class LinkedProjectGroup(QWidget):
         
         layout.addLayout(group_layout)
         for project in self.projects:
+            project_widget = QWidget()
             project_layout = QHBoxLayout()
             
             project_name_label = QLabel(project)
             project_layout.addWidget(project_name_label)
             
-            unlink_project_button = QPushButton("🗑️") # Is it a good idea to use utf 8 emojis?
+            unlink_project_button = QPushButton("🗑️", objectName=LinkedProjectGroup.DELETE_BUTTON) # Is it a good idea to use utf 8 emojis?
             unlink_project_button.clicked.connect(
-                functools.partial(self.handle_unlink_project, project_name=project)
+                functools.partial(self.handle_unlink_project, widget=project_widget, project_name=project)
                     )
             project_layout.addWidget(unlink_project_button)
             
-            layout.addLayout(project_layout)
+            project_widget.setLayout(project_layout)
+            layout.addWidget(project_widget)
         self.setLayout(layout)
 
     def handle_download_projects(self):
@@ -142,7 +146,9 @@ class LinkedProjectGroup(QWidget):
         if link_dialog.exec():
             self.parent_add_project_signal.emit((link_dialog.getInput(), self.group_name))
     
-    def handle_unlink_project(self, project_name):
+    def handle_unlink_project(self, widget, project_name):
+        widget.setStyleSheet("background-color: red")
+        widget.findChild(QPushButton, LinkedProjectGroup.DELETE_BUTTON).setEnabled(False)
         self.parent_unlink_project_signal.emit((project_name, self.group_name))
         
 
