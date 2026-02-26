@@ -49,9 +49,10 @@ class LinkedProjectGroup(QWidget):
         self.group_name = group_name
         self.projects = projects
         self.parent_add_project_signal = add_project_signal
-        self._init_widgets(unlink_project_signal, delete_group_signal)
+        self.parent_unlink_project_signal = unlink_project_signal
+        self._init_widgets(delete_group_signal)
 
-    def _init_widgets(self, unlink_project_signal, delete_group_signal):
+    def _init_widgets(self, delete_group_signal):
         layout = QVBoxLayout()
         group_layout = QHBoxLayout()
         
@@ -63,7 +64,7 @@ class LinkedProjectGroup(QWidget):
         group_layout.addWidget(download_projects_button)
         
         add_project_button = QPushButton("+")
-        add_project_button.clicked.connect(self.handle_add_project)
+        add_project_button.clicked.connect(self.handle_link_project)
         group_layout.addWidget(add_project_button)
         
         delete_group_button = QPushButton("🗑️") # Is it a good idea to use utf 8 emojis?
@@ -79,7 +80,7 @@ class LinkedProjectGroup(QWidget):
             
             unlink_project_button = QPushButton("🗑️") # Is it a good idea to use utf 8 emojis?
             unlink_project_button.clicked.connect(
-                functools.partial(lambda p_name: unlink_project_signal.emit((p_name, self.group_name)), project)
+                functools.partial(self.handle_unlink_project, project_name=project)
                     )
             project_layout.addWidget(unlink_project_button)
             
@@ -136,11 +137,14 @@ class LinkedProjectGroup(QWidget):
                     l.error("%s",e)
             l.info("Finished cloning")
                 
-        
-    def handle_add_project(self):
+    def handle_link_project(self):
         link_dialog = LinkProjectDialog()
         if link_dialog.exec():
             self.parent_add_project_signal.emit((link_dialog.getInput(), self.group_name))
+    
+    def handle_unlink_project(self, project_name):
+        self.parent_unlink_project_signal.emit((project_name, self.group_name))
+        
 
 class CreateGroupDialog(QDialog):
     def __init__(self, parent=None):
