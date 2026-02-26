@@ -86,6 +86,8 @@ class ClientWorker(QObject):
         result = self.server_client.link_project(url, group) # type: ignore
         if result[0] == False:
             l.error(result[1])
+        else:
+            self.get_linked_projects()
     
     @Slot(tuple)
     @_client_required
@@ -94,6 +96,8 @@ class ClientWorker(QObject):
         result = self.server_client.unlink_project(url, group) # type: ignore
         if result[0] == False:
             l.error(result[1])
+        else:
+            self.get_linked_projects()
     
     @Slot(str)
     @_client_required
@@ -101,6 +105,8 @@ class ClientWorker(QObject):
         result = self.server_client.create_group(group_name) # type: ignore
         if result[0] == False:
             l.error(result[1])
+        else:
+            self.get_linked_projects()
         
     @Slot(str)
     @_client_required
@@ -108,6 +114,8 @@ class ClientWorker(QObject):
         result = self.server_client.delete_group(group_name) # type: ignore
         if result[0] == False:
             l.error(result[1])
+        else:
+            self.get_linked_projects()
     
     @Slot() 
     @_client_required
