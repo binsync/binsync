@@ -43,6 +43,30 @@ class LinkProjectDialog(QDialog):
     def getInput(self)->str:
         return self.url_field.text()
 
+class LinkedProjectItem(QWidget):
+    """
+    Represents a single entry in a linked project group.
+    """
+    def __init__(self, project_name, temporary=False, parent=None):
+        # temporary if project is not guaranteed to be known by the server yet
+        super().__init__(parent)
+        self._init_widgets(project_name, temporary)
+        
+    def _init_widgets(self, project_name, temporary):
+        layout = QHBoxLayout()            
+        project_name_label = QLabel(project_name)
+        layout.addWidget(project_name_label)
+        
+        self.unlink_button = QPushButton("🗑️") # Is it a good idea to use utf 8 emojis?
+        layout.addWidget(self.unlink_button)
+        if temporary:
+            self.setStyleSheet("background-color: green")
+        self.setLayout(layout)
+        
+    def update_pending_unlink(self):
+        self.setStyleSheet("background-color: red")
+        self.unlink_button.setEnabled(False)
+
 class LinkedProjectGroup(QWidget):
     DELETE_BUTTON = "DELETE_BUTTON"
     
@@ -55,7 +79,7 @@ class LinkedProjectGroup(QWidget):
         self._init_widgets(delete_group_signal)
 
     def _init_widgets(self, delete_group_signal):
-        layout = QVBoxLayout()
+        self.layout = QVBoxLayout()
         group_layout = QHBoxLayout()
         
         group_name_label = QLabel(self.group_name)
@@ -73,23 +97,14 @@ class LinkedProjectGroup(QWidget):
         delete_group_button.clicked.connect(lambda: delete_group_signal.emit(self.group_name))
         group_layout.addWidget(delete_group_button)
         
-        layout.addLayout(group_layout)
+        self.layout.addLayout(group_layout)
         for project in self.projects:
-            project_widget = QWidget()
-            project_layout = QHBoxLayout()
-            
-            project_name_label = QLabel(project)
-            project_layout.addWidget(project_name_label)
-            
-            unlink_project_button = QPushButton("🗑️", objectName=LinkedProjectGroup.DELETE_BUTTON) # Is it a good idea to use utf 8 emojis?
-            unlink_project_button.clicked.connect(
+            project_widget = LinkedProjectItem(project)
+            project_widget.unlink_button.clicked.connect(
                 functools.partial(self.handle_unlink_project, widget=project_widget, project_name=project)
-                    )
-            project_layout.addWidget(unlink_project_button)
-            
-            project_widget.setLayout(project_layout)
-            layout.addWidget(project_widget)
-        self.setLayout(layout)
+                    )            
+            self.layout.addWidget(project_widget)
+        self.setLayout(self.layout)
 
     def handle_download_projects(self):
         """
@@ -144,11 +159,13 @@ class LinkedProjectGroup(QWidget):
     def handle_link_project(self):
         link_dialog = LinkProjectDialog()
         if link_dialog.exec():
-            self.parent_add_project_signal.emit((link_dialog.getInput(), self.group_name))
+            project_name = link_dialog.getInput()
+            self.parent_add_project_signal.emit((project_name, self.group_name))
+            temp_widget = LinkedProjectItem(project_name, temporary=True)
+            self.layout.addWidget(temp_widget)
     
-    def handle_unlink_project(self, widget, project_name):
-        widget.setStyleSheet("background-color: red")
-        widget.findChild(QPushButton, LinkedProjectGroup.DELETE_BUTTON).setEnabled(False)
+    def handle_unlink_project(self, widget: LinkedProjectItem, project_name):
+        widget.update_pending_unlink()
         self.parent_unlink_project_signal.emit((project_name, self.group_name))
         
 
