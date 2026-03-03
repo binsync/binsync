@@ -157,7 +157,7 @@ class LinkedProjectGroup(QWidget):
             l.info("Finished cloning")
                 
     def handle_link_project(self):
-        link_dialog = LinkProjectDialog()
+        link_dialog = LinkProjectDialog(self)
         if link_dialog.exec():
             project_name = link_dialog.getInput()
             self.parent_add_project_signal.emit((project_name, self.group_name))
@@ -201,7 +201,7 @@ class LinkedProjectsWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._init_widgets()
-        self.groups:dict[str, LinkedProjectGroup] = {}
+        self.projects_loaded = False
 
     def _init_widgets(self):
         self.layout = QVBoxLayout()
@@ -236,21 +236,56 @@ class LinkedProjectsWidget(QWidget):
     
     @Slot(dict)
     def update_linked_projects(self, linked_projects: dict[str,dict[str,None]]):
-        self.delete_layout_items(self.projects_layout)
-        for group_name, projects in linked_projects.items():
-            new_group = LinkedProjectGroup(group_name, projects, self.add_project, self.unlink_project, self.delete_group)
-            self.projects_layout.addWidget(new_group) 
+        if not self.projects_loaded:
+            widgets_to_delete = self.pop_layout_items(self.projects_layout)
+            if widgets_to_delete is None:
+                l.error("projects layout is missing?")
+                return
+            for widget in widgets_to_delete:
+                widget.deleteLater()
+            for group_name, projects in linked_projects.items():
+                new_group = LinkedProjectGroup(group_name, projects, self.add_project, self.unlink_project, self.delete_group)
+                self.projects_layout.addWidget(new_group)
+            self.projects_loaded = True
+        else:
+            # Only update existing widgets to stop risk of disappearing references
+            # Pop out all widgets
+            old_widgets = self.pop_layout_items(self.projects_layout)
+            if old_widgets is None:
+                l.error("projects layout is missing?")
+                return
+            widgets_dict = {}
+            for widget in old_widgets:
+                widgets_dict[widget.group_name] = widget
+            # Send widgets back into layout as they show up in linked_projects
+            for group_name, projects in linked_projects.items():
+                if group_name in widgets_dict:
+                    self.projects_layout.addWidget(widgets_dict[group_name])
+                    del widgets_dict[group_name]
+                else:
+                    new_group = LinkedProjectGroup(group_name, projects, self.add_project, self.unlink_project, self.delete_group)
+                    self.projects_layout.addWidget(new_group)
+            # Delete widgets that were not re-added
+            for gone_widget in widgets_dict.values():
+                gone_widget.deleteLater()
+    
 
-    def delete_layout_items(self, layout):
+    def pop_layout_items(self, layout)->list[QWidget] | list[LinkedProjectGroup] | None:
+        """
+        Returns a list of all top-level widgets present in the layout and deletes all non-widgets
+        """
         if layout:
+            widgets = []
             while layout.count() > 0:
                 item = layout.takeAt(0)
                 widget = item.widget()
                 if widget:
-                    widget.setParent(None)
-                    widget.deleteLater()
+                    widgets.append(widget)
                 else:
-                    self.delete_layout_items(item.layout())
+                    sub_widgets = self.pop_layout_items(item.layout()) or []
+                    for sub_widget in sub_widgets:
+                        sub_widget.deleteLater()
+            return widgets
 
 
 class AuxServerConnectedWidget(QWidget):
