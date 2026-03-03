@@ -47,25 +47,44 @@ class LinkedProjectItem(QWidget):
     """
     Represents a single entry in a linked project group.
     """
-    def __init__(self, project_name, temporary=False, parent=None):
+    ADDED_LOCALLY = 1 # Tried linking locally but not yet confirmed on server
+    PRESENT_REMOTE = 2 # Project is linked on the server
+    DELETED_LOCALLY = 3 # Tried deleting locally but not yet confirmed on server
+    UNKNOWN = -1
+    def __init__(self, project_url, state=UNKNOWN, parent=None):
         # temporary if project is not guaranteed to be known by the server yet
         super().__init__(parent)
-        self._init_widgets(project_name, temporary)
+        self.project_url = project_url
+        self.state = state
+        self._init_widgets()
+        self.update_state(self.state)
         
-    def _init_widgets(self, project_name, temporary):
+    def _init_widgets(self):
         layout = QHBoxLayout()            
-        project_name_label = QLabel(project_name)
+        project_name_label = QLabel(self.project_url)
         layout.addWidget(project_name_label)
         
         self.unlink_button = QPushButton("🗑️") # Is it a good idea to use utf 8 emojis?
         layout.addWidget(self.unlink_button)
-        if temporary:
-            self.setStyleSheet("background-color: green")
+                    
         self.setLayout(layout)
-        
-    def update_pending_unlink(self):
-        self.setStyleSheet("background-color: red")
-        self.unlink_button.setEnabled(False)
+    
+    def update_state(self, new_state):
+        # Update appearance
+        if new_state == LinkedProjectItem.ADDED_LOCALLY:
+            self.setStyleSheet("background-color: green")
+        elif new_state == LinkedProjectItem.PRESENT_REMOTE:
+            self.setStyleSheet("")
+        elif new_state == LinkedProjectItem.DELETED_LOCALLY:
+            self.setStyleSheet("background-color: red")
+        else:
+            l.error("Tried to set to unknown state %d", new_state)
+            return
+        self.state = new_state
+        if new_state == LinkedProjectItem.DELETED_LOCALLY:
+            self.unlink_button.setEnabled(False)
+        else:
+            self.unlink_button.setEnabled(True)
 
 class LinkedProjectGroup(QWidget):
     DELETE_BUTTON = "DELETE_BUTTON"
@@ -98,12 +117,15 @@ class LinkedProjectGroup(QWidget):
         group_layout.addWidget(delete_group_button)
         
         self.layout.addLayout(group_layout)
+        
+        self.projects_layout = QVBoxLayout()
         for project in self.projects:
-            project_widget = LinkedProjectItem(project)
+            project_widget = LinkedProjectItem(project, state=LinkedProjectItem.PRESENT_REMOTE)
             project_widget.unlink_button.clicked.connect(
-                functools.partial(self.handle_unlink_project, widget=project_widget, project_name=project)
+                functools.partial(self.handle_unlink_project, widget=project_widget)
                     )            
-            self.layout.addWidget(project_widget)
+            self.projects_layout.addWidget(project_widget)
+        self.layout.addLayout(self.projects_layout)
         self.setLayout(self.layout)
 
     def handle_download_projects(self):
@@ -155,18 +177,40 @@ class LinkedProjectGroup(QWidget):
                 except git.exc.GitCommandError as e: # Mainly to handle bad urls so that we can clone the other projects
                     l.error("%s",e)
             l.info("Finished cloning")
-                
+    
+    def update_projects(self, projects: dict[str, None]):
+        projects_dict:dict[str, LinkedProjectItem] = {}
+        while self.projects_layout.count() > 0:
+            curr_project:LinkedProjectItem = self.projects_layout.takeAt(0).widget()
+            projects_dict[curr_project.project_url] = curr_project
+        for project_url in projects:
+            if project_url in projects_dict:
+                curr_project = projects_dict[project_url]
+                curr_project.update_state(LinkedProjectItem.PRESENT_REMOTE)
+                self.projects_layout.addWidget(curr_project)
+
+                del projects_dict[project_url]
+            else:
+                new_project = LinkedProjectItem(project_url, state=LinkedProjectItem.PRESENT_REMOTE)
+                new_project.unlink_button.clicked.connect(
+                functools.partial(self.handle_unlink_project, widget=new_project)
+                    )            
+                self.projects_layout.addWidget(new_project)
+        
+        for gone_widget in projects_dict.values():
+            gone_widget.deleteLater()
+            
     def handle_link_project(self):
         link_dialog = LinkProjectDialog(self)
         if link_dialog.exec():
             project_name = link_dialog.getInput()
             self.parent_add_project_signal.emit((project_name, self.group_name))
-            temp_widget = LinkedProjectItem(project_name, temporary=True)
-            self.layout.addWidget(temp_widget)
+            temp_widget = LinkedProjectItem(project_name, state=LinkedProjectItem.ADDED_LOCALLY)
+            self.projects_layout.addWidget(temp_widget)
     
-    def handle_unlink_project(self, widget: LinkedProjectItem, project_name):
-        widget.update_pending_unlink()
-        self.parent_unlink_project_signal.emit((project_name, self.group_name))
+    def handle_unlink_project(self, widget: LinkedProjectItem):
+        widget.update_state(LinkedProjectItem.DELETED_LOCALLY)
+        self.parent_unlink_project_signal.emit((widget.project_url, self.group_name))
         
 
 class CreateGroupDialog(QDialog):
@@ -254,13 +298,15 @@ class LinkedProjectsWidget(QWidget):
             if old_widgets is None:
                 l.error("projects layout is missing?")
                 return
-            widgets_dict = {}
+            widgets_dict:dict[str, LinkedProjectGroup] = {}
             for widget in old_widgets:
                 widgets_dict[widget.group_name] = widget
             # Send widgets back into layout as they show up in linked_projects
             for group_name, projects in linked_projects.items():
                 if group_name in widgets_dict:
-                    self.projects_layout.addWidget(widgets_dict[group_name])
+                    curr_widget = widgets_dict[group_name]
+                    curr_widget.update_projects(projects)
+                    self.projects_layout.addWidget(curr_widget)
                     del widgets_dict[group_name]
                 else:
                     new_group = LinkedProjectGroup(group_name, projects, self.add_project, self.unlink_project, self.delete_group)
