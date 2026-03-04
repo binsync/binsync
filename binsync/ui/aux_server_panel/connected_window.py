@@ -153,7 +153,7 @@ class LinkedProjectGroup(QWidget):
     def __init__(self, group_name, projects:dict[str, None], add_project_signal, unlink_project_signal, delete_group_signal, parent=None):
         super().__init__(parent)
         self.group_name = group_name
-        self.projects = projects
+        self.projects = projects # Keeps track of projects believed to be present on server (ADDED_LOCALLY, PRESENT_REMOTE)
         self.parent_add_project_signal = add_project_signal
         self.parent_unlink_project_signal = unlink_project_signal
         
@@ -190,7 +190,7 @@ class LinkedProjectGroup(QWidget):
             project_widget.unlink_button.clicked.connect(
                 functools.partial(self.handle_unlink_project, widget=project_widget)
                     )            
-            self.projects_layout.addWidget(project_widget)
+            self.add_project_item(project_widget)
         self.layout.addLayout(self.projects_layout)
         self.setLayout(self.layout)
 
@@ -226,7 +226,7 @@ class LinkedProjectGroup(QWidget):
             
     
     def update_projects(self, projects: dict[str, None]):
-        self.projects = projects
+        self.projects = {}
         projects_dict:dict[str, LinkedProjectItem] = {}
         while self.projects_layout.count() > 0:
             curr_project:LinkedProjectItem = self.projects_layout.takeAt(0).widget()
@@ -239,21 +239,19 @@ class LinkedProjectGroup(QWidget):
                     pass
                 else:
                     curr_project.update_state(LinkedProjectItem.PRESENT_REMOTE)
-                self.projects_layout.addWidget(curr_project)
-
-                del projects_dict[project_url]
+                self.add_project_item(curr_project)
+                del projects_dict[project_url] # Remove so that we know it's been added to layout
             else:
                 new_project = LinkedProjectItem(project_url, state=LinkedProjectItem.PRESENT_REMOTE)
                 new_project.unlink_button.clicked.connect(
                 functools.partial(self.handle_unlink_project, widget=new_project)
                     )            
-                self.projects_layout.addWidget(new_project)
+                self.add_project_item(new_project)
         
         for gone_widget in projects_dict.values():
             # Check if it's possible the server just hasn't updated its state with new project yet
             if gone_widget.state == LinkedProjectItem.ADDED_LOCALLY and time.time() - gone_widget.timestamp < 3:
-                self.projects_layout.addWidget(gone_widget)
-                self.projects[gone_widget.project_url] = None
+                self.add_project_item(gone_widget)
             else:
                 gone_widget.deleteLater()
             
@@ -266,13 +264,17 @@ class LinkedProjectGroup(QWidget):
             temp_widget.unlink_button.clicked.connect(
                 functools.partial(self.handle_unlink_project, widget=temp_widget)
                     )     
-            self.projects_layout.addWidget(temp_widget)
-            self.projects[project_url] = None
+            self.add_project_item(temp_widget)
     
     def handle_unlink_project(self, widget: LinkedProjectItem):
         widget.update_state(LinkedProjectItem.DELETED_LOCALLY)
         self.parent_unlink_project_signal.emit((widget.project_url, self.group_name))
         del self.projects[widget.project_url]
+        
+    def add_project_item(self, project_item: LinkedProjectItem):
+        self.projects_layout.addWidget(project_item)
+        if (project_item.state in (LinkedProjectItem.ADDED_LOCALLY, LinkedProjectItem.PRESENT_REMOTE)):
+            self.projects[project_item.project_url] = None
         
 
 class CreateGroupDialog(QDialog):
