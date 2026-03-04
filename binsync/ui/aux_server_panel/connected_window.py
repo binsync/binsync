@@ -187,6 +187,7 @@ class LinkedProjectGroup(QWidget):
             l.info("Finished cloning")
     
     def update_projects(self, projects: dict[str, None]):
+        self.projects = projects
         projects_dict:dict[str, LinkedProjectItem] = {}
         while self.projects_layout.count() > 0:
             curr_project:LinkedProjectItem = self.projects_layout.takeAt(0).widget()
@@ -213,23 +214,26 @@ class LinkedProjectGroup(QWidget):
             # Check if it's possible the server just hasn't updated its state with new project yet
             if gone_widget.state == LinkedProjectItem.ADDED_LOCALLY and time.time() - gone_widget.timestamp < 3:
                 self.projects_layout.addWidget(gone_widget)
+                self.projects[gone_widget.project_url] = None
             else:
                 gone_widget.deleteLater()
             
     def handle_link_project(self):
         link_dialog = LinkProjectDialog(self)
         if link_dialog.exec():
-            project_name = link_dialog.getInput()
-            self.parent_add_project_signal.emit((project_name, self.group_name))
-            temp_widget = LinkedProjectItem(project_name, state=LinkedProjectItem.ADDED_LOCALLY)
+            project_url = link_dialog.getInput()
+            self.parent_add_project_signal.emit((project_url, self.group_name))
+            temp_widget = LinkedProjectItem(project_url, state=LinkedProjectItem.ADDED_LOCALLY)
             temp_widget.unlink_button.clicked.connect(
                 functools.partial(self.handle_unlink_project, widget=temp_widget)
                     )     
             self.projects_layout.addWidget(temp_widget)
+            self.projects[project_url] = None
     
     def handle_unlink_project(self, widget: LinkedProjectItem):
         widget.update_state(LinkedProjectItem.DELETED_LOCALLY)
         self.parent_unlink_project_signal.emit((widget.project_url, self.group_name))
+        del self.projects[widget.project_url]
         
 
 class CreateGroupDialog(QDialog):
