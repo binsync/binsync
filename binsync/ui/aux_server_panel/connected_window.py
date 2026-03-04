@@ -263,8 +263,9 @@ class LinkedProjectsWidget(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._init_widgets()
         self.projects_loaded = False
+
+        self._init_widgets()
 
     def _init_widgets(self):
         self.layout = QVBoxLayout()
@@ -277,7 +278,7 @@ class LinkedProjectsWidget(QWidget):
         self.projects_area_widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.MinimumExpanding)
         self.projects_layout = QVBoxLayout()
         self.projects_layout.setAlignment(Qt.AlignTop)
-        self.projects_layout.addWidget(QLabel("Waiting for server to provide linked projects...")) # This message will be replaced later
+        self.clear_linked_projects()
         self.projects_area_widget.setLayout(self.projects_layout)
         projects_area.setWidget(self.projects_area_widget)
         projects_area.setWidgetResizable(True)
@@ -289,6 +290,22 @@ class LinkedProjectsWidget(QWidget):
         self.layout.addWidget(add_group_button)
         
         self.setLayout(self.layout)
+
+    def clear_linked_projects(self):
+        """
+        Clears out display of linked projects (if they exist) and 
+        replaces with a default message saying we are waiting for
+        the server to provide projects
+        """
+        widgets_to_delete = self.pop_layout_items(self.projects_layout)
+        if widgets_to_delete is None:
+            l.error("projects layout is missing? (in clear_linked_projects)")
+            return
+        for widget in widgets_to_delete:
+            widget.deleteLater()
+
+        self.projects_layout.addWidget(QLabel("Waiting for server to provide linked projects...")) # This message will be replaced later
+        self.projects_loaded = False
         
     @Slot()
     def handle_add_group(self):
@@ -339,7 +356,7 @@ class LinkedProjectsWidget(QWidget):
         """
         Returns a list of all top-level widgets present in the layout and deletes all non-widgets
         """
-        if layout:
+        if layout is not None:
             widgets = []
             while layout.count() > 0:
                 item = layout.takeAt(0)
@@ -351,7 +368,6 @@ class LinkedProjectsWidget(QWidget):
                     for sub_widget in sub_widgets:
                         sub_widget.deleteLater()
             return widgets
-
 
 class AuxServerConnectedWidget(QWidget):
     def __init__(self, parent=None):

@@ -195,6 +195,7 @@ class AuxServerWidget(QDialog):
     @Slot(bool)
     def update_layout(self, connected):
         if not connected:
+            self.connected_widget.linked_projects_view.clear_linked_projects() # Get rid of linked projects. We may connect somewhere else
             self.stacked_layout.setCurrentIndex(self.DISCONNECTED_INDEX)
         else:
             self.connected_widget.linked_projects_view.list_projects.emit() # Load in linked projects
