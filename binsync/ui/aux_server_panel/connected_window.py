@@ -14,6 +14,8 @@ from libbs.ui.qt_objects import (
     QSizePolicy,
     Qt,
     QFileDialog,
+    QObject,
+    QThread
 )
 import git
 import git.exc
@@ -21,6 +23,57 @@ import functools
 import pathlib
 import time
 l = logging.getLogger(__name__)
+
+class ProjectCloneWorker(QObject):
+    finished = Signal()
+    def __init__(self, target_dir:pathlib.Path, projects: dict[str, None]):
+        super().__init__()
+        self.target_dir = target_dir
+        self.projects = projects
+    
+    @Slot()
+    def do_clone(self):
+        l.info("Cloning projects %s into directory %s", list(self.projects.keys()), self.target_dir)
+        # Collect a set of Git projects already in the directory by url
+        existing_repos = set()
+        for f in self.target_dir.iterdir():
+            if not f.is_dir():
+                continue
+            
+            try:
+                repo = git.Repo(str(f))
+                remotes = repo.remotes
+                if len(remotes) == 0:
+                    continue # No remote repo so no chance of conflict
+                existing_repos.add(remotes.origin.url)
+            except git.exc.InvalidGitRepositoryError:
+                pass
+        
+        num_cloned = 0
+        for project in self.projects:
+            if project in existing_repos:
+                continue # No need to re-clone repo, it already exists
+            project_name = project.split("/")[-1]
+            
+            # Take out .git in url
+            if project_name.endswith(".git"):
+                project_name = project_name[:-4]
+                
+            target_path = self.target_dir.joinpath(project_name)
+            if target_path.exists():
+                l.info('Skipped cloning "%s" due to a file already existing at the intended path "%s"',
+                        project, target_path)
+                continue # Can't clone this repo into the path we want because of name conflict
+            
+            try:
+                git.Repo.clone_from(project, str(target_path))
+                num_cloned += 1
+            except git.exc.GitCommandError as e: # Mainly to handle bad urls so that we can clone the other projects
+                l.error("%s",e)
+        l.info("Finished cloning (cloned %d new projects)", num_cloned)
+        self.finished.emit()
+    
+        
 
 class LinkProjectDialog(QDialog):
     def __init__(self, parent=None):
@@ -103,6 +156,11 @@ class LinkedProjectGroup(QWidget):
         self.projects = projects
         self.parent_add_project_signal = add_project_signal
         self.parent_unlink_project_signal = unlink_project_signal
+        
+        # Keeps references to the multiple project cloning workers that may be active at once
+        self.clone_workers:set[ProjectCloneWorker] = set()
+        self.clone_threads:set[QThread] = set()
+        
         self._init_widgets(delete_group_signal)
 
     def _init_widgets(self, delete_group_signal):
@@ -145,46 +203,27 @@ class LinkedProjectGroup(QWidget):
         Will not clone a repo if there is a name conflict with a pre-existing file
         or directory.
         """
+        # Save a copy of projects as they are now as we assume the download 
+        # is clicked when the state looks correct to the user
+        projects_to_clone = self.projects.copy()
         directory_dialog = QFileDialog(self)
         directory_dialog.setFileMode(QFileDialog.Directory)
         if directory_dialog.exec():
             target_dir = pathlib.Path(directory_dialog.selectedFiles()[0]) # Returns a list so we want to get the directory
-            l.info("Cloning projects %s into directory %s", list(self.projects.keys()), target_dir)
-            # Collect a set of Git projects already in the directory by url
-            existing_repos = set()
-            for f in target_dir.iterdir():
-                if not f.is_dir():
-                    continue
-                
-                try:
-                    repo = git.Repo(str(f))
-                    remotes = repo.remotes
-                    if len(remotes) == 0:
-                        continue # No remote repo so no chance of conflict
-                    existing_repos.add(remotes.origin.url)
-                except git.exc.InvalidGitRepositoryError:
-                    pass
-
-            for project in self.projects:
-                if project in existing_repos:
-                    continue # No need to re-clone repo, it already exists
-                project_name = project.split("/")[-1]
-                
-                # Take out .git in url
-                if project_name.endswith(".git"):
-                    project_name = project_name[:-4]
-                    
-                target_path = target_dir.joinpath(project_name)
-                if target_path.exists():
-                    l.info('Skipped cloning "%s" due to a file already existing at the intended path "%s"',
-                           project, target_path)
-                    continue # Can't clone this repo into the path we want because of name conflict
-                
-                try:
-                    git.Repo.clone_from(project, str(target_path))
-                except git.exc.GitCommandError as e: # Mainly to handle bad urls so that we can clone the other projects
-                    l.error("%s",e)
-            l.info("Finished cloning")
+            
+            clone_worker = ProjectCloneWorker(target_dir, projects_to_clone)
+            self.clone_workers.add(clone_worker)
+            clone_thread = QThread()
+            self.clone_threads.add(clone_thread)
+            
+            clone_worker.moveToThread(clone_thread)
+            clone_worker.finished.connect(clone_thread.quit)
+            clone_worker.finished.connect(lambda: self.clone_workers.remove(clone_worker))
+            clone_worker.finished.connect(lambda: self.clone_threads.remove(clone_thread))
+            clone_thread.started.connect(clone_worker.do_clone)
+            
+            clone_thread.start()
+            
     
     def update_projects(self, projects: dict[str, None]):
         self.projects = projects
