@@ -19,6 +19,7 @@ import git
 import git.exc
 import functools
 import pathlib
+import time
 l = logging.getLogger(__name__)
 
 class LinkProjectDialog(QDialog):
@@ -56,6 +57,7 @@ class LinkedProjectItem(QWidget):
         super().__init__(parent)
         self.project_url = project_url
         self.state = state
+        self.timestamp = -1
         self._init_widgets()
         self.update_state(self.state)
         
@@ -81,10 +83,16 @@ class LinkedProjectItem(QWidget):
             l.error("Tried to set to unknown state %d", new_state)
             return
         self.state = new_state
+        # Enable/disable button to unlink project
         if new_state == LinkedProjectItem.DELETED_LOCALLY:
             self.unlink_button.setEnabled(False)
         else:
             self.unlink_button.setEnabled(True)
+        
+        if new_state == LinkedProjectItem.ADDED_LOCALLY or LinkedProjectItem.DELETED_LOCALLY:
+            self.timestamp = time.time() # If timestamp is expired then adhere to the state as given by server
+        
+        
 
 class LinkedProjectGroup(QWidget):
     DELETE_BUTTON = "DELETE_BUTTON"
@@ -186,7 +194,11 @@ class LinkedProjectGroup(QWidget):
         for project_url in projects:
             if project_url in projects_dict:
                 curr_project = projects_dict[project_url]
-                curr_project.update_state(LinkedProjectItem.PRESENT_REMOTE)
+                # Check if it's possible the server just hasn't updated its state yet
+                if curr_project.state == LinkedProjectItem.DELETED_LOCALLY and time.time() - curr_project.timestamp < 3:
+                    pass
+                else:
+                    curr_project.update_state(LinkedProjectItem.PRESENT_REMOTE)
                 self.projects_layout.addWidget(curr_project)
 
                 del projects_dict[project_url]
@@ -198,7 +210,11 @@ class LinkedProjectGroup(QWidget):
                 self.projects_layout.addWidget(new_project)
         
         for gone_widget in projects_dict.values():
-            gone_widget.deleteLater()
+            # Check if it's possible the server just hasn't updated its state with new project yet
+            if gone_widget.state == LinkedProjectItem.ADDED_LOCALLY and time.time() - gone_widget.timestamp < 3:
+                self.projects_layout.addWidget(gone_widget)
+            else:
+                gone_widget.deleteLater()
             
     def handle_link_project(self):
         link_dialog = LinkProjectDialog(self)
@@ -206,6 +222,9 @@ class LinkedProjectGroup(QWidget):
             project_name = link_dialog.getInput()
             self.parent_add_project_signal.emit((project_name, self.group_name))
             temp_widget = LinkedProjectItem(project_name, state=LinkedProjectItem.ADDED_LOCALLY)
+            temp_widget.unlink_button.clicked.connect(
+                functools.partial(self.handle_unlink_project, widget=temp_widget)
+                    )     
             self.projects_layout.addWidget(temp_widget)
     
     def handle_unlink_project(self, widget: LinkedProjectItem):
