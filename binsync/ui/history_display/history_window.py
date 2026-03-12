@@ -13,7 +13,9 @@ from libbs.ui.qt_objects import (
     QAction,
     Qt,
     QColor,
-    QComboBox
+    QComboBox,
+    QLineEdit,
+    QPushButton
 )
 l = logging.getLogger(__name__)
 
@@ -101,9 +103,7 @@ class HistoryDisplayWidget(QDialog):
         super().__init__(parent)
         self.controller = controller
         self._init_widgets()
-        self._display_diff(timescale_options={
-            HistoryDisplayWidget.timescale_mapping["Days"]: 1
-        })
+        self._update_diff()
         
     def _init_widgets(self):
         self.setWindowTitle("History")
@@ -112,16 +112,21 @@ class HistoryDisplayWidget(QDialog):
         top_layout = QHBoxLayout()
         bottom_layout = QVBoxLayout()
         
-        top_layout.addWidget(QLabel("Functions Changed in the Past 1"))
-        timescale_widget = QComboBox()
-        timescale_widget.addItems(list(HistoryDisplayWidget.timescale_mapping.keys()))
-        timescale_widget.setCurrentText("Days")
-        timescale_widget.currentTextChanged.connect(
-            lambda val: self._display_diff(timescale_options={
-                HistoryDisplayWidget.timescale_mapping[val]: 1
-                })
-            )
-        top_layout.addWidget(timescale_widget)
+        top_layout.addWidget(QLabel("Functions Changed in the Past "))
+
+        self.timescale_time_widget = QLineEdit() 
+        self.timescale_time_widget.setText("1")
+        top_layout.addWidget(self.timescale_time_widget)
+
+        self.timescale_type_widget = QComboBox()
+        self.timescale_type_widget.addItems(list(HistoryDisplayWidget.timescale_mapping.keys()))
+        self.timescale_type_widget.setCurrentText("Days")
+        top_layout.addWidget(self.timescale_type_widget)
+
+        self.refresh_button = QPushButton("Refresh")
+        self.refresh_button.clicked.connect(self._update_diff_from_refresh)
+        top_layout.addWidget(self.refresh_button)
+
 
         self.table_view = HistoryTableView(self.controller)
         bottom_layout.addWidget(self.table_view)
@@ -132,7 +137,28 @@ class HistoryDisplayWidget(QDialog):
         
         self.setLayout(main_layout)
         self.resize(1000, 800)
-        
+    
+    def _update_diff_from_refresh(self):
+        self.refresh_button.setEnabled(False)
+        self._update_diff()
+
+    def _update_diff(self):
+        """
+        Calls _display_diff with the values provided in the input widgets
+        """
+        try:
+            timescale_time = int(self.timescale_time_widget.text())
+        except ValueError:
+            return # Wait for an actual time value to be entered
+        else:
+            if timescale_time < 0:
+                return # We can't see into the future
+
+        timescale_type = self.timescale_type_widget.currentText()
+        self._display_diff(timescale_options={
+            HistoryDisplayWidget.timescale_mapping[timescale_type]: timescale_time
+        })
+
     def _display_diff(self, timescale_options: dict[str, int]):
         changed_functions = []
         client = self.controller.client
@@ -160,4 +186,5 @@ class HistoryDisplayWidget(QDialog):
             [(func.addr,func.name) for func in changed_functions],
             [QColor(0,0,0,0) for _ in changed_functions]
         )
+        self.refresh_button.setEnabled(True)
                 
