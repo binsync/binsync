@@ -75,7 +75,7 @@ class ClientWorker(QObject):
     
     @Slot()
     @_client_required
-    def get_linked_projects(self):
+    def update_linked_projects(self):
         linked_projects = self.server_client.list_projects() # type: ignore
         self.projects_list.emit(linked_projects)
     
@@ -86,7 +86,7 @@ class ClientWorker(QObject):
         result = self.server_client.link_project(url, group) # type: ignore
         if result[0] == False:
             l.error(result[1])
-        self.get_linked_projects()
+        self.update_linked_projects()
     
     @Slot(tuple)
     @_client_required
@@ -95,7 +95,7 @@ class ClientWorker(QObject):
         result = self.server_client.unlink_project(url, group) # type: ignore
         if result[0] == False:
             l.error(result[1])
-        self.get_linked_projects()
+        self.update_linked_projects()
     
     @Slot(str)
     @_client_required
@@ -103,7 +103,7 @@ class ClientWorker(QObject):
         result = self.server_client.create_group(group_name) # type: ignore
         if result[0] == False:
             l.error(result[1])
-        self.get_linked_projects()
+        self.update_linked_projects()
         
     @Slot(str)
     @_client_required
@@ -111,7 +111,7 @@ class ClientWorker(QObject):
         result = self.server_client.delete_group(group_name) # type: ignore
         if result[0] == False:
             l.error(result[1])
-        self.get_linked_projects()
+        self.update_linked_projects()
     
     @Slot() 
     @_client_required
@@ -151,7 +151,7 @@ class AuxServerWidget(QDialog):
         """
         self.connect_signal.connect(client_worker.connect_client)
         self.disconnect_signal.connect(client_worker.disconnect_client)
-        self.connected_widget.linked_projects_view.list_projects.connect(client_worker.get_linked_projects)
+        self.connected_widget.linked_projects_view.list_projects.connect(client_worker.update_linked_projects)
         self.connected_widget.linked_projects_view.add_project.connect(client_worker.link_project)
         self.connected_widget.linked_projects_view.unlink_project.connect(client_worker.unlink_project)
         self.connected_widget.linked_projects_view.add_group.connect(client_worker.add_group)
