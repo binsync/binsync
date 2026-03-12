@@ -13,7 +13,7 @@ from libbs.ui.qt_objects import (
     QAction,
     Qt,
     QColor,
-    QFont
+    QComboBox
 )
 l = logging.getLogger(__name__)
 
@@ -91,11 +91,19 @@ class HistoryTableView(BinsyncTableView):
         menu.popup(self.mapToGlobal(event.pos()))
 
 class HistoryDisplayWidget(QDialog):
-    def __init__(self,controller:BSController=None,parent=None):
+    timescale_mapping = {
+        "Minutes": "minutes",
+        "Hours": "hours",
+        "Days": "days",
+        "Weeks": "weeks"
+    }
+    def __init__(self, controller:BSController=None, parent=None):
         super().__init__(parent)
         self.controller = controller
         self._init_widgets()
-        self._display_diff()
+        self._display_diff(timescale_options={
+            HistoryDisplayWidget.timescale_mapping["Days"]: 1
+        })
         
     def _init_widgets(self):
         self.setWindowTitle("History")
@@ -104,8 +112,17 @@ class HistoryDisplayWidget(QDialog):
         top_layout = QHBoxLayout()
         bottom_layout = QVBoxLayout()
         
-        top_layout.addWidget(QLabel("Functions Changed in the Past Day"))
-        
+        top_layout.addWidget(QLabel("Functions Changed in the Past 1"))
+        timescale_widget = QComboBox()
+        timescale_widget.addItems(list(HistoryDisplayWidget.timescale_mapping.keys()))
+        timescale_widget.setCurrentText("Days")
+        timescale_widget.currentTextChanged.connect(
+            lambda val: self._display_diff(timescale_options={
+                HistoryDisplayWidget.timescale_mapping[val]: 1
+                })
+            )
+        top_layout.addWidget(timescale_widget)
+
         self.table_view = HistoryTableView(self.controller)
         bottom_layout.addWidget(self.table_view)
         
@@ -116,13 +133,13 @@ class HistoryDisplayWidget(QDialog):
         self.setLayout(main_layout)
         self.resize(1000, 800)
         
-    def _display_diff(self):
+    def _display_diff(self, timescale_options: dict[str, int]):
         changed_functions = []
         client = self.controller.client
         if client is None:
             l.error("Client is None when trying display diff")
             return
-        previous_time =  (datetime.now(timezone.utc)-timedelta(days=1)).timestamp()
+        previous_time =  (datetime.now(timezone.utc)-timedelta(**timescale_options)).timestamp()
         old_commit = client.find_commit_before_ts(client.repo, previous_time,user_name=client.master_user)
         # Because we're not grabbing from the newest commit we don't want to mess around with the cache
         old_state = client.get_state(priority = SchedSpeed.FAST, fetch_cache=False, save_cache=False, commit_hash=old_commit)
