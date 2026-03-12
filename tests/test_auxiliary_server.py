@@ -59,11 +59,11 @@ class ServerThreadManager():
     def __init__(self, server:Server):
         self.server = make_server(server.host, server.port, server.app)
         
-    def __enter__(self):
+    def enter(self):
         self._thread = threading.Thread(target=self.server.serve_forever)
         self._thread.start()
         
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def exit(self):
         self.server.shutdown()
         self._thread.join()
 
@@ -73,9 +73,16 @@ class MockUser(QWidget):
     '''
     connect_signal = Signal(tuple)
     stop_signal = Signal()
+    add_group = Signal(str)
+    delete_group = Signal(str)
+    link_project = Signal(tuple)
+    unlink_project = Signal(tuple)
+    list_projects = Signal()
+    
     def __init__(self, controller):
         super().__init__()
         self.beliefs = {}
+        self.linked_projects = {}
         
         self.worker = ClientWorker(controller)
         self.thread = QThread()
@@ -83,9 +90,15 @@ class MockUser(QWidget):
         self.worker.moveToThread(self.thread)
         
         self.worker.context_change.connect(self._update_beliefs)
-        
+        self.worker.projects_list.connect(self._update_linked_projects)
+
         self.connect_signal.connect(self.worker.connect_client)
         self.stop_signal.connect(self.worker.stop)
+        self.add_group.connect(self.worker.add_group)
+        self.delete_group.connect(self.worker.delete_group)
+        self.link_project.connect(self.worker.link_project)
+        self.unlink_project.connect(self.worker.unlink_project)
+        self.list_projects.connect(self.worker.get_linked_projects)
         
         self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
@@ -99,6 +112,10 @@ class MockUser(QWidget):
     @Slot(dict)
     def _update_beliefs(self, new_beliefs):
         self.beliefs = new_beliefs
+        
+    @Slot(dict)
+    def _update_linked_projects(self, new_projects_list):
+        self.linked_projects = new_projects_list
         
 
 class TestAuxServer(unittest.TestCase):
@@ -115,9 +132,13 @@ class TestAuxServer(unittest.TestCase):
         # Note: Not all clients may be present in self.clients as some tests shut down the clients early
         for user in self.users:
             user.shutdown()
-        time.sleep(3) # Give time for clients' blocking requests to finish (server has shut down already) so that they can begin emitting shutdown signals
-        # TODO: figure out a better way to do this so that there isn't a forced 3sec sleep every testcase
+        time.sleep(1) # Give time for clients to finish sending disconnects so that they can begin emitting shutdown signals
         self.app.processEvents() # Process events so that threads can receive their quit signal
+        
+        try:
+            self.server_thread_manager.exit()
+        except:
+            pass
         
         try:
             self.app
@@ -131,8 +152,9 @@ class TestAuxServer(unittest.TestCase):
         Make sure that the server can start up without issues.
         """
         server = Server(self.HOST, self.PORT)
-        with ServerThreadManager(server):
-            time.sleep(1)
+        self.server_thread_manager = ServerThreadManager(server)
+        self.server_thread_manager.enter()
+        time.sleep(1)
         assert server.store._user_map == {} # Validate that the initial map of user functions is empty
         assert server.store._user_count == 0 # Validate that the initial user count is 0
         
@@ -142,15 +164,16 @@ class TestAuxServer(unittest.TestCase):
         """
             
         server = Server(self.HOST, self.PORT)
-        with ServerThreadManager(server):
-            self.users.append(MockUser(MockController("Alice")))
-            
-            self.users[0].connect_signal.emit((self.HOST, self.PORT))
-            time.sleep(1)
-            assert server.store._user_count == 1 # Verify that the server received the connection
-            self.users[0].stop_signal.emit()
-            time.sleep(1)
-            assert server.store._user_count == 0 # Verify that server received disconnection
+        self.server_thread_manager = ServerThreadManager(server)
+        self.server_thread_manager.enter()
+        self.users.append(MockUser(MockController("Alice")))
+        
+        self.users[0].connect_signal.emit((self.HOST, self.PORT))
+        time.sleep(1)
+        assert server.store._user_count == 1 # Verify that the server received the connection
+        self.users[0].stop_signal.emit()
+        time.sleep(1)
+        assert server.store._user_count == 0 # Verify that server received disconnection
     
     def test_many_connections(self):
         """
@@ -159,186 +182,194 @@ class TestAuxServer(unittest.TestCase):
         num_connections = 10
         server = Server(self.HOST, self.PORT)
         controllers:list[MockController] = []
-        with ServerThreadManager(server):
-            # Set up contexts
-            for i in range(num_connections):
-                controller = MockController(f"User_{i}")
-                controller.deci._update_context({
-                    "address":0x40000+10*i,
-                    "function_address":0x500000+10*i
-                })
-                controllers.append(controller)
-                self.users.append(MockUser(controller))
-            
-            # Start up client threads
-            for user in self.users:
-                user.connect_signal.emit((self.HOST, self.PORT))
-            time.sleep(2)
-            # Make sure that each user's function context is present in the server's storage
-            contexts_dict, _ = server.store.getUserData()
-            for controller in controllers:
-                user_entry = contexts_dict[controller.client.master_user]
-                assert user_entry["addr"] == controller.deci._context.addr
-                assert user_entry["func_addr"] == controller.deci._context.func_addr
+        self.server_thread_manager = ServerThreadManager(server)
+        self.server_thread_manager.enter()
+        # Set up contexts
+        for i in range(num_connections):
+            controller = MockController(f"User_{i}")
+            controller.deci._update_context({
+                "address":0x40000+10*i,
+                "function_address":0x500000+10*i
+            })
+            controllers.append(controller)
+            self.users.append(MockUser(controller))
+        
+        # Start up client threads
+        for user in self.users:
+            user.connect_signal.emit((self.HOST, self.PORT))
+        time.sleep(2)
+        # Make sure that each user's function context is present in the server's storage
+        contexts_dict, _ = server.store.getUserData()
+        for controller in controllers:
+            user_entry = contexts_dict[controller.client.master_user]
+            assert user_entry["addr"] == controller.deci._context.addr
+            assert user_entry["func_addr"] == controller.deci._context.func_addr
     
     def test_context_change(self):
         """
         Verify that clients contact the server when their context changes
         """ 
         server = Server(self.HOST, self.PORT)
-        with ServerThreadManager(server):
-            controller = MockController("Alice")
-            self.users.append(MockUser(controller))
-            for user in self.users:
-                user.connect_signal.emit((self.HOST, self.PORT))
-            time.sleep(1)
-            
-            contexts_dict, _ = server.store.getUserData()
-            user_entry = contexts_dict[controller.client.master_user]
-            assert user_entry["addr"] == controller.deci._context.addr
-            assert user_entry["func_addr"] == controller.deci._context.func_addr
-            
-            # Update!
-            controller.deci._update_context({
-                "address":0x444444,
-                "function_address":0x454545
-            })
-            time.sleep(1)
-            
-            contexts_dict, _ = server.store.getUserData()
-            user_entry = contexts_dict[controller.client.master_user]
-            assert user_entry["addr"] == controller.deci._context.addr
-            assert user_entry["func_addr"] == controller.deci._context.func_addr
+        self.server_thread_manager = ServerThreadManager(server)
+        self.server_thread_manager.enter()
+        controller = MockController("Alice")
+        self.users.append(MockUser(controller))
+        for user in self.users:
+            user.connect_signal.emit((self.HOST, self.PORT))
+        time.sleep(1)
+        
+        contexts_dict, _ = server.store.getUserData()
+        user_entry = contexts_dict[controller.client.master_user]
+        assert user_entry["addr"] == controller.deci._context.addr
+        assert user_entry["func_addr"] == controller.deci._context.func_addr
+        
+        # Update!
+        controller.deci._update_context({
+            "address":0x444444,
+            "function_address":0x454545
+        })
+        time.sleep(1)
+        
+        contexts_dict, _ = server.store.getUserData()
+        user_entry = contexts_dict[controller.client.master_user]
+        assert user_entry["addr"] == controller.deci._context.addr
+        assert user_entry["func_addr"] == controller.deci._context.func_addr
                 
     def test_see_other_clients(self):
         num_connections = 20
         server = Server(self.HOST, self.PORT)
         
-        with ServerThreadManager(server):
-            # Set up contexts
-            controllers:list[MockController] = []
-            for i in range(num_connections):
-                controller = MockController(f"User_{i}")
-                controller.deci._update_context({
-                    "address":0x40000+10*i,
-                    "function_address":0x500000+10*i
-                })
-                controllers.append(controller)
-                self.users.append(MockUser(controller))
-            
-            for user in self.users:
-                user.connect_signal.emit((self.HOST, self.PORT))
-            time.sleep(2)
-            
-            self.app.processEvents() # required for beliefs to update in this test
-            
-            # Make sure beliefs have been updated to something
-            assert self.users[0].beliefs != {}
-            # Make sure everyone's beliefs are the same
-            for i in range(len(self.users)-1):
-                assert self.users[i].beliefs == self.users[i+1].beliefs
-            # Make sure everyone's beliefs match up with the server
-            assert self.users[0].beliefs == server.store._user_map  
-    
-    # TODO: re-implement test cases for linking & unlinking projects. 
-    # Modifications to ClientWorker broke these tests so they are disabled for now.
-    # def test_link_unlink_projects(self):
-    #     '''
-    #     Test: Client creates a new group, links a project to that group, then deletes the group. 
-    #     There should be errors when deleting the group a second time and when trying to unlink the project (as it is already deleted).
-    #     '''
-            
-    #     server = Server(self.HOST, self.PORT)
-    #     project_url = "https://github.com/binsync/binsync.git"
-    #     group_name = "binsync"
-    #     with ServerThreadManager(server):
-    #         self.users.append(MockUser(MockController("Alice")))
-    #         for user in self.users:
-    #             user.connect_signal.emit((self.HOST, self.PORT))
-    #         time.sleep(1)
-            
-            
-    #         # Client makes new group
-    #         group_create_result = client.create_group(group_name)
-    #         assert group_create_result == (True, "")
-            
-    #         # Client links a project
-    #         link_result = client.link_project(project_url, group_name)
-    #         assert link_result == (True, "")
-            
-    #         # Validate projects list contains only our one project
-    #         project_list = client.list_projects()
-    #         assert project_list == {
-    #             ServerStore.DEFAULT_GROUPNAME: {},
-    #             group_name: {
-    #                 project_url: None
-    #             }
-    #         }
+        self.server_thread_manager = ServerThreadManager(server)
+        self.server_thread_manager.enter()
+        # Set up contexts
+        controllers:list[MockController] = []
+        for i in range(num_connections):
+            controller = MockController(f"User_{i}")
+            controller.deci._update_context({
+                "address":0x40000+10*i,
+                "function_address":0x500000+10*i
+            })
+            controllers.append(controller)
+            self.users.append(MockUser(controller))
         
-    #         # Client deletes the group
-    #         group_delete_result_1 = client.delete_group(group_name)
-    #         assert group_delete_result_1 == (True, "")
-            
-    #         # Client deletes the group (should error)
-    #         group_delete_result_2 = client.delete_group(group_name)
-    #         assert group_delete_result_2[0] == False
-            
-    #         # Client unlinks the project (should error)
-    #         unlink_result = client.unlink_project(project_url)
-    #         assert unlink_result[0] == False
-            
-    #         # Validate projects list is empty
-    #         project_list = client.list_projects()
-    #         assert project_list == {
-    #             ServerStore.DEFAULT_GROUPNAME: {}
-    #         }
+        for user in self.users:
+            user.connect_signal.emit((self.HOST, self.PORT))
+        time.sleep(2)
+        
+        self.app.processEvents() # required for beliefs to update in this test
+        
+        # Make sure beliefs have been updated to something
+        assert self.users[0].beliefs != {}
+        # Make sure everyone's beliefs are the same
+        for i in range(len(self.users)-1):
+            assert self.users[i].beliefs == self.users[i+1].beliefs
+        # Make sure everyone's beliefs match up with the server
+        assert self.users[0].beliefs == server.store._user_map  
     
-    # def test_multi_user_link_unlink_projects(self):
-    #     '''
-    #     Client A links a project, then Client B lists out linked projects.
-    #     Client C then unlinks the project and Client B lists out linked projects again.
-    #     '''
-    #     def client_task(client:ServerClient):
-    #         client.run()
+    # Modifications to ClientWorker broke these tests so they are disabled for now.
+    def test_link_unlink_projects(self):
+        '''
+        Test: Client creates 2 new groups, links a project to each group, then deletes one group and unlinks the project in the other group
+        '''
             
-    #     server = Server(self.HOST, self.PORT)
-    #     with ServerThreadManager(server):
-    #         client_a = ServerClient(self.HOST, self.PORT, MockController("Alice"), lambda *args:None)
-    #         self.clients.append(client_a)
-    #         client_b = ServerClient(self.HOST, self.PORT, MockController("Bob"), lambda *args:None)
-    #         self.clients.append(client_b)
-    #         client_c = ServerClient(self.HOST, self.PORT, MockController("Carol"), lambda *args:None)
-    #         self.clients.append(client_c)
-            
-    #         for client in self.clients:
-    #             self.client_threads.append(threading.Thread(target=client_task, args=(client, )))
+        server = Server(self.HOST, self.PORT)
+        binsync_url = "https://github.com/binsync/binsync.git"
+        binsync_group_name = "binsync"
+        
+        libbs_url = "https://github.com/binsync/libbs.git"
+        libbs_group_name = "libbs"
+        self.server_thread_manager = ServerThreadManager(server)
+        self.server_thread_manager.enter()
+        
+        user = MockUser(MockController("Alice"))
+        self.users.append(user)
+        
+        for user in self.users:
+            user.connect_signal.emit((self.HOST, self.PORT))
+        
+        # Client makes new groups
+        user.add_group.emit(binsync_group_name)
+        user.add_group.emit(libbs_group_name)
+        
+        # Client links projects
+        user.link_project.emit((binsync_url, binsync_group_name))
+        user.link_project.emit((libbs_url, libbs_group_name))
+        
+        # Validate projects list contains only our one project
+        user.list_projects.emit()
+        time.sleep(1) # Give time for user and server to finish up their communication
+        self.app.processEvents()
+        assert user.linked_projects == {
+            ServerStore.DEFAULT_GROUPNAME: {},
+            binsync_group_name: {
+                binsync_url: None
+            },
+            libbs_group_name: {
+                libbs_url: None
+            }
+        }
 
-    #         for client_thread in self.client_threads:
-    #             client_thread.start()
+        # Client deletes a group
+        user.delete_group.emit(binsync_group_name)
+        
+        # Client unlinks a project 
+        user.unlink_project.emit((libbs_url, libbs_group_name))
+        
+        # Validate projects list is empty
+        user.list_projects.emit()
+        time.sleep(1) # Give time for user and server to finish up their communication
+        self.app.processEvents()
+        assert user.linked_projects == {
+            ServerStore.DEFAULT_GROUPNAME: {},
+            libbs_group_name: {}
+        }
+    
+    def test_multi_user_link_unlink_projects(self):
+        '''
+        User A links a project, then User B lists out linked projects.
+        User C then unlinks the project and User B lists out linked projects again.
+        '''
             
-    #         project_url = "https://github.com/binsync/binsync.git"
-            
-    #         # Client A links project
-    #         link_result = client_a.link_project(project_url)
-    #         assert link_result == (True, "")
-            
-    #         # Client B lists out projects
-    #         list_result_1 = client_b.list_projects()
-    #         assert list_result_1 == {
-    #             ServerStore.DEFAULT_GROUPNAME: {
-    #                 project_url: None
-    #             }
-    #         }
-            
-    #         # Client C unlinks project
-    #         unlink_result = client_c.unlink_project(project_url)
-    #         assert unlink_result == (True, "")
-            
-    #         # Client B lists out projects
-    #         list_result_2 = client_b.list_projects()
-    #         assert list_result_2 == {
-    #             ServerStore.DEFAULT_GROUPNAME: {}
-    #         }
+        server = Server(self.HOST, self.PORT)
+        self.server_thread_manager = ServerThreadManager(server)
+        self.server_thread_manager.enter()
+        user_a = MockUser(MockController("Alice"))
+        self.users.append(user_a)
+        user_b = MockUser(MockController("Bob"))
+        self.users.append(user_b)
+        user_c = MockUser(MockController("Carol"))
+        self.users.append(user_c)
+        
+        for user in self.users:
+            user.connect_signal.emit((self.HOST, self.PORT))
+        
+        project_url = "https://github.com/binsync/binsync.git"
+        
+        # Client A links project
+        user_a.link_project.emit((project_url, ServerStore.DEFAULT_GROUPNAME))
+        time.sleep(0.5) # Give time for server to receive the project
+        
+        # Client B lists out projects
+        user_b.list_projects.emit()
+        time.sleep(1)
+        self.app.processEvents()
+        self.assertEqual(user_b.linked_projects, {
+            ServerStore.DEFAULT_GROUPNAME: {
+                project_url: None
+            }
+        })
+        
+        # Client C unlinks project
+        user_c.unlink_project.emit((project_url, ServerStore.DEFAULT_GROUPNAME))
+        time.sleep(0.5) # Give time for server to receive the unlink
+        
+        # Client B lists out projects
+        user_b.list_projects.emit()
+        time.sleep(1)
+        self.app.processEvents()
+        assert user_b.linked_projects == {
+            ServerStore.DEFAULT_GROUPNAME: {}
+        }
             
 if __name__ == "__main__":
     unittest.main(argv=sys.argv)
