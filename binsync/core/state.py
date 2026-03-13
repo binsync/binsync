@@ -717,3 +717,40 @@ class State:
                 return func
         else:
             return None
+        
+    def diff_function_artifacts(self, other_state: "State", func_addr: int):
+        # A lot of repetition so this is just a helper to get the relevant attributes 
+        def get_header_attr(func, attr):
+            return getattr(func.header, attr, None) if func and func.header else None
+        
+        # Get the comments where each comment is a dictionary 
+        get_comments = lambda state_obj : {addr: cmt.comment for addr, cmt in state_obj.get_func_comments(func_addr).items()}
+
+        func_1 = self.get_function(func_addr)
+        func_2 = other_state.get_function(func_addr)
+
+        diffs = {
+            'name': {
+                # can change this to use helper func since func and func.header should have same name 
+                'master': func_1.name if func_1 else None,
+                'target': func_2.name if func_2 else None
+            },
+            'args': {
+                'master': get_header_attr(func_1, 'args') or {},
+                'target': get_header_attr(func_2, 'args') or {}
+            },
+            'type': {
+                'master': get_header_attr(func_1, 'type'),
+                'target': get_header_attr(func_2, 'type')
+            },
+            'stack_vars': {
+                'master': func_1.stack_vars if func_1 else {},
+                'target': func_2.stack_vars if func_2 else {}
+            },
+            'comments': {
+                'master': get_comments(self),
+                'target': get_comments(other_state)
+            }
+        }
+
+        return diffs

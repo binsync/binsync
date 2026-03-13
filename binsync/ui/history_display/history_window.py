@@ -129,18 +129,12 @@ class HistoryDisplayWidget(QDialog):
         
         curr_state = self.controller.get_state()
         
-        # Get the comments where each comment is a dictionary 
-        get_comments = lambda state_obj, func_addr: {addr: cmt.comment for addr, cmt in state_obj.get_func_comments(func_addr).items()}
-        
         for addr, new_function in curr_state.functions.items():
             if addr not in old_state.functions:
                 # Is this case possible?
                 changed_functions.append(new_function)
             else:
-                diffs = self.controller.get_function_comment_diffs(
-                    new_function, get_comments(curr_state, addr),
-                    old_state.functions[addr], get_comments(old_state, addr),
-                    )
+                diffs = curr_state.diff_function_artifacts(old_state, addr)
                 for diff_dict in diffs.values():
                     if diff_dict["master"] != diff_dict["target"]:
                         changed_functions.append(new_function)
