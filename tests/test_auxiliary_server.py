@@ -98,7 +98,7 @@ class MockUser(QWidget):
         self.delete_group.connect(self.worker.delete_group)
         self.link_project.connect(self.worker.link_project)
         self.unlink_project.connect(self.worker.unlink_project)
-        self.list_projects.connect(self.worker.get_linked_projects)
+        self.list_projects.connect(self.worker.update_linked_projects)
         
         self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
