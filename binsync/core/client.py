@@ -476,15 +476,8 @@ class Client:
         # artifacts to retrieve. As the cache is using a defaultdict() we will
         # get an empty state back when querying from the cache, and we always
         # get this empty state as we don't update the cache.
-        
-        # I am not sure what this code is doing but I had the expectation that 
-        # no_cache would keep you from caching results so I've commented it out. 
-        # This behavior is incompatible with the HistoryDisplayWidget's use of
-        # older commits, as we don't want those to be saved to the cache.
-        # Also, doesn't atomic_git_action handle caching already?
-        # TODO figure out the original intention of this code to see how to restore it
-        # if no_cache or not self.cache.get_state(user):
-        #     self.cache.set_state(state, user=user)
+        if (no_cache or not self.cache.get_state(user)) and not no_save_cache:
+            self.cache.set_state(state, user=user)
 
         return state
 
