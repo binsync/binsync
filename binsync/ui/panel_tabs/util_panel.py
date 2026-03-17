@@ -22,6 +22,8 @@ from libbs.ui.qt_objects import (
     QDialog,
     QLineEdit,
     QDialogButtonBox,
+    QTimer,
+    Slot
 )
 from libbs.artifacts import (
     Context
@@ -33,61 +35,11 @@ from binsync.controller import BSController
 from binsync.extras import EXTRAS_AVAILABLE
 
 l = logging.getLogger(__name__)
-
-class AuxServerDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.first = QLineEdit("[::1]",self)
-        self.second = QLineEdit("7962",self)
-        buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
-        
-        layout = QVBoxLayout()
-        inputs_layout = QHBoxLayout()
-        
-        host_layout = QVBoxLayout()
-        host_layout.addWidget(QLabel("Host"))
-        host_layout.addWidget(self.first)
-        inputs_layout.addLayout(host_layout)
-        
-        port_layout = QVBoxLayout()
-        port_layout.addWidget(QLabel("Port"))
-        port_layout.addWidget(self.second)
-        inputs_layout.addLayout(port_layout)
-
-        layout.addLayout(inputs_layout)
-        
-        layout.addWidget(buttonBox)
-        buttonBox.accepted.connect(self.accept)
-        buttonBox.rejected.connect(self.reject)
-        
-        self.setLayout(layout)
-        
-    def getInputs(self)->tuple[str,str]:
-        return (self.first.text(), self.second.text())
-        
-
-# There are type warnings with the display_clients signal when ClientWorker is placed at the bottom
-class ClientWorker(QObject):
-    finished = Signal()
-    context_change = Signal(dict)
-    def __init__(self,host:str,port:int,controller):
-        super().__init__()
-        from binsync.extras.aux_server.aux_client import ServerClient
-
-        self.server_client = ServerClient(host,port,controller,self.client_context_callback)
-        
-    def run(self):
-        self.server_client.run()
-        self.finished.emit()
-    
-    def client_context_callback(self, contexts: dict[str,dict[str,int]]):
-        self.context_change.emit(contexts)
-    
-    def stop(self):
-        self.server_client.stop()
         
 class QUtilPanel(QWidget):
-    display_clients = Signal(ClientWorker)
+    connected_to_server = Signal(bool)
+    server_context_change = Signal(dict) # type is dict[str,dict[str,int]] but we get a TypeError: bytes or ASCII string expected not 'types.GenericAlias'
+    
     def __init__(self, controller: BSController, parent=None):
         super().__init__(parent)
         self.controller = controller
@@ -244,6 +196,8 @@ class QUtilPanel(QWidget):
     #
 
     def _create_extras_group(self):
+        from binsync.ui.aux_server_panel.aux_server_window import ClientWorker
+
         extras_group = QGroupBox()
         extras_layout = QVBoxLayout()
         extras_group.setTitle("BS Extras")
@@ -257,8 +211,17 @@ class QUtilPanel(QWidget):
         extras_layout.addWidget(progress_view_btn)
 
         # Binsync server
-        self.client_thread = None
-        self._connect_to_server_btn = QPushButton("Connect to Server...")
+        self.client_connected = False
+        self.client_worker = ClientWorker(self.controller)
+        
+        self.client_thread = QThread()
+        self.client_worker.moveToThread(self.client_thread)
+        self.client_worker.context_change.connect(lambda new_context: self.server_context_change.emit(new_context))
+        self.client_worker.client_connected.connect(lambda connected: self.connected_to_server.emit(connected))
+        
+        self.client_worker.finished.connect(self.client_thread.quit)
+        self.client_thread.start()
+        self._connect_to_server_btn = QPushButton("Auxiliary Server")
         self._connect_to_server_btn.clicked.connect(self._handle_connection)
         extras_layout.addWidget(self._connect_to_server_btn)
 
@@ -267,37 +230,13 @@ class QUtilPanel(QWidget):
         return extras_group
 
     def _handle_connection(self):
-        if not self.client_thread:
-            # User is trying to connect
-            dialog = AuxServerDialog()
-            if dialog.exec():
-                host, port_str = dialog.getInputs()
-                if not port_str.isdigit():
-                    l.info("Port is not a valid number.")
-                    return
-                port = int(port_str)
-            else:
-                # Connection was cancelled
-                return
-            self.client_worker = ClientWorker(host,port,self.controller)
-            self.client_thread = QThread()
-            # Text is set up here because existence of thread controls the behavior of the button
-            self._connect_to_server_btn.setText("Disconnect From Server...") 
-            self.client_worker.moveToThread(self.client_thread)
-            self.client_thread.started.connect(self.client_worker.run)
-            self.client_worker.finished.connect(self.client_thread.quit)
-            self.client_thread.start()
-            self.display_clients.emit(self.client_worker) # Signal the activity table that it's time to display the current addresses column
-        else:
-            # User is trying to disconnect
-            if self.client_worker: # Small possibility that client worker crashed on init and so is not a valid ClientWorker
-                self.client_worker.stop()
-                self.client_worker = None
-            self.client_thread.quit()
-            self.client_thread.wait() # Issue - will block on thread cleanup
-            self.client_thread = None
-            self._connect_to_server_btn.setText("Connect to Server...") # Text is hardcoded and duplicates setup - good idea?
-            self.display_clients.emit(None) # Signal the activity table that it's time to hide the current addresses column
+        from binsync.ui.aux_server_panel.aux_server_window import AuxServerWidget
+
+        dialog = AuxServerWidget(self.client_worker.server_client is not None, self)
+        dialog.connect_worker(self.client_worker)
+        dialog.startup_emits()
+        dialog.show()
+        dialog.exec()
 
     def _handle_progress_view(self):
         from ..progress_graph.progress_window import ProgressGraphWidget

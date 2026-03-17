@@ -93,26 +93,44 @@ class GhidraRemoteInterfaceWrapper:
     @staticmethod
     def start_gui_in_new_process():
         _l.info("Starting the Ghidra BinSync UI in a new process...")
-        # first attempt to use the binsync binary
-        proc = subprocess.Popen(
+        # Try command sets in order of preference.
+        # We prefer sys.executable to ensure the current Python environment is used.
+        commands = [
+            [sys.executable, "-m", "binsync", "-s", "ghidra"],
             ["binsync", "-s", "ghidra"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-        sleep(1)
+            ["python", "-m", "binsync", "-s", "ghidra"],
+        ]
+
+        proc = None
+        for cmd in commands:
+            _l.info(f"Attempting to start UI with command: {' '.join(cmd)}")
+            try:
+                proc = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+                sleep(1)
+                
+                # Check if process is still running after 1 second
+                # poll() returns None if process is running
+                if proc.poll() is None:
+                    _l.info(f"Successfully started UI process with PID {proc.pid}")
+                    break
+                else:
+                    _l.warning(f"Process exited prematurely: {proc.stderr.read()}")
+            except Exception as e:
+                _l.warning(f"Failed to run command '{cmd[0]}': {e}")
+                
+        if proc is None:
+             raise RuntimeError("Exhausted all methods to start the Ghidra BinSync UI.")
+        
+        # Check if the process exited prematurely (if the loop finished without breaking)
         if proc.poll() is not None:
-            _l.warning("Unable to start the Ghidra BinSync UI using the 'binsync' binary: %s", proc.stderr.read())
-            # fallback to starting the UI using python modules
-            proc = subprocess.Popen(
-                ["python", "-m", "binsync", "-s", "ghidra"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            sleep(1)
-            if proc.poll() is not None:
-                raise RuntimeError(f"Unable to start the new Python process for the Ghidra BinSync UI: {proc.stderr.read()}")
+             error_output = proc.stderr.read() if proc.stderr else "Unknown error"
+             raise RuntimeError(f"Exhausted all methods to start the Ghidra BinSync UI. Last error: {error_output}")
+             
         _l.info("Ghidra BinSync UI process started with PID %d", proc.pid)
 
     @property
