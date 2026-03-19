@@ -125,7 +125,7 @@ class HistoryDisplayWidget(QDialog):
         previous_time =  (datetime.now(timezone.utc)-timedelta(days=1)).timestamp()
         old_commit = client.find_commit_before_ts(client.repo, previous_time,user_name=client.master_user)
         # Because we're not grabbing from the newest commit we don't want to mess around with the cache
-        old_state = client.get_state(priority = SchedSpeed.FAST, no_cache=True, no_save_cache=True, commit_hash=old_commit)
+        old_state = client.get_state(priority = SchedSpeed.FAST, no_cache=True, save_cache=False, commit_hash=old_commit)
         
         curr_state = self.controller.get_state()
         
