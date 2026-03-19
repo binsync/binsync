@@ -15,7 +15,9 @@ from libbs.ui.qt_objects import (
     QColor,
     QComboBox,
     QLineEdit,
-    QPushButton
+    QPushButton,
+    QDateTimeEdit,
+    QDateTime,
 )
 l = logging.getLogger(__name__)
 
@@ -112,21 +114,33 @@ class HistoryDisplayWidget(QDialog):
         top_layout = QHBoxLayout()
         bottom_layout = QVBoxLayout()
         
-        top_layout.addWidget(QLabel("Functions Changed in the Past "))
+        top_layout.addWidget(QLabel("Functions Changed From "))
 
-        self.timescale_time_widget = QLineEdit() 
-        self.timescale_time_widget.setText("1")
-        top_layout.addWidget(self.timescale_time_widget)
+        # self.timescale_time_widget = QLineEdit() 
+        # self.timescale_time_widget.setText("1")
+        # top_layout.addWidget(self.timescale_time_widget)
 
-        self.timescale_type_widget = QComboBox()
-        self.timescale_type_widget.addItems(list(HistoryDisplayWidget.timescale_mapping.keys()))
-        self.timescale_type_widget.setCurrentText("Days")
-        top_layout.addWidget(self.timescale_type_widget)
+        # self.timescale_type_widget = QComboBox()
+        # self.timescale_type_widget.addItems(list(HistoryDisplayWidget.timescale_mapping.keys()))
+        # self.timescale_type_widget.setCurrentText("Days")
+        # top_layout.addWidget(self.timescale_type_widget)
+
+        self.from_date_widget = QDateTimeEdit()
+        self.from_date_widget.setCalendarPopup(True)
+        self.from_date_widget.setDateTime(QDateTime.currentDateTime().addDays(-1)) # 1 day before current time
+        top_layout.addWidget(self.from_date_widget)
+
+        top_layout.addWidget(QLabel("to"))
+
+        self.to_date_widget = QDateTimeEdit()
+        self.to_date_widget.setCalendarPopup(True)
+        self.to_date_widget.setDateTime(QDateTime.currentDateTime())
+        top_layout.addWidget(self.to_date_widget)
+
 
         self.refresh_button = QPushButton("Refresh")
         self.refresh_button.clicked.connect(self._update_diff_from_refresh)
         top_layout.addWidget(self.refresh_button)
-
 
         self.table_view = HistoryTableView(self.controller)
         bottom_layout.addWidget(self.table_view)
@@ -146,27 +160,18 @@ class HistoryDisplayWidget(QDialog):
         """
         Calls _display_diff with the values provided in the input widgets
         """
-        try:
-            timescale_time = int(self.timescale_time_widget.text())
-        except ValueError:
-            return # Wait for an actual time value to be entered
-        else:
-            if timescale_time < 0:
-                return # We can't see into the future
+        l.info("%s",self.from_date_widget.dateTime().toSecsSinceEpoch())
+        self._display_diff(old_time=self.from_date_widget.dateTime().toSecsSinceEpoch())
 
-        timescale_type = self.timescale_type_widget.currentText()
-        self._display_diff(timescale_options={
-            HistoryDisplayWidget.timescale_mapping[timescale_type]: timescale_time
-        })
-
-    def _display_diff(self, timescale_options: dict[str, int]):
+    def _display_diff(self, old_time: int):
         changed_functions = []
         client = self.controller.client
         if client is None:
             l.error("Client is None when trying display diff")
             return
-        previous_time =  (datetime.now(timezone.utc)-timedelta(**timescale_options)).timestamp()
+        previous_time =  old_time
         old_commit = client.find_commit_before_ts(client.repo, previous_time,user_name=client.master_user)
+        
         # Because we're not grabbing from the newest commit we don't want to mess around with the cache
         old_state = client.get_state(priority = SchedSpeed.FAST, fetch_cache=False, save_cache=False, commit_hash=old_commit)
         
