@@ -155,34 +155,43 @@ class HistoryDisplayWidget(QDialog):
     def _update_diff_from_refresh(self):
         self.refresh_button.setEnabled(False)
         self._update_diff()
+        self.refresh_button.setEnabled(True)
 
     def _update_diff(self):
         """
         Calls _display_diff with the values provided in the input widgets
         """
-        l.info("%s",self.from_date_widget.dateTime().toSecsSinceEpoch())
-        self._display_diff(old_time=self.from_date_widget.dateTime().toSecsSinceEpoch())
+        old_time = self.from_date_widget.dateTime().toSecsSinceEpoch()
+        new_time = self.to_date_widget.dateTime().toSecsSinceEpoch()
+        if old_time >= new_time:
+            # Wipe out table
+            self.table_view.model.update_data( 
+                [],
+                []
+            )
+        else:
+            self._display_diff(old_time=old_time, new_time=new_time)
 
-    def _display_diff(self, old_time: int):
+    def _display_diff(self, old_time: int, new_time: int):
         changed_functions = []
         client = self.controller.client
         if client is None:
             l.error("Client is None when trying display diff")
             return
-        previous_time =  old_time
-        old_commit = client.find_commit_before_ts(client.repo, previous_time,user_name=client.master_user)
-        
+        old_commit = client.find_commit_before_ts(client.repo, old_time,user_name=client.master_user)
         # Because we're not grabbing from the newest commit we don't want to mess around with the cache
         old_state = client.get_state(priority = SchedSpeed.FAST, fetch_cache=False, save_cache=False, commit_hash=old_commit)
         
-        curr_state = self.controller.get_state()
+        new_commit = client.find_commit_before_ts(client.repo, new_time,user_name=client.master_user)
+        # Because we're not grabbing from the newest commit we don't want to mess around with the cache
+        new_state = client.get_state(priority = SchedSpeed.FAST, fetch_cache=False, save_cache=False, commit_hash=new_commit)
         
-        for addr, new_function in curr_state.functions.items():
+        for addr, new_function in new_state.functions.items():
             if addr not in old_state.functions:
                 # Is this case possible?
                 changed_functions.append(new_function)
             else:
-                diffs = curr_state.diff_function_artifacts(old_state, addr)
+                diffs = new_state.diff_function_artifacts(old_state, addr)
                 for diff_dict in diffs.values():
                     if diff_dict["master"] != diff_dict["target"]:
                         changed_functions.append(new_function)
@@ -191,5 +200,4 @@ class HistoryDisplayWidget(QDialog):
             [(func.addr,func.name) for func in changed_functions],
             [QColor(0,0,0,0) for _ in changed_functions]
         )
-        self.refresh_button.setEnabled(True)
-                
+        
