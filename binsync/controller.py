@@ -418,8 +418,8 @@ class BSController:
         self.headless = not self.headless
 
     @init_checker
-    def users(self, priority=None, no_cache=True) -> Iterable[User]:  # TODO: fix no_cache user bug
-        return self.client.users(priority=priority, no_cache=no_cache)
+    def users(self, priority=None, fetch_cache=False) -> Iterable[User]:  # TODO: fix fetch_cache user bug
+        return self.client.users(priority=priority, fetch_cache=fetch_cache)
 
     def usernames(self, priority=None) -> Iterable[str]:
         for user in self.users(priority=priority):
@@ -439,8 +439,8 @@ class BSController:
     #
 
     @init_checker
-    def get_state(self, user=None, priority=None, no_cache=False) -> State:
-        return self.client.get_state(user=user, priority=priority, no_cache=no_cache)
+    def get_state(self, user=None, priority=None, fetch_cache=True) -> State:
+        return self.client.get_state(user=user, priority=priority, fetch_cache=fetch_cache)
 
     @init_checker
     def pull_artifact(self, type_: Artifact, *identifiers, many=False, user=None, state=None) -> Optional[Artifact]:

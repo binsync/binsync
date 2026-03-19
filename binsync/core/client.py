@@ -49,8 +49,8 @@ def atomic_git_action(f):
     """
     @wraps(f)
     def _atomic_git_action(self: "Client", *args, **kwargs):
-        no_cache = kwargs.get("no_cache", False)
-        if not no_cache:
+        fetch_cache = kwargs.get("fetch_cache", True)
+        if fetch_cache:
             # cache check
             cache_item = self.check_cache_(f, **kwargs)
             if cache_item is not None:
@@ -154,7 +154,7 @@ class Client:
 
         self.active_remote = True
         # force a state update on init
-        self.master_state = self.get_state(no_cache=True)
+        self.master_state = self.get_state(fetch_cache=False)
 
     def copy(self, copy_files=False):
         temp_dir = None
@@ -397,7 +397,7 @@ class Client:
     #
 
     @atomic_git_action
-    def users(self, priority=None, no_cache=False) -> Iterable[User]:
+    def users(self, priority=None, fetch_cache=True) -> Iterable[User]:
         repo = self.repo
         attempt_again = True
         attempted_fix = False
@@ -462,7 +462,7 @@ class Client:
 
 
     @atomic_git_action
-    def get_state(self, user=None, priority=None, no_cache=False, save_cache = True, commit_hash=None) -> State:
+    def get_state(self, user=None, priority=None, fetch_cache=True, save_cache = True, commit_hash=None) -> State:
         if user is None and commit_hash is None:
             user = self.master_user
 
@@ -470,13 +470,13 @@ class Client:
             self.repo, user=user, commit_hash=commit_hash, is_master=user == self.master_user, client=self
         )
 
-        # NOTE: there might be a race between get_state(no_cache=True) in
+        # NOTE: there might be a race between get_state(fetch_cache=False) in
         # Client and get_state(...) from all_states() in Controller which uses
         # the cache. That race happens when we have a repository with a lot of
         # artifacts to retrieve. As the cache is using a defaultdict() we will
         # get an empty state back when querying from the cache, and we always
         # get this empty state as we don't update the cache.
-        if (no_cache or not self.cache.get_state(user)) and save_cache:
+        if (not fetch_cache or not self.cache.get_state(user)) and save_cache:
             self.cache.set_state(state, user=user)
 
         return state
@@ -494,7 +494,7 @@ class Client:
     def all_states(self, before_ts: int = None) -> Iterable[State]:
         states = list()
         # promises users in the event of inability to get new users
-        users = self.users(no_cache=True) or self.users()
+        users = self.users(fetch_cache=False) or self.users()
         if not users:
             l.critical("Failed to get users from current project. Report me if possible.")
             return {}
@@ -511,7 +511,7 @@ class Client:
         for username in usernames:
             commit_hash = username_to_commit.get(username, None)
             state = self.get_state(
-                user=username, priority=SchedSpeed.FAST, commit_hash=commit_hash, no_cache=(commit_hash is not None)
+                user=username, priority=SchedSpeed.FAST, commit_hash=commit_hash, fetch_cache=(commit_hash is None)
             )
 
             # NOTE: It can happen that state is None when the state is

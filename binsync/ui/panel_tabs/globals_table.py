@@ -145,7 +145,7 @@ class GlobalsTableView(BinsyncTableView):
                 return
 
             for user in self.controller.client.check_cache_(self.controller.client.users,
-                                                            priority=SchedSpeed.FAST, no_cache=False):
+                                                            priority=SchedSpeed.FAST, fetch_cache=True):
                 # only populate with cached items to prevent main thread waiting on atomic actions
                 cache_item = self.controller.client.check_cache_(self.controller.client.get_state, user=user.name,
                                                                  priority=SchedSpeed.FAST)
