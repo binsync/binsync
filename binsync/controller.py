@@ -418,8 +418,8 @@ class BSController:
         self.headless = not self.headless
 
     @init_checker
-    def users(self, priority=None, no_cache=True) -> Iterable[User]:  # TODO: fix no_cache user bug
-        return self.client.users(priority=priority, no_cache=no_cache)
+    def users(self, priority=None, fetch_cache=False) -> Iterable[User]:  # TODO: fix fetch_cache user bug
+        return self.client.users(priority=priority, fetch_cache=fetch_cache)
 
     def usernames(self, priority=None) -> Iterable[str]:
         for user in self.users(priority=priority):
@@ -439,8 +439,8 @@ class BSController:
     #
 
     @init_checker
-    def get_state(self, user=None, priority=None, no_cache=False) -> State:
-        return self.client.get_state(user=user, priority=priority, no_cache=no_cache)
+    def get_state(self, user=None, priority=None, fetch_cache=True) -> State:
+        return self.client.get_state(user=user, priority=priority, fetch_cache=fetch_cache)
 
     @init_checker
     def pull_artifact(self, type_: Artifact, *identifiers, many=False, user=None, state=None) -> Optional[Artifact]:
@@ -1467,7 +1467,7 @@ class BSController:
         self.progress_view_open = True
 
 
-    def preview_function_changes(self, func_addr=None, user=None, **kwargs):
+    def preview_function_changes(self, func_addr=None, user: str|None = None, **kwargs):
         """
         Get a preview of the function differences between two functions about to be synced.
 
@@ -1479,6 +1479,9 @@ class BSController:
         on name, type, args, and comments for master and target functions which can then be parsed to see 
         how they differ. 
         """
+        # TODO: Update this function to take advantage of State's new parse_from_deci function
+        # as well as diff_function_artifacts. Should clean up the code significantly but did 
+        # not implement yet since I am trying to minimize changes being made
         state = self.get_state(user=user, priority=SchedSpeed.FAST)
         user = user or state.user
         
@@ -1536,5 +1539,3 @@ class BSController:
         }
 
         return diffs
-            
-
