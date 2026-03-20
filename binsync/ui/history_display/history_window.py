@@ -95,12 +95,6 @@ class HistoryTableView(BinsyncTableView):
         menu.popup(self.mapToGlobal(event.pos()))
 
 class HistoryDisplayWidget(QDialog):
-    timescale_mapping = {
-        "Minutes": "minutes",
-        "Hours": "hours",
-        "Days": "days",
-        "Weeks": "weeks"
-    }
     def __init__(self, controller:BSController=None, parent=None):
         super().__init__(parent)
         self.controller = controller
@@ -115,15 +109,6 @@ class HistoryDisplayWidget(QDialog):
         bottom_layout = QVBoxLayout()
         
         top_layout.addWidget(QLabel("Functions Changed From "))
-
-        # self.timescale_time_widget = QLineEdit() 
-        # self.timescale_time_widget.setText("1")
-        # top_layout.addWidget(self.timescale_time_widget)
-
-        # self.timescale_type_widget = QComboBox()
-        # self.timescale_type_widget.addItems(list(HistoryDisplayWidget.timescale_mapping.keys()))
-        # self.timescale_type_widget.setCurrentText("Days")
-        # top_layout.addWidget(self.timescale_type_widget)
 
         self.from_date_widget = QDateTimeEdit()
         self.from_date_widget.setCalendarPopup(True)
@@ -178,6 +163,7 @@ class HistoryDisplayWidget(QDialog):
         if client is None:
             l.error("Client is None when trying display diff")
             return
+
         old_commit = client.find_commit_before_ts(client.repo, old_time,user_name=client.master_user)
         # Because we're not grabbing from the newest commit we don't want to mess around with the cache
         old_state = client.get_state(priority = SchedSpeed.FAST, fetch_cache=False, save_cache=False, commit_hash=old_commit)
