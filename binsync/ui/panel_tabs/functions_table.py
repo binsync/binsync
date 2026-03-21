@@ -156,7 +156,9 @@ class FunctionTableView(BinsyncTableView):
                 sync_action = QAction("Sync", parent=menu)
                 sync_action.triggered.connect( lambda: self.controller.fill_artifact(func_addr, artifact_type=Function, user=user_name))
                 menu.addAction(sync_action)
-                sync_action.hovered.connect(lambda: self.show_tooltip(func_addr, user_name))
+                sync_action.hovered.connect(lambda: self.show_tooltip(
+                    self.controller.preview_function_changes(func_addr=func_addr, user=user_name)
+                    ))
 
             from_menu = menu.addMenu("Sync from...")
             users = self._get_valid_users_for_func(func_addr)
@@ -165,7 +167,9 @@ class FunctionTableView(BinsyncTableView):
                 action.triggered.connect(
                     lambda checked=False, name=username: self.controller.fill_artifact(func_addr, artifact_type=Function, user=name))
                 action.hovered.connect(
-                    lambda name=username: self.show_tooltip(func_addr, name))
+                    lambda name=username: self.show_tooltip(
+                        self.controller.preview_function_changes(func_addr=func_addr, user=name)
+                        ))
         menu.popup(self.mapToGlobal(event.pos()))
 
 
