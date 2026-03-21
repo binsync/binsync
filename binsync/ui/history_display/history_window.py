@@ -13,7 +13,11 @@ from libbs.ui.qt_objects import (
     QAction,
     Qt,
     QColor,
-    QFont
+    QComboBox,
+    QLineEdit,
+    QPushButton,
+    QDateTimeEdit,
+    QDateTime,
 )
 l = logging.getLogger(__name__)
 
@@ -91,11 +95,11 @@ class HistoryTableView(BinsyncTableView):
         menu.popup(self.mapToGlobal(event.pos()))
 
 class HistoryDisplayWidget(QDialog):
-    def __init__(self,controller:BSController=None,parent=None):
+    def __init__(self, controller:BSController=None, parent=None):
         super().__init__(parent)
         self.controller = controller
         self._init_widgets()
-        self._display_diff()
+        self._update_diff()
         
     def _init_widgets(self):
         self.setWindowTitle("History")
@@ -104,8 +108,25 @@ class HistoryDisplayWidget(QDialog):
         top_layout = QHBoxLayout()
         bottom_layout = QVBoxLayout()
         
-        top_layout.addWidget(QLabel("Functions Changed in the Past Day"))
-        
+        top_layout.addWidget(QLabel("Functions Changed From "))
+
+        self.from_date_widget = QDateTimeEdit()
+        self.from_date_widget.setCalendarPopup(True)
+        self.from_date_widget.setDateTime(QDateTime.currentDateTime().addDays(-1)) # 1 day before current time
+        top_layout.addWidget(self.from_date_widget)
+
+        top_layout.addWidget(QLabel("to"))
+
+        self.to_date_widget = QDateTimeEdit()
+        self.to_date_widget.setCalendarPopup(True)
+        self.to_date_widget.setDateTime(QDateTime.currentDateTime())
+        top_layout.addWidget(self.to_date_widget)
+
+
+        self.refresh_button = QPushButton("Refresh")
+        self.refresh_button.clicked.connect(self._update_diff_from_refresh)
+        top_layout.addWidget(self.refresh_button)
+
         self.table_view = HistoryTableView(self.controller)
         bottom_layout.addWidget(self.table_view)
         
@@ -115,26 +136,48 @@ class HistoryDisplayWidget(QDialog):
         
         self.setLayout(main_layout)
         self.resize(1000, 800)
-        
-    def _display_diff(self):
+    
+    def _update_diff_from_refresh(self):
+        self.refresh_button.setEnabled(False)
+        self._update_diff()
+        self.refresh_button.setEnabled(True)
+
+    def _update_diff(self):
+        """
+        Calls _display_diff with the values provided in the input widgets
+        """
+        old_time = self.from_date_widget.dateTime().toSecsSinceEpoch()
+        new_time = self.to_date_widget.dateTime().toSecsSinceEpoch()
+        if old_time >= new_time:
+            # Wipe out table
+            self.table_view.model.update_data( 
+                [],
+                []
+            )
+        else:
+            self._display_diff(old_time=old_time, new_time=new_time)
+
+    def _display_diff(self, old_time: int, new_time: int):
         changed_functions = []
         client = self.controller.client
         if client is None:
             l.error("Client is None when trying display diff")
             return
-        previous_time =  (datetime.now(timezone.utc)-timedelta(days=1)).timestamp()
-        old_commit = client.find_commit_before_ts(client.repo, previous_time,user_name=client.master_user)
+
+        old_commit = client.find_commit_before_ts(client.repo, old_time,user_name=client.master_user)
         # Because we're not grabbing from the newest commit we don't want to mess around with the cache
         old_state = client.get_state(priority = SchedSpeed.FAST, fetch_cache=False, save_cache=False, commit_hash=old_commit)
         
-        curr_state = self.controller.get_state()
+        new_commit = client.find_commit_before_ts(client.repo, new_time,user_name=client.master_user)
+        # Because we're not grabbing from the newest commit we don't want to mess around with the cache
+        new_state = client.get_state(priority = SchedSpeed.FAST, fetch_cache=False, save_cache=False, commit_hash=new_commit)
         
-        for addr, new_function in curr_state.functions.items():
+        for addr, new_function in new_state.functions.items():
             if addr not in old_state.functions:
                 # Is this case possible?
                 changed_functions.append(new_function)
             else:
-                diffs = curr_state.diff_function_artifacts(old_state, addr)
+                diffs = new_state.diff_function_artifacts(old_state, addr)
                 for diff_dict in diffs.values():
                     if diff_dict["master"] != diff_dict["target"]:
                         changed_functions.append(new_function)
@@ -143,4 +186,4 @@ class HistoryDisplayWidget(QDialog):
             [(func.addr,func.name) for func in changed_functions],
             [QColor(0,0,0,0) for _ in changed_functions]
         )
-                
+        
