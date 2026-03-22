@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 from binsync.controller import BSController
 from datetime import datetime, timezone, timedelta
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableView
@@ -27,8 +28,8 @@ class HistoryTableModel(BinsyncTableModel):
         super().__init__(controller, col_headers, filter_cols, time_col, addr_col, parent)
         self.data_dict = {}
         self.saved_color_window = self.controller.table_coloring_window
-
         self.saved_ctx = None
+        self.data_diffs: list[dict[str, Any]] = []
 
     def data(self, index, role=Qt.DisplayRole):
         if not index.isValid():
@@ -51,6 +52,15 @@ class HistoryTableModel(BinsyncTableModel):
             #return self.data_tooltips[row]
             pass
         return None
+
+    def update_data(self, new_data, new_colors):
+        """
+        NOTE: DO NOT CALL WITHOUT ALSO UPDATING DIFFS WITH update_diffs AS THERE WILL BE A MISMATCH
+        """
+        return super().update_data(new_data, new_colors)
+    
+    def update_diffs(self, new_diffs: list[dict[str, Any]]):
+        self.data_diffs = new_diffs
 
     # No update_table because we don't care about the current state
 
@@ -91,6 +101,17 @@ class HistoryTableView(BinsyncTableView):
             act.setChecked(self.column_visibility[i])
             act.triggered.connect(handler(i))
             col_hide_menu.addAction(act)
+
+        if valid_row:
+            func_addr = self.model.row_data[idx.row()][self.model.addr_col]
+
+            menu.addSeparator()
+            if isinstance(func_addr, int) and func_addr > 0:
+                sync_action = QAction("Preview Diff", parent=menu)
+                menu.addAction(sync_action)
+                sync_action.hovered.connect(lambda: self.show_tooltip(
+                    self.model.data_diffs[idx.row()]
+                    ))
 
         menu.popup(self.mapToGlobal(event.pos()))
 
@@ -158,7 +179,7 @@ class HistoryDisplayWidget(QDialog):
             self._display_diff(old_time=old_time, new_time=new_time)
 
     def _display_diff(self, old_time: int, new_time: int):
-        changed_functions = []
+        changed_functions_and_diffs = []
         client = self.controller.client
         if client is None:
             l.error("Client is None when trying display diff")
@@ -173,17 +194,16 @@ class HistoryDisplayWidget(QDialog):
         new_state = client.get_state(priority = SchedSpeed.FAST, fetch_cache=False, save_cache=False, commit_hash=new_commit)
         
         for addr, new_function in new_state.functions.items():
-            if addr not in old_state.functions:
-                # Is this case possible?
-                changed_functions.append(new_function)
-            else:
-                diffs = new_state.diff_function_artifacts(old_state, addr)
-                for diff_dict in diffs.values():
-                    if diff_dict["master"] != diff_dict["target"]:
-                        changed_functions.append(new_function)
-                        break
+            diffs = new_state.diff_function_artifacts(old_state, addr)
+            for diff_dict in diffs.values():
+                if diff_dict["master"] != diff_dict["target"]:
+                    changed_functions_and_diffs.append((new_function, diffs))
+                    break
         self.table_view.model.update_data(
-            [(func.addr,func.name) for func in changed_functions],
-            [QColor(0,0,0,0) for _ in changed_functions]
+            [(func.addr,func.name) for func, _ in changed_functions_and_diffs],
+            [QColor(0,0,0,0) for _ in changed_functions_and_diffs]
+        )
+        self.table_view.model.update_diffs(
+            [diff for _, diff in changed_functions_and_diffs]
         )
         
