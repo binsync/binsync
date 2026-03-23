@@ -151,6 +151,11 @@ class HistoryDisplayWidget(QDialog):
         self.table_view = HistoryTableView(self.controller)
         bottom_layout.addWidget(self.table_view)
         
+        self.revert_button = QPushButton("Revert to Old State")
+        self.revert_button.setEnabled(False)
+        self.revert_button.clicked.connect(self._revert_decompiler_state)
+        bottom_layout.addWidget(self.revert_button)
+
         
         main_layout.addLayout(top_layout)
         main_layout.addLayout(bottom_layout)
@@ -158,6 +163,9 @@ class HistoryDisplayWidget(QDialog):
         self.setLayout(main_layout)
         self.resize(1000, 800)
     
+    def _revert_decompiler_state(self):
+        l.info("Revert button clicked")
+
     def _update_diff_from_refresh(self):
         self.refresh_button.setEnabled(False)
         self._update_diff()
@@ -175,8 +183,13 @@ class HistoryDisplayWidget(QDialog):
             self._show_invalid_diff()
         else:
             self._display_diff(old_time=old_time, new_time=new_time)
+            self.revert_button.setEnabled(True)
 
     def _display_diff(self, old_time: int, new_time: int):
+        """
+        Should only be called by _update_diff to ensure revert button is properly
+        enabled and disabled
+        """
         changed_functions_and_diffs = []
         client = self.controller.client
         if client is None:
@@ -221,4 +234,5 @@ class HistoryDisplayWidget(QDialog):
         self.table_view.model.update_diffs(
             []
         )
+        self.revert_button.setEnabled(False)
         
