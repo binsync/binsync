@@ -119,6 +119,7 @@ class HistoryDisplayWidget(QDialog):
     def __init__(self, controller:BSController=None, parent=None):
         super().__init__(parent)
         self.controller = controller
+        self.old_commit = None
         self._init_widgets()
         self._update_diff()
         
@@ -164,7 +165,11 @@ class HistoryDisplayWidget(QDialog):
         self.resize(1000, 800)
     
     def _revert_decompiler_state(self):
-        l.info("Revert button clicked")
+        if self.old_commit is not None:
+            l.info("Revert button clicked: Trying to revert to commit with hash %s", self.old_commit)
+            self.controller.client.reset_to_commit(user=None, commit_hash=self.old_commit) # type: ignore
+        else:
+            l.error("Tried to revert without an older state present")
 
     def _update_diff_from_refresh(self):
         self.refresh_button.setEnabled(False)
@@ -180,6 +185,7 @@ class HistoryDisplayWidget(QDialog):
         if old_time >= new_time:
             l.error("Old date set after the new date")
             # Wipe out table
+            self.old_commit = None
             self._show_invalid_diff()
         else:
             self._display_diff(old_time=old_time, new_time=new_time)
@@ -196,13 +202,13 @@ class HistoryDisplayWidget(QDialog):
             l.error("Client is None when trying display diff")
             return
 
-        old_commit = client.find_commit_before_ts(client.repo, old_time,user_name=client.master_user)
-        if old_commit == {}: # Check with {} because atomic_git_action wrapper replaces None results with {}
+        self.old_commit = client.find_commit_before_ts(client.repo, old_time,user_name=client.master_user)
+        if self.old_commit == {}: # Check with {} because atomic_git_action wrapper replaces None results with {}
             l.error("Old date commit is invalid")
             self._show_invalid_diff()
             return
         # Because we're not grabbing from the newest commit we don't want to mess around with the cache
-        old_state = client.get_state(priority = SchedSpeed.FAST, fetch_cache=False, save_cache=False, commit_hash=old_commit)
+        old_state = client.get_state(priority = SchedSpeed.FAST, fetch_cache=False, save_cache=False, commit_hash=self.old_commit)
         
         new_commit = client.find_commit_before_ts(client.repo, new_time,user_name=client.master_user)
         if new_commit == {}: # Check with {} because atomic_git_action wrapper replaces None results with {}

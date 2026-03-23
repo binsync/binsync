@@ -523,6 +523,25 @@ class Client:
 
         return states
 
+    @atomic_git_action
+    def reset_to_commit(self, user: str|None, commit_hash: str, fetch_cache=False, save_cache=False):
+        """
+        Resets a branch to a certain commit hash.
+
+        !!! DO NOT EVER SET fetch_cache or save_cache !!!
+
+        They are set to False by default as reverting is not a cachable operation 
+        so there is no reason to ever look in the cache or save to the cache.
+        """
+        if user is None:
+            self.repo.git.checkout(f"binsync/{self.master_user}")
+        else:
+            self.repo.git.checkout(f"binsync/{user}")
+        self.repo.git.reset("--hard", commit_hash)
+        self.repo.git.reset("--soft", "ORIG_HEAD")
+        self.repo.git.commit(m=f"Reset to commit {commit_hash}")
+
+
     def find_commits_before_ts(self, repo: git.Repo, ts: int, users: list[str]):
         ref_dict = self._get_best_refs(repo, force_local=True)
         best_commits = {}
