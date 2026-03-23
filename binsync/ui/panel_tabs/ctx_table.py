@@ -125,7 +125,9 @@ class QCTXTable(BinsyncTableView):
                 lambda: self.controller.fill_artifact(self.model.saved_ctx, artifact_type=Function, user=user_name)
             )
             menu.addAction(sync_action)
-            sync_action.hovered.connect(lambda: self.show_tooltip(self.model.saved_ctx, user_name))
+            sync_action.hovered.connect(lambda: self.show_tooltip(
+                self.controller.preview_function_changes(func_addr=self.model.saved_ctx, user=user_name)
+                ))
 
         menu.popup(self.mapToGlobal(event.pos()))
 

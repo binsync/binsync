@@ -1,6 +1,6 @@
 import logging
 import datetime
-from typing import Dict, Set
+from typing import Any, Dict, Set
 
 from binsync.controller import BSController
 from libbs.ui.qt_objects import (
@@ -329,8 +329,7 @@ class BinsyncTableView(QTableView):
         """ Handle text changes in the filter box, filters the table by the arg. """
         self.proxymodel.setFilterFixedString(text)
 
-    def render_tooltip_text(self, func_addr, user_name):
-        differences = self.controller.preview_function_changes(func_addr=func_addr, user=user_name)
+    def render_tooltip_text(self, differences: dict[str, Any]):
         # print(f"Differences: {differences}")
 
         # This will hold all the HTML stuff that will go into the tooltip
@@ -411,7 +410,7 @@ class BinsyncTableView(QTableView):
         diff_html = "".join(diff_sections) if diff_sections else "<span style='color:red; background-color:#ffecec;'>No changes</span>"
         return diff_html
 
-    def show_tooltip(self, func_addr, user_name):
+    def show_tooltip(self, differences: dict[str, Any]):
         """
         Have a popup box that shows the differences between the master and target function when hovering a sync option.
 
@@ -420,7 +419,7 @@ class BinsyncTableView(QTableView):
         """
         
         try:
-            diff_html = self.render_tooltip_text(func_addr, user_name)
+            diff_html = self.render_tooltip_text(differences)
         except Exception:
             diff_html = None
 
