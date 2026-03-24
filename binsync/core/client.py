@@ -524,9 +524,12 @@ class Client:
         return states
 
     @atomic_git_action
-    def reset_to_commit(self, user: str|None, commit_hash: str, fetch_cache=False, save_cache=True):
+    def reset_to_commit(self, commit_hash: str, user:str|None=None , priority=None, fetch_cache=False, save_cache=True):
         """
-        Resets a branch to a certain commit hash. Returns the State that was reverted to.
+        Resets a branch to a certain commit hash. Returns the State that was 
+        reverted to. If the user is not specified, assumes the user to be the
+        master user.
+        
 
         !!! DO NOT EVER SET fetch_cache !!!
 
@@ -535,9 +538,9 @@ class Client:
         because it saves the new state to the cache).
         """
         if user is None:
-            self.repo.git.checkout(f"binsync/{self.master_user}")
-        else:
-            self.repo.git.checkout(f"binsync/{user}")
+            user = self.master_user
+        self.repo.git.checkout(f"binsync/{user}")
+
         self.repo.git.reset("--hard", commit_hash)
         self.repo.git.reset("--soft", "ORIG_HEAD")
         self.repo.git.commit(m=f"Reset to commit {commit_hash}")
@@ -546,8 +549,9 @@ class Client:
         # interactions with the cache. If reset_to_commit is called with 
         # save_cache=True, we update the cached state to match the new reset 
         # state.
-        return self.get_state(user=user, fetch_cache=False, save_cache=False)
-        
+        return self.parse_state_from_commit(
+            self.repo, user=user, commit_hash=None, is_master=user == self.master_user, client=self
+        )
 
 
     def find_commits_before_ts(self, repo: git.Repo, ts: int, users: list[str]):
