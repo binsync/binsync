@@ -165,6 +165,14 @@ class HistoryDisplayWidget(QDialog):
         self.resize(1000, 800)
     
     def _revert_decompiler_state(self):
+        """
+        Reverts the commit history of your branch to a specified older commit,
+        updating the decompiler view accordingly
+        
+        WARNING: Behaves strangely when the old commit does have a specific function
+        present as it is unable to restore the original appearance of the function.
+        Avoid such changes if possible.
+        """
         if self.old_commit is not None:
             l.info("Revert button clicked: Trying to revert to commit with hash %s", self.old_commit)
             updated_state = self.controller.client.reset_to_commit(commit_hash=self.old_commit, user=None, priority=SchedSpeed.FAST) # type: ignore
