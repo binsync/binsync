@@ -230,6 +230,7 @@ class HistoryDisplayWidget(QDialog):
             [diff for _, diff in changed_functions_and_diffs]
         )
         self.revert_button.setEnabled(True)
+        self.revert_button.setToolTip(f"Resets to commit hash {self.old_commit}")
 
     def _show_invalid_diff(self):
         self.old_commit = None
@@ -241,4 +242,5 @@ class HistoryDisplayWidget(QDialog):
             []
         )
         self.revert_button.setEnabled(False)
+        self.revert_button.setToolTip("")
         
