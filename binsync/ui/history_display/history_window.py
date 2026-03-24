@@ -189,7 +189,6 @@ class HistoryDisplayWidget(QDialog):
             self._show_invalid_diff()
         else:
             self._display_diff(old_time=old_time, new_time=new_time)
-            self.revert_button.setEnabled(True)
 
     def _display_diff(self, old_time: int, new_time: int):
         """
@@ -231,6 +230,7 @@ class HistoryDisplayWidget(QDialog):
         self.table_view.model.update_diffs(
             [diff for _, diff in changed_functions_and_diffs]
         )
+        self.revert_button.setEnabled(True)
 
     def _show_invalid_diff(self):
         self.table_view.model.update_data( 
