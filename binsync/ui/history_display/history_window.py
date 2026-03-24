@@ -185,7 +185,6 @@ class HistoryDisplayWidget(QDialog):
         if old_time >= new_time:
             l.error("Old date set after the new date")
             # Wipe out table
-            self.old_commit = None
             self._show_invalid_diff()
         else:
             self._display_diff(old_time=old_time, new_time=new_time)
@@ -233,6 +232,7 @@ class HistoryDisplayWidget(QDialog):
         self.revert_button.setEnabled(True)
 
     def _show_invalid_diff(self):
+        self.old_commit = None
         self.table_view.model.update_data( 
             [],
             []
