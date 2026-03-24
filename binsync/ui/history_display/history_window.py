@@ -167,7 +167,8 @@ class HistoryDisplayWidget(QDialog):
     def _revert_decompiler_state(self):
         if self.old_commit is not None:
             l.info("Revert button clicked: Trying to revert to commit with hash %s", self.old_commit)
-            self.controller.client.reset_to_commit(user=None, commit_hash=self.old_commit) # type: ignore
+            updated_state = self.controller.client.reset_to_commit(commit_hash=self.old_commit, user=None, priority=SchedSpeed.FAST) # type: ignore
+            self.controller.complete_fill(updated_state)
         else:
             l.error("Tried to revert without an older state present")
 

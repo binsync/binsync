@@ -902,6 +902,45 @@ class BSController:
             "In total: %d Structs, %d Functions, %d Global Variables, and %d Enums were synced.",
             total_synced[Struct], total_synced[Function], total_synced[GlobalVariable], total_synced[Enum]
         )
+    
+    def complete_fill(self, state: State):
+        """
+        Updates everything in the decompiler with the specified State.
+
+        ### Restrictions:
+        - If the new state is missing a certain function, the controller
+        will not be able to restore the function to its original appearance.
+
+        TODO change function name
+        """
+        target_artifacts =  {
+            Struct: self.fill_artifact,
+            #Comment: lambda *x, **y: None,
+            Comment: self.fill_artifact,
+            Function: self.fill_artifact,
+            GlobalVariable: self.fill_artifact,
+            Enum: self.fill_artifact
+        }
+        _l.info("Using state %s", state)
+        for artifact_type, filler_func in target_artifacts.items():
+            _l.info("Filling with artifacts of type %s now...", artifact_type.__name__)
+            for identifier in self.changed_artifacts_of_type(artifact_type, users=["foo"],
+                                                             states={"foo": state}): # TODO change to not use "foo"
+                pref_art = self.pull_artifact(artifact_type, identifier, state=state)
+
+                _l.debug("Filling artifact %s now... (not really)", pref_art)
+                try:
+                    filler_func(
+                        identifier, artifact_type=artifact_type, artifact=pref_art, state=state,
+                        commit_msg=f"WOWOWOW COMPLETE FILL",
+                        merge_level=MergeLevel.OVERWRITE,
+                        do_type_search=False
+                    )
+                except Exception as e:
+                    _l.info("Banishing exception: %s", e)
+
+        _l.info("Fill Completed!")
+        # summarize total synchage!
 
     def safe_sync_all(self, all_states: list[State]):
         """
