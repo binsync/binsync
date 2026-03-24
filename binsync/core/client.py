@@ -524,14 +524,15 @@ class Client:
         return states
 
     @atomic_git_action
-    def reset_to_commit(self, user: str|None, commit_hash: str, fetch_cache=False, save_cache=False):
+    def reset_to_commit(self, user: str|None, commit_hash: str, fetch_cache=False, save_cache=True):
         """
-        Resets a branch to a certain commit hash.
+        Resets a branch to a certain commit hash. Returns the State that was reverted to.
 
-        !!! DO NOT EVER SET fetch_cache or save_cache !!!
+        !!! DO NOT EVER SET fetch_cache !!!
 
-        They are set to False by default as reverting is not a cachable operation 
-        so there is no reason to ever look in the cache or save to the cache.
+        It is set to False by default as reverting is not a cachable operation 
+        so there is no reason to ever look in the cache. (save_cache can be set
+        because it saves the new state to the cache).
         """
         if user is None:
             self.repo.git.checkout(f"binsync/{self.master_user}")
@@ -540,6 +541,13 @@ class Client:
         self.repo.git.reset("--hard", commit_hash)
         self.repo.git.reset("--soft", "ORIG_HEAD")
         self.repo.git.commit(m=f"Reset to commit {commit_hash}")
+
+        # We set both fetch_cache and save_cache to False to avoid unintended
+        # interactions with the cache. If reset_to_commit is called with 
+        # save_cache=True, we update the cached state to match the new reset 
+        # state.
+        return self.get_state(user=user, fetch_cache=False, save_cache=False)
+        
 
 
     def find_commits_before_ts(self, repo: git.Repo, ts: int, users: list[str]):
@@ -1002,6 +1010,11 @@ class Client:
         elif f.__qualname__ == self.users.__qualname__:
             set_func = self.cache.set_users
             args = []
+        elif f.__qualname__ == self.reset_to_commit.__qualname__:
+            set_func = self.cache.set_state
+            args = []
+            if kwargs.get("user", None) is None:
+                kwargs["user"] = self.master_user
         else:
             return None
 
