@@ -39,7 +39,7 @@ test = [
     "pytest",
 ]
 extras = [
-    "dailalib",
+    "dailalib>=3.20.0",
     "flask",
     "requests"
 ]
