@@ -544,11 +544,8 @@ class Client:
         self.repo.git.reset("--hard", commit_hash)
         self.repo.git.reset("--soft", "ORIG_HEAD")
         self.repo.git.commit(m=f"Reset to commit {commit_hash}")
-
-        # We set both fetch_cache and save_cache to False to avoid unintended
-        # interactions with the cache. If reset_to_commit is called with 
-        # save_cache=True, we update the cached state to match the new reset 
-        # state.
+        
+        # Return the state parsed from the new head commit (the reset target)
         return self.parse_state_from_commit(
             self.repo, user=user, commit_hash=None, is_master=user == self.master_user, client=self
         )

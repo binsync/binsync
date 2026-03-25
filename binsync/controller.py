@@ -920,14 +920,13 @@ class BSController:
             GlobalVariable: self.fill_artifact,
             Enum: self.fill_artifact
         }
-        _l.info("Using state %s", state)
         for artifact_type, filler_func in target_artifacts.items():
             _l.info("Filling with artifacts of type %s now...", artifact_type.__name__)
-            for identifier in self.changed_artifacts_of_type(artifact_type, users=["foo"],
-                                                             states={"foo": state}): # TODO change to not use "foo"
+            for identifier in self.changed_artifacts_of_type(artifact_type, users=["dummy"],
+                                                             states={"dummy": state}): # Using changed_artifacts_of_type to reuse prop_map
                 pref_art = self.pull_artifact(artifact_type, identifier, state=state)
 
-                _l.debug("Filling artifact %s now... (not really)", pref_art)
+                _l.debug("Filling artifact %s now...", pref_art)
                 try:
                     filler_func(
                         identifier, artifact_type=artifact_type, artifact=pref_art, state=state,
@@ -938,7 +937,6 @@ class BSController:
                     _l.info("Banishing exception: %s", e)
 
         _l.info("Fill Completed!")
-        # summarize total synchage!
 
     def safe_sync_all(self, all_states: list[State]):
         """
