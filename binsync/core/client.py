@@ -523,6 +523,34 @@ class Client:
 
         return states
 
+    @atomic_git_action
+    def reset_to_commit(self, commit_hash: str, user:str|None=None , priority=None, fetch_cache=False, save_cache=True):
+        """
+        Resets a branch to a certain commit hash. Returns the State that was 
+        reverted to. If the user is not specified, assumes the user to be the
+        master user.
+        
+
+        !!! DO NOT EVER SET fetch_cache !!!
+
+        It is set to False by default as reverting is not a cachable operation 
+        so there is no reason to ever look in the cache. (save_cache can be set
+        because it saves the new state to the cache).
+        """
+        if user is None:
+            user = self.master_user
+        self.repo.git.checkout(f"binsync/{user}")
+
+        self.repo.git.reset("--hard", commit_hash)
+        self.repo.git.reset("--soft", "ORIG_HEAD")
+        self.repo.git.commit(m=f"Reset to commit {commit_hash}")
+        
+        # Return the state parsed from the new head commit (the reset target)
+        return self.parse_state_from_commit(
+            self.repo, user=user, commit_hash=None, is_master=user == self.master_user, client=self
+        )
+
+
     def find_commits_before_ts(self, repo: git.Repo, ts: int, users: list[str]):
         ref_dict = self._get_best_refs(repo, force_local=True)
         best_commits = {}
@@ -605,6 +633,30 @@ class Client:
             self._push()
 
         l.debug("Commit %d times, pull: %s, push: %s", commit_num, did_pull, did_push)
+
+    @atomic_git_action
+    def get_first_user_commit(self, user=None, priority=None, fetch_cache=False, save_cache=False):
+        """
+        ### DO NOT CHANGE fetch_cache OR save_cache!!!!! There is no reason to interact with the cache!!!
+        Gets the first commit by the specified user. This is expected to be the 
+        commit where all the .toml files are created.
+
+        Note: May not function as expected if the BinSync repo is structured
+        strangely and one branch contains multiple "User created" commits. In
+        that case, it will return the very first such commit that occurred.
+        
+
+        @param
+        @return: A tuple (commit_hash, timestamp) of the "User created" commit
+        """
+        if user is None:
+            user = self.master_user
+        
+        for commit in self.repo.iter_commits(f"binsync/{user}"):
+            if commit.message.strip() == "User created": # Starting commit message contains a newline
+                return (commit.hexsha, commit.committed_date)
+        return None
+
 
     #
     # Git Backend
@@ -983,6 +1035,11 @@ class Client:
         elif f.__qualname__ == self.users.__qualname__:
             set_func = self.cache.set_users
             args = []
+        elif f.__qualname__ == self.reset_to_commit.__qualname__:
+            set_func = self.cache.set_state
+            args = []
+            if kwargs.get("user", None) is None:
+                kwargs["user"] = self.master_user
         else:
             return None
 

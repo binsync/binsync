@@ -119,6 +119,7 @@ class HistoryDisplayWidget(QDialog):
     def __init__(self, controller:BSController=None, parent=None):
         super().__init__(parent)
         self.controller = controller
+        self.old_commit = None
         self._init_widgets()
         self._update_diff()
         
@@ -151,6 +152,11 @@ class HistoryDisplayWidget(QDialog):
         self.table_view = HistoryTableView(self.controller)
         bottom_layout.addWidget(self.table_view)
         
+        self.revert_button = QPushButton("Revert to Old State")
+        self.revert_button.setEnabled(False)
+        self.revert_button.clicked.connect(self._revert_decompiler_state)
+        bottom_layout.addWidget(self.revert_button)
+
         
         main_layout.addLayout(top_layout)
         main_layout.addLayout(bottom_layout)
@@ -158,6 +164,22 @@ class HistoryDisplayWidget(QDialog):
         self.setLayout(main_layout)
         self.resize(1000, 800)
     
+    def _revert_decompiler_state(self):
+        """
+        Reverts the commit history of your branch to a specified older commit,
+        updating the decompiler view accordingly
+        
+        WARNING: Behaves strangely when the old commit does have a specific function
+        present as it is unable to restore the original appearance of the function.
+        Avoid such changes if possible.
+        """
+        if self.old_commit is not None:
+            l.info("Revert button clicked: Trying to revert to commit with hash %s", self.old_commit)
+            updated_state = self.controller.client.reset_to_commit(commit_hash=self.old_commit, user=None, priority=SchedSpeed.FAST) # type: ignore
+            self.controller.fill_with_state(updated_state)
+        else:
+            l.error("Tried to revert without an older state present")
+
     def _update_diff_from_refresh(self):
         self.refresh_button.setEnabled(False)
         self._update_diff()
@@ -177,19 +199,36 @@ class HistoryDisplayWidget(QDialog):
             self._display_diff(old_time=old_time, new_time=new_time)
 
     def _display_diff(self, old_time: int, new_time: int):
+        """
+        Should only be called by _update_diff to ensure revert button is properly
+        enabled and disabled
+        """
         changed_functions_and_diffs = []
         client = self.controller.client
         if client is None:
             l.error("Client is None when trying display diff")
+            self._show_invalid_diff()
             return
 
-        old_commit = client.find_commit_before_ts(client.repo, old_time,user_name=client.master_user)
-        if old_commit == {}: # Check with {} because atomic_git_action wrapper replaces None results with {}
+        first_commit_data = client.get_first_user_commit(priority=SchedSpeed.FAST)
+        if first_commit_data is None:
+            l.error("User branch is invalid (missing 'User created' commit)")
+            self._show_invalid_diff()
+            return
+        _, first_timestamp = first_commit_data
+
+        if first_timestamp > new_time:
+            l.error("'to'-date is set before 'User created' commit")
+            self._show_invalid_diff()
+            return
+
+        self.old_commit = client.find_commit_before_ts(client.repo, max(old_time, first_timestamp), user_name=client.master_user)
+        if self.old_commit == {}: # Check with {} because atomic_git_action wrapper replaces None results with {}
             l.error("Old date commit is invalid")
             self._show_invalid_diff()
             return
         # Because we're not grabbing from the newest commit we don't want to mess around with the cache
-        old_state = client.get_state(priority = SchedSpeed.FAST, fetch_cache=False, save_cache=False, commit_hash=old_commit)
+        old_state = client.get_state(priority = SchedSpeed.FAST, fetch_cache=False, save_cache=False, commit_hash=self.old_commit)
         
         new_commit = client.find_commit_before_ts(client.repo, new_time,user_name=client.master_user)
         if new_commit == {}: # Check with {} because atomic_git_action wrapper replaces None results with {}
@@ -212,8 +251,11 @@ class HistoryDisplayWidget(QDialog):
         self.table_view.model.update_diffs(
             [diff for _, diff in changed_functions_and_diffs]
         )
+        self.revert_button.setEnabled(True)
+        self.revert_button.setToolTip(f"Resets to commit hash {self.old_commit}")
 
     def _show_invalid_diff(self):
+        self.old_commit = None
         self.table_view.model.update_data( 
             [],
             []
@@ -221,4 +263,6 @@ class HistoryDisplayWidget(QDialog):
         self.table_view.model.update_diffs(
             []
         )
+        self.revert_button.setEnabled(False)
+        self.revert_button.setToolTip("")
         
