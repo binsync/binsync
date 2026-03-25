@@ -634,6 +634,30 @@ class Client:
 
         l.debug("Commit %d times, pull: %s, push: %s", commit_num, did_pull, did_push)
 
+    @atomic_git_action
+    def get_first_user_commit(self, user=None, priority=None, fetch_cache=False, save_cache=False):
+        """
+        ### DO NOT CHANGE fetch_cache OR save_cache!!!!! There is no reason to interact with the cache!!!
+        Gets the first commit by the specified user. This is expected to be the 
+        commit where all the .toml files are created.
+
+        Note: May not function as expected if the BinSync repo is structured
+        strangely and one branch contains multiple "User created" commits. In
+        that case, it will return the very first such commit that occurred.
+        
+
+        @param
+        @return: A tuple (commit_hash, timestamp) of the "User created" commit
+        """
+        if user is None:
+            user = self.master_user
+        
+        for commit in self.repo.iter_commits(f"binsync/{user}"):
+            if commit.message.strip() == "User created": # Starting commit message contains a newline
+                return (commit.hexsha, commit.committed_date)
+        return None
+
+
     #
     # Git Backend
     #

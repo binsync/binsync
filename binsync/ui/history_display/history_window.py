@@ -207,9 +207,22 @@ class HistoryDisplayWidget(QDialog):
         client = self.controller.client
         if client is None:
             l.error("Client is None when trying display diff")
+            self._show_invalid_diff()
             return
 
-        self.old_commit = client.find_commit_before_ts(client.repo, old_time,user_name=client.master_user)
+        first_commit_data = client.get_first_user_commit(priority=SchedSpeed.FAST)
+        if first_commit_data is None:
+            l.error("User branch is invalid (missing 'User created' commit)")
+            self._show_invalid_diff()
+            return
+        _, first_timestamp = first_commit_data
+
+        if first_timestamp > new_time:
+            l.error("'to'-date is set before 'User created' commit")
+            self._show_invalid_diff()
+            return
+
+        self.old_commit = client.find_commit_before_ts(client.repo, max(old_time, first_timestamp), user_name=client.master_user)
         if self.old_commit == {}: # Check with {} because atomic_git_action wrapper replaces None results with {}
             l.error("Old date commit is invalid")
             self._show_invalid_diff()
