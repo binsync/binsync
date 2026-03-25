@@ -903,19 +903,18 @@ class BSController:
             total_synced[Struct], total_synced[Function], total_synced[GlobalVariable], total_synced[Enum]
         )
     
-    def complete_fill(self, state: State):
+    def fill_with_state(self, state: State):
         """
         Updates everything in the decompiler with the specified State.
+        Intended to fill based on the master state of the current user - 
+        other states may not behave as expected.
 
         ### Restrictions:
         - If the new state is missing a certain function, the controller
         will not be able to restore the function to its original appearance.
-
-        TODO change function name
         """
         target_artifacts =  {
             Struct: self.fill_artifact,
-            #Comment: lambda *x, **y: None,
             Comment: self.fill_artifact,
             Function: self.fill_artifact,
             GlobalVariable: self.fill_artifact,
@@ -932,7 +931,6 @@ class BSController:
                 try:
                     filler_func(
                         identifier, artifact_type=artifact_type, artifact=pref_art, state=state,
-                        commit_msg=f"WOWOWOW COMPLETE FILL",
                         merge_level=MergeLevel.OVERWRITE,
                         do_type_search=False
                     )
