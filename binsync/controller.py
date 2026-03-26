@@ -420,8 +420,8 @@ class BSController:
         self.headless = not self.headless
 
     @init_checker
-    def users(self, priority=None, no_cache=True) -> Iterable[User]:  # TODO: fix no_cache user bug
-        return self.client.users(priority=priority, no_cache=no_cache)
+    def users(self, priority=None, fetch_cache=False) -> Iterable[User]:  # TODO: fix fetch_cache user bug
+        return self.client.users(priority=priority, fetch_cache=fetch_cache)
 
     def usernames(self, priority=None) -> Iterable[str]:
         for user in self.users(priority=priority):
@@ -441,8 +441,8 @@ class BSController:
     #
 
     @init_checker
-    def get_state(self, user=None, priority=None, no_cache=False) -> State:
-        return self.client.get_state(user=user, priority=priority, no_cache=no_cache)
+    def get_state(self, user=None, priority=None, fetch_cache=True) -> State:
+        return self.client.get_state(user=user, priority=priority, fetch_cache=fetch_cache)
 
     @init_checker
     def pull_artifact(self, type_: Artifact, *identifiers, many=False, user=None, state=None) -> Optional[Artifact]:
@@ -911,6 +911,41 @@ class BSController:
             "In total: %d Structs, %d Functions, %d Global Variables, and %d Enums were synced.",
             total_synced[Struct], total_synced[Function], total_synced[GlobalVariable], total_synced[Enum]
         )
+    
+    def fill_with_state(self, state: State):
+        """
+        Updates everything in the decompiler with the specified State.
+        Intended to fill based on the master state of the current user - 
+        other states may not behave as expected.
+
+        ### Restrictions:
+        - If the new state is missing a certain function, the controller
+        will not be able to restore the function to its original appearance.
+        """
+        target_artifacts =  {
+            Struct: self.fill_artifact,
+            Comment: self.fill_artifact,
+            Function: self.fill_artifact,
+            GlobalVariable: self.fill_artifact,
+            Enum: self.fill_artifact
+        }
+        for artifact_type, filler_func in target_artifacts.items():
+            _l.info("Filling with artifacts of type %s now...", artifact_type.__name__)
+            for identifier in self.changed_artifacts_of_type(artifact_type, users=["dummy"],
+                                                             states={"dummy": state}): # Using changed_artifacts_of_type to reuse prop_map
+                pref_art = self.pull_artifact(artifact_type, identifier, state=state)
+
+                _l.debug("Filling artifact %s now...", pref_art)
+                try:
+                    filler_func(
+                        identifier, artifact_type=artifact_type, artifact=pref_art, state=state,
+                        merge_level=MergeLevel.OVERWRITE,
+                        do_type_search=False
+                    )
+                except Exception as e:
+                    _l.info("Banishing exception: %s", e)
+
+        _l.info("Fill Completed!")
 
     def safe_sync_all(self, all_states: list[State]):
         """
@@ -1476,7 +1511,7 @@ class BSController:
         self.progress_view_open = True
 
 
-    def preview_function_changes(self, func_addr=None, user=None, **kwargs):
+    def preview_function_changes(self, func_addr=None, user: str|None = None, **kwargs):
         """
         Get a preview of the function differences between two functions about to be synced.
 
@@ -1488,6 +1523,9 @@ class BSController:
         on name, type, args, and comments for master and target functions which can then be parsed to see 
         how they differ. 
         """
+        # TODO: Update this function to take advantage of State's new parse_from_deci function
+        # as well as diff_function_artifacts. Should clean up the code significantly but did 
+        # not implement yet since I am trying to minimize changes being made
         state = self.get_state(user=user, priority=SchedSpeed.FAST)
         user = user or state.user
         
@@ -1557,5 +1595,3 @@ class BSController:
         }
 
         return diffs
-            
-

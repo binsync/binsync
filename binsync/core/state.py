@@ -5,7 +5,7 @@ import datetime
 import re
 from functools import wraps
 from typing import Dict, Optional, Union, List
-
+import copy
 import git
 import toml
 from sortedcontainers import SortedDict
@@ -378,6 +378,37 @@ class State:
         state._dirty = False
         return state
 
+    @classmethod
+    def parse_from_deci(cls, deci):
+        """
+        Constructs a State from a DecompilerInterface.
+        The returned State can be safely modified without 
+        impacting the DecompilerInterface as everything 
+        is deepcopy'ed.
+
+        @param deci: A libbs.DecompilerInterface object
+        """
+        state = cls(None)
+
+        # We go through and deep copy all the deci items 
+        # to avoid risk of inadvertently editing deci from State
+        def deepcopy_artifactdict(state_dict, artifact_dict):
+            for key, val in artifact_dict.items():
+                state_dict[key] = copy.deepcopy(val)
+        
+        deepcopy_artifactdict(state.functions, deci.functions)
+        deepcopy_artifactdict(state.comments, deci.comments)
+        deepcopy_artifactdict(state.structs, deci.structs)
+        deepcopy_artifactdict(state.patches, deci.patches)
+        deepcopy_artifactdict(state.global_vars, deci.global_vars)
+        deepcopy_artifactdict(state.enums, deci.enums)
+        deepcopy_artifactdict(state.typedefs, deci.typedefs)
+        deepcopy_artifactdict(state.segments, deci.segments)
+
+        state._dirty = False
+        return state
+
+
     #
     # Setters
     #
@@ -717,3 +748,40 @@ class State:
                 return func
         else:
             return None
+        
+    def diff_function_artifacts(self, other_state: "State", func_addr: int):
+        # A lot of repetition so this is just a helper to get the relevant attributes 
+        def get_header_attr(func, attr):
+            return getattr(func.header, attr, None) if func and func.header else None
+        
+        # Get the comments where each comment is a dictionary 
+        get_comments = lambda state_obj : {addr: cmt.comment for addr, cmt in state_obj.get_func_comments(func_addr).items()}
+
+        func_1 = self.get_function(func_addr)
+        func_2 = other_state.get_function(func_addr)
+
+        diffs = {
+            'name': {
+                # can change this to use helper func since func and func.header should have same name 
+                'master': func_1.name if func_1 else None,
+                'target': func_2.name if func_2 else None
+            },
+            'args': {
+                'master': get_header_attr(func_1, 'args') or {},
+                'target': get_header_attr(func_2, 'args') or {}
+            },
+            'type': {
+                'master': get_header_attr(func_1, 'type'),
+                'target': get_header_attr(func_2, 'type')
+            },
+            'stack_vars': {
+                'master': func_1.stack_vars if func_1 else {},
+                'target': func_2.stack_vars if func_2 else {}
+            },
+            'comments': {
+                'master': get_comments(self),
+                'target': get_comments(other_state)
+            }
+        }
+
+        return diffs

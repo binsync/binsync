@@ -41,7 +41,7 @@ class TestClient(unittest.TestCase):
             assert state.dirty is False
 
             # ignore cache and grab the master state from the git repo
-            state = client.get_state(user="user0", no_cache=True)
+            state = client.get_state(user="user0", fetch_cache=False)
             assert len(state.functions) == 1
             assert state.functions[self.FAKE_ADDR].header == func_header
 

@@ -41,15 +41,16 @@ def atomic_git_action(f):
     Cache. Generally, just never call functions with this decorator until the Client is done initing.
 
     This function will also attempt to check the cache for requested data on the same thread the original call
-    was made from. If not found, the atomic scheduling is done.
+    was made from. If not found, the atomic scheduling is done. 
+    If save_cache is False, then this function will not save results to the cache.
 
     @param f:   A Client object function
     @return:
     """
     @wraps(f)
     def _atomic_git_action(self: "Client", *args, **kwargs):
-        no_cache = kwargs.get("no_cache", False)
-        if not no_cache:
+        fetch_cache = kwargs.get("fetch_cache", True)
+        if fetch_cache:
             # cache check
             cache_item = self.check_cache_(f, **kwargs)
             if cache_item is not None:
@@ -62,7 +63,8 @@ def atomic_git_action(f):
             priority=priority
         )
 
-        if ret_val:
+        save_cache = kwargs.get("save_cache", True)
+        if ret_val and save_cache:
             self._set_cache(f, ret_val, **kwargs)
 
         return ret_val if ret_val is not None else {}
@@ -152,7 +154,7 @@ class Client:
 
         self.active_remote = True
         # force a state update on init
-        self.master_state = self.get_state(no_cache=True)
+        self.master_state = self.get_state(fetch_cache=False)
 
     def copy(self, copy_files=False):
         temp_dir = None
@@ -395,7 +397,7 @@ class Client:
     #
 
     @atomic_git_action
-    def users(self, priority=None, no_cache=False) -> Iterable[User]:
+    def users(self, priority=None, fetch_cache=True) -> Iterable[User]:
         repo = self.repo
         attempt_again = True
         attempted_fix = False
@@ -460,21 +462,21 @@ class Client:
 
 
     @atomic_git_action
-    def get_state(self, user=None, priority=None, no_cache=False, commit_hash=None) -> State:
-        if user is None:
+    def get_state(self, user=None, priority=None, fetch_cache=True, save_cache = True, commit_hash=None) -> State:
+        if user is None and commit_hash is None:
             user = self.master_user
 
         state = self.parse_state_from_commit(
             self.repo, user=user, commit_hash=commit_hash, is_master=user == self.master_user, client=self
         )
 
-        # NOTE: there might be a race between get_state(no_cache=True) in
+        # NOTE: there might be a race between get_state(fetch_cache=False) in
         # Client and get_state(...) from all_states() in Controller which uses
         # the cache. That race happens when we have a repository with a lot of
         # artifacts to retrieve. As the cache is using a defaultdict() we will
         # get an empty state back when querying from the cache, and we always
         # get this empty state as we don't update the cache.
-        if no_cache or not self.cache.get_state(user):
+        if (not fetch_cache or not self.cache.get_state(user)) and save_cache:
             self.cache.set_state(state, user=user)
 
         return state
@@ -492,7 +494,7 @@ class Client:
     def all_states(self, before_ts: int = None) -> Iterable[State]:
         states = list()
         # promises users in the event of inability to get new users
-        users = self.users(no_cache=True) or self.users()
+        users = self.users(fetch_cache=False) or self.users()
         if not users:
             l.critical("Failed to get users from current project. Report me if possible.")
             return {}
@@ -509,7 +511,7 @@ class Client:
         for username in usernames:
             commit_hash = username_to_commit.get(username, None)
             state = self.get_state(
-                user=username, priority=SchedSpeed.FAST, commit_hash=commit_hash, no_cache=(commit_hash is not None)
+                user=username, priority=SchedSpeed.FAST, commit_hash=commit_hash, fetch_cache=(commit_hash is None)
             )
 
             # NOTE: It can happen that state is None when the state is
@@ -521,21 +523,71 @@ class Client:
 
         return states
 
+    @atomic_git_action
+    def reset_to_commit(self, commit_hash: str, user:str|None=None , priority=None, fetch_cache=False, save_cache=True):
+        """
+        Resets a branch to a certain commit hash. Returns the State that was 
+        reverted to. If the user is not specified, assumes the user to be the
+        master user.
+        
+
+        !!! DO NOT EVER SET fetch_cache !!!
+
+        It is set to False by default as reverting is not a cachable operation 
+        so there is no reason to ever look in the cache. (save_cache can be set
+        because it saves the new state to the cache).
+        """
+        if user is None:
+            user = self.master_user
+        self.repo.git.checkout(f"binsync/{user}")
+
+        self.repo.git.reset("--hard", commit_hash)
+        self.repo.git.reset("--soft", "ORIG_HEAD")
+        self.repo.git.commit(m=f"Reset to commit {commit_hash}")
+        
+        # Return the state parsed from the new head commit (the reset target)
+        return self.parse_state_from_commit(
+            self.repo, user=user, commit_hash=None, is_master=user == self.master_user, client=self
+        )
+
+
     def find_commits_before_ts(self, repo: git.Repo, ts: int, users: list[str]):
         ref_dict = self._get_best_refs(repo, force_local=True)
         best_commits = {}
         for user_name, ref in ref_dict.items():
             if user_name not in users:
                 continue
-
-            commits = list(repo.iter_commits(ref))
-            reverse_sorted_commits = sorted(commits, key=lambda x: x.committed_date, reverse=True)
-            for commit in reverse_sorted_commits:
-                if commit.committed_date <= ts:
-                    best_commits[user_name] = commit.hexsha
-                    break
-
+            commit_sha = self._find_commit_before_ts(repo, ts, ref=ref)
+            if commit_sha is not None:  
+                best_commits[user_name] = commit_sha
         return best_commits
+    
+    def _find_commit_before_ts(self, repo: git.Repo, ts:float, user_name:str|None=None, ref:git.Reference|None=None):
+        """
+        Get the last commit before a timestamp given either a user or a ref.
+        """
+        if user_name and ref:
+            raise ValueError("Can't specify both a user and a ref - unable to disambiguate")
+        elif ref:
+            commits = list(repo.iter_commits(ref))
+        elif user_name:
+            ref_dict = self._get_best_refs(repo, force_local=True)
+            commits = list(repo.iter_commits(ref_dict[user_name]))
+        elif not user_name and not ref:
+            raise ValueError("Must specify either a user or a ref")
+        
+        reverse_sorted_commits = sorted(commits, key=lambda x: x.committed_date, reverse=True)
+        for commit in reverse_sorted_commits:
+            if commit.committed_date <= ts:
+                return commit.hexsha
+        return None # No commits before timestamp
+    
+    @atomic_git_action
+    def find_commit_before_ts(self, repo: git.Repo, ts:float, user_name:str|None= None, ref:git.Reference|None=None):
+        """
+        Wrapper around _find_commit_before_ts that enforces atomic git actions
+        """
+        return self._find_commit_before_ts(repo, ts, user_name, ref)
 
     def commit_master_state(self, commit_msg=None) -> int:
         # Attempt to commit dirty files in a update phase.
@@ -581,6 +633,30 @@ class Client:
             self._push()
 
         l.debug("Commit %d times, pull: %s, push: %s", commit_num, did_pull, did_push)
+
+    @atomic_git_action
+    def get_first_user_commit(self, user=None, priority=None, fetch_cache=False, save_cache=False):
+        """
+        ### DO NOT CHANGE fetch_cache OR save_cache!!!!! There is no reason to interact with the cache!!!
+        Gets the first commit by the specified user. This is expected to be the 
+        commit where all the .toml files are created.
+
+        Note: May not function as expected if the BinSync repo is structured
+        strangely and one branch contains multiple "User created" commits. In
+        that case, it will return the very first such commit that occurred.
+        
+
+        @param
+        @return: A tuple (commit_hash, timestamp) of the "User created" commit
+        """
+        if user is None:
+            user = self.master_user
+        
+        for commit in self.repo.iter_commits(f"binsync/{user}"):
+            if commit.message.strip() == "User created": # Starting commit message contains a newline
+                return (commit.hexsha, commit.committed_date)
+        return None
+
 
     #
     # Git Backend
@@ -959,6 +1035,11 @@ class Client:
         elif f.__qualname__ == self.users.__qualname__:
             set_func = self.cache.set_users
             args = []
+        elif f.__qualname__ == self.reset_to_commit.__qualname__:
+            set_func = self.cache.set_state
+            args = []
+            if kwargs.get("user", None) is None:
+                kwargs["user"] = self.master_user
         else:
             return None
 
