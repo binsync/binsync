@@ -1492,10 +1492,19 @@ class BSController:
         user = user or state.user
         
         # Check if function is in decompilation cache or if precise diff is enabled
-        use_precise_diff = func_addr in self.decompilation_cache or self.precise_diff_preview
+        in_cache = func_addr in self.decompilation_cache
+        use_precise_diff = in_cache or self.precise_diff_preview
+        cached_decomp = self.decompilation_cache.get(func_addr) if in_cache else None
+        
+        if in_cache:
+            _l.info(f"Decompilation cache hit for function @ {hex(func_addr)}")
+        else:
+            _l.info(f"Decompilation cache miss for function @ {hex(func_addr)}")
         
         # Get the master function based on the selected method
-        if use_precise_diff:
+        if in_cache and cached_decomp and cached_decomp.bs_func:
+            master_func = cached_decomp.bs_func
+        elif use_precise_diff:
             master_func = self.deci.functions.get(func_addr)
         else:
             master_state = self.client.master_state

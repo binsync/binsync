@@ -125,6 +125,11 @@ class FunctionTableView(BinsyncTableView):
     def contextMenuEvent(self, event):
         menu = QMenu(self)
         menu.setObjectName("binsync_function_table_context_menu")
+        self.reset_tooltip_state()
+        self.bind_tooltip_menu(menu)
+        menu.hovered.connect(self.handle_menu_hovered_action)
+        menu.aboutToHide.connect(self.reset_tooltip_state)
+
         valid_row = True
         selected_row = self.rowAt(event.pos().y())
         idx = self.proxymodel.index(selected_row, 0)
@@ -154,7 +159,7 @@ class FunctionTableView(BinsyncTableView):
                 sync_action = QAction("Sync", parent=menu)
                 sync_action.triggered.connect( lambda: self.controller.fill_artifact(func_addr, artifact_type=Function, user=user_name))
                 menu.addAction(sync_action)
-                sync_action.hovered.connect(lambda: self.show_tooltip(func_addr, user_name))
+                sync_action.hovered.connect(lambda act=sync_action: self.show_tooltip(func_addr, user_name, action=act))
 
             from_menu = menu.addMenu("Sync from...")
             users = self._get_valid_users_for_func(func_addr)
@@ -163,7 +168,7 @@ class FunctionTableView(BinsyncTableView):
                 action.triggered.connect(
                     lambda checked=False, name=username: self.controller.fill_artifact(func_addr, artifact_type=Function, user=name))
                 action.hovered.connect(
-                    lambda name=username: self.show_tooltip(func_addr, name))
+                    lambda name=username, act=action: self.show_tooltip(func_addr, name, action=act))
         menu.popup(self.mapToGlobal(event.pos()))
 
 
