@@ -42,6 +42,7 @@ class ControlPanel(QWidget):
         self.controller = controller
 
         self.tables = {}
+        self._user_contexts = {}
         self._init_widgets()
 
         # register controller callback
@@ -110,6 +111,7 @@ class ControlPanel(QWidget):
         
         # Connect signal from utility panel to control panel "users looking at function" functionality
         self._utilities_panel.connected_to_server.connect(self._update_aux_server_status)
+        self._utilities_panel.server_context_change.connect(self._update_aux_server_contexts)
 
         self.tables.update({
             "functions": self._func_table,
@@ -131,21 +133,53 @@ class ControlPanel(QWidget):
         ctx_name = ctx_name[:12] + "..." if len(ctx_name) > 12 else ctx_name
         self._status_bar.showMessage(f"{ctx_name}@{hex(self.controller.last_active_func.addr)}")
         self._ctx_table.reload()
+        self._update_aux_server_counts()
 
     def _update_aux_server_status(self, connected: bool):
         if connected:
             if self._context_info is not None:
                 l.debug("Received connected signal when already connected")
                 return
-            self._context_info = QLabel("Hi im here")
+            self._context_info = QLabel()
             self._status_bar.addPermanentWidget(self._context_info)
+            self._update_aux_server_counts()
         else: # not connected
             if self._context_info is None:
                 l.debug("Received disconnected signal when already disconnected")
                 return
             self._status_bar.removeWidget(self._context_info)
+            self._context_info.deleteLater()
             self._context_info = None
+            self._user_contexts = {}
+    
+    def _update_aux_server_contexts(self, user_contexts:dict[str,dict[str,int]]):
+        """
+        Updates user contexts to new provided values, then updates the
+        _context_info widget with the new contexts
+        """
+        if self._context_info is None:
+            l.error("Received updated auxiliary server context while not connected to server")
+            return
+        self._user_contexts = user_contexts
+        self._update_aux_server_counts()
+
+    def _update_aux_server_counts(self):
+        if self._context_info is None:
+            l.error("Trying to update counts while not connected to server")
+            return
+        if self.controller.last_active_func is None:
+            # We are not looking at a function, but we do want to update the count
+            self._context_info.setText(str(0))
+            return
         
+        curr_addr = self.controller.last_active_func.addr
+        connected_count = 0
+        for user, context_info in self._user_contexts.items():
+            if context_info["func_addr"] == curr_addr:
+                connected_count += 1
+
+        self._context_info.setText(str(connected_count))
+
 
     def _update_table_data(self, states):
 
