@@ -83,6 +83,7 @@ class ControlPanel(QWidget):
         self._status_label.setText(self.controller.status_string())
         self._status_bar = QContextStatusBar(self.controller, self)
         self._status_bar.addPermanentWidget(self._status_label)
+        self._context_info: QLabel|None = None # To be given a QLabel when needed
 
         # control box
         control_layout = QVBoxLayout()
@@ -106,6 +107,9 @@ class ControlPanel(QWidget):
         # Connect signal from utility panel to function in activity table to facilitate displaying user locations for binsync Server extra
         self._utilities_panel.connected_to_server.connect(self._activity_table.add_live_addresses) 
         self._utilities_panel.server_context_change.connect(self._activity_table.update_table_context)
+        
+        # Connect signal from utility panel to control panel "users looking at function" functionality
+        self._utilities_panel.connected_to_server.connect(self._update_aux_server_status)
 
         self.tables.update({
             "functions": self._func_table,
@@ -127,6 +131,21 @@ class ControlPanel(QWidget):
         ctx_name = ctx_name[:12] + "..." if len(ctx_name) > 12 else ctx_name
         self._status_bar.showMessage(f"{ctx_name}@{hex(self.controller.last_active_func.addr)}")
         self._ctx_table.reload()
+
+    def _update_aux_server_status(self, connected: bool):
+        if connected:
+            if self._context_info is not None:
+                l.debug("Received connected signal when already connected")
+                return
+            self._context_info = QLabel("Hi im here")
+            self._status_bar.addPermanentWidget(self._context_info)
+        else: # not connected
+            if self._context_info is None:
+                l.debug("Received disconnected signal when already disconnected")
+                return
+            self._status_bar.removeWidget(self._context_info)
+            self._context_info = None
+        
 
     def _update_table_data(self, states):
 
