@@ -14,10 +14,24 @@ from libbs.ui.qt_objects import (
     QVBoxLayout,
     QWidget,
     Signal,
-    Slot
+    Slot,
+    QToolTip,
+    QRect,
+    QCursor,
 )
 
 l = logging.getLogger(__name__)
+
+class HoverLabel(QLabel):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._tooltip = ""
+
+    def enterEvent(self, event):
+        QToolTip.showText(QCursor.pos(), self._tooltip, self, QRect(), 60000)
+    
+    def set_tooltip(self, tooltip:str):
+        self._tooltip = tooltip
 
 class QContextStatusBar(QStatusBar):
     def __init__(self, controller, parent = None):
@@ -84,7 +98,7 @@ class ControlPanel(QWidget):
         self._status_label.setText(self.controller.status_string())
         self._status_bar = QContextStatusBar(self.controller, self)
         self._status_bar.addPermanentWidget(self._status_label)
-        self._context_info: QLabel|None = None # To be given a QLabel when needed
+        self._context_info: HoverLabel|None = None # To be given a QLabel when needed
 
         # control box
         control_layout = QVBoxLayout()
@@ -140,7 +154,7 @@ class ControlPanel(QWidget):
             if self._context_info is not None:
                 l.debug("Received connected signal when already connected")
                 return
-            self._context_info = QLabel()
+            self._context_info = HoverLabel()
             self._status_bar.addPermanentWidget(self._context_info)
             self._update_aux_server_counts()
         else: # not connected
@@ -173,12 +187,13 @@ class ControlPanel(QWidget):
             return
         
         curr_addr = self.controller.last_active_func.addr
-        connected_count = 0
+        users = []
         for user, context_info in self._user_contexts.items():
             if context_info["func_addr"] == curr_addr:
-                connected_count += 1
+                users.append(user)
 
-        self._context_info.setText(str(connected_count))
+        self._context_info.setText(str(len(users)))
+        self._context_info.set_tooltip("\n".join(users))
 
 
     def _update_table_data(self, states):
