@@ -19,6 +19,7 @@ from libbs.ui.qt_objects import (
     QRect,
     QCursor,
 )
+import html
 
 l = logging.getLogger(__name__)
 
@@ -192,8 +193,10 @@ class ControlPanel(QWidget):
             if context_info["func_addr"] == curr_addr:
                 users.append(user)
 
+        users_html = "<strong>Users Currently Viewing This Function</strong><br>"
+        users_html += "<br>".join([html.escape(user) for user in users])
         self._context_info.setText(str(len(users)))
-        self._context_info.set_tooltip("\n".join(users))
+        self._context_info.set_tooltip(users_html)
 
 
     def _update_table_data(self, states):
