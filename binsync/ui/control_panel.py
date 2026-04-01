@@ -156,7 +156,7 @@ class ControlPanel(QWidget):
                 l.debug("Received connected signal when already connected")
                 return
             self._context_info = HoverLabel()
-            self._status_bar.addPermanentWidget(self._context_info)
+            self._status_bar.insertPermanentWidget(0, self._context_info)
             self._update_aux_server_counts()
         else: # not connected
             if self._context_info is None:
@@ -184,7 +184,7 @@ class ControlPanel(QWidget):
             return
         if self.controller.last_active_func is None:
             # We are not looking at a function, but we do want to update the count
-            self._context_info.setText(str(0))
+            self._context_info.setText(f'Viewing: <span style="color:forestgreen">{0}</span>')
             return
         
         curr_addr = self.controller.last_active_func.addr
@@ -195,7 +195,7 @@ class ControlPanel(QWidget):
 
         users_html = "<strong>Users Currently Viewing This Function</strong><br>"
         users_html += "<br>".join([html.escape(user) for user in users])
-        self._context_info.setText(str(len(users)))
+        self._context_info.setText(f'Viewing: <span style="color:forestgreen">{len(users)}</span>')
         self._context_info.set_tooltip(users_html)
 
 
