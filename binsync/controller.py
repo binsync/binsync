@@ -13,7 +13,7 @@ from libbs.artifacts import (
     Artifact,
     Function, FunctionHeader, StackVariable,
     Comment, GlobalVariable, Patch,
-    Enum, Struct, FunctionArgument, StructMember, Typedef, Segment, Context
+    Enum, Struct, FunctionArgument, StructMember, Typedef, Segment, Context, Decompilation
 )
 from libbs.api import DecompilerInterface
 from libbs.api.type_parser import CType
@@ -144,9 +144,11 @@ class BSController:
         # record movements (in IDA) and use that for discovering auto-created objects
         self.recorded_movements = []
         self.startup_time = None
+        self.decompilation_cache = {}
         if self.deci.name == IDA_DECOMPILER:
             self.deci.force_click_recording = True
             self.deci.artifact_change_callbacks[Context].append(self._handle_context_update)
+            self.deci.artifact_change_callbacks[Decompilation].append(self._update_dec_cache)
 
         # artifact map
         self.artifact_dict_map = {
@@ -475,6 +477,13 @@ class BSController:
 
         if self.startup_time is None:
             self.startup_time = time.time()
+
+    def _update_dec_cache(self, *args, **kwargs):
+        dec: Decompilation = args[0] if len(args) > 0 else None
+        if dec is None or dec.addr is None:
+            return
+
+        self.decompilation_cache[dec.addr] = dec
 
     def _had_recent_human_movement(self):
         """
@@ -1520,8 +1529,20 @@ class BSController:
         state = self.get_state(user=user, priority=SchedSpeed.FAST)
         user = user or state.user
         
+        # Check if function is in decompilation cache or if precise diff is enabled
+        in_cache = func_addr in self.decompilation_cache
+        use_precise_diff = in_cache or self.precise_diff_preview
+        cached_decomp = self.decompilation_cache.get(func_addr) if in_cache else None
+        
+        if in_cache:
+            _l.info("Decompilation cache hit for function @ %s", hex(func_addr))
+        else:
+            _l.info("Decompilation cache miss for function @ %s", hex(func_addr))
+        
         # Get the master function based on the selected method
-        if self.precise_diff_preview:
+        if in_cache and cached_decomp and cached_decomp.bs_func:
+            master_func = cached_decomp.bs_func
+        elif use_precise_diff:
             master_func = self.deci.functions.get(func_addr)
         else:
             master_state = self.client.master_state
@@ -1537,7 +1558,7 @@ class BSController:
         get_comments = lambda state_obj: {addr: cmt.comment for addr, cmt in state_obj.get_func_comments(func_addr).items()}
         
         # Get master comments based on the selected method
-        if self.precise_diff_preview:
+        if use_precise_diff:
             master_comments = {}
             if master_func:
                 func_size = master_func.size if hasattr(master_func, 'size') else 0x1000
