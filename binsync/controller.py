@@ -1535,9 +1535,9 @@ class BSController:
         cached_decomp = self.decompilation_cache.get(func_addr) if in_cache else None
         
         if in_cache:
-            _l.info(f"Decompilation cache hit for function @ {hex(func_addr)}")
+            _l.info("Decompilation cache hit for function @ %s", hex(func_addr))
         else:
-            _l.info(f"Decompilation cache miss for function @ {hex(func_addr)}")
+            _l.info("Decompilation cache miss for function @ %s", hex(func_addr))
         
         # Get the master function based on the selected method
         if in_cache and cached_decomp and cached_decomp.bs_func:
