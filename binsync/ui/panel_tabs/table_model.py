@@ -429,7 +429,8 @@ class BinsyncTableView(QTableView):
         self._last_tooltip_action = action
         
         try:
-            diff_html = self.render_tooltip_text(differences)
+            diff = self.controller.preview_function_changes(func_addr=func_addr, user=user_name)
+            diff_html = self.render_tooltip_text(diff)
         except Exception:
             diff_html = None
 
