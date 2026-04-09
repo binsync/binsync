@@ -6,6 +6,7 @@ from binsync.controller import BSController
 from libbs.ui.qt_objects import (
     QAbstractItemView,
     QAbstractTableModel,
+    QEvent,
     QHeaderView,
     Qt,
     QModelIndex,
@@ -265,6 +266,9 @@ class BinsyncTableView(QTableView):
 
         self.doubleClicked.connect(self._doubleclick_handler)
         self.column_visibility = []
+        self._last_tooltip_key = None
+        self._last_tooltip_action = None
+        self._tooltip_menu = None
 
         self.stretch_col = stretch_col
         self.col_count = col_count
@@ -410,16 +414,23 @@ class BinsyncTableView(QTableView):
         diff_html = "".join(diff_sections) if diff_sections else "<span style='color:red; background-color:#ffecec;'>No changes</span>"
         return diff_html
 
-    def show_tooltip(self, differences: dict[str, Any]):
+    def show_tooltip(self, func_addr, user_name, action=None):
         """
         Have a popup box that shows the differences between the master and target function when hovering a sync option.
 
         Call preview_function_changes and parse the dictionary for any differences. Note this just applies to functions
         and their comments.
         """
+        tooltip_key = (func_addr, user_name)
+        if self._last_tooltip_key == tooltip_key and self._last_tooltip_action is action:
+            return
+
+        self._last_tooltip_key = tooltip_key
+        self._last_tooltip_action = action
         
         try:
-            diff_html = self.render_tooltip_text(differences)
+            diff = self.controller.preview_function_changes(func_addr=func_addr, user=user_name)
+            diff_html = self.render_tooltip_text(diff)
         except Exception:
             diff_html = None
 
@@ -435,3 +446,28 @@ class BinsyncTableView(QTableView):
             }
             """)
             QToolTip.showText(QCursor.pos(), diff_html, self, QRect(), 60000)
+
+    def reset_tooltip_state(self):
+        self._last_tooltip_key = None
+        self._last_tooltip_action = None
+        QToolTip.hideText()
+
+    def bind_tooltip_menu(self, menu):
+        if self._tooltip_menu is not None:
+            self._tooltip_menu.removeEventFilter(self)
+
+        self._tooltip_menu = menu
+        self._tooltip_menu.setMouseTracking(True)
+        self._tooltip_menu.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if obj is self._tooltip_menu and event.type() == QEvent.MouseMove:
+            hovered_action = obj.actionAt(event.pos())
+            if hovered_action is None and self._last_tooltip_action is not None:
+                self.reset_tooltip_state()
+
+        return super().eventFilter(obj, event)
+
+    def handle_menu_hovered_action(self, action):
+        if action is not self._last_tooltip_action:
+            self.reset_tooltip_state()
