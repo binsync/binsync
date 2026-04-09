@@ -148,7 +148,8 @@ class ControlPanel(QWidget):
         ctx_name = ctx_name[:12] + "..." if len(ctx_name) > 12 else ctx_name
         self._status_bar.showMessage(f"{ctx_name}@{hex(self.controller.last_active_func.addr)}")
         self._ctx_table.reload()
-        self._update_aux_server_counts()
+        if self._context_info is not None:
+            self._update_aux_server_counts()
 
     def _update_aux_server_status(self, connected: bool):
         if connected:
@@ -179,6 +180,11 @@ class ControlPanel(QWidget):
         self._update_aux_server_counts()
 
     def _update_aux_server_counts(self):
+        """
+        Updates the number of users looking at the current function.
+        Assumes the client is connected to the server as user count
+        information cannot be obtained otherwise.
+        """
         if self._context_info is None:
             l.error("Trying to update counts while not connected to server")
             return
