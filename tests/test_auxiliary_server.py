@@ -13,9 +13,9 @@ from libbs.ui.qt_objects import (
 )
 import unittest
 import threading
+import multiprocessing
 import time
 import socket
-from werkzeug.serving import make_server
 from contextlib import contextmanager
 from libbs.artifacts import Artifact, Context
 
@@ -57,15 +57,15 @@ class ServerThreadManager():
     Implementation of the server that enables shutting down the server in between tests
     """
     def __init__(self, server:Server):
-        self.server = make_server(server.host, server.port, server.app)
+        self.server = server
         
     def enter(self):
-        self._thread = threading.Thread(target=self.server.serve_forever)
-        self._thread.start()
-        
+        self._process = multiprocessing.Process(target=self.server.run)
+        self._process.start()
+
     def exit(self):
-        self.server.shutdown()
-        self._thread.join()
+        self._process.terminate()
+        self._process.join()
 
 class MockUser(QWidget):
     '''
