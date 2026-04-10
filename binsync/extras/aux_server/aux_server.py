@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, Response
 from threading import Lock
 import logging
 from binsync.extras.aux_server.store import ServerStore
+from werkzeug.serving import make_server
 l = logging.getLogger(__name__)
     
 class Server:
@@ -135,6 +136,11 @@ class Server:
         return jsonify(self.store.list_projects())
     
     def run(self):
-        self.app.run(self.host,self.port)
+        self._wz_server = make_server(self.host, self.port, self.app)
+        l.info("Server started!")
+        self._wz_server.serve_forever()
+
+    def stop(self):
+        self._wz_server.shutdown()
 
     
