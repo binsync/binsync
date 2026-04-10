@@ -42,6 +42,7 @@ extras = [
     "dailalib>=3.20.0",
     "flask",
     "requests"
+    "werkzeug"
 ]
 
 [project.scripts]
