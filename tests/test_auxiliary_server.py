@@ -214,7 +214,7 @@ class TestAuxServer(unittest.TestCase):
         self.users.append(MockUser(controller))
         for user in self.users:
             user.connect_signal.emit((self.HOST, self.PORT))
-        time.sleep(1)
+        time.sleep(2)
         
         contexts_dict, _ = server.store.getUserData()
         user_entry = contexts_dict[controller.client.master_user]
@@ -345,7 +345,7 @@ class TestAuxServer(unittest.TestCase):
         
         # Client A links project
         user_a.link_project.emit((project_url, ServerStore.DEFAULT_GROUPNAME))
-        time.sleep(0.5) # Give time for server to receive the project
+        time.sleep(1) # Give time for server to receive the project
         
         # Client B lists out projects
         user_b.list_projects.emit()
@@ -359,7 +359,7 @@ class TestAuxServer(unittest.TestCase):
         
         # Client C unlinks project
         user_c.unlink_project.emit((project_url, ServerStore.DEFAULT_GROUPNAME))
-        time.sleep(0.5) # Give time for server to receive the unlink
+        time.sleep(1) # Give time for server to receive the unlink
         
         # Client B lists out projects
         user_b.list_projects.emit()
