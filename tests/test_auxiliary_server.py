@@ -55,14 +55,17 @@ class ServerThreadManager():
     Implementation of the server that enables shutting down the server in between tests
     """
     def __init__(self, server:Server):
-        self.server = server
+        from werkzeug.serving import make_server
+        # self.server = server
+        self.server = make_server(server.host, server.port, server.app)
         
     def enter(self):
-        self._thread = threading.Thread(target=self.server.run)
+        self._thread = threading.Thread(target=self.server.serve_forever)
         self._thread.start()
         
     def exit(self):
-        self.server.stop()
+        # self.server.stop()
+        self.server.shutdown()
         self._thread.join()
 
 class MockUser(QWidget):
