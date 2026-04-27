@@ -37,7 +37,7 @@ pip3 install binsync && binsync --install
 BinSync is also available in the Binary Ninja plugin manager.
 If you plan on using BS with Ghidra, you must launch it in [PyGhidra mode](https://github.com/NationalSecurityAgency/ghidra/blob/stable/GhidraDocs/GettingStarted.md#pyghidra-mode).
 If you plan on using extra BS features, like the ChatGPT User, install the package like this: `pip3 install binsync[extras]`, which will install extra packages for support.
-For full install information, please read our [quickstart docs](https://binsync.net/docs/home).
+For full install information, please read our [quickstart docs](https://docs.binsync.net/quickstart/install).
 
 For developers, install the package to be editable (`-e`) and make sure `pip>=23.0.0`.
 
@@ -53,7 +53,7 @@ Ghidra support is still very much in early stage, so only expect the minimal fea
 
 ## Decompiler Support Progress
 Although we support the decompilers in the earlier section, not every decompiler is supported at the same level of syncing. 
-To understand the difference between artifact support, pull, push, and auto push, read our [decompiler use introduction](https://binsync.net/docs/dec-introduction/).
+To understand the difference between artifact support, pull, push, and auto push, read our [decompiler use introduction](https://docs.binsync.net/decompilers/dec-introduction).
 
 ### IDA Pro
 
