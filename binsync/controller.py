@@ -241,12 +241,20 @@ class BSController:
         if self.headless:
             return
 
-        # after this point you can import anything from UI and it is safe!
+        # If a previous connect() already started the UI thread, reuse it. Replacing
+        # self._ui_updater_thread with a new QThread races with the old wrapper's
+        # GC and triggers Qt's "QThread: Destroyed while thread is still running"
+        # qFatal abort (hard-crashes IDA on project switch).
+        try:
+            if self._ui_updater_thread is not None and self._ui_updater_thread.isRunning():
+                return
+        except RuntimeError:
+            pass
+
         from libbs.ui.qt_objects import (
             QThread
         )
         from binsync.ui.utils import BSUIScheduler
-        # spawns a qthread/worker
         self._ui_updater_thread = QThread()
         self._ui_updater_worker = BSUIScheduler()
         self._ui_updater_worker.moveToThread(self._ui_updater_thread)
@@ -367,7 +375,11 @@ class BSController:
 
     def start_worker_routines(self):
         self._run_updater_threads = True
-        self.user_states_update_thread.start()
+        # Thread instances can only be started once; recreate after a previous run
+        # (e.g. when switching projects re-runs connect()).
+        if not self.user_states_update_thread.is_alive():
+            self.user_states_update_thread = threading.Thread(target=self.updater_routine, daemon=True)
+            self.user_states_update_thread.start()
 
         self.push_job_scheduler.start_worker_thread()
 
@@ -385,6 +397,14 @@ class BSController:
     #
 
     def connect(self, user, path, init_repo=False, remote_url=None, single_thread=False, **kwargs):
+        # If we were previously connected, tear down the old worker routines first
+        # so we don't end up with stale background threads pointing at the old client.
+        if self.client is not None:
+            try:
+                self.stop_worker_routines()
+            except Exception:
+                _l.exception("Error stopping previous worker routines on reconnect")
+
         binary_hash = self.deci.binary_hash
         self.client = Client(
             user, path, binary_hash, init_repo=init_repo, remote_url=remote_url, **kwargs
