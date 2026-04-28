@@ -388,6 +388,16 @@ class BSController:
         self.deci.start_artifact_watchers()
 
     def stop_worker_routines(self):
+        # Unhook IDA artifact watchers first so no new IDB/Hex-Rays events can
+        # fire into Python after the rest of the teardown runs (and crucially
+        # before IDAPython tears down on IDA exit — otherwise a stale hook will
+        # try to PyGILState_Ensure() on a dead interpreter and IDA crashes).
+        if not self.headless and self.deci is not None:
+            try:
+                self.deci.stop_artifact_watchers()
+            except Exception:
+                _l.exception("Error stopping artifact watchers")
+
         self._run_updater_threads = False
         self.push_job_scheduler.stop_worker_thread()
         self._stop_ui_components()
