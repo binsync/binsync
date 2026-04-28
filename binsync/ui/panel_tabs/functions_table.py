@@ -180,6 +180,7 @@ class QFunctionTable(QWidget):
     def __init__(self, controller: BSController, parent=None):
         super().__init__(parent)
         self.controller = controller
+        self._history_dialog = None
         self._init_widgets()
 
     def _init_widgets(self):
@@ -197,8 +198,15 @@ class QFunctionTable(QWidget):
         self.setLayout(layout)
 
     def _handle_history_view(self):
-        dialog = HistoryDisplayWidget(controller=self.controller,parent=self)
-        dialog.show()
+        if self._history_dialog is None:
+            dialog = HistoryDisplayWidget(controller=self.controller, parent=self)
+            dialog.setAttribute(Qt.WA_DeleteOnClose, True)
+            dialog.destroyed.connect(lambda *_: setattr(self, "_history_dialog", None))
+            self._history_dialog = dialog
+
+        self._history_dialog.show()
+        self._history_dialog.raise_()
+        self._history_dialog.activateWindow()
 
     def update_table(self, states):
         self.table.update_table(states)

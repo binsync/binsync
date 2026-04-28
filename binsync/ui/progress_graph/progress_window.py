@@ -234,6 +234,9 @@ class ProgressGraphWidget(QDialog):
 
         self.displayed_graph = None
         self._graph_view = None
+        self._summary_dialog = None
+        self._summary_timer = None
+        self._summary_htmlresponse = None
         _l.info("ProgressGraphWidget created with tag %s", self._tag_selection)
 
         self._init_widgets()
@@ -520,13 +523,14 @@ class ProgressGraphWidget(QDialog):
 
     
     def _load_ai_text(self, file_location, fileText):
+        if self._summary_htmlresponse is None:
+            return
 
         try:
             with open(file_location, "r") as f:
                 response = f.read()
-        except Exception as e:
+        except Exception:
             response = ""
-
 
         if response == fileText or response.strip() == "":
             return
@@ -541,7 +545,7 @@ class ProgressGraphWidget(QDialog):
 
         _l.debug(response)
 
-        self.htmlresponse.setStyleSheet("""
+        self._summary_htmlresponse.setStyleSheet("""
 QTextBrowser {
             background-color: #ffffff;   
             color: #2b2b2b;              
@@ -564,10 +568,23 @@ QTextBrowser {
             font-weight: bold;
         }
 """)
-        self.htmlresponse.setHtml(response)
+        self._summary_htmlresponse.setHtml(response)
 
-        if self.timer.isActive():
-            self.timer.stop()
+        if self._summary_timer is not None and self._summary_timer.isActive():
+            self._summary_timer.stop()
+
+    def _clear_summary_refs(self):
+        self._summary_dialog = None
+        self._summary_timer = None
+        self._summary_htmlresponse = None
+
+    def _cleanup_summary_dialog(self):
+        if self._summary_timer is not None and self._summary_timer.isActive():
+            self._summary_timer.stop()
+        if self._summary_dialog is not None:
+            self._summary_dialog.close()
+            self._summary_dialog.deleteLater()
+        self._clear_summary_refs()
 
 
 
@@ -587,18 +604,21 @@ QTextBrowser {
                 filetext = f.read()
         except Exception as e:
             filetext = ""
-        self.summary_dialog = QDialog(self)
-        self.summary_dialog.setWindowTitle("Summarization Results")
-        self.summary_dialog.setMinimumSize(600, 400)
+        self._cleanup_summary_dialog()
+        self._summary_dialog = QDialog(self)
+        self._summary_dialog.setAttribute(Qt.WA_DeleteOnClose, True)
+        self._summary_dialog.destroyed.connect(lambda *_: self._clear_summary_refs())
+        self._summary_dialog.setWindowTitle("Summarization Results")
+        self._summary_dialog.setMinimumSize(600, 400)
 
         # Make it modeless so you can interact with IDA while waiting
-        self.summary_dialog.setWindowFlags(Qt.Window)
+        self._summary_dialog.setWindowFlags(Qt.Window)
 
-        self.dlg_layout = QVBoxLayout()
+        dlg_layout = QVBoxLayout()
 
         # --- The Text Browser ---
-        self.htmlresponse = QTextBrowser() #For the stylesheet, we could adjust text sizing to be bigger but my monitor is 2560x1440 so I'm not sure how it looks on smaller windows
-        self.htmlresponse.setStyleSheet("""
+        self._summary_htmlresponse = QTextBrowser() #For the stylesheet, we could adjust text sizing to be bigger but my monitor is 2560x1440 so I'm not sure how it looks on smaller windows
+        self._summary_htmlresponse.setStyleSheet("""
     QTextBrowser {
                 background-color: #ffffff;   
                 color: #2b2b2b;              
@@ -622,19 +642,18 @@ QTextBrowser {
                 font-weight: bold;
             }
 """)    #Our HTML Window for the AI Response, below is the code for updating it with the AI response and hotlinking functions
-        self.htmlresponse.setText("<h3>Generating Summary...</h3><p>The AI is writing to the file in the background.<br>This window will auto-update when it's done.</p>")
-        self.htmlresponse.setOpenExternalLinks(False)
-        self.htmlresponse.anchorClicked.connect(self._function_hotlink)
-        self.htmlresponse.setOpenLinks(False)
-        self.timer = QTimer()
-        self.timer.timeout.connect(lambda: self._load_ai_text(file_location, filetext))
-        self.timer.start(2000) #Timer is stopped in _load_ai_text when new AI response is received
+        self._summary_htmlresponse.setText("<h3>Generating Summary...</h3><p>The AI is writing to the file in the background.<br>This window will auto-update when it's done.</p>")
+        self._summary_htmlresponse.setOpenExternalLinks(False)
+        self._summary_htmlresponse.anchorClicked.connect(self._function_hotlink)
+        self._summary_htmlresponse.setOpenLinks(False)
+        self._summary_timer = QTimer(self._summary_dialog)
+        self._summary_timer.timeout.connect(lambda: self._load_ai_text(file_location, filetext))
+        self._summary_timer.start(2000) #Timer is stopped in _load_ai_text when new AI response is received
 
+        dlg_layout.addWidget(self._summary_htmlresponse)
 
-        self.dlg_layout.addWidget(self.htmlresponse)
-
-        self.summary_dialog.setLayout(self.dlg_layout)
-        self.summary_dialog.show()
+        self._summary_dialog.setLayout(dlg_layout)
+        self._summary_dialog.show()
     @staticmethod
     def compute_size_outlier_scores(node_sizes: list[int], max_size=3, min_size=1) -> dict:
         """
