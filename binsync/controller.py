@@ -171,6 +171,7 @@ class BSController:
         self._last_reload = None
         self.last_active_func = None
         self._got_first_state = False
+        self._last_all_states = None
         # ui worker that fires off requests for UI update
         self._ui_updater_thread = None
         self._ui_updater_worker: Scheduler = None
@@ -331,6 +332,7 @@ class BSController:
                     continue
 
                 self._got_first_state |= True
+                self._last_all_states = all_states
                 # update context knowledge every loop iteration
                 if self.ctx_change_callback:
                     self._ui_updater_worker.schedule_job(
@@ -507,6 +509,14 @@ class BSController:
 
         if self.startup_time is None:
             self.startup_time = time.time()
+
+        # IDA fires this on every cursor movement; mirror it into the UI
+        # immediately so the "users on current function" panel updates without
+        # waiting for the next 0.5s polling iteration of updater_routine.
+        if self.ctx_change_callback and self._last_all_states is not None and self._ui_updater_worker is not None:
+            self._ui_updater_worker.schedule_job(
+                Job(self._check_and_notify_ctx, self._last_all_states)
+            )
 
     def _update_dec_cache(self, *args, **kwargs):
         dec: Decompilation = args[0] if len(args) > 0 else None
