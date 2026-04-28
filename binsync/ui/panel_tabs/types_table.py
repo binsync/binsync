@@ -3,7 +3,7 @@ import datetime
 from collections import defaultdict
 import time
 
-from libbs.artifacts import GlobalVariable
+from libbs.artifacts import Struct, Enum, Typedef
 
 from binsync.controller import BSController
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView
@@ -20,8 +20,20 @@ from binsync.core.scheduler import SchedSpeed
 l = logging.getLogger(__name__)
 
 
-class GlobalsTableModel(BinsyncTableModel):
-    """Activity model for global variables only (addr-keyed)."""
+_KIND_TO_ARTIFACT = {
+    "Struct": Struct,
+    "Enum": Enum,
+    "Typedef": Typedef,
+}
+_KIND_TO_GETTER = {
+    "Struct": "get_struct",
+    "Enum": "get_enum",
+    "Typedef": "get_typedef",
+}
+
+
+class TypesTableModel(BinsyncTableModel):
+    """Activity model for structs, enums, and typedefs (name-keyed)."""
 
     def __init__(self, controller: BSController, col_headers=None, filter_cols=None, time_col=None,
                  addr_col=None, parent=None):
@@ -37,24 +49,23 @@ class GlobalsTableModel(BinsyncTableModel):
         row = index.row()
         val = self.row_data[row][col]
         if role == Qt.DisplayRole:
-            if col == GlobalsTableView.COL_ADDR:
-                return hex(val) if val is not None else ""
-            elif col in (GlobalsTableView.COL_NAME, GlobalsTableView.COL_USER):
+            if col in (TypesTableView.COL_KIND, TypesTableView.COL_NAME, TypesTableView.COL_USER):
                 return val
-            elif col == GlobalsTableView.COL_DATE:
-                return friendly_datetime(val)
+            elif col == TypesTableView.COL_DATE:
+                return friendly_datetime(val) if val is not None else "—"
         elif role == self.SortRole:
-            if col == self.time_col and isinstance(val, datetime.datetime):
-                return time.mktime(val.timetuple())
+            if col == self.time_col:
+                if isinstance(val, datetime.datetime):
+                    return time.mktime(val.timetuple())
+                return 0
             return val
         elif role == Qt.BackgroundRole:
             return self.data_bgcolors[row]
         elif role == self.FilterRole:
-            addr = self.row_data[row][GlobalsTableView.COL_ADDR]
             return " ".join((
-                hex(addr) if addr is not None else "",
-                self.row_data[row][GlobalsTableView.COL_NAME] or "",
-                self.row_data[row][GlobalsTableView.COL_USER] or "",
+                self.row_data[row][TypesTableView.COL_KIND] or "",
+                self.row_data[row][TypesTableView.COL_NAME] or "",
+                self.row_data[row][TypesTableView.COL_USER] or "",
             ))
         return None
 
@@ -64,30 +75,40 @@ class GlobalsTableModel(BinsyncTableModel):
 
         for state in states:
             user_name = state.user
-            for _, gvar in state.global_vars.items():
-                change_time = gvar.last_change
-                if not change_time:
-                    continue
+            sources = (
+                (state.structs, "Struct"),
+                (state.enums, "Enum"),
+                (state.typedefs, "Typedef"),
+            )
+            for user_artifacts, kind in sources:
+                for _, artifact in user_artifacts.items():
+                    # Types loaded from the IDB type library don't fire per-artifact
+                    # change events the way functions/globals do, so most arrive with
+                    # last_change=None. Show them anyway and sort missing-time rows
+                    # to the bottom.
+                    change_time = artifact.last_change
+                    key = f"{artifact.name}({kind})"
+                    cmenu_cache[key].append(user_name)
 
-                key = gvar.addr
-                cmenu_cache[key].append(user_name)
+                    existing = self.data_dict.get(key)
+                    if existing is not None:
+                        existing_time = existing[self.time_col]
+                        if existing_time is not None and (
+                            change_time is None or change_time <= existing_time
+                        ):
+                            continue
 
-                # skip updating existing, older artifacts
-                if key in self.data_dict and \
-                        (not change_time or change_time <= self.data_dict[key][self.time_col]):
-                    continue
-
-                self.data_dict[key] = [gvar.addr, gvar.name, user_name, change_time]
-                updated_row_keys.add(key)
+                    self.data_dict[key] = [kind, artifact.name, user_name, change_time]
+                    updated_row_keys.add(key)
 
         self.context_menu_cache = cmenu_cache
         self._update_changed_rows(self.data_dict, updated_row_keys)
         self.refresh_time_cells()
 
 
-class GlobalsTableView(BinsyncTableView):
-    HEADER = ['Addr', 'Name', 'User', 'Last Push']
-    COL_ADDR = 0
+class TypesTableView(BinsyncTableView):
+    HEADER = ['Kind', 'Name', 'User', 'Last Push']
+    COL_KIND = 0
     COL_NAME = 1
     COL_USER = 2
     COL_DATE = 3
@@ -96,19 +117,24 @@ class GlobalsTableView(BinsyncTableView):
                  col_count=None, parent=None):
         super().__init__(controller, filteredit, stretch_col, col_count, parent)
 
-        self.model = GlobalsTableModel(
+        self.model = TypesTableModel(
             controller, self.HEADER,
-            filter_cols=[self.COL_ADDR, self.COL_NAME, self.COL_USER],
-            time_col=self.COL_DATE, addr_col=self.COL_ADDR, parent=parent,
+            filter_cols=[self.COL_KIND, self.COL_NAME, self.COL_USER],
+            time_col=self.COL_DATE, parent=parent,
         )
         self.proxymodel.setSourceModel(self.model)
         self.setModel(self.proxymodel)
         self._init_settings()
 
-    def _get_valid_users_for_gvar(self, gvar_addr):
-        if gvar_addr in self.model.context_menu_cache:
-            for user_name in self.model.context_menu_cache[gvar_addr]:
+    def _get_valid_users_for_type(self, type_name, kind):
+        cache_key = f"{type_name}({kind})"
+        if cache_key in self.model.context_menu_cache:
+            for user_name in self.model.context_menu_cache[cache_key]:
                 yield user_name
+            return
+
+        getter_name = _KIND_TO_GETTER.get(kind)
+        if getter_name is None:
             return
 
         for user in self.controller.client.check_cache_(self.controller.client.users,
@@ -117,14 +143,15 @@ class GlobalsTableView(BinsyncTableView):
                                                               priority=SchedSpeed.FAST)
             if cache_item is None:
                 continue
-            user_global = cache_item.get_global_var(gvar_addr)
-            if not user_global or not user_global.last_change:
+            getter = getattr(cache_item, getter_name)
+            user_artifact = getter(type_name)
+            if not user_artifact or not user_artifact.last_change:
                 continue
             yield user.name
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
-        menu.setObjectName("binsync_global_table_context_menu")
+        menu.setObjectName("binsync_types_table_context_menu")
 
         valid_row = True
         selected_row = self.rowAt(event.pos().y())
@@ -146,37 +173,44 @@ class GlobalsTableView(BinsyncTableView):
             col_hide_menu.addAction(act)
 
         if valid_row:
-            gvar_addr = self.model.row_data[idx.row()][self.COL_ADDR]
+            kind = self.model.row_data[idx.row()][self.COL_KIND]
+            type_name = self.model.row_data[idx.row()][self.COL_NAME]
             user_name = self.model.row_data[idx.row()][self.COL_USER]
-            if gvar_addr is None or user_name is None:
+            if kind is None or type_name is None or user_name is None:
+                menu.popup(self.mapToGlobal(event.pos()))
+                return
+
+            artifact_cls = _KIND_TO_ARTIFACT.get(kind)
+            if artifact_cls is None:
+                l.warning("Invalid type kind: %s", kind)
                 menu.popup(self.mapToGlobal(event.pos()))
                 return
 
             filler_func = lambda username: lambda chk=False: self.controller.fill_artifact(
-                gvar_addr, artifact_type=GlobalVariable, user=username
+                type_name, artifact_type=artifact_cls, user=username
             )
 
             menu.addSeparator()
             action = menu.addAction("Sync")
             action.triggered.connect(filler_func(user_name))
             from_menu = menu.addMenu("Sync from...")
-            for username in self._get_valid_users_for_gvar(gvar_addr):
+            for username in self._get_valid_users_for_type(type_name, kind):
                 action = from_menu.addAction(username)
                 action.triggered.connect(filler_func(username))
 
         menu.popup(self.mapToGlobal(event.pos()))
 
     def _doubleclick_handler(self):
-        """Jump to the global variable in the decompiler."""
+        """Open the type in the decompiler."""
         row_idx = self.selectionModel().selectedIndexes()[0]
         tls_row_idx = self.proxymodel.mapToSource(row_idx)
-        addr = self.model.row_data[tls_row_idx.row()][self.COL_ADDR]
-        if addr is not None:
-            self.controller.deci.gui_goto(addr)
+        type_name = self.model.row_data[tls_row_idx.row()][self.COL_NAME]
+        if type_name:
+            self.controller.deci.gui_show_type(type_name)
 
 
-class QGlobalsTable(QWidget):
-    """Control panel tab listing per-user activity on global variables."""
+class QTypesTable(QWidget):
+    """Control panel tab listing per-user activity on structs, enums, and typedefs."""
 
     def __init__(self, controller: BSController, parent=None):
         super().__init__(parent)
@@ -184,10 +218,10 @@ class QGlobalsTable(QWidget):
         self._init_widgets()
 
     def _init_widgets(self):
-        col_count = len([col for col in GlobalsTableView.__dict__ if col.startswith("COL_")])
+        col_count = len([col for col in TypesTableView.__dict__ if col.startswith("COL_")])
         self.filteredit = BinsyncTableFilterLineEdit(parent=self)
-        self.table = GlobalsTableView(self.controller, self.filteredit,
-                                       stretch_col=GlobalsTableView.COL_NAME, col_count=col_count)
+        self.table = TypesTableView(self.controller, self.filteredit,
+                                     stretch_col=TypesTableView.COL_NAME, col_count=col_count)
         layout = QVBoxLayout()
         layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)

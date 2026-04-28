@@ -5,6 +5,7 @@ from binsync.ui.panel_tabs.activity_table import QActivityTable
 from binsync.ui.panel_tabs.ctx_table import QCTXTable
 from binsync.ui.panel_tabs.functions_table import QFunctionTable
 from binsync.ui.panel_tabs.globals_table import QGlobalsTable
+from binsync.ui.panel_tabs.types_table import QTypesTable
 from binsync.ui.panel_tabs.util_panel import QUtilPanel
 from libbs.ui.qt_objects import (
     QLabel,
@@ -127,6 +128,7 @@ class ControlPanel(QWidget):
         self._ctx_table = QCTXTable(self.controller)
         self._func_table = QFunctionTable(self.controller)
         self._global_table = QGlobalsTable(self.controller)
+        self._types_table = QTypesTable(self.controller)
         self._activity_table = QActivityTable(self.controller)
         self._utilities_panel = QUtilPanel(self.controller)
 
@@ -139,6 +141,7 @@ class ControlPanel(QWidget):
 
         self.tabView.addTab(self._func_table, "Functions")
         self.tabView.addTab(self._global_table, "Globals")
+        self.tabView.addTab(self._types_table, "Types")
         self.tabView.addTab(self._activity_panel, "Activity")
         self.tabView.addTab(self._utilities_panel, "Utilities")
 
@@ -153,6 +156,7 @@ class ControlPanel(QWidget):
         self.tables.update({
             "functions": self._func_table,
             "globals": self._global_table,
+            "types": self._types_table,
             "activity": self._activity_table
         })
 
