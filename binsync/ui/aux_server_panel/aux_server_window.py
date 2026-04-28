@@ -170,17 +170,26 @@ class AuxServerWidget(QDialog):
     def _init_widgets(self, connected:bool):
         self.disconnected_widget = AuxServerDisconnectedWidget(self)
         self.disconnected_widget.buttonBox.accepted.connect(self.try_connect)
-        
+        self.disconnected_widget.buttonBox.rejected.connect(self.reject)
+
         self.connected_widget = AuxServerConnectedWidget(self)
         self.connected_widget.disconnect_button.clicked.connect(lambda: self.disconnect_signal.emit())
-        
+
         self.stacked_layout = QStackedLayout()
         self.stacked_layout.addWidget(self.disconnected_widget)
         self.stacked_layout.addWidget(self.connected_widget)
-            
+
         self.stacked_layout.setCurrentIndex(self.DISCONNECTED_INDEX if not connected else self.CONNECTED_INDEX)
-        self.resize(1000, 800)
+        # Width floor so the form has room. Height follows the active page —
+        # disconnected starts compact, switches grow the dialog when the larger
+        # connected page becomes active.
+        self.setMinimumWidth(400)
         self.setLayout(self.stacked_layout)
+        if not connected:
+            # QStackedLayout's sizeHint is the max of all children, so without an
+            # explicit resize the dialog inherits the connected page's tall hint
+            # even on the disconnected page. Keep the disconnected open compact.
+            self.resize(420, 140)
 
     @Slot()
     def try_connect(self):
@@ -197,8 +206,10 @@ class AuxServerWidget(QDialog):
         if not connected:
             self.connected_widget.linked_projects_view.clear_linked_projects() # Get rid of linked projects. We may connect somewhere else
             self.stacked_layout.setCurrentIndex(self.DISCONNECTED_INDEX)
+            self.resize(420, 140)
         else:
             self.connected_widget.linked_projects_view.list_projects.emit() # Load in linked projects
             self.stacked_layout.setCurrentIndex(self.CONNECTED_INDEX)
+            self.resize(self.connected_widget.sizeHint().expandedTo(self.minimumSize()))
     
     
