@@ -547,12 +547,17 @@ class ConfigureBSDialog(QDialog):
             user = project_data.user or ""
             repo = project_data.repo_path or ""
 
+            # Drop entries whose repo no longer exists on disk so users don't
+            # pick a stale path that will fail to open.
+            if repo and not Path(repo).exists():
+                continue
+
             if not user and not repo:
                 confs.append(None)
 
             confs.append(f"{repo}:{user}")
 
-        return confs
+        return confs or None
 
     def save_config(self, user, repo, remote) -> Optional[str]:
         if remote and not repo:

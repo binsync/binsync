@@ -89,11 +89,20 @@ class BinSyncBSConfig(BSConfig):
         if binary_hash not in self.recent_projects.keys():
             self.recent_projects = _dict_insert(self.recent_projects, binary_hash, [])
 
-        if {k: v for k, v in projectData.__getstate__().items() if v is not None} not in self.recent_projects[
-            binary_hash]:
-            self.recent_projects[binary_hash].insert(0, projectData.__getstate__())
+        new_state = projectData.__getstate__()
+        identity = (new_state.get("user"), new_state.get("repo_path"), new_state.get("remote"))
+        self.recent_projects[binary_hash] = [
+            entry for entry in self.recent_projects[binary_hash]
+            if (entry.get("user"), entry.get("repo_path"), entry.get("remote")) != identity
+        ]
+        self.recent_projects[binary_hash].insert(0, new_state)
 
-        self.recent_projects[binary_hash] = self.recent_projects[binary_hash][0:max_recent_projects]
+        # Bump this binary to the front so the most recently used binary stays on top too.
+        self.recent_projects = _dict_insert(
+            {k: v for k, v in self.recent_projects.items() if k != binary_hash},
+            binary_hash,
+            self.recent_projects[binary_hash][0:max_recent_projects],
+        )
         self.recent_projects = dict(itertools.islice(self.recent_projects.items(), max_saved_binaries))
 
 
