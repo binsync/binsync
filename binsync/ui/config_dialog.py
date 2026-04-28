@@ -26,8 +26,6 @@ from libbs.ui.qt_objects import (
     QHeaderView,
     QAbstractItemView
 )
-from binsync.ui.utils import QCollapsibleBox
-
 l = logging.getLogger(__name__)
 
 
@@ -105,11 +103,7 @@ class BSProjectDialog(QDialog):
         self._disable_commit_checkbox.setChecked(False)
         options_layout.addWidget(self._disable_commit_checkbox)
 
-        box = QCollapsibleBox("Project Options", parent=self)
-        box.setContentLayout(options_layout)
-        box_layout = QVBoxLayout()
-        box_layout.addWidget(box)
-        self._main_layout.addLayout(box_layout)
+        self._main_layout.addLayout(options_layout)
 
     def _init_close_btn_widgets(self):
         # buttons
@@ -257,11 +251,25 @@ class ConfigureBSDialog(QDialog):
         self.load_config = load_config
 
         self.setWindowTitle("Start BinSync")
+        self.resize(800, 400)
+        self.setMinimumWidth(600)
         self._main_layout = QVBoxLayout()
 
         self._init_widgets()
         self.setLayout(self._main_layout)
-        self.show()
+
+    def _critical(self, title: str, text: str):
+        """Show a critical error without creating a temporary QMessageBox.
+
+        On macOS, allowing Python/Shiboken to GC temporary QMessageBox wrapper
+        instances off the main thread can crash AppKit while tearing down the
+        underlying NSWindow. Using the static helpers avoids that wrapper
+        lifetime issue entirely.
+        """
+        QMessageBox.critical(self, title, text)
+
+    def _question(self, title: str, text: str, buttons):
+        return QMessageBox.question(self, title, text, buttons)
 
     def _init_widgets(self):
         upper_layout = QGridLayout()
@@ -297,7 +305,7 @@ class ConfigureBSDialog(QDialog):
         self._prev_proj_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self._prev_proj_table.verticalHeader().setVisible(False)
         self._prev_proj_table.horizontalHeader().setVisible(False)
-        self._prev_proj_table.setMaximumHeight(50)
+        self._prev_proj_table.setMinimumHeight(120)
         self._prev_proj_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._prev_proj_table.itemDoubleClicked.connect(self._handle_prev_proj_double_click)
         prev_proj_layout.addWidget(self._prev_proj_table)
@@ -392,6 +400,7 @@ class ConfigureBSDialog(QDialog):
         dialog = dialog_cls(self.controller, parent=self)
         self.hide()
         dialog.exec_()
+        self.show()
         if not dialog.configured:
             l.warning("Stopping configuration before connection...")
             return
@@ -404,8 +413,7 @@ class ConfigureBSDialog(QDialog):
 
         valid_config = True
         if not username or username.lower() == BINSYNC_ROOT_BRANCH:
-            QMessageBox(self).critical(
-                None,
+            self._critical(
                 "Invalid username",
                 f"Username cannot be empty or be {BINSYNC_ROOT_BRANCH}"
             )
@@ -414,32 +422,28 @@ class ConfigureBSDialog(QDialog):
         if not create:
             if not remote_url:
                 if not project_path.exists():
-                    QMessageBox(self).critical(
-                        None,
+                    self._critical(
                         "Project does not exist",
                         "The specified BS project does not exist. "
                     )
                     valid_config = False
 
                 if not self.is_git_repo(project_path):
-                    QMessageBox(self).critical(
-                        None,
+                    self._critical(
                         "Directory contains no .git",
                         "The specified directory is not a BS project (it has no .git) "
                     )
                     valid_config = False
             else:
-                 if project_path.exists() and any(project_path.iterdir()):
-                    QMessageBox(self).critical(
-                        None,
+                if project_path.exists() and any(project_path.iterdir()):
+                    self._critical(
                         "Directory Exists",
                         "The specified directory exists and is not empty, this should not be for remote cloning! "
                     )
                     valid_config = False
 
         if create and Path(project_path).exists():
-            QMessageBox(self).critical(
-                None,
+            self._critical(
                 "Project Exists",
                 "The specified BS project already exists! You should open it instead. "
             )
@@ -466,6 +470,21 @@ class ConfigureBSDialog(QDialog):
 
     def connect_client_to_project(self, username, proj_path, initialize=False, remote_url=None, push_on_update=True,
                                   pull_on_update=True, commit_on_update=True):
+        # If this process is already connected to the same project, the lockfile
+        # we'd see belongs to us — don't go through the delete-lockfile dance and
+        # don't tear down/recreate the client (which corrupts Qt model state and
+        # has crashed IDA in the past).
+        existing_client = self.controller.client
+        if existing_client is not None:
+            try:
+                existing_path = Path(existing_client.repo_root).resolve()
+                requested_path = Path(proj_path).resolve()
+            except Exception:
+                existing_path = requested_path = None
+            if existing_path is not None and existing_path == requested_path:
+                l.info("Already connected to %s; skipping reconnect.", proj_path)
+                return True
+
         lockfile_path = Path(proj_path) / ".git" / "binsync.lock"
         if lockfile_path.exists():
             repo_lock = filelock.FileLock(lockfile_path)
@@ -476,12 +495,14 @@ class ConfigureBSDialog(QDialog):
                 lock_exists = True
 
             if lock_exists:
-                box_resp = QMessageBox(self).question(None, "Error",
-                                                      "WARNING: Can only have one binsync client touching a local repository at once." +
-                                                      "If the previous client crashed, the lockfile at:" +
-                                                      f"'{lockfile_path.resolve()}'\n" +
-                                                      "must be deleted. Would you like to delete this now?",
-                                                      QMessageBox.Yes | QMessageBox.No)
+                box_resp = self._question(
+                    "Error",
+                    "WARNING: Can only have one binsync client touching a local repository at once."
+                    + "If the previous client crashed, the lockfile at:"
+                    + f"'{lockfile_path.resolve()}'\n"
+                    + "must be deleted. Would you like to delete this now?",
+                    QMessageBox.Yes | QMessageBox.No,
+                )
                 if box_resp == QMessageBox.Yes:
                     lockfile_path.unlink()
             else:
@@ -493,13 +514,13 @@ class ConfigureBSDialog(QDialog):
             )
         except Exception as e:
             l.critical("Error connecting to specified repository: %s!", e)
-            QMessageBox(self).critical(None, "Error connecting to repository", str(e))
+            self._critical("Error connecting to repository", str(e))
             return False
 
         self.controller.auto_commit_enabled = commit_on_update
         self.controller.auto_pull_enabled = pull_on_update
         self.controller.auto_push_enabled = push_on_update
-        self._parse_and_display_connection_warnings(connection_warnings)
+        self._parse_and_display_connection_warnings(connection_warnings, parent=self)
         l.info("Client has connected to sync repo with user: %s.", username)
 
         # create and save config if possible
@@ -514,7 +535,7 @@ class ConfigureBSDialog(QDialog):
         return (path / ".git").exists()
 
     @staticmethod
-    def _parse_and_display_connection_warnings(warnings):
+    def _parse_and_display_connection_warnings(warnings, parent=None):
         warning_text = ""
 
         for warning in warnings:
@@ -525,7 +546,7 @@ class ConfigureBSDialog(QDialog):
 
         if len(warning_text) > 0:
             QMessageBox.warning(
-                None,
+                parent,
                 "BinSync: Connection Warnings",
                 warning_text,
                 QMessageBox.Ok,
