@@ -13,27 +13,29 @@ from libbs.ui.qt_objects import (
     QModelIndex,
     QCheckBox,
     QPushButton,
-    QAbstractTableModel
+    QAbstractTableModel,
 )
+
 l = logging.getLogger(__name__)
 
 
-class SegmentTableModel(BinsyncTableModel):
+class TypesTableModel(BinsyncTableModel):
+    """Model for the Types tab. Rowdata is [kind, name]; checkbox at col 0, id at col 1 (name)."""
+
     update_signal = Signal(list)
+    ID_COL = 1
+
     def __init__(self, controller: BSController, col_headers=None, filter_cols=None, time_col=None,
                  addr_col=None, parent=None):
         super().__init__(controller, col_headers, filter_cols, time_col, addr_col, parent)
         self.data_dict = {}
         self.checks = {}
 
-    # Logical column layout: [start, end, name]; id_col=2, check_col=0
-    ID_COL = 2
-
     def checkState(self, index):
         return Qt.Checked if self.checks[self.row_data[index.row()][self.ID_COL]] else Qt.Unchecked
 
     def checkStateBool(self, index):
-        return True if self.checks[self.row_data[index.row()][self.ID_COL]] else False
+        return bool(self.checks[self.row_data[index.row()][self.ID_COL]])
 
     def data(self, index, role=Qt.DisplayRole):
         if not index.isValid():
@@ -42,25 +44,19 @@ class SegmentTableModel(BinsyncTableModel):
         col = index.column()
         row = index.row()
         if role == Qt.DisplayRole:
-            val = self.row_data[row][col]
-            if isinstance(val, int):
-                return f"{val:#x}"
-            return val
+            return self.row_data[row][col]
         elif role == self.SortRole:
             return self.row_data[row][col]
         elif role == self.FilterRole:
-            return " ".join(
-                f"{c:#x}" if isinstance(c, int) else str(c)
-                for c in self.row_data[row]
-            )
+            return f"{self.row_data[row][0]} {self.row_data[row][1]}"
         elif role == Qt.CheckStateRole and col == 0:
             return self.checkState(index)
         return None
 
     def setAllCheckStates(self, val):
-        for k,v in self.checks.items():
+        for k in self.checks:
             self.checks[k] = val
-        self.dataChanged.emit(self.index(0, 0), self.index(self.rowCount() - 1, 0))
+        self.dataChanged.emit(self.index(0, 0), self.index(self.rowCount() - 1, self.columnCount() - 1))
 
     def setData(self, index, value, role=Qt.EditRole):
         if role != Qt.EditRole and role != Qt.CheckStateRole:
@@ -77,15 +73,19 @@ class SegmentTableModel(BinsyncTableModel):
             return True
         return False
 
-    def update_table(self) -> None:
+    def update_table(self):
         updated_row_keys = set()
-        self.controller.deci.info("Collecting Segment artifacts...")
-        segment_by_name = {k: v for k, v in self.controller.deci.segments.items()}
-
-        for name, segment in segment_by_name.items():
-            self.data_dict[name] = [segment.start_addr, segment.end_addr, segment.name or ""]
-            updated_row_keys.add(name)
-            self.checks[name] = False
+        sources = (
+            (self.controller.deci.structs, "Struct"),
+            (self.controller.deci.enums, "Enum"),
+            (self.controller.deci.typedefs, "Typedef"),
+        )
+        for type_artifacts, kind in sources:
+            self.controller.deci.info(f"Collecting {kind} artifacts...")
+            for _, artifact in type_artifacts.items():
+                self.data_dict[artifact.name] = [kind, artifact.name]
+                self.checks[artifact.name] = False
+                updated_row_keys.add(artifact.name)
         self._update_changed_rows(self.data_dict, updated_row_keys)
 
     @Slot(list)
@@ -107,8 +107,6 @@ class SegmentTableModel(BinsyncTableModel):
             self.endRemoveRows()
 
     def _update_changed_rows(self, row_data: Dict, updated_row_keys: Set):
-
-        # no changes are required
         if not updated_row_keys:
             return False
 
@@ -117,10 +115,8 @@ class SegmentTableModel(BinsyncTableModel):
             if row_key in updated_row_keys
         ]
 
-        # send update signal for everything in row data, with new colors
         self.update_signal.emit(list(row_data.values()))
 
-        # ask for in-row updates (in UI) to any single row changed
         for update_idx in row_update_idxs:
             self.dataChanged.emit(self.index(0, update_idx), self.index(self.rowCount() - 1, update_idx))
 
@@ -128,30 +124,25 @@ class SegmentTableModel(BinsyncTableModel):
         pass
 
     def flags(self, index):
-        """ Set the item flags at the given index. """
         if not index.isValid():
             return Qt.ItemIsEnabled
         if index.column() == 0:
             return Qt.ItemIsUserCheckable | Qt.ItemIsSelectable | Qt.ItemIsEnabled
-        else:
-            return Qt.ItemFlags(QAbstractTableModel.flags(self, index))
+        return Qt.ItemFlags(QAbstractTableModel.flags(self, index))
 
-class SegmentTableView(BinsyncTableView):
-    HEADER = ['Start', 'End', 'Name']
 
-    def __init__(
-        self, controller: BSController, filteredit: BinsyncTableFilterLineEdit, stretch_col=None, col_count=None,
-        parent=None
-    ):
+class TypesTableView(BinsyncTableView):
+    HEADER = ['Kind', 'Name']
+
+    def __init__(self, controller: BSController, filteredit: BinsyncTableFilterLineEdit, stretch_col=None,
+                 col_count=None, parent=None):
         super().__init__(controller, filteredit, stretch_col, col_count, parent)
 
-        self.model = SegmentTableModel(
-            controller, self.HEADER, filter_cols=[0, 1, 2], addr_col=0, parent=parent
+        self.model = TypesTableModel(
+            controller, self.HEADER, filter_cols=[0, 1], addr_col=0, parent=parent,
         )
         self.proxymodel.setSourceModel(self.model)
         self.setModel(self.proxymodel)
-
-        # always init settings *after* loading the model
         self._init_settings()
 
     def update_table(self):
@@ -159,26 +150,22 @@ class SegmentTableView(BinsyncTableView):
 
     def push(self):
         names_to_push = []
-        if self.proxymodel.rowCount() == 0:
-            self.controller.force_push_segments(names_to_push)
-            return
+        if self.proxymodel.rowCount() > 0:
+            first_state_obj = self.model.checkState(
+                self.proxymodel.mapToSource(self.proxymodel.index(0, 0, QModelIndex()))
+            )
+            check_has_value = hasattr(first_state_obj, "value")
 
-        first_state_obj = self.model.checkState(
-            self.proxymodel.mapToSource(self.proxymodel.index(0, 0, QModelIndex()))
-        )
-        check_has_value = hasattr(first_state_obj, "value")
+            self.proxymodel.setFilterFixedString("")
+            for i in range(self.proxymodel.rowCount()):
+                proxyIndex = self.proxymodel.index(i, 0, QModelIndex())
+                mappedIndex = self.proxymodel.mapToSource(proxyIndex)
+                model_state = self.model.checkState(mappedIndex)
+                is_checked = model_state.value if check_has_value else model_state
+                if is_checked:
+                    names_to_push.append(self.model.row_data[mappedIndex.row()][self.model.ID_COL])
 
-        self.proxymodel.setFilterFixedString("")
-        for i in range(self.proxymodel.rowCount()):
-            proxyIndex = self.proxymodel.index(i, 0, QModelIndex())
-            mappedIndex = self.proxymodel.mapToSource(proxyIndex)
-            model_state = self.model.checkState(mappedIndex)
-            is_checked = model_state.value if check_has_value else model_state
-            if is_checked:
-                segment_name = self.model.row_data[mappedIndex.row()][self.model.ID_COL]
-                names_to_push.append(segment_name)
-
-        self.controller.force_push_segments(names_to_push)
+        self.controller.force_push_types(names_to_push)
 
     def check_all(self):
         self.model.setAllCheckStates(True)
@@ -187,14 +174,13 @@ class SegmentTableView(BinsyncTableView):
         self.model.setAllCheckStates(False)
 
     def _doubleclick_handler(self):
-        """ Handler for double clicking on a row, toggles selection. """
         row_idx = self.selectionModel().selectedIndexes()[0]
         tls_row_idx = self.proxymodel.mapToSource(row_idx)
         self.model.setData(tls_row_idx, not self.model.checkStateBool(tls_row_idx), role=Qt.CheckStateRole)
 
 
-class QSegmentTable(QWidget):
-    """ Wrapper widget to contain the segment table classes in one file (prevents bulking up control_panel.py) """
+class QTypesTable(QWidget):
+    """Force-push tab listing types (structs, enums, typedefs — name-keyed)."""
 
     def __init__(self, controller: BSController, parent=None):
         super().__init__(parent)
@@ -209,9 +195,8 @@ class QSegmentTable(QWidget):
 
     def _init_widgets(self):
         self.filteredit = BinsyncTableFilterLineEdit(parent=self)
-        self.table = SegmentTableView(
-            self.controller, self.filteredit, stretch_col=2, col_count=3
-        )
+        self.table = TypesTableView(self.controller, self.filteredit, stretch_col=1, col_count=2)
+
         layout = QVBoxLayout()
         layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -221,7 +206,7 @@ class QSegmentTable(QWidget):
         layout.addSpacing(6)
         layout.addWidget(self.table)
         layout.addWidget(self.filteredit)
-        self.push_button = QPushButton("Push 0 segments")
+        self.push_button = QPushButton("Push 0 types")
         self.push_button.clicked.connect(self.table.push)
         layout.addWidget(self.push_button)
         self.setContentsMargins(0, 0, 0, 0)
@@ -231,7 +216,7 @@ class QSegmentTable(QWidget):
 
     def _update_push_button(self, *_):
         n = sum(1 for v in self.table.model.checks.values() if v)
-        self.push_button.setText(f"Push {n} segments")
+        self.push_button.setText(f"Push {n} types")
 
     def update_table(self):
         self.table.update_table()

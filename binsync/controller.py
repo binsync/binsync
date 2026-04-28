@@ -1167,39 +1167,58 @@ class BSController:
         # commit the master state back!
         master_state.last_commit_msg = f"Force pushed {committed} functions"
         self.client.master_state = master_state
-        self.deci.info(f"Function force push successful: committed {committed} functions.")
+        self.deci.info(f"Functions force push successful: committed {committed} function{'' if committed == 1 else 's'}.")
 
     @init_checker
-    def force_push_global_artifacts(self, lookup_items: List):
+    def force_push_global_vars(self, addrs: List[int]):
         """
-        Collects the global artifact (struct, gvar, enum) currently stored in the decompiler, not the BS State,
-        and commits it to the master users BS Database.
+        Commits the listed global variables (by address) currently stored in the decompiler
+        to the master user's BS database.
+        """
+        if not addrs:
+            _l.warning("Ignored globals force push, no globals selected")
+            return
 
-        @param lookup_item:
-        @return: Success of committing the Artifact
-        """
         master_state: State = self.client.master_state
         committed = 0
-        for lookup_key in lookup_items:
-            if isinstance(lookup_key, int):
-                art = self.deci.global_vars[lookup_key]
-                master_state.global_vars[art.addr] = art
-            else:
-                art = None
-                # structs always first
-                try:
-                    art = self.deci.structs[lookup_key]
-                    master_state.structs[lookup_key] = art
-                except KeyError:
-                    pass
-
-                if art is None:
-                    master_state.enums[lookup_key] = self.deci.enums[lookup_key]
+        for addr in addrs:
+            try:
+                art = self.deci.global_vars[addr]
+            except KeyError:
+                continue
+            master_state.set_global_var(art)
             committed += 1
 
-        master_state.last_commit_msg = f"Force pushed {committed} global artifacts"
+        master_state.last_commit_msg = f"Force pushed {committed} global{'' if committed == 1 else 's'}"
         self.client.master_state = master_state
-        self.deci.info(f"Globals force push successful: committed {committed} artifacts.")
+        self.deci.info(f"Globals force push successful: committed {committed} global{'' if committed == 1 else 's'}.")
+
+    @init_checker
+    def force_push_types(self, names: List[str]):
+        """
+        Commits the listed types (structs, enums, typedefs by name) currently stored
+        in the decompiler to the master user's BS database.
+        """
+        if not names:
+            _l.warning("Ignored types force push, no types selected")
+            return
+
+        master_state: State = self.client.master_state
+        committed = 0
+        for name in names:
+            if name in self.deci.structs:
+                master_state.set_struct(self.deci.structs[name])
+            elif name in self.deci.enums:
+                master_state.set_enum(self.deci.enums[name])
+            elif name in self.deci.typedefs:
+                master_state.set_typedef(self.deci.typedefs[name])
+            else:
+                continue
+            committed += 1
+
+        master_state.last_commit_msg = f"Force pushed {committed} type{'' if committed == 1 else 's'}"
+        self.client.master_state = master_state
+        self.deci.info(f"Types force push successful: committed {committed} type{'' if committed == 1 else 's'}.")
 
     @init_checker
     def force_push_segments(self, segment_names: List[int]):
@@ -1230,7 +1249,7 @@ class BSController:
 
         master_state.last_commit_msg = f"Force pushed {committed} segments"
         self.client.master_state = master_state
-        self.deci.info(f"Segments force push successful: committed {committed} segments.")
+        self.deci.info(f"Segments force push successful: committed {committed} segment{'' if committed == 1 else 's'}.")
 
     #
     # Utils
