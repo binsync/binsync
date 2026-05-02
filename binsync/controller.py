@@ -171,6 +171,7 @@ class BSController:
         self._last_reload = None
         self.last_active_func = None
         self._got_first_state = False
+        self._last_all_states = None
         # ui worker that fires off requests for UI update
         self._ui_updater_thread = None
         self._ui_updater_worker: Scheduler = None
@@ -241,12 +242,20 @@ class BSController:
         if self.headless:
             return
 
-        # after this point you can import anything from UI and it is safe!
+        # If a previous connect() already started the UI thread, reuse it. Replacing
+        # self._ui_updater_thread with a new QThread races with the old wrapper's
+        # GC and triggers Qt's "QThread: Destroyed while thread is still running"
+        # qFatal abort (hard-crashes IDA on project switch).
+        try:
+            if self._ui_updater_thread is not None and self._ui_updater_thread.isRunning():
+                return
+        except RuntimeError:
+            pass
+
         from libbs.ui.qt_objects import (
             QThread
         )
         from binsync.ui.utils import BSUIScheduler
-        # spawns a qthread/worker
         self._ui_updater_thread = QThread()
         self._ui_updater_worker = BSUIScheduler()
         self._ui_updater_worker.moveToThread(self._ui_updater_thread)
@@ -323,6 +332,7 @@ class BSController:
                     continue
 
                 self._got_first_state |= True
+                self._last_all_states = all_states
                 # update context knowledge every loop iteration
                 if self.ctx_change_callback:
                     self._ui_updater_worker.schedule_job(
@@ -367,7 +377,11 @@ class BSController:
 
     def start_worker_routines(self):
         self._run_updater_threads = True
-        self.user_states_update_thread.start()
+        # Thread instances can only be started once; recreate after a previous run
+        # (e.g. when switching projects re-runs connect()).
+        if not self.user_states_update_thread.is_alive():
+            self.user_states_update_thread = threading.Thread(target=self.updater_routine, daemon=True)
+            self.user_states_update_thread.start()
 
         self.push_job_scheduler.start_worker_thread()
 
@@ -376,6 +390,16 @@ class BSController:
         self.deci.start_artifact_watchers()
 
     def stop_worker_routines(self):
+        # Unhook IDA artifact watchers first so no new IDB/Hex-Rays events can
+        # fire into Python after the rest of the teardown runs (and crucially
+        # before IDAPython tears down on IDA exit — otherwise a stale hook will
+        # try to PyGILState_Ensure() on a dead interpreter and IDA crashes).
+        if not self.headless and self.deci is not None:
+            try:
+                self.deci.stop_artifact_watchers()
+            except Exception:
+                _l.exception("Error stopping artifact watchers")
+
         self._run_updater_threads = False
         self.push_job_scheduler.stop_worker_thread()
         self._stop_ui_components()
@@ -385,6 +409,14 @@ class BSController:
     #
 
     def connect(self, user, path, init_repo=False, remote_url=None, single_thread=False, **kwargs):
+        # If we were previously connected, tear down the old worker routines first
+        # so we don't end up with stale background threads pointing at the old client.
+        if self.client is not None:
+            try:
+                self.stop_worker_routines()
+            except Exception:
+                _l.exception("Error stopping previous worker routines on reconnect")
+
         binary_hash = self.deci.binary_hash
         self.client = Client(
             user, path, binary_hash, init_repo=init_repo, remote_url=remote_url, **kwargs
@@ -477,6 +509,14 @@ class BSController:
 
         if self.startup_time is None:
             self.startup_time = time.time()
+
+        # IDA fires this on every cursor movement; mirror it into the UI
+        # immediately so the "users on current function" panel updates without
+        # waiting for the next 0.5s polling iteration of updater_routine.
+        if self.ctx_change_callback and self._last_all_states is not None and self._ui_updater_worker is not None:
+            self._ui_updater_worker.schedule_job(
+                Job(self._check_and_notify_ctx, self._last_all_states)
+            )
 
     def _update_dec_cache(self, *args, **kwargs):
         dec: Decompilation = args[0] if len(args) > 0 else None
@@ -1127,39 +1167,58 @@ class BSController:
         # commit the master state back!
         master_state.last_commit_msg = f"Force pushed {committed} functions"
         self.client.master_state = master_state
-        self.deci.info(f"Function force push successful: committed {committed} functions.")
+        self.deci.info(f"Functions force push successful: committed {committed} function{'' if committed == 1 else 's'}.")
 
     @init_checker
-    def force_push_global_artifacts(self, lookup_items: List):
+    def force_push_global_vars(self, addrs: List[int]):
         """
-        Collects the global artifact (struct, gvar, enum) currently stored in the decompiler, not the BS State,
-        and commits it to the master users BS Database.
+        Commits the listed global variables (by address) currently stored in the decompiler
+        to the master user's BS database.
+        """
+        if not addrs:
+            _l.warning("Ignored globals force push, no globals selected")
+            return
 
-        @param lookup_item:
-        @return: Success of committing the Artifact
-        """
         master_state: State = self.client.master_state
         committed = 0
-        for lookup_key in lookup_items:
-            if isinstance(lookup_key, int):
-                art = self.deci.global_vars[lookup_key]
-                master_state.global_vars[art.addr] = art
-            else:
-                art = None
-                # structs always first
-                try:
-                    art = self.deci.structs[lookup_key]
-                    master_state.structs[lookup_key] = art
-                except KeyError:
-                    pass
-
-                if art is None:
-                    master_state.enums[lookup_key] = self.deci.enums[lookup_key]
+        for addr in addrs:
+            try:
+                art = self.deci.global_vars[addr]
+            except KeyError:
+                continue
+            master_state.set_global_var(art)
             committed += 1
 
-        master_state.last_commit_msg = f"Force pushed {committed} global artifacts"
+        master_state.last_commit_msg = f"Force pushed {committed} global{'' if committed == 1 else 's'}"
         self.client.master_state = master_state
-        self.deci.info(f"Globals force push successful: committed {committed} artifacts.")
+        self.deci.info(f"Globals force push successful: committed {committed} global{'' if committed == 1 else 's'}.")
+
+    @init_checker
+    def force_push_types(self, names: List[str]):
+        """
+        Commits the listed types (structs, enums, typedefs by name) currently stored
+        in the decompiler to the master user's BS database.
+        """
+        if not names:
+            _l.warning("Ignored types force push, no types selected")
+            return
+
+        master_state: State = self.client.master_state
+        committed = 0
+        for name in names:
+            if name in self.deci.structs:
+                master_state.set_struct(self.deci.structs[name])
+            elif name in self.deci.enums:
+                master_state.set_enum(self.deci.enums[name])
+            elif name in self.deci.typedefs:
+                master_state.set_typedef(self.deci.typedefs[name])
+            else:
+                continue
+            committed += 1
+
+        master_state.last_commit_msg = f"Force pushed {committed} type{'' if committed == 1 else 's'}"
+        self.client.master_state = master_state
+        self.deci.info(f"Types force push successful: committed {committed} type{'' if committed == 1 else 's'}.")
 
     @init_checker
     def force_push_segments(self, segment_names: List[int]):
@@ -1190,7 +1249,7 @@ class BSController:
 
         master_state.last_commit_msg = f"Force pushed {committed} segments"
         self.client.master_state = master_state
-        self.deci.info(f"Segments force push successful: committed {committed} segments.")
+        self.deci.info(f"Segments force push successful: committed {committed} segment{'' if committed == 1 else 's'}.")
 
     #
     # Utils

@@ -43,6 +43,7 @@ class QUtilPanel(QWidget):
     def __init__(self, controller: BSController, parent=None):
         super().__init__(parent)
         self.controller = controller
+        self._force_push_dialog = None
         self._init_widgets()
 
     def _init_widgets(self):
@@ -232,16 +233,19 @@ class QUtilPanel(QWidget):
     def _handle_connection(self):
         from binsync.ui.aux_server_panel.aux_server_window import AuxServerWidget
 
-        dialog = AuxServerWidget(self.client_worker.server_client is not None, self)
-        dialog.connect_worker(self.client_worker)
-        dialog.startup_emits()
-        dialog.show()
-        dialog.exec()
+        # Reuse a single dialog instance — re-creating + reconnecting signals on
+        # every click would accumulate dangling connections into the long-lived
+        # ClientWorker.
+        if getattr(self, "_aux_server_dialog", None) is None:
+            self._aux_server_dialog = AuxServerWidget(self.client_worker.server_client is not None, self)
+            self._aux_server_dialog.connect_worker(self.client_worker)
+
+        self._aux_server_dialog.startup_emits()
+        self._aux_server_dialog.exec()
 
     def _handle_progress_view(self):
         from ..progress_graph.progress_window import ProgressGraphWidget
         dialog = ProgressGraphWidget(graph=self.controller.deci.get_callgraph(), controller=self.controller, parent=self)
-        dialog.show()
         dialog.exec_()
 
     #
@@ -324,8 +328,15 @@ class QUtilPanel(QWidget):
         self.controller.magic_fill(preference_user=dialog.preferred_user)
 
     def _handle_force_push_button(self):
-        self.popup = ForcePushUI(self.controller)
-        self.popup.show()
+        if self._force_push_dialog is None:
+            dialog = ForcePushUI(self.controller)
+            dialog.setAttribute(Qt.WA_DeleteOnClose, True)
+            dialog.destroyed.connect(lambda *_: setattr(self, "_force_push_dialog", None))
+            self._force_push_dialog = dialog
+
+        self._force_push_dialog.show()
+        self._force_push_dialog.raise_()
+        self._force_push_dialog.activateWindow()
 
     def _handle_pull_segments_button(self):
         from ..pull_segments_dialog import PullSegmentsDialog

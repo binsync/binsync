@@ -5,10 +5,12 @@ from binsync.ui.panel_tabs.activity_table import QActivityTable
 from binsync.ui.panel_tabs.ctx_table import QCTXTable
 from binsync.ui.panel_tabs.functions_table import QFunctionTable
 from binsync.ui.panel_tabs.globals_table import QGlobalsTable
+from binsync.ui.panel_tabs.types_table import QTypesTable
 from binsync.ui.panel_tabs.util_panel import QUtilPanel
 from libbs.ui.qt_objects import (
     QLabel,
     QMenu,
+    QSplitter,
     QStatusBar,
     QTabWidget,
     QVBoxLayout,
@@ -18,6 +20,7 @@ from libbs.ui.qt_objects import (
     QToolTip,
     QRect,
     QCursor,
+    Qt,
 )
 import html
 
@@ -93,6 +96,20 @@ class ControlPanel(QWidget):
         if self.controller is not None:
             self.controller.client_init_callback = None
 
+    @staticmethod
+    def _wrap_with_label(text, widget):
+        """Stack a header label above `widget` and return the container."""
+        container = QWidget()
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        label = QLabel(text)
+        label.setStyleSheet("font-weight: bold; padding: 2px 4px;")
+        layout.addWidget(label)
+        layout.addWidget(widget)
+        container.setLayout(layout)
+        return container
+
     def _init_widgets(self):
         # status bar
         self._status_label = QLabel(self)
@@ -111,13 +128,21 @@ class ControlPanel(QWidget):
         self._ctx_table = QCTXTable(self.controller)
         self._func_table = QFunctionTable(self.controller)
         self._global_table = QGlobalsTable(self.controller)
+        self._types_table = QTypesTable(self.controller)
         self._activity_table = QActivityTable(self.controller)
         self._utilities_panel = QUtilPanel(self.controller)
 
-        self.tabView.addTab(self._ctx_table, "Context")
+        # Activity tab: per-function context on top, global team activity below.
+        self._activity_panel = QSplitter(Qt.Vertical)
+        self._activity_panel.addWidget(self._wrap_with_label("Users on current function", self._ctx_table))
+        self._activity_panel.addWidget(self._wrap_with_label("Team activity", self._activity_table))
+        self._activity_panel.setStretchFactor(0, 1)
+        self._activity_panel.setStretchFactor(1, 1)
+
         self.tabView.addTab(self._func_table, "Functions")
         self.tabView.addTab(self._global_table, "Globals")
-        self.tabView.addTab(self._activity_table, "Activity")
+        self.tabView.addTab(self._types_table, "Types")
+        self.tabView.addTab(self._activity_panel, "Activity")
         self.tabView.addTab(self._utilities_panel, "Utilities")
 
         # Connect signal from utility panel to function in activity table to facilitate displaying user locations for binsync Server extra
@@ -131,6 +156,7 @@ class ControlPanel(QWidget):
         self.tables.update({
             "functions": self._func_table,
             "globals": self._global_table,
+            "types": self._types_table,
             "activity": self._activity_table
         })
 
@@ -144,9 +170,9 @@ class ControlPanel(QWidget):
         self.setLayout(main_layout)
 
     def _reload_ctx(self):
-        ctx_name = self.controller.last_active_func.name or ""
-        ctx_name = ctx_name[:12] + "..." if len(ctx_name) > 12 else ctx_name
-        self._status_bar.showMessage(f"{ctx_name}@{hex(self.controller.last_active_func.addr)}")
+        func = self.controller.last_active_func
+        full_name = func.name or getattr(getattr(func, "header", None), "name", None) or ""
+        self._status_bar.showMessage(f"{full_name}@{hex(func.addr)}")
         self._ctx_table.reload()
         if self._context_info is not None:
             self._update_aux_server_counts()

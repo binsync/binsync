@@ -134,6 +134,15 @@ class BinsyncPlugin(GenericIDAPlugin):
         """
         Open the control panel view and attach it to IDA View-A or Pseudocode-A.
         """
+        # If a panel already exists, reuse it. Building a new ControlPanel on
+        # every project (re)selection orphans the old one's models and queued
+        # signals; once Python eventually GCs them, pending QMetaCallEvents hit
+        # freed memory and IDA crashes (SIGBUS in QMetaTypeInterfaceWrapper).
+        existing = idaapi.find_widget("BinSync")
+        if existing is not None:
+            ida_kernwin.activate_widget(existing, True)
+            return None
+
         wrapper = IDAWidgetWrapper(ControlPanel, "BinSync", self.controller)
         if not wrapper.twidget:
             _l.info("BinSync is unable to find a widget to attach to. You are likely running headlessly")

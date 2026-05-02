@@ -26,7 +26,6 @@ class MagicSyncDialog(QDialog):
 
         self.should_sync = False
         self.preferred_user = None
-        self.show()
 
     def _init_widgets(self):
         vertical_layout = QVBoxLayout()

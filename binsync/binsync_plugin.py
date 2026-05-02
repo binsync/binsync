@@ -1,3 +1,5 @@
+import os
+
 # A cross-decompiler collaboration plugin
 # @author BinSync Team
 # @category Collaboration
@@ -18,7 +20,11 @@ def PLUGIN_ENTRY(*args, **kwargs):
     """
     This is the entry point for IDA to load the plugin.
     """
+    if not os.environ.get("IDA_IS_INTERACTIVE"):
+        return None
+
     return create_plugin(*args, **kwargs)
+
 
 try:
     import idaapi

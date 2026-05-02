@@ -257,6 +257,7 @@ class BinsyncTableView(QTableView):
         self.proxymodel.setSortRole(BinsyncTableModel.SortRole)
         self.proxymodel.setFilterRole(BinsyncTableModel.FilterRole)
         self.proxymodel.setFilterKeyColumn(0)
+        self.proxymodel.setFilterCaseSensitivity(Qt.CaseInsensitive)
 
         self.setModel(self.proxymodel)
 

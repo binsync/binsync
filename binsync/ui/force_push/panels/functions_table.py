@@ -231,28 +231,56 @@ class QFunctionTable(QWidget):
         else:
             self.table.uncheck_all()
 
+    def _exclude_defaults_changed(self, state):
+        self.table.model.exclude_defaults = bool(state)
+        self.update_table()
+
+    def _use_decompilation_changed(self, state):
+        self.table.use_decompilation = bool(state)
+
     def _init_widgets(self):
         self.filteredit = BinsyncTableFilterLineEdit(parent=self)
         self.table = FunctionTableView(
             self.controller, self.filteredit, stretch_col=1, col_count=2, use_cache=self._use_cache,
             exclude_defaults=self._exclude_defaults, use_decompilation=self.use_decompilation
         )
+
+        self._exclude_defaults_btn = QCheckBox(
+            f'Exclude default named functions "{self.controller.deci.default_func_prefix}"'
+        )
+        self._exclude_defaults_btn.setChecked(self._exclude_defaults)
+        self._exclude_defaults_btn.stateChanged.connect(self._exclude_defaults_changed)
+
+        self._use_dec_btn = QCheckBox("Use decompilation (slow)")
+        self._use_dec_btn.setChecked(self.use_decompilation)
+        self._use_dec_btn.stateChanged.connect(self._use_decompilation_changed)
+
         layout = QVBoxLayout()
         layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._exclude_defaults_btn)
+        layout.addWidget(self._use_dec_btn)
         self.checkbox = QCheckBox("Select All")
         self.checkbox.clicked.connect(self.toggle_select_all)
         layout.addWidget(self.checkbox)
+        layout.addSpacing(6)
         layout.addWidget(self.table)
         layout.addWidget(self.filteredit)
-        self.push_button = QPushButton("Push")
+        self.push_button = QPushButton("Push 0 functions")
         self.push_button.clicked.connect(self.table.push)
         layout.addWidget(self.push_button)
         self.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
+        self.table.model.dataChanged.connect(self._update_push_button)
+
+    def _update_push_button(self, *_):
+        n = sum(1 for v in self.table.model.checks.values() if v)
+        self.push_button.setText(f"Push {n} functions")
+
     def update_table(self):
         self.table.update_table()
+        self._update_push_button()
 
     def reload(self):
         pass

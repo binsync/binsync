@@ -59,8 +59,10 @@ class Scheduler:
 
     def start_worker_thread(self):
         self._work = True
-        self._worker.daemon = True
-        self._worker.start()
+        # Thread instances can only be started once; recreate after a previous run.
+        if not self._worker.is_alive():
+            self._worker = Thread(target=self._worker_thread, daemon=True)
+            self._worker.start()
 
     def _worker_thread(self):
         while self._work:

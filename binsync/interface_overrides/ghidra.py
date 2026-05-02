@@ -43,7 +43,6 @@ class ControlPanelWindow(QMainWindow):
 
     def configure(self):
         config = ConfigureBSDialog(self.controller)
-        config.show()
         config.exec_()
         return self.controller.check_client()
 

@@ -123,22 +123,15 @@ class BinsyncTableModel(QAbstractTableModel):
 
     @Slot(list, list)
     def update_data(self, new_data, new_colors):
-        prev_rc = len(self.row_data)
-        new_rc = len(new_data)
-        adding = prev_rc < new_rc
-        removing = new_rc < prev_rc
-        if adding:
-            self.beginInsertRows(QModelIndex(), prev_rc, new_rc-1)
-        elif removing:
-            self.beginRemoveRows(QModelIndex(), new_rc, prev_rc-1)
-
+        # Use beginResetModel/endResetModel — it's the only path that reliably
+        # invalidates QTableView's cached layout when rows are added/removed
+        # from a worker thread via a queued signal. The previous granular
+        # begin/endInsertRows + begin/endRemoveRows path left the view drawing
+        # stale rows on context-tab cursor changes until the user clicked.
+        self.beginResetModel()
         self.row_data = new_data
         self.data_bgcolors = new_colors
-
-        if adding:
-            self.endInsertRows()
-        elif removing:
-            self.endRemoveRows()
+        self.endResetModel()
 
     def flags(self, index):
         """ Set the item flags at the given index. """
@@ -153,6 +146,8 @@ class BinsyncTableModel(QAbstractTableModel):
 
     def refresh_time_cells(self):
         # always update every column in the table that contains time
+        if self.rowCount() <= 0 or self.time_col is None:
+            return
         self.dataChanged.emit(
             self.createIndex(0, self.time_col),
             self.createIndex(self.rowCount() - 1, self.time_col)
@@ -261,6 +256,7 @@ class BinsyncTableView(QTableView):
         self.proxymodel.setSortRole(BinsyncTableModel.SortRole)
         self.proxymodel.setFilterRole(BinsyncTableModel.FilterRole)
         self.proxymodel.setFilterKeyColumn(0)
+        self.proxymodel.setFilterCaseSensitivity(Qt.CaseInsensitive)
 
         self.setModel(self.proxymodel)
 
