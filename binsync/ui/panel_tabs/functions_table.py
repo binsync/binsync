@@ -6,7 +6,7 @@ from collections import defaultdict
 
 from binsync.controller import BSController
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView
-from libbs.ui.qt_objects import (
+from declib.ui.qt_objects import (
     QMenu,
     QAction,
     QWidget,
@@ -17,7 +17,7 @@ from libbs.ui.qt_objects import (
 from binsync.ui.utils import friendly_datetime
 from binsync.core.scheduler import SchedSpeed
 from binsync.ui.history_display.history_window import HistoryDisplayWidget
-from libbs.artifacts import Function
+from declib.artifacts import Function
 
 l = logging.getLogger(__name__)
 

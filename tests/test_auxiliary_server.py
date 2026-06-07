@@ -4,7 +4,7 @@ from binsync.extras.aux_server.aux_server import Server
 from binsync.extras.aux_server.store import ServerStore
 
 from binsync.ui.aux_server_panel.aux_server_window import ClientWorker
-from libbs.ui.qt_objects import (
+from declib.ui.qt_objects import (
     QThread,
     QWidget,
     Signal,
@@ -17,7 +17,7 @@ import time
 import socket
 from werkzeug.serving import make_server
 from contextlib import contextmanager
-from libbs.artifacts import Artifact, Context
+from declib.artifacts import Artifact, Context
 
 
 class MockContext:
@@ -276,8 +276,8 @@ class TestAuxServer(unittest.TestCase):
         binsync_url = "https://github.com/binsync/binsync.git"
         binsync_group_name = "binsync"
         
-        libbs_url = "https://github.com/binsync/libbs.git"
-        libbs_group_name = "libbs"
+        declib_url = "https://github.com/binsync/declib.git"
+        declib_group_name = "declib"
         self.server_thread_manager = ServerThreadManager(server)
         self.server_thread_manager.enter()
         
@@ -289,11 +289,11 @@ class TestAuxServer(unittest.TestCase):
         
         # Client makes new groups
         user.add_group.emit(binsync_group_name)
-        user.add_group.emit(libbs_group_name)
+        user.add_group.emit(declib_group_name)
         
         # Client links projects
         user.link_project.emit((binsync_url, binsync_group_name))
-        user.link_project.emit((libbs_url, libbs_group_name))
+        user.link_project.emit((declib_url, declib_group_name))
         
         # Validate projects list contains only our one project
         user.list_projects.emit()
@@ -304,8 +304,8 @@ class TestAuxServer(unittest.TestCase):
             binsync_group_name: {
                 binsync_url: None
             },
-            libbs_group_name: {
-                libbs_url: None
+            declib_group_name: {
+                declib_url: None
             }
         }
 
@@ -313,7 +313,7 @@ class TestAuxServer(unittest.TestCase):
         user.delete_group.emit(binsync_group_name)
         
         # Client unlinks a project 
-        user.unlink_project.emit((libbs_url, libbs_group_name))
+        user.unlink_project.emit((declib_url, declib_group_name))
         
         # Validate projects list is empty
         user.list_projects.emit()
@@ -321,7 +321,7 @@ class TestAuxServer(unittest.TestCase):
         self.app.processEvents()
         assert user.linked_projects == {
             ServerStore.DEFAULT_GROUPNAME: {},
-            libbs_group_name: {}
+            declib_group_name: {}
         }
     
     def test_multi_user_link_unlink_projects(self):

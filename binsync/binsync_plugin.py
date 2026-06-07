@@ -12,7 +12,7 @@ def create_plugin(*args, **kwargs):
     return _create_plugin(*args, **kwargs)
 
 # =============================================================================
-# LibBS generic plugin loader (don't touch things below this)
+# DecLib generic plugin loader (don't touch things below this)
 # =============================================================================
 
 

@@ -4,8 +4,8 @@ from binsync.ui.force_push.panels.functions_table import QFunctionTable
 from binsync.ui.force_push.panels.globals_table import QGlobalsTable
 from binsync.ui.force_push.panels.types_table import QTypesTable
 from binsync.ui.force_push.panels.segments_table import QSegmentTable
-from libbs.api.utils import progress_bar
-from libbs.ui.qt_objects import (
+from declib.api.utils import progress_bar
+from declib.ui.qt_objects import (
     QDialog,
     QTabWidget,
     QVBoxLayout,

@@ -18,13 +18,13 @@ BinSync is a decompiler collaboration tool built on Git versioning that enables 
 
 ### Decompiler Integration
 
-- **Interface Overrides (`binsync/interface_overrides/`)**: Decompiler-specific implementations extending libbs DecompilerInterface
+- **Interface Overrides (`binsync/interface_overrides/`)**: Decompiler-specific implementations extending declib DecompilerInterface
 - **Plugin System**: Main plugin creation through `create_plugin()` in `__init__.py`
 - **UI Components (`binsync/ui/`)**: Cross-platform UI panels and dialogs
 
 ### Key Dependencies
 
-- **libbs**: Core binary analysis library for decompiler abstraction (>=2.15.6)
+- **declib**: Core binary analysis library for decompiler abstraction (>=4.0.1)
 - **GitPython**: Git operations and repository management
 - **PySide6**: GUI framework (for Ghidra support)
 
@@ -62,7 +62,7 @@ cd tests/
 ## Key Patterns
 
 ### Artifact Management
-- All artifacts inherit from libbs `Artifact` base class
+- All artifacts inherit from declib `Artifact` base class
 - State management uses TOML serialization with hex encoding for addresses
 - Branch-based isolation: each user gets their own Git branch (`binsync/username`)
 

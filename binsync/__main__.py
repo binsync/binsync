@@ -4,12 +4,12 @@ from pathlib import Path
 import os
 import sys
 
-from libbs.decompilers import SUPPORTED_DECOMPILERS, GHIDRA_DECOMPILER, ANGR_DECOMPILER, IDA_DECOMPILER, BINJA_DECOMPILER
+from declib.decompilers import SUPPORTED_DECOMPILERS, GHIDRA_DECOMPILER, ANGR_DECOMPILER, IDA_DECOMPILER, BINJA_DECOMPILER
 
 from binsync.installer import BinSyncInstaller
 from binsync.extras import EXTRAS_AVAILABLE
 import binsync
-import libbs
+import declib
 
 l = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ def main():
         """
     )
     parser.add_argument(
-        "-v", "--version", action="version", version=f"BinSync {binsync.__version__} | LibBS {libbs.__version__}"
+        "-v", "--version", action="version", version=f"BinSync {binsync.__version__} | DecLib {declib.__version__}"
     )
     if EXTRAS_AVAILABLE:
         parser.add_argument(

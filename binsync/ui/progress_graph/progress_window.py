@@ -5,7 +5,7 @@ import os
 import networkx as nx
 import numpy as np
 
-from libbs.ui.qt_objects import (
+from declib.ui.qt_objects import (
     # QtWidgets
     QGraphicsScene,
     QGraphicsView,
@@ -29,8 +29,8 @@ from libbs.ui.qt_objects import (
     # QtCore
     Qt, QLineF, QTimer
 )
-from libbs.artifacts import Function
-from libbs.api.decompiler_interface import DecompilerInterface
+from declib.artifacts import Function
+from declib.api.decompiler_interface import DecompilerInterface
 from binsync.extras import EXTRAS_AVAILABLE
 
 from .summarize import summarize_changes

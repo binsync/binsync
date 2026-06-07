@@ -2,7 +2,7 @@ import urllib.parse
 import requests
 import logging
 import time
-from libbs.artifacts import (
+from declib.artifacts import (
     Context
 )
 l = logging.getLogger(__name__)

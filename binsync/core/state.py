@@ -11,7 +11,7 @@ import toml
 from sortedcontainers import SortedDict
 
 
-from libbs.artifacts import (
+from declib.artifacts import (
     Artifact,
     ArtifactFormat,
     Comment,
@@ -23,7 +23,7 @@ from libbs.artifacts import (
     StackVariable,
     Struct, Typedef, Segment,
 )
-from libbs.artifacts import TomlHexEncoder
+from declib.artifacts import TomlHexEncoder
 from binsync import __version__ as BS_VERS
 from binsync.core.errors import MetadataNotFoundError
 
@@ -386,7 +386,7 @@ class State:
         impacting the DecompilerInterface as everything 
         is deepcopy'ed.
 
-        @param deci: A libbs.DecompilerInterface object
+        @param deci: A declib.DecompilerInterface object
         """
         state = cls(None)
 

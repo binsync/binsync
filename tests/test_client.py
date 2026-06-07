@@ -7,7 +7,7 @@ import toml
 
 import unittest
 
-from libbs.artifacts import (
+from declib.artifacts import (
     FunctionHeader, StackVariable, Comment, Struct
 )
 from binsync.core.client import Client

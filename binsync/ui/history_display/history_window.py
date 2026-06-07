@@ -4,7 +4,7 @@ from binsync.controller import BSController
 from datetime import datetime, timezone, timedelta
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableView
 from binsync.core.client import SchedSpeed
-from libbs.ui.qt_objects import (
+from declib.ui.qt_objects import (
     # QtWidgets
     QDialog,
     QHBoxLayout,

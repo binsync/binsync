@@ -4,7 +4,7 @@ from typing import Dict, Set
 
 from binsync.controller import BSController
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableFilterLineEdit, BinsyncTableView
-from libbs.ui.qt_objects import (
+from declib.ui.qt_objects import (
     QWidget,
     QVBoxLayout,
     Qt,

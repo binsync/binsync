@@ -5,7 +5,7 @@ import itertools
 from hashlib import md5
 from typing import Optional, Dict
 
-from libbs.configuration import BSConfig
+from declib.configuration import DLConfig
 
 l = logging.getLogger(__name__)
 max_recent_projects = 5
@@ -48,8 +48,8 @@ class ProjectData:
         return proj_data
 
 
-class BinSyncBSConfig(BSConfig):
-    __slots__ = BSConfig.__slots__ + (
+class BinSyncDLConfig(DLConfig):
+    __slots__ = DLConfig.__slots__ + (
         "recent_projects",
         "table_coloring_window",
         "log_level",

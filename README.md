@@ -109,7 +109,7 @@ To understand the difference between artifact support, pull, push, and auto push
 | Auto Push 	                        | :white_check_mark:                       | :white_check_mark:		               | :x:					                            | :x:					                        | :x: 					                     | :white_check_mark: 					         |
 
 ## Scripting
-For scripting please see [Lib BinSync](https://github.com/binsync/libbs), which allows you to do all lifting and data manipulation in Python.
+For scripting please see [DecLib](https://github.com/binsync/declib), which allows you to do all lifting and data manipulation in Python.
 
 ## Sponsors 
 BinSync and its associated projects would not be possible without sponsorship. 

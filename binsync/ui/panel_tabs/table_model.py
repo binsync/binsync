@@ -3,7 +3,7 @@ import datetime
 from typing import Any, Dict, Set
 
 from binsync.controller import BSController
-from libbs.ui.qt_objects import (
+from declib.ui.qt_objects import (
     QAbstractItemView,
     QAbstractTableModel,
     QEvent,
