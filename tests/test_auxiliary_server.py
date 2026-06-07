@@ -14,8 +14,6 @@ from libbs.ui.qt_objects import (
 import unittest
 import threading
 import time
-import socket
-from werkzeug.serving import make_server
 from contextlib import contextmanager
 from libbs.artifacts import Artifact, Context
 
@@ -57,6 +55,8 @@ class ServerThreadManager():
     Implementation of the server that enables shutting down the server in between tests
     """
     def __init__(self, server:Server):
+        from werkzeug.serving import make_server
+        # self.server = server
         self.server = make_server(server.host, server.port, server.app)
         
     def enter(self):
@@ -64,6 +64,7 @@ class ServerThreadManager():
         self._thread.start()
         
     def exit(self):
+        # self.server.stop()
         self.server.shutdown()
         self._thread.join()
 
@@ -216,7 +217,7 @@ class TestAuxServer(unittest.TestCase):
         self.users.append(MockUser(controller))
         for user in self.users:
             user.connect_signal.emit((self.HOST, self.PORT))
-        time.sleep(1)
+        time.sleep(2)
         
         contexts_dict, _ = server.store.getUserData()
         user_entry = contexts_dict[controller.client.master_user]
@@ -347,7 +348,7 @@ class TestAuxServer(unittest.TestCase):
         
         # Client A links project
         user_a.link_project.emit((project_url, ServerStore.DEFAULT_GROUPNAME))
-        time.sleep(0.5) # Give time for server to receive the project
+        time.sleep(1) # Give time for server to receive the project
         
         # Client B lists out projects
         user_b.list_projects.emit()
@@ -361,7 +362,7 @@ class TestAuxServer(unittest.TestCase):
         
         # Client C unlinks project
         user_c.unlink_project.emit((project_url, ServerStore.DEFAULT_GROUPNAME))
-        time.sleep(0.5) # Give time for server to receive the unlink
+        time.sleep(1) # Give time for server to receive the unlink
         
         # Client B lists out projects
         user_b.list_projects.emit()
