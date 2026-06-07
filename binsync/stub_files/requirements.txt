@@ -1,1 +1,1 @@
-binsync>=5.15.0
+binsync>=5.15.1
