@@ -2,11 +2,11 @@ import logging
 import datetime
 import time
 
-from libbs.artifacts import Function
+from declib.artifacts import Function
 
 from binsync.controller import BSController
 from binsync.ui.panel_tabs.table_model import BinsyncTableModel, BinsyncTableView
-from libbs.ui.qt_objects import (
+from declib.ui.qt_objects import (
     QMenu,
     QAction,
     Qt

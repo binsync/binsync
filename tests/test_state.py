@@ -5,7 +5,7 @@ import sys
 import unittest
 
 from binsync.core.client import Client
-from libbs.artifacts import (
+from declib.artifacts import (
     FunctionHeader, Struct, StructMember,
 )
 from binsync.core.state import State, ArtifactType

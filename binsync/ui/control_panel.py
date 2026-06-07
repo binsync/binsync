@@ -1,13 +1,13 @@
 import logging
 
-import libbs.artifacts
+import declib.artifacts
 from binsync.ui.panel_tabs.activity_table import QActivityTable
 from binsync.ui.panel_tabs.ctx_table import QCTXTable
 from binsync.ui.panel_tabs.functions_table import QFunctionTable
 from binsync.ui.panel_tabs.globals_table import QGlobalsTable
 from binsync.ui.panel_tabs.types_table import QTypesTable
 from binsync.ui.panel_tabs.util_panel import QUtilPanel
-from libbs.ui.qt_objects import (
+from declib.ui.qt_objects import (
     QLabel,
     QMenu,
     QSplitter,
@@ -82,7 +82,7 @@ class ControlPanel(QWidget):
         self.update_ready.emit(status)
 
     def ctx_callback(self, states):
-        if isinstance(self.controller.last_active_func, libbs.artifacts.Function):
+        if isinstance(self.controller.last_active_func, declib.artifacts.Function):
             self._ctx_table.update_table(states, new_ctx=self.controller.last_active_func.addr)
 
         self.ctx_change.emit()

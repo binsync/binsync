@@ -8,8 +8,8 @@ sudo apt-get update && sudo apt-get install -y \
   --exec /usr/bin/Xvfb -- :99 -screen 0 1920x1200x24 -ac +extension GLX
 # update pip
 python -m pip install --upgrade pip
-# install the parallel branch of libbs that matches the current branch
-(git clone https://github.com/binsync/libbs.git /tmp/libbs && cd /tmp/libbs && git checkout $BRANCH_NAME || true && pip install .)
+# install the parallel branch of declib that matches the current branch
+(git clone https://github.com/binsync/declib.git /tmp/declib && cd /tmp/declib && git checkout $BRANCH_NAME || true && pip install .)
 # attempt an install of angr-management first since version of binsync will conflict
 pip install angr-management==9.2.139
 pip install .[test]

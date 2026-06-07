@@ -4,11 +4,11 @@ import threading
 from time import sleep
 import subprocess
 
-from libbs.ui.version import set_ui_version
+from declib.ui.version import set_ui_version
 set_ui_version("PySide6")
-from libbs.ui.qt_objects import QMainWindow, QApplication, QTimer
-from libbs.api import DecompilerInterface
-from libbs.api.decompiler_server import DecompilerServer
+from declib.ui.qt_objects import QMainWindow, QApplication, QTimer
+from declib.api import DecompilerInterface
+from declib.api.decompiler_server import DecompilerServer
 
 from binsync.ui.control_panel import ControlPanel
 from binsync.ui.config_dialog import ConfigureBSDialog
@@ -54,7 +54,7 @@ class ControlPanelWindow(QMainWindow):
 
 
 def start_ghidra_ui():
-    from libbs.api.decompiler_client import DecompilerClient
+    from declib.api.decompiler_client import DecompilerClient
     deci = DecompilerClient.discover()
     app = QApplication.instance()
     if app is None:

@@ -2,11 +2,11 @@ import logging
 import typing
 
 # pylint: disable=wrong-import-position,wrong-import-order
-from libbs.ui.version import set_ui_version
+from declib.ui.version import set_ui_version
 set_ui_version("PySide6")
 
-from libbs.ui.qt_objects import QVBoxLayout
-from libbs.decompilers.angr.compat import GenericBSAngrManagementPlugin
+from declib.ui.qt_objects import QVBoxLayout
+from declib.decompilers.angr.compat import GenericDLAngrManagementPlugin
 
 from angrmanagement.ui.views.view import BaseView
 from PySide6QtAds import SideBarRight, CDockWidget, CDockManager
@@ -52,7 +52,7 @@ class ControlPanelView(BaseView):
         self.setLayout(main_layout)
 
 
-class BinsyncPlugin(GenericBSAngrManagementPlugin):
+class BinsyncPlugin(GenericDLAngrManagementPlugin):
     """
     Controller plugin for BinSync
     """

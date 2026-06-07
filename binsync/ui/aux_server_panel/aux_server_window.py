@@ -5,7 +5,7 @@ import logging
 
 from binsync.ui.aux_server_panel.connected_window import AuxServerConnectedWidget
 from binsync.ui.aux_server_panel.disconnected_window import AuxServerDisconnectedWidget
-from libbs.ui.qt_objects import (
+from declib.ui.qt_objects import (
     QHBoxLayout,
     QLabel,
     QPushButton,

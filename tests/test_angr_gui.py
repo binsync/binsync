@@ -18,7 +18,7 @@ import angr
 from angrmanagement.ui.dialogs.rename_node import RenameNode
 from angrmanagement.ui.main_window import MainWindow
 
-from libbs.ui.version import set_ui_version
+from declib.ui.version import set_ui_version
 set_ui_version("PySide6")
 from binsync.controller import SyncControlStatus
 from binsync.ui.config_dialog import ConfigureBSDialog

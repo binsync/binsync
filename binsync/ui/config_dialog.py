@@ -8,8 +8,8 @@ from typing import Optional
 import filelock
 
 from binsync.core.client import ConnectionWarnings, BINSYNC_ROOT_BRANCH
-from binsync.configuration import BinSyncBSConfig, ProjectData
-from libbs.ui.qt_objects import (
+from binsync.configuration import BinSyncDLConfig, ProjectData
+from declib.ui.qt_objects import (
     QCheckBox,
     QDialog,
     QDir,
@@ -555,7 +555,7 @@ class ConfigureBSDialog(QDialog):
     def load_saved_config(self):
         binary_hash = self.controller.deci.binary_hash
         config = self.controller.load_saved_config()
-        if not config or not isinstance(config, BinSyncBSConfig):
+        if not config or not isinstance(config, BinSyncDLConfig):
             return None
 
         if binary_hash not in config.recent_projects.keys():
@@ -585,7 +585,7 @@ class ConfigureBSDialog(QDialog):
             repo = str(Path(self.controller.client.repo_root).absolute())
 
         if not self.controller.config:
-            self.controller.config = BinSyncBSConfig()
+            self.controller.config = BinSyncDLConfig()
 
         self.controller.config.save_project_data(
             self.controller.deci.binary_path,

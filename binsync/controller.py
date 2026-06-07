@@ -8,24 +8,24 @@ from typing import Dict, Iterable, Optional, Union, List, Tuple
 import math
 import re
 
-from libbs.api.utils import progress_bar
-from libbs.artifacts import (
+from declib.api.utils import progress_bar
+from declib.artifacts import (
     Artifact,
     Function, FunctionHeader, StackVariable,
     Comment, GlobalVariable, Patch,
     Enum, Struct, FunctionArgument, StructMember, Typedef, Segment, Context, Decompilation
 )
-from libbs.api import DecompilerInterface
-from libbs.api.type_parser import CType
+from declib.api import DecompilerInterface
+from declib.api.type_parser import CType
 
 from binsync.core.client import Client, SchedSpeed, Scheduler, Job
 from binsync.core.state import State
 from binsync.core.user import User
-from binsync.configuration import BinSyncBSConfig
+from binsync.configuration import BinSyncDLConfig
 
 from wordfreq import word_frequency
 
-from libbs.decompilers import IDA_DECOMPILER
+from declib.decompilers import IDA_DECOMPILER
 
 _l = logging.getLogger(name=__name__)
 
@@ -252,7 +252,7 @@ class BSController:
         except RuntimeError:
             pass
 
-        from libbs.ui.qt_objects import (
+        from declib.ui.qt_objects import (
             QThread
         )
         from binsync.ui.utils import BSUIScheduler
@@ -726,7 +726,7 @@ class BSController:
                 # set the imports into the decompiler
                 art_dict[identifier] = merged_artifact
 
-                # TODO: figure out a way to do this inside LibBS (getting all comments for a func)
+                # TODO: figure out a way to do this inside DecLib (getting all comments for a func)
                 if artifact_type is Function:
                     for addr, cmt in state.get_func_comments(merged_artifact.addr).items():
                         self.fill_artifact(addr, artifact_type=Comment, artifact=cmt, state=state, user=user)
@@ -1463,8 +1463,8 @@ class BSController:
     # Config Utils
     #
 
-    def load_saved_config(self) -> Optional[BinSyncBSConfig]:
-        config = BinSyncBSConfig().load_from_file()
+    def load_saved_config(self) -> Optional[BinSyncDLConfig]:
+        config = BinSyncDLConfig().load_from_file()
         if not config:
             return None
 

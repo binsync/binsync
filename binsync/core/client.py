@@ -15,7 +15,7 @@ import git
 import git.exc
 
 from binsync.core.user import User
-from binsync.configuration import BinSyncBSConfig, ProjectData
+from binsync.configuration import BinSyncDLConfig, ProjectData
 from binsync.core.errors import ExternalUserCommitError, MetadataNotFoundError
 from binsync.core.state import State, toml_file_to_dict
 from binsync.core.scheduler import Scheduler, Job, SchedSpeed

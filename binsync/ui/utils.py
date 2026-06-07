@@ -2,7 +2,7 @@ import datetime
 import logging
 import threading
 
-from libbs.ui.qt_objects import (
+from declib.ui.qt_objects import (
     QFrame,
     QWidget,
     QScrollArea,

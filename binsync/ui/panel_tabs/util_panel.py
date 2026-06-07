@@ -4,7 +4,7 @@ import requests
 import urllib.parse
 
 from binsync.controller import  MergeLevel
-from libbs.ui.qt_objects import (
+from declib.ui.qt_objects import (
     QCheckBox,
     QComboBox,
     QGroupBox,
@@ -25,7 +25,7 @@ from libbs.ui.qt_objects import (
     QTimer,
     Slot
 )
-from libbs.artifacts import (
+from declib.artifacts import (
     Context
 )
 from binsync.ui.magic_sync_dialog import MagicSyncDialog

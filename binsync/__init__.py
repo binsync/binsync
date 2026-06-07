@@ -1,4 +1,4 @@
-__version__ = "5.15.1"
+__version__ = "5.15.2"
 # don't forget to bump binsync/stub_files/plugin.json
 
 import os
@@ -22,8 +22,8 @@ if platform.system() == "Darwin":
 
 
 def create_plugin(*args, **kwargs):
-    from libbs.api import DecompilerInterface
-    from libbs.decompilers import IDA_DECOMPILER, ANGR_DECOMPILER, BINJA_DECOMPILER, GHIDRA_DECOMPILER
+    from declib.api import DecompilerInterface
+    from declib.decompilers import IDA_DECOMPILER, ANGR_DECOMPILER, BINJA_DECOMPILER, GHIDRA_DECOMPILER
 
     # First discover the current decompiler and grab the overrides for BinSync specific UI
     current_decompiler = DecompilerInterface.find_current_decompiler()

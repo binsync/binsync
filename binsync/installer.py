@@ -2,10 +2,10 @@ import shutil
 import textwrap
 from pathlib import Path
 
-from libbs.plugin_installer import LibBSPluginInstaller, PluginInstaller
+from declib.plugin_installer import DecLibPluginInstaller, PluginInstaller
 
 
-class BinSyncInstaller(LibBSPluginInstaller):
+class BinSyncInstaller(DecLibPluginInstaller):
     def __init__(self):
         super().__init__(targets=PluginInstaller.DECOMPILERS)
         pkg_files = self.find_pkg_files("binsync")

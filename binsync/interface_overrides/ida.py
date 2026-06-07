@@ -5,13 +5,13 @@ import ida_kernwin
 import ida_hexrays
 import idautils
 
-from libbs.decompilers.ida.compat import get_ida_gui_version
-from libbs.ui.version import set_ui_version
+from declib.decompilers.ida.compat import get_ida_gui_version
+from declib.ui.version import set_ui_version
 set_ui_version(get_ida_gui_version())
-from libbs.ui.qt_objects import QEvent, Qt, QKeyEvent, QWidget, QVBoxLayout, wrapInstance
-from libbs.decompilers.ida.compat import has_older_hexrays_version, generate_generic_ida_plugic_cls
-from libbs.decompilers.ida.ida_ui import IDAWidgetWrapper
-from libbs.decompilers.ida.interface import IDAInterface
+from declib.ui.qt_objects import QEvent, Qt, QKeyEvent, QWidget, QVBoxLayout, wrapInstance
+from declib.decompilers.ida.compat import has_older_hexrays_version, generate_generic_ida_plugic_cls
+from declib.decompilers.ida.ida_ui import IDAWidgetWrapper
+from declib.decompilers.ida.interface import IDAInterface
 
 from binsync.ui.config_dialog import ConfigureBSDialog
 from binsync.ui.control_panel import ControlPanel

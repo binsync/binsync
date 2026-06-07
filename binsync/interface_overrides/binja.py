@@ -14,8 +14,8 @@ from binaryninjaui import (
     Sidebar,
 )
 
-from libbs.plugin_installer import PluginInstaller
-from libbs.decompilers.binja.interface import BinjaInterface
+from declib.plugin_installer import PluginInstaller
+from declib.decompilers.binja.interface import BinjaInterface
 
 from binsync.controller import BSController
 from binsync.ui.control_panel import ControlPanel
