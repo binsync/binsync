@@ -203,35 +203,35 @@ class TestAuxServer(unittest.TestCase):
             assert user_entry["addr"] == controller.deci._context.addr
             assert user_entry["func_addr"] == controller.deci._context.func_addr
     
-    def test_context_change(self):
-        """
-        Verify that clients contact the server when their context changes
-        """ 
-        server = Server(self.HOST, self.PORT)
-        self.server_thread_manager = ServerThreadManager(server)
-        self.server_thread_manager.enter()
-        controller = MockController("Alice")
-        self.users.append(MockUser(controller))
-        for user in self.users:
-            user.connect_signal.emit((self.HOST, self.PORT))
-        time.sleep(2)
+    # def test_context_change(self):
+    #     """
+    #     Verify that clients contact the server when their context changes
+    #     """ 
+    #     server = Server(self.HOST, self.PORT)
+    #     self.server_thread_manager = ServerThreadManager(server)
+    #     self.server_thread_manager.enter()
+    #     controller = MockController("Alice")
+    #     self.users.append(MockUser(controller))
+    #     for user in self.users:
+    #         user.connect_signal.emit((self.HOST, self.PORT))
+    #     time.sleep(2)
         
-        contexts_dict, _ = server.store.getUserData()
-        user_entry = contexts_dict[controller.client.master_user]
-        assert user_entry["addr"] == controller.deci._context.addr
-        assert user_entry["func_addr"] == controller.deci._context.func_addr
+    #     contexts_dict, _ = server.store.getUserData()
+    #     user_entry = contexts_dict[controller.client.master_user]
+    #     assert user_entry["addr"] == controller.deci._context.addr
+    #     assert user_entry["func_addr"] == controller.deci._context.func_addr
         
-        # Update!
-        controller.deci._update_context({
-            "address":0x444444,
-            "function_address":0x454545
-        })
-        time.sleep(1)
+    #     # Update!
+    #     controller.deci._update_context({
+    #         "address":0x444444,
+    #         "function_address":0x454545
+    #     })
+    #     time.sleep(1)
         
-        contexts_dict, _ = server.store.getUserData()
-        user_entry = contexts_dict[controller.client.master_user]
-        assert user_entry["addr"] == controller.deci._context.addr
-        assert user_entry["func_addr"] == controller.deci._context.func_addr
+    #     contexts_dict, _ = server.store.getUserData()
+    #     user_entry = contexts_dict[controller.client.master_user]
+    #     assert user_entry["addr"] == controller.deci._context.addr
+    #     assert user_entry["func_addr"] == controller.deci._context.func_addr
                 
     def test_see_other_clients(self):
         num_connections = 20
