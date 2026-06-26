@@ -214,7 +214,7 @@ class TestAuxServer(unittest.TestCase):
         self.users.append(MockUser(controller))
         for user in self.users:
             user.connect_signal.emit((self.HOST, self.PORT))
-        time.sleep(20)
+        time.sleep(2)
         
         contexts_dict, _ = server.store.getUserData()
         user_entry = contexts_dict[controller.client.master_user]

@@ -64,14 +64,15 @@ class ServerClient():
 
         try:
             l.info(self.sess.get(self.server_url+"/connect").text)
-            self.connected = True
-            self.controller.deci.artifact_change_callbacks[Context].append(self._submit_new_context)
-            self.callback_registered = True
-            self._submit_new_context(self.controller.deci.gui_active_context())
-            return True
-        except requests.ConnectionError:
-            l.info("Unable to establish a connection with the auxiliary server")
+        except requests.ConnectionError as e:
+            l.error("Tried to connect to server at self.server_url but received error %s", e)
             return False
+        self.connected = True
+        self.controller.deci.artifact_change_callbacks[Context].append(self._submit_new_context)
+        self.callback_registered = True
+        self._submit_new_context(self.controller.deci.gui_active_context())
+        return True
+        
 
     @_connection_required
     def poll_users_data(self):
