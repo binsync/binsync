@@ -210,6 +210,7 @@ class TestAuxServer(unittest.TestCase):
         server = Server(self.HOST, self.PORT)
         self.server_thread_manager = ServerThreadManager(server)
         self.server_thread_manager.enter()
+        time.sleep(1)
         controller = MockController("Alice")
         self.users.append(MockUser(controller))
         for user in self.users:
