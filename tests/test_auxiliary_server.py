@@ -115,7 +115,15 @@ class MockUser(QWidget):
     def _update_linked_projects(self, new_projects_list):
         self.linked_projects = new_projects_list
         
-
+# NOTE: While working on these test cases, I noticed an issue with 
+# the server starting up only after clients attempt connecting 
+# (e.g. https://github.com/binsync/binsync/actions/runs/28305215535/job/83860138903).
+# This seems to have been fixed by adding a sleep after the call to start
+# the server (self.server_thread_manager.enter()) and prior to having the user 
+# connect (connect_signal.emit((HOST, PORT))), but because the other 
+# test cases have not exhibited this issue I did not implement this for 
+# the other test cases. If the issue shows up again, add the sleep for other
+# test cases as well.
 class TestAuxServer(unittest.TestCase):
     HOST = "127.0.0.1"
     PORT = 7962
