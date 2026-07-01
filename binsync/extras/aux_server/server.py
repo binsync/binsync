@@ -1,6 +1,6 @@
 import binsync.extras.aux_server as aux_server
 from flask import Flask, request, jsonify, Response
-from threading import Lock
+import threading
 import logging
 from binsync.extras.aux_server.store import ServerStore
 from werkzeug.serving import make_server
@@ -13,6 +13,8 @@ class Server:
         self.app = Flask(__name__)
         # When returning the list of linked projects, we want order to be preserved in case users care
         self.app.json.sort_keys = False # type: ignore
+        
+        self.app.before_request(self.user_heartbeat)
 
         self.app.add_url_rule("/version", view_func=self.return_version, methods=["GET"])
 
@@ -27,6 +29,11 @@ class Server:
         self.app.add_url_rule("/link_project", view_func=self.handle_link_project, methods=["POST"])
         self.app.add_url_rule("/unlink_project", view_func=self.handle_unlink_project, methods=["POST"])
         self.app.add_url_rule("/list_projects", view_func=self.return_linked_projects, methods=["GET"])
+    
+    def user_heartbeat(self):
+        if "user" in request.cookies:
+            l.info("Request received from user %s", request.cookies["user"])
+
     
     def return_version(self):
         return Response(aux_server.__version__, mimetype="text/plain")
@@ -60,7 +67,6 @@ class Server:
         
         If an If-None-Match header is provided and the ETag value matches the modification counter, 
         returns a 304 to indicate unchanged data.
-        
         '''
         if "If-None-Match" in request.headers: # Check for the presence of an ETag
             etag = request.headers['If-None-Match']

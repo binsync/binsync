@@ -29,13 +29,27 @@ class ServerClient():
         self.old_post_data = {}
         self.connected = False
         self.callback_registered = False
+<<<<<<< HEAD:binsync/extras/aux_server/client.py
 
+=======
+        
+    
+    # Try connecting to the server. Return True on successful connection and False on fail.
+>>>>>>> ca08328 (send username alongside requests):binsync/extras/aux_server/aux_client.py
     def connect(self):
         self.server_url = f"http://{self.host}:{self.port}"
-        self._etag = None
         parsed = urllib.parse.urlparse(self.server_url)
         if parsed.netloc != f"{self.host}:{self.port}":
             l.error("HOST AND PORT COMBINATION IS NOT VALID: NETLOC %s BUT HOST %s AND PORT %s",parsed.netloc,parsed.hostname,parsed.port)
+            return False
+
+        try:
+            username = self.controller.client.master_user
+        except AttributeError:
+            l.error("Tried to access username but was not set")
+            return False
+
+        self._etag = None
         self.sess = requests.Session()
         try:
             client_version_nums = aux_server.__version__.split(".")
@@ -61,7 +75,8 @@ class ServerClient():
         except ValueError as e:
             l.error("Tried to get version from auxiliary server but response was malformed. Encountered error: %s", e)
             return False
-
+        
+        self.sess.cookies.set("user", username)
         try:
             l.info(self.sess.get(self.server_url+"/connect").text)
         except requests.ConnectionError as e:
