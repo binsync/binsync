@@ -22,7 +22,7 @@ from declib.ui.qt_objects import (
     QTimer
 )
 from functools import wraps
-from binsync.extras.aux_server.aux_client import ServerClient
+from binsync.extras.aux_server.client import ServerClient
 
 l = logging.getLogger(__name__)
     
