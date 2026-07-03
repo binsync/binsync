@@ -50,7 +50,7 @@ class ServerStore:
                 self._user_map[username] = new_user
             self._map_modify_count += 1
     
-    def getUserData(self, count=None)->tuple[dict[str, dict[str, int | None]], int]|None:
+    def get_user_data(self, count=None)->tuple[dict[str, dict[str, int | None]], int]|None:
         """
         Gets the user data (dict of username -> [dict of "addr"/"func_addr" to address])
         stored as a tuple alongside the current modification counter.

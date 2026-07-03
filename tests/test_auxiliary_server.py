@@ -205,7 +205,7 @@ class TestAuxServer(unittest.TestCase):
             user.connect_signal.emit((self.HOST, self.PORT))
         time.sleep(2)
         # Make sure that each user's function context is present in the server's storage
-        contexts_dict, _ = server.store.getUserData()
+        contexts_dict, _ = server.store.get_user_data()
         for controller in controllers:
             user_entry = contexts_dict[controller.client.master_user]
             assert user_entry["addr"] == controller.deci._context.addr
@@ -225,7 +225,7 @@ class TestAuxServer(unittest.TestCase):
             user.connect_signal.emit((self.HOST, self.PORT))
         time.sleep(1)
         
-        contexts_dict, _ = server.store.getUserData()
+        contexts_dict, _ = server.store.get_user_data()
         user_entry = contexts_dict[controller.client.master_user]
         assert user_entry["addr"] == controller.deci._context.addr
         assert user_entry["func_addr"] == controller.deci._context.func_addr
@@ -237,7 +237,7 @@ class TestAuxServer(unittest.TestCase):
         })
         time.sleep(1)
         
-        contexts_dict, _ = server.store.getUserData()
+        contexts_dict, _ = server.store.get_user_data()
         user_entry = contexts_dict[controller.client.master_user]
         assert user_entry["addr"] == controller.deci._context.addr
         assert user_entry["func_addr"] == controller.deci._context.func_addr
@@ -271,7 +271,7 @@ class TestAuxServer(unittest.TestCase):
         for i in range(len(self.users)-1):
             assert self.users[i].beliefs == self.users[i+1].beliefs
         # Make sure everyone's beliefs match up with the server
-        assert self.users[0].beliefs == server.store._user_map  
+        assert self.users[0].beliefs == server.store.get_user_data()  
     
     # Modifications to ClientWorker broke these tests so they are disabled for now.
     def test_link_unlink_projects(self):

@@ -60,7 +60,7 @@ class Server:
                 func_addr = None
 
             self.store.setUserLocation(username, addr, func_addr)
-        l.info("%s", self.store.getUserData())
+        l.info("%s", self.store.get_user_data())
         return "OK"
     
     def return_user_data(self):
@@ -74,12 +74,12 @@ class Server:
             etag = request.headers['If-None-Match']
             if not (etag.startswith('"') and etag.endswith('"')):
                 return Response("Bad ETag",400)
-            user_data = self.store.getUserData(int(etag[1:-1]))
+            user_data = self.store.get_user_data(int(etag[1:-1]))
             if user_data is None: # User data unchanged
                 return Response(status=304)
         else:
             # Guaranteed not None because no count provided
-            user_data = self.store.getUserData()
+            user_data = self.store.get_user_data()
         resp = jsonify(user_data[0]) # pyright: ignore[reportOptionalSubscript]
         resp.set_etag(str(user_data[1])) # pyright: ignore[reportOptionalSubscript]
         return resp
