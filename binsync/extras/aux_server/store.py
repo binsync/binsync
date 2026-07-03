@@ -5,13 +5,16 @@ class ServerStore:
     def __init__(self):
         self._user_count = 0
         self._user_map:dict[str,dict[str,int|None]] = {}
-        self._user_count_lock = threading.Lock()
-        self._user_map_lock = threading.Lock()
         self._map_modify_count = 0 # Counter to help minimize unnecessary requests on a fetch
-        
-        self._linked_projects_lock = threading.Lock()
+
         # We use a dict for the projects in each group so that we can preserve order while retaining fast access
         self._linked_projects:dict[str,dict[str,None]] = {ServerStore.DEFAULT_GROUPNAME: {}} 
+        
+        self._user_count_lock = threading.Lock()
+        # Lock for both _user_map and _map_modify_count
+        self._user_map_lock = threading.Lock()
+        self._linked_projects_lock = threading.Lock()
+       
         
     def incrementUser(self):
         with self._user_count_lock:
