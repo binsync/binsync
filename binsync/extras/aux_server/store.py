@@ -1,10 +1,26 @@
 import threading
 from copy import deepcopy
+
+class User:
+    def __init__(self):
+        self._addr = None
+        self._func_addr = None
+    
+    def update_location(self, addr:int|None, func_addr:int|None):
+        self._addr = addr
+        self._func_addr = func_addr
+    
+    def get_location(self):
+        """
+        Returns _addr and _func_addr as a dict of {"addr": _addr, "func_addr": _func_addr}
+        """
+        return {"addr": self._addr, "func_addr": self._func_addr}
+
 class ServerStore:
     DEFAULT_GROUPNAME = "default"
     def __init__(self):
         self._user_count = 0
-        self._user_map:dict[str,dict[str,int|None]] = {}
+        self._user_map:dict[str, User] = {}
         self._map_modify_count = 0 # Counter to help minimize unnecessary requests on a fetch
 
         # We use a dict for the projects in each group so that we can preserve order while retaining fast access
@@ -24,21 +40,30 @@ class ServerStore:
         with self._user_count_lock:
             self._user_count-=1
     
-    def setUserData(self, username:str, newData:dict[str,int|None]):
+    def setUserLocation(self, username:str, addr:int|None, func_addr:int|None):
         with self._user_map_lock:
-            self._user_map[username] = newData
+            if username in self._user_map:
+                self._user_map[username].update_location(addr, func_addr)
+            else:
+                new_user = User()
+                new_user.update_location(addr, func_addr)
+                self._user_map[username] = new_user
             self._map_modify_count += 1
     
-    def getUserData(self, count=None)->tuple[dict,int]|None:
+    def getUserData(self, count=None)->tuple[dict[str, dict[str, int | None]], int]|None:
         """
-        Gets the user data stored as a tuple alongside the current modification counter.
-        
+        Gets the user data (dict of username -> [dict of "addr"/"func_addr" to address])
+        stored as a tuple alongside the current modification counter.
+
         If the modification counter matches the provided count, instead returns None.
         (If no count provided, will always return user data)
+
+        It is safe to modify the returned data however you want because the locations
+        are primitive data types that are copied.
         """
         with self._user_map_lock:
             if self._map_modify_count != count:
-                map_copy = deepcopy(self._user_map)
+                map_copy = {username: user.get_location() for username, user in self._user_map.items()}
                 return (map_copy, self._map_modify_count)
         return None
     

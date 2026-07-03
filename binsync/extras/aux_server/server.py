@@ -49,15 +49,17 @@ class Server:
     def receive_function(self):
         if "username" in request.form: # Can't keep track of users if they are not associated with a username
             username = request.form["username"]
-            user_info:dict[str,None|int] = {
-                "addr":None,
-                "func_addr":None
-            }
             if "address" in request.form:
-                user_info["addr"] = int(request.form["address"])
+                addr = int(request.form["address"])
+            else:
+                addr = None
+
             if "function_address" in request.form:
-                user_info["func_addr"] = int(request.form["function_address"])
-            self.store.setUserData(username,user_info)
+                func_addr = int(request.form["function_address"])
+            else:
+                func_addr = None
+
+            self.store.setUserLocation(username, addr, func_addr)
         l.info("%s", self.store.getUserData())
         return "OK"
     
@@ -73,13 +75,13 @@ class Server:
             if not (etag.startswith('"') and etag.endswith('"')):
                 return Response("Bad ETag",400)
             user_data = self.store.getUserData(int(etag[1:-1]))
-            if user_data == None: # User data unchanged
+            if user_data is None: # User data unchanged
                 return Response(status=304)
         else:
             # Guaranteed not None because no count provided
-            user_data:tuple[dict, int] = self.store.getUserData() # type: ignore
-        resp = jsonify(user_data[0])
-        resp.set_etag(str(user_data[1]))
+            user_data = self.store.getUserData()
+        resp = jsonify(user_data[0]) # pyright: ignore[reportOptionalSubscript]
+        resp.set_etag(str(user_data[1])) # pyright: ignore[reportOptionalSubscript]
         return resp
         
     def handle_create_group(self):
