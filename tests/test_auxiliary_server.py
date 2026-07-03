@@ -1,6 +1,6 @@
 import sys
 
-from binsync.extras.aux_server.aux_server import Server
+from binsync.extras.aux_server.server import Server
 from binsync.extras.aux_server.store import ServerStore
 
 from binsync.ui.aux_server_panel.aux_server_window import ClientWorker

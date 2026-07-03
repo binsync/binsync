@@ -160,7 +160,7 @@ def main():
             from binsync.interface_overrides.ghidra import start_ghidra_ui
             start_ghidra_ui()
         elif args.server == "headless":
-            from binsync.extras.aux_server.aux_server import Server
+            from binsync.extras.aux_server.server import Server
             host = args.host
             port = args.port
             server = Server(host,port)
