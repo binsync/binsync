@@ -58,7 +58,7 @@ class Server:
             if "function_address" in request.form:
                 user_info["func_addr"] = int(request.form["function_address"])
             self.store.setUserData(username,user_info)
-        l.info(self.store.getUserData())
+        l.info("%s", self.store.getUserData())
         return "OK"
     
     def return_user_data(self):
@@ -72,11 +72,12 @@ class Server:
             etag = request.headers['If-None-Match']
             if not (etag.startswith('"') and etag.endswith('"')):
                 return Response("Bad ETag",400)
-            user_data = self.store.getUserDataCountNotMatch(int(etag[1:-1]))
+            user_data = self.store.getUserData(int(etag[1:-1]))
             if user_data == None: # User data unchanged
                 return Response(status=304)
         else:
-            user_data = self.store.getUserData()
+            # Guaranteed not None because no count provided
+            user_data:tuple[dict, int] = self.store.getUserData() # type: ignore
         resp = jsonify(user_data[0])
         resp.set_etag(str(user_data[1]))
         return resp

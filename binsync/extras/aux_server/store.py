@@ -28,21 +28,13 @@ class ServerStore:
         with self._user_map_lock:
             self._user_map[username] = newData
             self._map_modify_count += 1
-            
-    # If getUserData and getUserDataCountNotMatch become more complex, consider changing _user_map_lock to an RLock
-    def getUserData(self)->tuple[dict,int]:
-        """
-        Gets the user data stored as a tuple alongside the current modification counter.
-        """
-        with self._user_map_lock:
-            map_copy = deepcopy(self._user_map)
-            return (map_copy,self._map_modify_count)
     
-    def getUserDataCountNotMatch(self,count)->tuple[dict,int]|None:
+    def getUserData(self, count=None)->tuple[dict,int]|None:
         """
         Gets the user data stored as a tuple alongside the current modification counter.
         
-        If the modification counter matches the provided count, instead returns None
+        If the modification counter matches the provided count, instead returns None.
+        (If no count provided, will always return user data)
         """
         with self._user_map_lock:
             if self._map_modify_count != count:
