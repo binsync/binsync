@@ -116,8 +116,6 @@ class ServerClient():
             post_data["address"] = context.addr
         if context.func_addr:
             post_data["function_address"] = context.func_addr
-        if self.controller.client:
-            post_data["username"] = self.controller.client.master_user
         if post_data != self.old_post_data: # No need to do extra communication with server if no change
             try:
                 self.sess.post(self.server_url+"/function",data=post_data)

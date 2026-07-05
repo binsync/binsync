@@ -47,8 +47,8 @@ class Server:
         return 'You have disconnected!'
 
     def receive_function(self):
-        if "username" in request.form: # Can't keep track of users if they are not associated with a username
-            username = request.form["username"]
+        if "user" in request.cookies: # Can't keep track of users if they are not associated with a username
+            username = request.cookies["user"]
             if "address" in request.form:
                 addr = int(request.form["address"])
             else:
