@@ -1,10 +1,12 @@
 import threading
 from copy import deepcopy
+import time
 
 class User:
     def __init__(self):
         self._addr = None
         self._func_addr = None
+        self._last_active = time.time()
     
     def update_location(self, addr:int|None, func_addr:int|None):
         self._addr = addr
@@ -15,6 +17,15 @@ class User:
         Returns _addr and _func_addr as a dict of {"addr": _addr, "func_addr": _func_addr}
         """
         return {"addr": self._addr, "func_addr": self._func_addr}
+    
+    def update_active(self):
+        self._last_active = time.time()
+
+    def get_active(self):
+        return self._last_active
+    
+    def __str__(self):
+        return f"Address: {self._addr}, function address: {self._func_addr}, last active: {self._last_active}"
 
 class ServerStore:
     DEFAULT_GROUPNAME = "default"
@@ -31,7 +42,13 @@ class ServerStore:
         self._user_map_lock = threading.Lock()
         self._linked_projects_lock = threading.Lock()
        
-        
+    def bump_active(self, username):
+        with self._user_map_lock:
+            if username in self._user_map:
+                self._user_map[username].update_active()
+            else:
+                self._user_map[username] = User()
+
     def incrementUser(self):
         with self._user_count_lock:
             self._user_count+=1

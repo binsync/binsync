@@ -31,8 +31,11 @@ class Server:
         self.app.add_url_rule("/list_projects", view_func=self.return_linked_projects, methods=["GET"])
     
     def user_heartbeat(self):
+        """
+        Runs on every received request to update the user's last active time.
+        """
         if "user" in request.cookies:
-            l.info("Request received from user %s", request.cookies["user"])
+            self.store.bump_active(request.cookies["user"])
 
     
     def return_version(self):
