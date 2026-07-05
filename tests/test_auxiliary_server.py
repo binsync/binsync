@@ -162,7 +162,6 @@ class TestAuxServer(unittest.TestCase):
         self.server_thread_manager.enter()
         time.sleep(1)
         assert server.store._user_map == {} # Validate that the initial map of user functions is empty
-        assert server.store._user_count == 0 # Validate that the initial user count is 0
         
     def test_single_connection(self):
         """
@@ -172,14 +171,22 @@ class TestAuxServer(unittest.TestCase):
         server = Server(self.HOST, self.PORT)
         self.server_thread_manager = ServerThreadManager(server)
         self.server_thread_manager.enter()
-        self.users.append(MockUser(MockController("Alice")))
+        controller = MockController("Alice")
+        self.users.append(MockUser(controller))
         
         self.users[0].connect_signal.emit((self.HOST, self.PORT))
         time.sleep(1)
-        assert server.store._user_count == 1 # Verify that the server received the connection
+        # Verify that the server received the connection
+        assert server.store.get_user_data()[0] == { # pyright: ignore[reportOptionalSubscript]
+            "Alice": {
+                "addr": controller.deci._context.addr,
+                "func_addr": controller.deci._context.func_addr,
+            }
+        } 
         self.users[0].stop_signal.emit()
         time.sleep(1)
-        assert server.store._user_count == 0 # Verify that server received disconnection
+        # Verify that server received disconnection
+        assert server.store.get_user_data()[0] == {}  # pyright: ignore[reportOptionalSubscript]
     
     def test_many_connections(self):
         """

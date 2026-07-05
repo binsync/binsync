@@ -42,12 +42,14 @@ class Server:
         return Response(aux_server.__version__, mimetype="text/plain")
 
     def handle_connection(self):
-        self.store.incrementUser()
         return 'You are connected!'
 
     def handle_disconnection(self):
-        self.store.decrementUser()
-        return 'You have disconnected!'
+        if "user" in request.cookies:
+            self.store.disconnect_user(request.cookies["user"])
+            return 'You have disconnected!'
+        else:
+            return Response("Missing Username", status=400)
 
     def receive_function(self):
         if "user" in request.cookies: # Can't keep track of users if they are not associated with a username

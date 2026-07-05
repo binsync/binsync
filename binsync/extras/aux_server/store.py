@@ -40,32 +40,28 @@ class User:
 class ServerStore:
     DEFAULT_GROUPNAME = "default"
     def __init__(self):
-        self._user_count = 0
         self._user_map:dict[str, User] = {}
         self._map_modify_count = 0 # Counter to help minimize unnecessary requests on a fetch
 
         # We use a dict for the projects in each group so that we can preserve order while retaining fast access
         self._linked_projects:dict[str,dict[str,None]] = {ServerStore.DEFAULT_GROUPNAME: {}} 
         
-        self._user_count_lock = threading.Lock()
         # Lock for both _user_map and _map_modify_count
         self._user_map_lock = threading.Lock()
         self._linked_projects_lock = threading.Lock()
        
+    def disconnect_user(self, username):
+        with self._user_map_lock:
+            del self._user_map[username]
+            l.info("User %s disconnected", username)
+            self._map_modify_count += 1
+
     def bump_active(self, username):
         with self._user_map_lock:
             if username in self._user_map:
                 self._user_map[username].update_active()
             else:
                 self._user_map[username] = User()
-
-    def incrementUser(self):
-        with self._user_count_lock:
-            self._user_count+=1
-    
-    def decrementUser(self):
-        with self._user_count_lock:
-            self._user_count-=1
     
     def setUserLocation(self, username:str, addr:int|None, func_addr:int|None):
         with self._user_map_lock:
