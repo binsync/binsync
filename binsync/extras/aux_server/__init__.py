@@ -1,5 +1,8 @@
 import importlib
 import logging
+
+__version__ = "1.0.0"
+
 logging.getLogger("angr").setLevel(logging.ERROR)
 
 _l = logging.getLogger(__name__)

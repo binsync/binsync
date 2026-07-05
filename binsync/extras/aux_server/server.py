@@ -1,9 +1,9 @@
+import binsync.extras.aux_server as aux_server
 from flask import Flask, request, jsonify, Response
 from threading import Lock
 import logging
 from binsync.extras.aux_server.store import ServerStore
 l = logging.getLogger(__name__)
-    
 class Server:
     def __init__(self,host,port):
         self.host = host
@@ -12,6 +12,8 @@ class Server:
         self.app = Flask(__name__)
         # When returning the list of linked projects, we want order to be preserved in case users care
         self.app.json.sort_keys = False # type: ignore
+
+        self.app.add_url_rule("/version", view_func=self.return_version, methods=["GET"])
 
         self.app.add_url_rule("/connect", view_func=self.handle_connection, methods=["GET"])
         self.app.add_url_rule("/disconnect", view_func=self.handle_disconnection, methods=["GET"])
@@ -25,6 +27,9 @@ class Server:
         self.app.add_url_rule("/unlink_project", view_func=self.handle_unlink_project, methods=["POST"])
         self.app.add_url_rule("/list_projects", view_func=self.return_linked_projects, methods=["GET"])
     
+    def return_version(self):
+        return jsonify(aux_server.__version__)
+
     def handle_connection(self):
         self.store.incrementUser()
         return 'You are connected!'
