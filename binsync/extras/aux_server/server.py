@@ -151,13 +151,23 @@ class Server:
         Returns all linked projects.
         '''
         return jsonify(self.store.list_projects())
-    
+
     def run(self):
+        self.stop_event = threading.Event()
+        self.cleaning_thread = threading.Thread(target=self.store.clean_inactive_loop, args=(self.stop_event, ))
         self._wz_server = make_server(self.host, self.port, self.app)
-        l.info("Server started!")
+        l.info("Server starting!")
+        self.cleaning_thread.start()
         self._wz_server.serve_forever()
 
+        # Stop if werkzeug server has stopped serving
+        self._wz_server = None
+        self.stop()
+
     def stop(self):
-        self._wz_server.shutdown()
+        self.stop_event.set()
+        if self._wz_server is not None:
+            self._wz_server.shutdown()
+        self.cleaning_thread.join()
 
     

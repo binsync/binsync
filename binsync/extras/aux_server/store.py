@@ -1,11 +1,15 @@
 import threading
 from copy import deepcopy
 import time
+import logging
+l = logging.getLogger(__name__)
 
 class User:
     def __init__(self):
         self._addr = None
         self._func_addr = None
+
+        # The last time the user contacted the server in seconds since the Epoch
         self._last_active = time.time()
     
     def update_location(self, addr:int|None, func_addr:int|None):
@@ -17,11 +21,17 @@ class User:
         Returns _addr and _func_addr as a dict of {"addr": _addr, "func_addr": _func_addr}
         """
         return {"addr": self._addr, "func_addr": self._func_addr}
-    
+
     def update_active(self):
+        """
+        Updates the last active time of the user with the current time.
+        """
         self._last_active = time.time()
 
     def get_active(self):
+        """
+        Returns the last time the user was active.
+        """
         return self._last_active
     
     def __str__(self):
@@ -137,3 +147,31 @@ class ServerStore:
         # Might want to convert the nested dicts back into lists
         with self._linked_projects_lock:
             return deepcopy(self._linked_projects)
+        
+    def clean_inactive_loop(self, stop_event: threading.Event, poll_sec:int|float=2, inactive_timeout_sec:int|float=30):
+        """
+        Periodically checks the user map to remove inactive users.
+        Do not call this function in the main thread as it will be permanently blocked.
+
+        Checks for inactive users every poll_sec and cleans inactive users who have
+        been inactive for at least inactive_timeout_sec. 
+        
+        Note that the check only occurs every poll_sec, so if poll_sec is 4 and 
+        inactive_timeout_sec is 5 then users will be cleaned every 4 * 2 = 8 seconds.
+        """
+        while not stop_event.is_set():
+            current_time = time.time()
+            with self._user_map_lock:
+                users_to_delete = []
+                # Find inactive users
+                for username, user in self._user_map.items():
+                    if current_time - user.get_active() > inactive_timeout_sec:
+                        users_to_delete.append(username)
+
+                # Remove inactive users
+                for username in users_to_delete:
+                    del self._user_map[username]
+                    l.info("Removed user %s due to inactivity", username)
+
+                self._map_modify_count += 1
+            stop_event.wait(poll_sec)
