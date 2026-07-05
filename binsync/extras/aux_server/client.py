@@ -39,9 +39,7 @@ class ServerClient():
         self.sess = requests.Session()
         try:
             client_version_nums = aux_server.__version__.split(".")
-            server_version = self.sess.get(self.server_url+"/version").json()
-            if type(server_version) != str:
-                raise TypeError(f"Server version was expected to be a string but was type {type(server_version)}")
+            server_version = self.sess.get(self.server_url+"/version").text
             server_version_nums = server_version.split(".")
             if len(server_version_nums) != 3:
                 raise ValueError(f"Server version was expected to have 3 parts but had {len(server_version_nums)}")
@@ -60,7 +58,7 @@ class ServerClient():
         except requests.ConnectionError as e:
             l.info("Unable to establish a connection with the auxiliary server")
             return False
-        except (requests.JSONDecodeError, TypeError, ValueError) as e:
+        except ValueError as e:
             l.error("Tried to get version from auxiliary server but response was malformed. Encountered error: %s", e)
             return False
 

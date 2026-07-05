@@ -28,7 +28,7 @@ class Server:
         self.app.add_url_rule("/list_projects", view_func=self.return_linked_projects, methods=["GET"])
     
     def return_version(self):
-        return jsonify(aux_server.__version__)
+        return Response(aux_server.__version__, mimetype="text/plain")
 
     def handle_connection(self):
         self.store.incrementUser()
