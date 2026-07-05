@@ -108,7 +108,7 @@ class MockUser(QWidget):
         self.stop_signal.emit()
 
     @Slot(dict)
-    def _update_beliefs(self, new_beliefs):
+    def _update_beliefs(self, new_beliefs: dict[str, dict[str, int | None]]):
         self.beliefs = new_beliefs
         
     @Slot(dict)
@@ -271,7 +271,7 @@ class TestAuxServer(unittest.TestCase):
         for i in range(len(self.users)-1):
             assert self.users[i].beliefs == self.users[i+1].beliefs
         # Make sure everyone's beliefs match up with the server
-        assert self.users[0].beliefs == server.store.get_user_data()  
+        assert self.users[0].beliefs == server.store.get_user_data()[0] # pyright: ignore[reportOptionalSubscript]
     
     # Modifications to ClientWorker broke these tests so they are disabled for now.
     def test_link_unlink_projects(self):

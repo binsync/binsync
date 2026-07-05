@@ -104,7 +104,7 @@ class ServerClient():
                 "If-None-Match":str(self._etag)
             })
             if r.status_code != 304:
-                self.users_data = r.json()
+                self.users_data:dict[str, dict[str, int | None]] = r.json()
                 self._etag = r.headers["ETag"]
                 l.info(self.users_data)
         return self.users_data
