@@ -52,18 +52,18 @@ class ServerStore:
        
     def disconnect_user(self, username):
         """
-        Removes a user from the user map. Returns True on a successful deletion
-        and False on an unsuccessful deletion (most likely due to the user not
-        being present in the user map).
+        Removes a user from the user map. Returns (True, "") on a successful deletion
+        and (False, "<error message>") on an unsuccessful deletion (most likely due 
+        to the user not being present in the user map).
         """
         with self._user_map_lock:
             try:
                 del self._user_map[username]
             except KeyError:
-                return False
+                return (False, f"username {username} not in users")
             l.info("User %s disconnected", username)
             self._map_modify_count += 1
-        return True
+        return (True, "")
 
     def bump_active(self, username):
         with self._user_map_lock:

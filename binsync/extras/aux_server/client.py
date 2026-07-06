@@ -220,9 +220,13 @@ class ServerClient():
             self.callback_registered = False
         if self.connected:
             try:
-                l.info(self.sess.get(self.server_url+"/disconnect").text)
+                disconnect_resp = self.sess.get(self.server_url+"/disconnect")
+                disconnect_resp.raise_for_status()
+                l.info("%s", disconnect_resp.text)
             except requests.ConnectionError:
                 l.info("Server unresponsive")
+            except requests.HTTPError:
+                l.info(f"Failed to disconnect: {disconnect_resp.text}") # pyright: ignore[reportPossiblyUnboundVariable]
             self.connected = False
         else:
             l.info("Disconnected without contacting server as it was previously unreachable")
