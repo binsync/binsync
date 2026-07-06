@@ -46,10 +46,13 @@ class Server:
 
     def handle_disconnection(self):
         if "user" in request.cookies:
-            self.store.disconnect_user(request.cookies["user"])
-            return 'You have disconnected!'
+            disconnect_result = self.store.disconnect_user(request.cookies["user"])
+            if disconnect_result == True:
+                return 'You have disconnected!'
+            else:
+                return Response("Error with disconnecting", 400)
         else:
-            return Response("Missing Username", status=400)
+            return Response("Missing Username", 400)
 
     def receive_function(self):
         if "user" in request.cookies: # Can't keep track of users if they are not associated with a username

@@ -51,10 +51,19 @@ class ServerStore:
         self._linked_projects_lock = threading.Lock()
        
     def disconnect_user(self, username):
+        """
+        Removes a user from the user map. Returns True on a successful deletion
+        and False on an unsuccessful deletion (most likely due to the user not
+        being present in the user map).
+        """
         with self._user_map_lock:
-            del self._user_map[username]
+            try:
+                del self._user_map[username]
+            except KeyError:
+                return False
             l.info("User %s disconnected", username)
             self._map_modify_count += 1
+        return True
 
     def bump_active(self, username):
         with self._user_map_lock:
