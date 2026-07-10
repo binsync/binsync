@@ -394,7 +394,7 @@ class TestAuxServer(unittest.TestCase):
         server = Server(self.HOST, self.PORT, inactive_poll_sec=1, inactive_timeout_sec=2)
         self.server_thread_manager = ServerThreadManager(server)
         self.server_thread_manager.enter()
-
+        time.sleep(1) # Sleep so server can start up properly or something
         controllers:list[MockController] = []
         controllers.append(MockController("Alice"))
         controllers.append(MockController("Bob"))
