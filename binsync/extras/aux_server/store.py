@@ -153,7 +153,7 @@ class ServerStore:
         with self._linked_projects_lock:
             return deepcopy(self._linked_projects)
         
-    def clean_inactive_loop(self, stop_event: threading.Event, poll_sec:int|float=2, inactive_timeout_sec:int|float=30):
+    def clean_inactive_loop(self, stop_event: threading.Event, poll_sec:int|float, inactive_timeout_sec:int|float):
         """
         Periodically checks the user map to remove inactive users.
         Do not call this function in the main thread as it will be permanently blocked.

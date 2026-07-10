@@ -6,9 +6,17 @@ from binsync.extras.aux_server.store import ServerStore
 from werkzeug.serving import make_server
 l = logging.getLogger(__name__)
 class Server:
-    def __init__(self,host,port):
+    def __init__(self, host, port, inactive_poll_sec=2, inactive_timeout_sec=30):
+        """
+        @param host: The host address of the server.
+        @param port: The host port of the server.
+        @param inactive_poll_sec: How frequently the server should check for inactive users. 
+        @param inactive_timeout_sec: The threshold at which users will be considered inactive.
+        """
         self.host = host
         self.port = port
+        self.inactive_poll_sec = inactive_poll_sec
+        self.inactive_timeout_sec = inactive_timeout_sec
         self.store = ServerStore()
         self.app = Flask(__name__)
         # When returning the list of linked projects, we want order to be preserved in case users care
@@ -159,7 +167,7 @@ class Server:
 
     def run(self):
         self.stop_event = threading.Event()
-        self.cleaning_thread = threading.Thread(target=self.store.clean_inactive_loop, args=(self.stop_event, ))
+        self.cleaning_thread = threading.Thread(target=self.store.clean_inactive_loop, args=(self.stop_event, self.inactive_poll_sec, self.inactive_timeout_sec))
         self._wz_server = make_server(self.host, self.port, self.app)
         l.info("Server starting!")
         self.cleaning_thread.start()

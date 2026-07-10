@@ -61,6 +61,8 @@ class ClientWorker(QObject):
             return # Client failed to connect so no need to do remaining setup
         self.client_connected.emit(True)
         self.timer = QTimer()
+        # Make sure timer stops properly when thread is suddenly quit
+        self.thread().finished.connect(self.timer.stop)
         self.timer.timeout.connect(self._client_context_callback)
         self.timer.start(1000)
     

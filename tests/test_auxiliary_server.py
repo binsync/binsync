@@ -385,5 +385,69 @@ class TestAuxServer(unittest.TestCase):
             ServerStore.DEFAULT_GROUPNAME: {}
         }
             
+    def test_clean_inactive_users(self):
+        '''
+        User A connects, then User B connects, then User C connects.
+        User A explicitly disconnects, then User B silently disconnects.
+        Only User C should remain.
+        '''
+        server = Server(self.HOST, self.PORT, inactive_poll_sec=1, inactive_timeout_sec=2)
+        self.server_thread_manager = ServerThreadManager(server)
+        self.server_thread_manager.enter()
+
+        controllers:list[MockController] = []
+        controllers.append(MockController("Alice"))
+        controllers.append(MockController("Bob"))
+        controllers.append(MockController("Carol"))
+
+        for i, controller in enumerate(controllers):
+            controller.deci._update_context({
+                "address":0x40000+10*i,
+                "function_address":0x500000+10*i
+            })
+            self.users.append(MockUser(controller))
+        
+        for user in self.users:
+            user.connect_signal.emit((self.HOST, self.PORT))
+
+        time.sleep(1)
+        
+        assert server.store.get_user_data()[0] == { # pyright: ignore[reportOptionalSubscript]
+            controller.client.master_user: {
+                "addr": controller.deci._context.addr,
+                "func_addr": controller.deci._context.func_addr,
+            } for controller in controllers
+        }
+
+        # Make Alice disconnect naturally
+        self.users[0].shutdown()
+        time.sleep(1) # Time for worker to emit finished signal
+        self.app.processEvents() # Process events so that threads can receive the finished signal
+        self.users = self.users[1:]
+        controllers = controllers[1:]
+
+        assert server.store.get_user_data()[0] == { # pyright: ignore[reportOptionalSubscript]
+            controller.client.master_user: {
+                "addr": controller.deci._context.addr,
+                "func_addr": controller.deci._context.func_addr,
+            } for controller in controllers
+        }
+
+        # Force stop Bob's thread
+        self.users[0].thread.quit()
+        time.sleep(1) # Time for worker to emit finished signal
+        self.app.processEvents() # Process events so that threads can receive the finished signal
+        self.users = self.users[1:]
+        controllers = controllers[1:]
+
+        time.sleep(2) # Additional time for server to notice that user has stopped contacting server
+        assert server.store.get_user_data()[0] == { # pyright: ignore[reportOptionalSubscript]
+            controller.client.master_user: {
+                "addr": controller.deci._context.addr,
+                "func_addr": controller.deci._context.func_addr,
+            } for controller in controllers
+        }
+        
+
 if __name__ == "__main__":
     unittest.main(argv=sys.argv)
