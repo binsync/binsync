@@ -1,7 +1,7 @@
 import importlib
 import logging
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 
 logging.getLogger("angr").setLevel(logging.ERROR)
 
