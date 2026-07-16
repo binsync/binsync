@@ -220,9 +220,9 @@ class ServerClient():
                 disconnect_resp.raise_for_status()
                 l.info("%s", disconnect_resp.text)
             except requests.ConnectionError:
-                l.info("Server unresponsive")
+                l.info("Server unresponsive (considering to be disconnected)")
             except requests.HTTPError:
-                l.info(f"Failed to disconnect: {disconnect_resp.text}") # pyright: ignore[reportPossiblyUnboundVariable]
+                l.info(f"Disconnected strangely: Server returned {disconnect_resp.text}") # pyright: ignore[reportPossiblyUnboundVariable]
             self.connected = False
         else:
             l.info("Disconnected without contacting server as it was previously unreachable")
