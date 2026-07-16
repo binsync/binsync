@@ -29,13 +29,9 @@ class ServerClient():
         self.old_post_data = {}
         self.connected = False
         self.callback_registered = False
-<<<<<<< HEAD:binsync/extras/aux_server/client.py
-
-=======
         
     
     # Try connecting to the server. Return True on successful connection and False on fail.
->>>>>>> ca08328 (send username alongside requests):binsync/extras/aux_server/aux_client.py
     def connect(self):
         self.server_url = f"http://{self.host}:{self.port}"
         parsed = urllib.parse.urlparse(self.server_url)
