@@ -39,13 +39,6 @@ class ServerClient():
             l.error("HOST AND PORT COMBINATION IS NOT VALID: NETLOC %s BUT HOST %s AND PORT %s",parsed.netloc,parsed.hostname,parsed.port)
             return False
 
-        try:
-            username = self.controller.client.master_user
-        except AttributeError:
-            l.error("Tried to access username but was not set")
-            return False
-
-        self._etag = None
         self.sess = requests.Session()
         try:
             client_version_nums = aux_server.__version__.split(".")
@@ -72,6 +65,13 @@ class ServerClient():
             l.error("Tried to get version from auxiliary server but response was malformed. Encountered error: %s", e)
             return False
         
+        try:
+            username = self.controller.client.master_user
+        except AttributeError:
+            l.error("Tried to access username but was not set")
+            return False
+
+        self._etag = None
         self.sess.cookies.set("user", username)
         try:
             l.info(self.sess.get(self.server_url+"/connect").text)
