@@ -172,11 +172,13 @@ class ServerStore:
                 for username, user in self._user_map.items():
                     if current_time - user.get_active() > inactive_timeout_sec:
                         users_to_delete.append(username)
+ 
+                if len(users_to_delete) > 0:
+                    self._map_modify_count += 1
 
                 # Remove inactive users
                 for username in users_to_delete:
                     del self._user_map[username]
                     l.info("Removed user %s due to inactivity", username)
 
-                self._map_modify_count += 1
             stop_event.wait(poll_sec)
