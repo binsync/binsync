@@ -1,7 +1,4 @@
 import logging
-import time
-import requests
-import urllib.parse
 
 from binsync.controller import  MergeLevel
 from declib.ui.qt_objects import (
