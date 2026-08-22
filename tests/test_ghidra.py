@@ -74,6 +74,16 @@ def _patch_popen_capture(monkeypatch, mock_proc):
     return popen_calls
 
 
+class DummyChangeManager:
+    DOCR_EOL_COMMENT_CHANGED = 1
+    DOCR_PRE_COMMENT_CHANGED = 2
+    DOCR_POST_COMMENT_CHANGED = 3
+    DOCR_PLATE_COMMENT_CHANGED = 4
+    DOCR_REPEATABLE_COMMENT_CHANGED = 5
+
+class DummyProgramChangeRecord:
+    pass
+
 class TestGhidra:
     """Tests for the Ghidra remote interface wrapper and UI process lifecycle.
 
@@ -333,6 +343,262 @@ class TestGhidra:
         assert popen_calls[0][0][0][0] == ghidra_module.sys.executable
         if len(popen_calls) > 1:
             assert popen_calls[1][0][0][0] == "binsync"
+
+    @pytest.mark.parametrize(
+        ("has_text", "expected_deleted"),
+        [(True, False), (False, True)],
+        ids=("comment-added", "comment-deleted"),
+    )
+    def test_ghidra_comment_hook_dispatch(self, monkeypatch, has_text, expected_deleted):
+        """DataMonitor.do_change_handler must intercept comment change events from Ghidra
+        (DOCR_EOL_COMMENT_CHANGED, DOCR_PRE_COMMENT_CHANGED, etc.), extract the affected address,
+        query the decompiler interface for the updated comment, and notify the interface via
+        deci.comment_changed with deleted=False when text exists or deleted=True when text is cleared.
+        """
+        import sys
+        from unittest.mock import MagicMock
+
+        class GhidraModuleLoader:
+            def find_spec(self, fullname, path, target=None):
+                if fullname.startswith(("ghidra", "docking", "java")):
+                    from importlib.machinery import ModuleSpec
+                    return ModuleSpec(fullname, self, is_package=True)
+                return None
+
+            def create_module(self, spec):
+                mod = MagicMock()
+                mod.__name__ = spec.name
+                if spec.name == "ghidra.program.util":
+                    mod.ProgramChangeRecord = DummyProgramChangeRecord
+                    mod.ChangeManager = DummyChangeManager
+                return mod
+
+            def exec_module(self, module):
+                pass
+
+        loader = GhidraModuleLoader()
+        monkeypatch.setattr(sys, "meta_path", [loader] + sys.meta_path)
+
+        mock_jpype = MagicMock()
+        mock_jpype.JImplements = lambda *a, **kw: (lambda cls: cls)
+        mock_jpype.JOverride = lambda func: func
+        monkeypatch.setitem(sys.modules, "jpype", mock_jpype)
+
+        mock_imports = MagicMock()
+        mock_imports.ChangeManager = DummyChangeManager
+        mock_imports.ProgramChangeRecord = DummyProgramChangeRecord
+        monkeypatch.setitem(sys.modules, "declib.decompilers.ghidra.compat.imports", mock_imports)
+
+        from declib.artifacts import Comment
+        from declib.decompilers.ghidra.hooks import DataMonitor
+
+        comment_calls = []
+
+        class MockDeci:
+            def get_comment(self, addr):
+                if has_text:
+                    return Comment(addr=addr, comment="Test Ghidra comment", func_addr=0x400100)
+                return None
+
+            def get_closest_function(self, addr):
+                return 0x400100
+
+            def comment_changed(self, cmt, deleted=False):
+                comment_calls.append((cmt, deleted))
+
+            def error(self, msg):
+                print("DECI ERROR:", msg)
+
+        deci = MockDeci()
+        monitor = DataMonitor.__new__(DataMonitor)
+        monitor._deci = deci
+        monitor.funcEvents = set()
+        monitor.typeEvents = set()
+        monitor.symDelEvents = set()
+        monitor.symChgEvents = set()
+        monitor.imageBaseEvents = set()
+        monitor.commentEvents = {DummyChangeManager.DOCR_EOL_COMMENT_CHANGED}
+        monitor.TrackedEvents = monitor.commentEvents
+
+        class MockAddr:
+            def getOffset(self):
+                return 0x400108
+
+        class MockRecord(DummyProgramChangeRecord):
+            def getEventType(self):
+                return DummyChangeManager.DOCR_EOL_COMMENT_CHANGED
+
+            def getByteAddress(self):
+                return MockAddr()
+
+            def getObject(self):
+                return None
+
+            def getNewValue(self):
+                return None
+
+        event = [MockRecord()]
+        monitor.do_change_handler(event)
+
+        assert len(comment_calls) == 1
+        cmt, deleted = comment_calls[0]
+        assert cmt.addr == 0x400108
+        assert deleted is expected_deleted
+        if has_text:
+            assert cmt.comment == "Test Ghidra comment"
+
+    @pytest.mark.parametrize(
+        ("auto_push_enabled", "is_deleted"),
+        [(True, False), (False, False), (True, True)],
+        ids=("auto-push-active", "auto-push-disabled", "auto-push-deletion"),
+    )
+    def test_ghidra_comment_auto_push_integration(self, monkeypatch, tmp_path, auto_push_enabled, is_deleted):
+        """When a comment change event is received from Ghidra, BSController must update the
+        client's master_state comments dictionary and respect auto_push_enabled on the client.
+        """
+        from collections import defaultdict
+        from declib.artifacts import Comment, Function
+        from binsync.controller import BSController
+        from binsync.core.state import State
+
+        class MockGhidraClientInterface:
+            name = "ghidra"
+            should_watch_artifacts = lambda self: True
+
+            def __init__(self):
+                self.artifact_change_callbacks = defaultdict(list)
+                self.functions = {0x400100: Function(addr=0x400100, size=0x50)}
+                self.comments = {}
+                self.global_vars = {}
+                self.enums = {}
+                self.typedefs = {}
+                self.structs = {}
+                self.patches = {}
+                self.segments = {}
+
+            def get_func_size(self, addr):
+                return 0x50
+
+            def shutdown(self):
+                pass
+
+        deci = MockGhidraClientInterface()
+        controller = BSController(decompiler_interface=deci, headless=True)
+
+        master_state = State("test_user")
+        master_state.set_function(Function(addr=0x400100, size=0x50))
+        if is_deleted:
+            master_state.set_comment(Comment(addr=0x400108, comment="Old comment", func_addr=0x400100))
+
+        class MockClient:
+            def __init__(self):
+                self.master_state = master_state
+                self.push_on_update = auto_push_enabled
+
+            def last_push_ts(self):
+                return None
+
+        client = MockClient()
+        controller.client = client
+
+        if is_deleted:
+            cmt = Comment(addr=0x400108, comment="", func_addr=0x400100)
+            controller.commit_artifact(cmt, deleted=True)
+            assert 0x400108 not in master_state.comments
+        else:
+            cmt = Comment(addr=0x400108, comment="New Ghidra comment", func_addr=0x400100)
+            controller.commit_artifact(cmt, deleted=False)
+            assert 0x400108 in master_state.comments
+            assert master_state.comments[0x400108].comment == "New Ghidra comment"
+
+        assert controller.auto_push_enabled == auto_push_enabled
+
+    def test_ghidra_interface_comment_methods(self, monkeypatch):
+        """GhidraDecompilerInterface comment methods (_get_comment, _set_comment, _del_comment,
+        _comments) must correctly construct, update, delete, and enumerate comments across
+        single or tagged slots and use Ghidra's comment address iterator for bulk retrieval.
+        """
+        import sys
+        from unittest.mock import MagicMock
+
+        class MockCodeUnitTypes:
+            PLATE_COMMENT = 0
+            PRE_COMMENT = 1
+            EOL_COMMENT = 2
+            POST_COMMENT = 3
+            REPEATABLE_COMMENT = 4
+
+        mock_imports = MagicMock()
+        mock_imports.CodeUnit = MockCodeUnitTypes
+        monkeypatch.setitem(sys.modules, "declib.decompilers.ghidra.compat.imports", mock_imports)
+
+        class MockGAddr:
+            def __init__(self, offset):
+                self._offset = offset
+            def getOffset(self):
+                return self._offset
+
+        class MockCodeUnit:
+            def __init__(self, addr, comments_map):
+                self._addr = MockGAddr(addr)
+                self._comments = comments_map
+
+            def getAddress(self):
+                return self._addr
+
+            def getComment(self, cmt_type):
+                return self._comments.get(cmt_type, None)
+
+        code_units = {
+            0x400108: MockCodeUnit(0x400108, {0: "Plate comment text", 2: "EOL comment text"}),
+            0x400120: MockCodeUnit(0x400120, {2: "Single EOL comment"}),
+        }
+
+        class MockListing:
+            def getCodeUnitAt(self, gaddr):
+                return code_units.get(gaddr.getOffset(), None)
+
+            def getCommentAddressIterator(self, min_addr, max_addr, forward):
+                return [MockGAddr(addr) for addr in code_units.keys()]
+
+        class MockProgram:
+            def getListing(self):
+                return MockListing()
+            def getMinAddress(self):
+                return MockGAddr(0x400000)
+            def getMaxAddress(self):
+                return MockGAddr(0x500000)
+
+        from declib.decompilers.ghidra.interface import GhidraDecompilerInterface
+
+        class MockGhidraInterface(GhidraDecompilerInterface):
+            currentProgram = MockProgram()
+
+            def __init__(self):
+                pass
+
+            def _to_gaddr(self, addr):
+                return MockGAddr(addr)
+
+            def get_closest_function(self, addr):
+                return 0x400100
+
+        interface = MockGhidraInterface()
+
+        cmt1 = interface._get_comment(0x400120)
+        assert cmt1 is not None
+        assert cmt1.addr == 0x400120
+        assert cmt1.comment == "Single EOL comment"
+
+        cmt2 = interface._get_comment(0x400108)
+        assert cmt2 is not None
+        assert "[PLATE] Plate comment text" in cmt2.comment
+        assert "[EOL] EOL comment text" in cmt2.comment
+
+        all_cmts = interface._comments()
+        assert len(all_cmts) == 2
+        assert 0x400108 in all_cmts
+        assert 0x400120 in all_cmts
 
 
 if __name__ == "__main__":

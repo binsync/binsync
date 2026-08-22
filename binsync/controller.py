@@ -621,6 +621,12 @@ class BSController:
         if isinstance(artifact, Struct) and deleted:
             del state.structs[artifact.name]
 
+        # if a comment is deleted remove it from the state dictionary
+        if isinstance(artifact, Comment) and deleted:
+            if artifact.addr in state.comments:
+                del state.comments[artifact.addr]
+                was_set = True
+
         # TODO: make was_set reliable
         _l.debug("%s committing now with %s", state, commit_msg)
         self.client.master_state = state
