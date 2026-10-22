@@ -398,16 +398,14 @@ class ConfigureBSDialog(QDialog):
     def open_or_create_from_dialog(self, create=False):
         dialog_cls = CreateBSProjectDialog if create else OpenBSProjectDialog
         dialog = dialog_cls(self.controller, parent=self)
-        self.hide()
         dialog.exec_()
-        self.show()
         if not dialog.configured:
             l.warning("Stopping configuration before connection...")
             return
 
         remote_url = None
         initialize = create
-        project_path = Path(dialog.project_path) if dialog.project_path is not None else None
+        project_path = Path(dialog.project_path) if dialog.project_path else None
         username = dialog.username
         remote_url = dialog.remote_url if dialog.remote_url else None
 
@@ -419,7 +417,13 @@ class ConfigureBSDialog(QDialog):
             )
             valid_config = False
 
-        if not create:
+        if project_path is None:
+            self._critical(
+                "Missing project path",
+                "You must specify a project path (for remote cloning, a new or empty directory to clone into)."
+            )
+            valid_config = False
+        elif not create:
             if not remote_url:
                 if not project_path.exists():
                     self._critical(
@@ -441,8 +445,7 @@ class ConfigureBSDialog(QDialog):
                         "The specified directory exists and is not empty, this should not be for remote cloning! "
                     )
                     valid_config = False
-
-        if create and Path(project_path).exists():
+        elif project_path.exists():
             self._critical(
                 "Project Exists",
                 "The specified BS project already exists! You should open it instead. "
