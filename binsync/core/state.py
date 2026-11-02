@@ -3,6 +3,7 @@ import os
 import pathlib
 import datetime
 import re
+import uuid
 from functools import wraps
 from typing import Dict, Optional, Union, List
 import copy
@@ -157,6 +158,31 @@ def toml_file_to_artifacts(src: Union[pathlib.Path, git.Tree], filename, artifac
     return artifact_cls.loads_many(file_data, fmt=ArtifactFormat.TOML) if file_data is not None else []
 
 
+def atomic_write(path: Union[str, pathlib.Path], data: bytes, tmp_dir: Union[str, pathlib.Path, None] = None):
+    path = pathlib.Path(path)
+    try:
+        with open(path, "rb") as fp:
+            if fp.read() == data:
+                return
+    except FileNotFoundError:
+        pass
+
+    # tmp_dir must be on the same filesystem as path for os.replace to be atomic
+    tmp_dir = pathlib.Path(tmp_dir) if tmp_dir else path.parent
+    tmp_path = tmp_dir.joinpath(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    # not using mkstemp, since it ignores the umask and would leave every state file 0600
+    fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o666)
+    try:
+        with os.fdopen(fd, "wb") as fp:
+            fp.write(data)
+            fp.flush()
+            os.fsync(fp.fileno())
+        os.replace(tmp_path, path)
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+
 #
 # State Defn & Operators
 #
@@ -243,8 +269,7 @@ class State:
 
         out_path = dst.joinpath(filename)
         pathlib.Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-        with open(out_path, "wb") as fp:
-            fp.write(data)
+        atomic_write(out_path, data, tmp_dir=self.client.repo.git_dir if self.client else None)
 
     def _delete_data(self, dst: Union[pathlib.Path, git.IndexFile], path):
         # Delete using Git files

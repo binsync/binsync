@@ -17,7 +17,7 @@ import git.exc
 from binsync.core.user import User
 from binsync.configuration import BinSyncDLConfig, ProjectData
 from binsync.core.errors import ExternalUserCommitError, MetadataNotFoundError
-from binsync.core.state import State, toml_file_to_dict
+from binsync.core.state import State, atomic_write, toml_file_to_dict
 from binsync.core.scheduler import Scheduler, Job, SchedSpeed
 from binsync.core.cache import Cache
 
@@ -961,8 +961,7 @@ class Client:
         """
         fullpath = os.path.join(os.path.dirname(index.repo.git_dir), path)
         pathlib.Path(fullpath).parent.mkdir(parents=True, exist_ok=True)
-        with open(fullpath, 'wb') as fp:
-            fp.write(data)
+        atomic_write(fullpath, data, tmp_dir=index.repo.git_dir)
         index.add([fullpath])
 
     @staticmethod
