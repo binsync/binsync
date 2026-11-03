@@ -3,6 +3,7 @@ import os
 import sys
 
 import unittest
+from unittest import mock
 
 from binsync.core.client import Client
 from declib.artifacts import (
@@ -76,6 +77,50 @@ class TestState(unittest.TestCase):
         self.assertEqual(state.functions[0x400090].last_change, None)
         self.assertNotEqual(state.functions[0x400080].last_change, None)
         self.assertNotEqual(state.structs["some_struct"].last_change, None)
+
+    def test_state_dump_interrupted(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = Client("user0", tmpdir, "fake_hash", init_repo=True)
+            state = State("user0", client=client)
+            state.set_function_header(FunctionHeader("some_name", 0x400080))
+            state.dump(tmpdir)
+
+            func_path = os.path.join(tmpdir, "functions", "00400080.toml")
+            with open(func_path, "rb") as fp:
+                old_data = fp.read()
+
+            # simulate the process dying mid-write
+            state.set_function_header(FunctionHeader("some_new_name", 0x400080))
+            with mock.patch("binsync.core.state.os.fsync", side_effect=OSError):
+                with self.assertRaises(OSError):
+                    state.dump(tmpdir)
+
+            with open(func_path, "rb") as fp:
+                assert fp.read() == old_data
+            assert os.listdir(os.path.join(tmpdir, "functions")) == ["00400080.toml"]
+            assert not [f for f in os.listdir(client.repo.git_dir) if f.endswith(".tmp")]
+
+    def test_state_dump_skips_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = Client("user0", tmpdir, "fake_hash", init_repo=True)
+            state = State("user0", client=client)
+            state.set_function_header(FunctionHeader("some_name", 0x400080))
+            state.set_function_header(FunctionHeader("some_other_name", 0x400090))
+            state.dump(tmpdir)
+
+            unchanged_path = os.path.join(tmpdir, "functions", "00400090.toml")
+            changed_path = os.path.join(tmpdir, "functions", "00400080.toml")
+            unchanged_ino = os.stat(unchanged_path).st_ino
+            changed_ino = os.stat(changed_path).st_ino
+
+            state.set_function_header(FunctionHeader("some_new_name", 0x400080))
+            state.dump(tmpdir)
+
+            assert os.stat(unchanged_path).st_ino == unchanged_ino
+            assert os.stat(changed_path).st_ino != changed_ino
+            new_state = State.parse(tmpdir, client=client)
+            assert new_state.functions[0x400080].name == "some_new_name"
+            assert new_state.functions[0x400090].name == "some_other_name"
 
 
 if __name__ == "__main__":
